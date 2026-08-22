@@ -50,6 +50,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -345,6 +346,7 @@ fun DocumentHubScreen(
     }
 
     fun openNoteInCanvas(noteFile: File) {
+        prefs.edit().putString("pref_last_opened_note_path", noteFile.absolutePath).apply()
         val intent = Intent(context, CanvasActivity::class.java).apply {
             putExtra(CanvasActivity.EXTRA_NOTE_PATH, noteFile.absolutePath)
         }
@@ -421,16 +423,24 @@ fun DocumentHubScreen(
                         }
                     },
                     actions = {
+                        val allSelected = selectedNotePaths.size == notes.size && notes.isNotEmpty()
                         IconButton(onClick = {
-                            selectedNotePaths = notes.map { it.path }.toSet()
+                            if (allSelected) {
+                                selectedNotePaths = emptySet()
+                            } else {
+                                selectedNotePaths = notes.map { it.path }.toSet()
+                            }
                         }) {
-                            Icon(imageVector = Icons.Default.SelectAll, contentDescription = "Select All")
+                            Icon(
+                                imageVector = if (allSelected) Icons.Default.Deselect else Icons.Default.SelectAll,
+                                contentDescription = if (allSelected) "Deselect All" else "Select All"
+                            )
                         }
                         IconButton(onClick = {
                             val allPaths = notes.map { it.path }.toSet()
                             selectedNotePaths = allPaths.minus(selectedNotePaths)
                         }) {
-                            Icon(imageVector = Icons.Default.Deselect, contentDescription = "Invert Selection")
+                            Icon(imageVector = Icons.AutoMirrored.Filled.CompareArrows, contentDescription = "Invert Selection")
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -903,7 +913,7 @@ fun DocumentHubScreen(
                                         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                             Icon(Icons.Default.Home, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                                             Spacer(modifier = Modifier.width(10.dp))
-                                            Text("Main Notes (Root)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                            Text("Notes Home", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                                         }
                                     }
                                 }
@@ -946,7 +956,7 @@ fun DocumentHubScreen(
                                     ) {
                                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("+ Create New Folder")
+                                        Text("Create New Folder")
                                     }
                                 }
                             }
@@ -1141,7 +1151,17 @@ fun DocumentHubScreen(
             }
 
             // Main Content Grid with Drag Selection Listener
-            val recentNote = notes.firstOrNull()
+            val lastOpenedPath = prefs.getString("pref_last_opened_note_path", null)
+            val continueNote = remember(lastOpenedPath, notes, folders) {
+                if (lastOpenedPath != null) {
+                    val f = File(lastOpenedPath)
+                    if (f.exists() && !f.absolutePath.contains("/.Trash/")) {
+                        repository.getNoteDocumentForFile(f)
+                    } else null
+                } else {
+                    repository.getAllRecentNotes(1).firstOrNull()
+                }
+            }
 
             LazyVerticalGrid(
                 columns = if (isGridView) GridCells.Adaptive(minSize = 200.dp) else GridCells.Fixed(1),
@@ -1255,8 +1275,8 @@ fun DocumentHubScreen(
                                 }
                             }
 
-                            // Hero Recent Note Resume Card
-                            recentNote?.let { recent ->
+                            // Hero Recent Note Resume Card (Global Tracked)
+                            continueNote?.let { recent ->
                                 Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -1286,7 +1306,7 @@ fun DocumentHubScreen(
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text("Continue Editing", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                             Text(recent.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                            Text("Modified ${recent.lastModifiedFormatted}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text("${recent.folder} · Modified ${recent.lastModifiedFormatted}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
 
                                         Button(
@@ -1719,6 +1739,36 @@ fun ExpressiveNoteCard(
                             }
                         }
                     }
+                    // Autosave Available Badge (Bottom of Thumbnail, above Info section)
+                    if (note.autosaveInfo != null) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.92f),
+                            shadowElevation = 2.dp,
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.History,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(12.dp),
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Text(
+                                    text = "Autosave Available",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                        }
+                    }
                 }
 
                 // Card Body
@@ -1769,21 +1819,6 @@ fun ExpressiveNoteCard(
                         Text(note.lastModifiedFormatted, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text("•", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                         Text(note.sizeFormatted, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-
-                    if (note.autosaveInfo != null) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = MaterialTheme.colorScheme.secondaryContainer
-                        ) {
-                            Text(
-                                "Autosave Available",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
                     }
                 }
             }

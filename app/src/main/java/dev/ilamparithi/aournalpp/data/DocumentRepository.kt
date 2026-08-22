@@ -259,6 +259,27 @@ class DocumentRepository(private val context: Context) {
         return list.sortedBy { it.name.lowercase() }
     }
 
+    private fun findAssociatedAutosaveAndBackupFiles(mainFile: File): List<File> {
+        val parentDir = mainFile.parentFile ?: return emptyList()
+        val baseName = mainFile.nameWithoutExtension
+        val fileName = mainFile.name
+        val ext = mainFile.extension
+
+        val candidates = parentDir.listFiles { file ->
+            file.isFile && (
+                file.name == ".$fileName.autosave.$ext" ||
+                file.name == ".$baseName.autosave.$ext" ||
+                file.name.startsWith(".$fileName.autosave.") ||
+                file.name.startsWith(".$baseName.autosave.") ||
+                file.name == "$fileName~" ||
+                file.name == ".$fileName~" ||
+                file.name == ".$baseName.$ext~"
+            )
+        } ?: emptyArray()
+
+        return candidates.toList()
+    }
+
     suspend fun moveNotesToFolder(notes: List<NoteDocument>, destFolder: File): Result<Int> = withContext(Dispatchers.IO) {
         runCatching {
             if (!destFolder.exists()) destFolder.mkdirs()
@@ -277,15 +298,23 @@ class DocumentRepository(private val context: Context) {
                     }
                 }
 
+                val srcAssociated = findAssociatedAutosaveAndBackupFiles(note.file)
+
                 if (note.file.renameTo(destFile)) {
                     movedCount++
 
-                    // Move associated autosave if exists
-                    note.autosaveInfo?.autosaveFile?.let { autoFile ->
-                        if (autoFile.exists()) {
-                            val autoExt = autoFile.extension
-                            val destAuto = File(destFolder, ".${destFile.nameWithoutExtension}.autosave.$autoExt")
-                            autoFile.renameTo(destAuto)
+                    // Move all associated autosave and backup files into destFolder as well
+                    for (assoc in srcAssociated) {
+                        if (assoc.exists()) {
+                            val newAssocName = if (assoc.name.contains(note.file.name)) {
+                                assoc.name.replace(note.file.name, destFile.name)
+                            } else if (assoc.name.contains(note.file.nameWithoutExtension)) {
+                                assoc.name.replace(note.file.nameWithoutExtension, destFile.nameWithoutExtension)
+                            } else {
+                                assoc.name
+                            }
+                            val destAssocFile = File(destFolder, newAssocName)
+                            assoc.renameTo(destAssocFile)
                         }
                     }
                 }
@@ -312,17 +341,20 @@ class DocumentRepository(private val context: Context) {
                 if (!note.file.exists()) continue
                 val trashFileName = "${timestamp}_${note.file.name}"
                 val targetTrashFile = File(trashDir, trashFileName)
+                val srcAssociated = findAssociatedAutosaveAndBackupFiles(note.file)
 
                 if (note.file.renameTo(targetTrashFile)) {
                     manifest.put(trashFileName, note.file.absolutePath)
                     movedCount++
 
-                    // Move associated autosave if present
-                    note.autosaveInfo?.autosaveFile?.let { autoFile ->
-                        if (autoFile.exists()) {
-                            val autoTrashFile = File(trashDir, "${timestamp}_${autoFile.name}")
-                            autoFile.renameTo(autoTrashFile)
-                            manifest.put(autoTrashFile.name, autoFile.absolutePath)
+                    // Move all associated autosave and backup files to Trash
+                    for (assoc in srcAssociated) {
+                        if (assoc.exists()) {
+                            val autoTrashName = "${timestamp}_${assoc.name}"
+                            val autoTrashFile = File(trashDir, autoTrashName)
+                            if (assoc.renameTo(autoTrashFile)) {
+                                manifest.put(autoTrashName, assoc.absolutePath)
+                            }
                         }
                     }
                 }
@@ -620,4 +652,54 @@ class DocumentRepository(private val context: Context) {
     fun discardEmergencyRecovery() {
         env.clearQuarantinedEmergencySave()
     }
+
+    fun getNoteDocumentForFile(file: File): NoteDocument? {
+        if (!file.exists() || !file.isFile || !isOpenableFile(file)) return null
+        val dateFormat = SimpleDateFormat("MMM dd, yyyy · HH:mm", Locale.getDefault())
+        val sizeKb = (file.length() + 1023) / 1024
+        val autosaveCandidate = findMatchingAutosave(file.parentFile ?: getRootNotesDirectory(), file)
+        val autosaveInfo = autosaveCandidate?.let { autoFile ->
+            AutosaveInfo(
+                autosaveFile = autoFile,
+                mainFile = file,
+                mainLastModifiedMs = file.lastModified(),
+                autosaveLastModifiedMs = autoFile.lastModified(),
+                mainSizeBytes = file.length(),
+                autosaveSizeBytes = autoFile.length()
+            )
+        }
+
+        return NoteDocument(
+            file = file,
+            title = file.nameWithoutExtension,
+            path = file.absolutePath,
+            lastModifiedMs = file.lastModified(),
+            sizeBytes = file.length(),
+            lastModifiedFormatted = dateFormat.format(Date(file.lastModified())),
+            sizeFormatted = "${sizeKb} KB",
+            autosaveInfo = autosaveInfo,
+            isHidden = file.name.startsWith("."),
+            folder = file.parentFile?.name ?: "Notes"
+        )
+    }
+
+    fun getAllRecentNotes(limit: Int = 1): List<NoteDocument> {
+        val allOpenableFiles = mutableListOf<File>()
+        fun scan(dir: File) {
+            val children = dir.listFiles() ?: return
+            for (c in children) {
+                if (c.isDirectory && c.name != TRASH_DIR_NAME && !c.name.startsWith(".")) {
+                    scan(c)
+                } else if (c.isFile && isOpenableFile(c) && !c.name.startsWith(".") && !c.name.endsWith("~") && !c.name.contains(".autosave.")) {
+                    allOpenableFiles.add(c)
+                }
+            }
+        }
+        scan(getRootNotesDirectory())
+        return allOpenableFiles
+            .sortedByDescending { it.lastModified() }
+            .take(limit)
+            .mapNotNull { getNoteDocumentForFile(it) }
+    }
 }
+

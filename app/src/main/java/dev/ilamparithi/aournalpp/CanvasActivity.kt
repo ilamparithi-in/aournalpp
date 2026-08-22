@@ -131,6 +131,11 @@ class CanvasActivity : ComponentActivity() {
             || intent.getBooleanExtra("EXTRA_OPEN_PREFS", false)
 
         val targetPath = intent.getStringExtra(EXTRA_NOTE_PATH)
+        if (targetPath != null) {
+            val prefs = getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+            prefs.edit().putString("pref_last_opened_note_path", targetPath).apply()
+        }
+
         val initialTitle = when {
             targetPath != null -> File(targetPath).name
             openPreferences -> "Preferences"
@@ -362,8 +367,35 @@ class CanvasActivity : ComponentActivity() {
             backPressTimestamps.clear()
             showEmergencyForceCloseDialogState.value = true
         } else {
-            // Send Ctrl+Q shortcut to Xournal++ to trigger native close / GTK save confirmation dialog
+            // 1. Direct hardware-level X11 key injection through TouchInputHandler
+            injectCtrlQDirect()
+
+            // 2. Multi-strategy background X11 WM_DELETE_WINDOW / xdotool close
             sessionManager.requestCloseSession()
+        }
+    }
+
+    private fun injectCtrlQDirect() {
+        activeLorieView?.let { view ->
+            view.post {
+                view.sendKeyEvent(0, KeyEvent.KEYCODE_CTRL_LEFT, true)
+                view.sendKeyEvent(0, KeyEvent.KEYCODE_Q, true)
+                view.sendKeyEvent(0, KeyEvent.KEYCODE_Q, false)
+                view.sendKeyEvent(0, KeyEvent.KEYCODE_CTRL_LEFT, false)
+            }
+        }
+
+        inputHandler?.let { handler ->
+            val now = android.os.SystemClock.uptimeMillis()
+            val ctrlDown = KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_CTRL_LEFT, 0)
+            val qDown = KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_Q, 0, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
+            val qUp = KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_Q, 0, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
+            val ctrlUp = KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_CTRL_LEFT, 0)
+
+            handler.sendKeyEvent(ctrlDown)
+            handler.sendKeyEvent(qDown)
+            handler.sendKeyEvent(qUp)
+            handler.sendKeyEvent(ctrlUp)
         }
     }
 
