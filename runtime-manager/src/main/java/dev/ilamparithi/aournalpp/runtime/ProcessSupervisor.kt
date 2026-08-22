@@ -48,6 +48,17 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
     private val _documentTitle = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     val documentTitle: kotlinx.coroutines.flow.StateFlow<String?> = _documentTitle
 
+    private var xournalProcess: Process? = null
+    private var onXournalExitListener: (() -> Unit)? = null
+
+    fun setOnXournalExitListener(listener: (() -> Unit)?) {
+        onXournalExitListener = listener
+    }
+
+    fun isXournalRunning(): Boolean {
+        return xournalProcess?.isAlive == true
+    }
+
     fun startXournal(targetFilePath: String? = null): Process? {
         val xournalFile = File(env.binDir, "xournalpp")
         if (!xournalFile.exists() || !xournalFile.canExecute()) {
@@ -65,8 +76,20 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
             .apply { environment().putAll(env.getEnvMap()) }
             .start()
             
+        xournalProcess = process
         activeProcesses.add(process)
         monitorProcessOutput(process, "NativeProcess:Xournalpp")
+
+        scope.launch {
+            try {
+                process.waitFor()
+                Log.i("ProcessSupervisor", "Xournal++ process terminated cleanly.")
+                onXournalExitListener?.invoke()
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+
         return process
     }
 

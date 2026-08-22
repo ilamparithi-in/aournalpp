@@ -87,7 +87,7 @@ class SettingsActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen(onBack: (() -> Unit)? = null) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -119,11 +119,13 @@ fun SettingsScreen(onBack: () -> Unit) {
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back"
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -489,6 +491,39 @@ fun SettingsScreen(onBack: () -> Unit) {
                             onCheckedChange = {
                                 autoShowIme = it
                                 prefs.edit().putBoolean("pref_auto_show_ime_on_focus", it).apply()
+                            }
+                        )
+                    }
+
+                    HorizontalDivider()
+
+                    var tripleBackForceClose by remember {
+                        mutableStateOf(prefs.getBoolean("pref_triple_back_force_close", true))
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text(
+                                text = "Triple-Back Emergency Force Close",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Pressing back 3 times rapidly in canvas brings up an emergency force-close confirmation if X11 or Xournal++ becomes unresponsive.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        androidx.compose.material3.Switch(
+                            checked = tripleBackForceClose,
+                            onCheckedChange = {
+                                tripleBackForceClose = it
+                                prefs.edit().putBoolean("pref_triple_back_force_close", it).apply()
                             }
                         )
                     }

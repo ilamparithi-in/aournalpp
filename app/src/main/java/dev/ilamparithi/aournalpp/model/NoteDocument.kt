@@ -6,6 +6,21 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
 
+enum class NoteFileType(val extension: String, val displayName: String) {
+    XOPP("xopp", "XOPP Note"),
+    XOJ("xoj", "Legacy XOJ"),
+    PDF("pdf", "PDF Document")
+}
+
+data class FolderItem(
+    val file: File,
+    val name: String,
+    val colorHex: String? = null,
+    val itemCount: Int = 0,
+    val lastModifiedMs: Long = 0L,
+    val isHidden: Boolean = false
+)
+
 /**
  * Encapsulates metadata and comparative metrics for an autosave file associated with a note.
  */
@@ -71,7 +86,6 @@ data class AutosaveInfo(
 
 /**
  * Domain model representing a note document in the Document Hub.
- * Futureproofed for folders, tags, search queries, and gallery display modes.
  */
 data class NoteDocument(
     val file: File,
@@ -86,4 +100,11 @@ data class NoteDocument(
     val isEmergencyRecovery: Boolean = false,
     val folder: String = "",
     val tags: List<String> = emptyList()
-)
+) {
+    val fileType: NoteFileType
+        get() = when (file.extension.lowercase()) {
+            "xoj" -> NoteFileType.XOJ
+            "pdf" -> NoteFileType.PDF
+            else -> NoteFileType.XOPP
+        }
+}

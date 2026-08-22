@@ -15,7 +15,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,9 +40,9 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +55,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -82,7 +82,9 @@ class CanvasActivity : ComponentActivity() {
     private lateinit var sessionManager: CanvasSessionManager
     private var inputHandler: TouchInputHandler? = null
     private var activeLorieView: LorieView? = null
-    private val showExitDialogState = mutableStateOf(false)
+
+    private val showEmergencyForceCloseDialogState = mutableStateOf(false)
+    private val backPressTimestamps = mutableListOf<Long>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -90,7 +92,7 @@ class CanvasActivity : ComponentActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                showExitDialogState.value = true
+                handleSmartBackPress()
             }
         })
 
@@ -115,6 +117,15 @@ class CanvasActivity : ComponentActivity() {
             scope = lifecycleScope
         )
 
+        // Automatically finish activity when Xournal++ terminates
+        sessionManager.setOnProcessExitListener {
+            runOnUiThread {
+                if (!isFinishing) {
+                    finish()
+                }
+            }
+        }
+
         val openPreferences = intent.getBooleanExtra(EXTRA_OPEN_PREFERENCES, false)
             || intent.getBooleanExtra(EXTRA_OPEN_PREFS_ALIAS, false)
             || intent.getBooleanExtra("EXTRA_OPEN_PREFS", false)
@@ -128,13 +139,13 @@ class CanvasActivity : ComponentActivity() {
 
         setContent {
             AournalTheme {
-                var showExitDialog by remember { showExitDialogState }
+                val showEmergencyForceCloseDialog by remember { showEmergencyForceCloseDialogState }
                 var isHeaderExpanded by remember { mutableStateOf(true) }
                 val liveTitle by sessionManager.documentTitle.collectAsState()
                 val displayTitle = liveTitle ?: initialTitle
 
-                BackHandler {
-                    showExitDialogState.value = true
+                BackHandler(enabled = true) {
+                    handleSmartBackPress()
                 }
 
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -150,7 +161,7 @@ class CanvasActivity : ComponentActivity() {
                             }
                         )
 
-                        // Floating Top Header Bar with Document Name and Keyboard Toggle
+                        // Floating Top Header Bar
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
@@ -175,7 +186,7 @@ class CanvasActivity : ComponentActivity() {
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
                                         IconButton(
-                                            onClick = { showExitDialog = true },
+                                            onClick = { handleSmartBackPress() },
                                             modifier = Modifier.size(36.dp)
                                         ) {
                                             Icon(
@@ -242,7 +253,7 @@ class CanvasActivity : ComponentActivity() {
                                 }
                             }
 
-                            // Minimalist Floating Collapse Indicator when header is collapsed
+                            // Minimalist Floating Collapse Indicator
                             if (!isHeaderExpanded) {
                                 Surface(
                                     modifier = Modifier
@@ -277,9 +288,14 @@ class CanvasActivity : ComponentActivity() {
                             }
                         }
 
-                        if (showExitDialog) {
+                        // Emergency Force Close Dialog (Non-dismissible by 4th+ back presses)
+                        if (showEmergencyForceCloseDialog) {
                             AlertDialog(
-                                onDismissRequest = { showExitDialog = false },
+                                onDismissRequest = { /* Non-dismissible on tap outside or back press */ },
+                                properties = DialogProperties(
+                                    dismissOnBackPress = false,
+                                    dismissOnClickOutside = false
+                                ),
                                 icon = {
                                     Icon(
                                         imageVector = Icons.Default.Warning,
@@ -289,35 +305,36 @@ class CanvasActivity : ComponentActivity() {
                                 },
                                 title = {
                                     Text(
-                                        text = "Exit Note Session?",
-                                        style = MaterialTheme.typography.titleLarge
+                                        text = "Force Close Session?",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold
                                     )
                                 },
                                 text = {
                                     Text(
-                                        text = "Are you sure you want to close this session? Please ensure your changes in Xournal++ are saved before exiting.",
+                                        text = "Xournal++ is not responding to normal close requests. Force terminating will immediately exit the canvas.",
                                         style = MaterialTheme.typography.bodyMedium
                                     )
                                 },
                                 confirmButton = {
-                                    androidx.compose.material3.Button(
-                                        onClick = { showExitDialog = false }
-                                    ) {
-                                        androidx.compose.material3.Text("Stay")
-                                    }
-                                },
-                                dismissButton = {
-                                    androidx.compose.material3.TextButton(
+                                    Button(
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                                         onClick = {
-                                            showExitDialog = false
+                                            showEmergencyForceCloseDialogState.value = false
                                             sessionManager.stopSession()
                                             finish()
                                         }
                                     ) {
-                                        androidx.compose.material3.Text(
-                                            text = "Exit Note",
-                                            color = androidx.compose.material3.MaterialTheme.colorScheme.error
-                                        )
+                                        Text("Force Close")
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(
+                                        onClick = {
+                                            showEmergencyForceCloseDialogState.value = false
+                                        }
+                                    ) {
+                                        Text("Wait / Cancel")
                                     }
                                 }
                             )
@@ -325,6 +342,28 @@ class CanvasActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    private fun handleSmartBackPress() {
+        // If force close dialog is already active, ignore back press to avoid accidental dismissal
+        if (showEmergencyForceCloseDialogState.value) {
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        backPressTimestamps.add(now)
+        backPressTimestamps.removeAll { now - it > 2000 }
+
+        val prefs = getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        val tripleBackEnabled = prefs.getBoolean("pref_triple_back_force_close", true)
+
+        if (tripleBackEnabled && backPressTimestamps.size >= 3) {
+            backPressTimestamps.clear()
+            showEmergencyForceCloseDialogState.value = true
+        } else {
+            // Send Ctrl+Q shortcut to Xournal++ to trigger native close / GTK save confirmation dialog
+            sessionManager.requestCloseSession()
         }
     }
 

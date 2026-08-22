@@ -232,6 +232,73 @@ class CanvasSessionManager(
     val documentTitle: kotlinx.coroutines.flow.StateFlow<String?>
         get() = supervisor.documentTitle
 
+    fun setOnProcessExitListener(listener: () -> Unit) {
+        supervisor.setOnXournalExitListener(listener)
+    }
+
+    fun requestCloseSession() {
+        if (!isSessionRunning) return
+        scope.launch(Dispatchers.IO) {
+            val xdotoolBin = File(env.binDir, "xdotool")
+            if (!xdotoolBin.exists() || !xdotoolBin.canExecute()) {
+                Log.w(TAG, "xdotool not available at ${xdotoolBin.absolutePath}, cannot send graceful close shortcut")
+                return@launch
+            }
+
+            Log.i(TAG, "Initiating graceful close for active Xournal++ session...")
+
+            val searchQueries = listOf(
+                listOf("search", "--onlyvisible", "--class", "xournalpp"),
+                listOf("search", "--onlyvisible", "--class", "xournal"),
+                listOf("search", "--onlyvisible", "--name", "Xournal"),
+                listOf("search", "--onlyvisible", "--classname", "xournalpp"),
+                listOf("search", "--onlyvisible", "")
+            )
+
+            val windowIds = mutableListOf<String>()
+
+            for (query in searchQueries) {
+                val cmd = mutableListOf(xdotoolBin.absolutePath).apply { addAll(query) }
+                val (code, out) = supervisor.runBinary(cmd)
+                if (code == 0 && out.isNotBlank()) {
+                    val ids = out.trim().lines().map { it.trim() }.filter { it.isNotEmpty() }
+                    if (ids.isNotEmpty()) {
+                        windowIds.addAll(ids)
+                        break
+                    }
+                }
+            }
+
+            if (windowIds.isNotEmpty()) {
+                // Focus and close the topmost / active X11 window
+                val topWid = windowIds.last()
+                Log.i(TAG, "Found visible windows $windowIds. Sending WM_DELETE_WINDOW & Ctrl+Q to top window $topWid...")
+
+                // 1. Activate window so GTK receives focus
+                supervisor.runBinary(listOf(xdotoolBin.absolutePath, "windowactivate", "--sync", topWid))
+
+                // 2. Send WM_DELETE_WINDOW (native X11 window close message)
+                supervisor.runBinary(listOf(xdotoolBin.absolutePath, "windowclose", topWid))
+
+                // 3. Inject Ctrl+Q directly to the window structure
+                supervisor.runBinary(
+                    listOf(xdotoolBin.absolutePath, "key", "--window", topWid, "--clearmodifiers", "ctrl+q")
+                )
+                supervisor.runBinary(
+                    listOf(xdotoolBin.absolutePath, "key", "--window", topWid, "--clearmodifiers", "Control_L+q")
+                )
+            } else {
+                Log.w(TAG, "No visible X11 window found via search, falling back to global keystrokes...")
+                supervisor.runBinary(
+                    listOf(xdotoolBin.absolutePath, "key", "--clearmodifiers", "ctrl+q")
+                )
+                supervisor.runBinary(
+                    listOf(xdotoolBin.absolutePath, "key", "--clearmodifiers", "Control_L+q")
+                )
+            }
+        }
+    }
+
     fun stopSession() {
         if (!isSessionRunning) return
         Log.i(TAG, "Stopping canvas session...")
@@ -248,3 +315,4 @@ class CanvasSessionManager(
         isSessionRunning = false
     }
 }
+
