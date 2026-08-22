@@ -10,6 +10,9 @@ import android.os.Environment
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,15 +32,25 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FolderShared
+import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WarningAmber
@@ -46,6 +59,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -57,9 +71,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -68,10 +86,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -82,8 +101,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.ilamparithi.aournalpp.CanvasActivity
+import dev.ilamparithi.aournalpp.LicensesActivity
+import dev.ilamparithi.aournalpp.SettingsActivity
 import dev.ilamparithi.aournalpp.data.DocumentRepository
 import dev.ilamparithi.aournalpp.model.NoteDocument
+import dev.ilamparithi.aournalpp.runtime.PdfExportManager
+import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
+import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -121,15 +145,33 @@ private fun requestStoragePermission(context: Context) {
 @Composable
 fun DocumentHubScreen() {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
+    val snackbarHostState = remember { SnackbarHostState() }
+
     val repository = remember { DocumentRepository(context) }
+    val env = remember { repository.getLinuxEnvironment() }
+    val supervisor = remember { ProcessSupervisor(env) }
+    val pdfExportManager = remember { PdfExportManager(env, supervisor) }
     val prefs = remember { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
 
     var hasPermission by remember { mutableStateOf(hasStoragePermission(context)) }
     var showPermissionDialog by remember { mutableStateOf(!hasPermission) }
     var showHiddenFiles by remember { mutableStateOf(prefs.getBoolean("pref_show_hidden_files", false)) }
+    var searchQuery by remember { mutableStateOf("") }
+    var isSearchActive by remember { mutableStateOf(false) }
     var notes by remember { mutableStateOf<List<NoteDocument>>(emptyList()) }
     var showMenu by remember { mutableStateOf(false) }
+
+    // Headless PDF conversion states
+    var isConvertingPdf by remember { mutableStateOf(false) }
+    var convertingNoteTitle by remember { mutableStateOf("") }
+    var pendingExportNote by remember { mutableStateOf<NoteDocument?>(null) }
+
+    // Dialog states for card operations
+    var noteToRename by remember { mutableStateOf<NoteDocument?>(null) }
+    var renameInputText by remember { mutableStateOf("") }
+    var noteToDelete by remember { mutableStateOf<NoteDocument?>(null) }
 
     // Emergency recovery state
     var quarantinedEmergencySave by remember { mutableStateOf<File?>(null) }
@@ -146,10 +188,31 @@ fun DocumentHubScreen() {
         hasPermission = hasStoragePermission(context)
     }
 
+    // SAF PDF Export Launcher
+    val exportPdfLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/pdf")
+    ) { uri ->
+        val note = pendingExportNote
+        pendingExportNote = null
+        if (uri != null && note != null) {
+            isConvertingPdf = true
+            convertingNoteTitle = note.title
+            scope.launch {
+                val result = pdfExportManager.exportPdfToUri(context, note.file, uri)
+                isConvertingPdf = false
+                if (result.isSuccess) {
+                    snackbarHostState.showSnackbar("Exported ${note.title}.pdf successfully")
+                } else {
+                    snackbarHostState.showSnackbar("PDF Export failed: ${result.exceptionOrNull()?.message}")
+                }
+            }
+        }
+    }
+
     fun loadNotes() {
         if (!hasPermission) return
-        notes = repository.scanDocuments(showHidden = showHiddenFiles)
-        val emergencyFile = repository.getLinuxEnvironment().checkAndQuarantineEmergencySave()
+        notes = repository.scanDocuments(query = searchQuery, showHidden = showHiddenFiles)
+        val emergencyFile = env.checkAndQuarantineEmergencySave()
         if (emergencyFile != null && emergencyFile.exists() && emergencyFile.length() > 0) {
             quarantinedEmergencySave = emergencyFile
             showEmergencyDialog = true
@@ -163,7 +226,7 @@ fun DocumentHubScreen() {
         context.startActivity(intent)
     }
 
-    // Refresh when screen is resumed
+    // Refresh when screen is resumed or permissions / search changes
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -177,72 +240,139 @@ fun DocumentHubScreen() {
         }
     }
 
-    LaunchedEffect(hasPermission, showHiddenFiles) {
+    LaunchedEffect(hasPermission, showHiddenFiles, searchQuery) {
         loadNotes()
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "Xournal++",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+            if (isSearchActive) {
+                TopAppBar(
+                    title = {
+                        TextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("Search notes by name...") },
+                            singleLine = true,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                disabledContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(
+                            onClick = {
+                                isSearchActive = false
+                                searchQuery = ""
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Close Search"
+                            )
+                        }
+                    },
+                    actions = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(imageVector = Icons.Default.Clear, contentDescription = "Clear")
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface
                     )
-                },
-                actions = {
-                    IconButton(onClick = { showMenu = true }) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "Options"
-                        )
-                    }
-
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = {
-                                Text(if (showHiddenFiles) "Hide Backup & Hidden Files" else "Show Hidden Files")
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = if (showHiddenFiles) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = null
-                                )
-                            },
-                            onClick = {
-                                showMenu = false
-                                val updated = !showHiddenFiles
-                                showHiddenFiles = updated
-                                prefs.edit().putBoolean("pref_show_hidden_files", updated).apply()
-                            }
-                        )
-                        HorizontalDivider()
-                        DropdownMenuItem(
-                            text = { Text("Settings") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Settings,
-                                    contentDescription = null
-                                )
-                            },
-                            onClick = {
-                                showMenu = false
-                                val intent = Intent(context, dev.ilamparithi.aournalpp.SettingsActivity::class.java)
-                                context.startActivity(intent)
-                            }
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            )
+            } else {
+                TopAppBar(
+                    title = {
+                        Text(
+                            "Xournal++",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    actions = {
+                        IconButton(onClick = { isSearchActive = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "Search Notes"
+                            )
+                        }
+
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "Options"
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(if (showHiddenFiles) "Hide Backup & Hidden Files" else "Show Hidden Files")
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = if (showHiddenFiles) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = null
+                                    )
+                                },
+                                onClick = {
+                                    showMenu = false
+                                    val updated = !showHiddenFiles
+                                    showHiddenFiles = updated
+                                    prefs.edit().putBoolean("pref_show_hidden_files", updated).apply()
+                                }
+                            )
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text("Open Source Licenses") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Gavel,
+                                        contentDescription = null
+                                    )
+                                },
+                                onClick = {
+                                    showMenu = false
+                                    val intent = Intent(context, LicensesActivity::class.java)
+                                    context.startActivity(intent)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Settings") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = null
+                                    )
+                                },
+                                onClick = {
+                                    showMenu = false
+                                    val intent = Intent(context, SettingsActivity::class.java)
+                                    context.startActivity(intent)
+                                }
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                        actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                )
+            }
         },
         floatingActionButton = {
             FloatingActionButton(
@@ -284,7 +414,7 @@ fun DocumentHubScreen() {
                 },
                 text = {
                     Text(
-                        text = "Xournal++ saves notes and exports directly to your device storage (${repository.getLinuxEnvironment().getNotesDirectory().absolutePath}). Please grant All Files Access to proceed.",
+                        text = "Xournal++ saves notes and exports directly to your device storage (${env.getNotesDirectory().absolutePath}). Please grant All Files Access to proceed.",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 },
@@ -433,7 +563,100 @@ fun DocumentHubScreen() {
             )
         }
 
-        // 3. On-Open Autosave Resolution Dialog
+        // 3. Rename Note Dialog
+        noteToRename?.let { doc ->
+            AlertDialog(
+                onDismissRequest = { noteToRename = null },
+                title = {
+                    Text("Rename Note", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Enter new name for \"${doc.title}\":", style = MaterialTheme.typography.bodySmall)
+                        OutlinedTextField(
+                            value = renameInputText,
+                            onValueChange = { renameInputText = it },
+                            singleLine = true,
+                            label = { Text("Title") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (renameInputText.isNotBlank()) {
+                                val target = noteToRename
+                                noteToRename = null
+                                target?.let { note ->
+                                    scope.launch {
+                                        val result = repository.renameNote(note, renameInputText)
+                                        if (result.isSuccess) {
+                                            snackbarHostState.showSnackbar("Renamed note successfully")
+                                            loadNotes()
+                                        } else {
+                                            snackbarHostState.showSnackbar("Rename failed: ${result.exceptionOrNull()?.message}")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    ) {
+                        Text("Rename")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { noteToRename = null }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
+        // 4. Delete Confirmation Dialog
+        noteToDelete?.let { doc ->
+            AlertDialog(
+                onDismissRequest = { noteToDelete = null },
+                icon = {
+                    Icon(imageVector = Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                },
+                title = {
+                    Text("Delete Note?", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                },
+                text = {
+                    Text("Are you sure you want to delete \"${doc.title}\"? This action cannot be undone.", style = MaterialTheme.typography.bodyMedium)
+                },
+                confirmButton = {
+                    Button(
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        onClick = {
+                            val target = noteToDelete
+                            noteToDelete = null
+                            target?.let { note ->
+                                scope.launch {
+                                    val result = repository.deleteNote(note)
+                                    if (result.isSuccess) {
+                                        snackbarHostState.showSnackbar("Deleted \"${note.title}\"")
+                                        loadNotes()
+                                    } else {
+                                        snackbarHostState.showSnackbar("Delete failed: ${result.exceptionOrNull()?.message}")
+                                    }
+                                }
+                            }
+                        }
+                    ) {
+                        Text("Delete")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { noteToDelete = null }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
+        // 5. On-Open Autosave Resolution Dialog
         pendingAutosaveNote?.let { note ->
             val autoInfo = note.autosaveInfo
             if (autoInfo != null) {
@@ -463,6 +686,44 @@ fun DocumentHubScreen() {
             }
         }
 
+        // Background PDF conversion floating progress indicator
+        AnimatedVisibility(
+            visible = isConvertingPdf,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.inverseSurface,
+                    tonalElevation = 8.dp,
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.inverseOnSurface
+                        )
+                        Text(
+                            text = "Exporting \"$convertingNoteTitle\" to PDF...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.inverseOnSurface
+                        )
+                    }
+                }
+            }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -482,88 +743,132 @@ fun DocumentHubScreen() {
                             Icon(imageVector = Icons.Default.WarningAmber, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
                             Text("All Files Access Required", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onErrorContainer)
                         }
-                        Text("To save notes directly into ${repository.getLinuxEnvironment().getNotesDirectory().absolutePath}, please grant storage management permission.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                        Text("To save notes directly into ${env.getNotesDirectory().absolutePath}, please grant storage management permission.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
                         Button(
                             onClick = {
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                                    requestStoragePermission(context)
-                                } else {
-                                    legacyPermissionLauncher.launch(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE))
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Icon(imageVector = Icons.Default.FolderShared, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Grant Storage Access")
-                        }
+                                requestStoragePermission(context)
+                            } else {
+                                legacyPermissionLauncher.launch(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE))
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.FolderShared, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Grant Storage Access")
                     }
                 }
             }
+        }
 
-            if (notes.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+        if (notes.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(24.dp)
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                        modifier = Modifier.padding(24.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = null,
-                            modifier = Modifier.size(72.dp),
-                            tint = MaterialTheme.colorScheme.outline
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "No notes yet",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Tap + to create a new note in ${repository.getLinuxEnvironment().getNotesDirectory().name}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                    }
+                    Icon(
+                        imageVector = if (searchQuery.isNotEmpty()) Icons.Default.Search else Icons.Default.Edit,
+                        contentDescription = null,
+                        modifier = Modifier.size(72.dp),
+                        tint = MaterialTheme.colorScheme.outline
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = if (searchQuery.isNotEmpty()) "No notes match \"$searchQuery\"" else "No notes yet",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (searchQuery.isNotEmpty()) "Try a different search term" else "Tap + to create a new note in ${env.getNotesDirectory().name}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
                 }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(notes, key = { it.path }) { note ->
-                        NoteCard(
-                            note = note,
-                            onClick = {
-                                if (!hasPermission) {
-                                    showPermissionDialog = true
-                                } else if (note.autosaveInfo != null) {
-                                    pendingAutosaveNote = note
-                                } else {
-                                    openNoteInCanvas(note.file)
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(notes, key = { it.path }) { note ->
+                    NoteCard(
+                        note = note,
+                        onClick = {
+                            if (!hasPermission) {
+                                showPermissionDialog = true
+                            } else if (note.autosaveInfo != null) {
+                                pendingAutosaveNote = note
+                            } else {
+                                openNoteInCanvas(note.file)
+                            }
+                        },
+                        onExportPdf = {
+                            pendingExportNote = note
+                            exportPdfLauncher.launch("${note.title}.pdf")
+                        },
+                        onSharePdf = {
+                            isConvertingPdf = true
+                            convertingNoteTitle = note.title
+                            scope.launch {
+                                val result = repository.shareNoteAsPdf(context, note, pdfExportManager)
+                                isConvertingPdf = false
+                                if (result.isFailure) {
+                                    snackbarHostState.showSnackbar("Failed to share PDF: ${result.exceptionOrNull()?.message}")
                                 }
                             }
-                        )
-                    }
+                        },
+                        onShareXopp = {
+                            repository.shareNoteAsXopp(context, note)
+                        },
+                        onRename = {
+                            noteToRename = note
+                            renameInputText = note.title
+                        },
+                        onDuplicate = {
+                            scope.launch {
+                                val result = repository.duplicateNote(note)
+                                if (result.isSuccess) {
+                                    snackbarHostState.showSnackbar("Duplicated \"${note.title}\"")
+                                    loadNotes()
+                                } else {
+                                    snackbarHostState.showSnackbar("Duplicate failed: ${result.exceptionOrNull()?.message}")
+                                }
+                            }
+                        },
+                        onDelete = {
+                            noteToDelete = note
+                        }
+                    )
                 }
             }
         }
     }
 }
+}
 
 @Composable
 fun NoteCard(
     note: NoteDocument,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onExportPdf: () -> Unit,
+    onSharePdf: () -> Unit,
+    onShareXopp: () -> Unit,
+    onRename: () -> Unit,
+    onDuplicate: () -> Unit,
+    onDelete: () -> Unit
 ) {
+    var showCardMenu by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -576,19 +881,31 @@ fun NoteCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
                 shape = CircleShape,
-                color = if (note.isHidden) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primaryContainer,
+                color = when {
+                    note.file.extension.equals("pdf", ignoreCase = true) -> MaterialTheme.colorScheme.tertiaryContainer
+                    note.isHidden -> MaterialTheme.colorScheme.surfaceVariant
+                    else -> MaterialTheme.colorScheme.primaryContainer
+                },
                 modifier = Modifier.size(44.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        imageVector = if (note.isHidden) Icons.Default.Description else Icons.Default.Edit,
+                        imageVector = when {
+                            note.file.extension.equals("pdf", ignoreCase = true) -> Icons.Default.PictureAsPdf
+                            note.isHidden -> Icons.Default.Description
+                            else -> Icons.Default.Edit
+                        },
                         contentDescription = null,
-                        tint = if (note.isHidden) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+                        tint = when {
+                            note.file.extension.equals("pdf", ignoreCase = true) -> MaterialTheme.colorScheme.onTertiaryContainer
+                            note.isHidden -> MaterialTheme.colorScheme.onSurfaceVariant
+                            else -> MaterialTheme.colorScheme.primary
+                        },
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -668,6 +985,73 @@ fun NoteCard(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                         )
                     }
+                }
+            }
+
+            // Card Overflow Menu Button
+            Box {
+                IconButton(onClick = { showCardMenu = true }) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "Note Actions",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = showCardMenu,
+                    onDismissRequest = { showCardMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Export to PDF") },
+                        leadingIcon = { Icon(Icons.Default.FileDownload, contentDescription = null) },
+                        onClick = {
+                            showCardMenu = false
+                            onExportPdf()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Share as PDF") },
+                        leadingIcon = { Icon(Icons.Default.PictureAsPdf, contentDescription = null) },
+                        onClick = {
+                            showCardMenu = false
+                            onSharePdf()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Share as .xopp") },
+                        leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                        onClick = {
+                            showCardMenu = false
+                            onShareXopp()
+                        }
+                    )
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text("Rename") },
+                        leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null) },
+                        onClick = {
+                            showCardMenu = false
+                            onRename()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Duplicate") },
+                        leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+                        onClick = {
+                            showCardMenu = false
+                            onDuplicate()
+                        }
+                    )
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                        onClick = {
+                            showCardMenu = false
+                            onDelete()
+                        }
+                    )
                 }
             }
         }
