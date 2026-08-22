@@ -121,10 +121,18 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
                                     if (destFile.exists()) {
                                         destFile.delete()
                                     }
+                                    val rawTarget = entry.linkName
+                                    val linkTarget = if (rawTarget.startsWith("/data/data/com.termux/files/")) {
+                                        rawTarget.replace("/data/data/com.termux/files", env.rootDir.absolutePath)
+                                    } else if (rawTarget.startsWith("/data/user/0/com.termux/files/")) {
+                                        rawTarget.replace("/data/user/0/com.termux/files", env.rootDir.absolutePath)
+                                    } else {
+                                        rawTarget
+                                    }
                                     try {
-                                        Os.symlink(entry.linkName, destFile.absolutePath)
+                                        Os.symlink(linkTarget, destFile.absolutePath)
                                     } catch (symlinkErr: Exception) {
-                                        Log.w(TAG, "Could not create symlink ${destFile.name} -> ${entry.linkName}: ${symlinkErr.message}")
+                                        Log.w(TAG, "Could not create symlink ${destFile.name} -> $linkTarget: ${symlinkErr.message}")
                                     }
                                 } else {
                                     destFile.parentFile?.mkdirs()
@@ -166,6 +174,30 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
                 return@withContext Result.failure(e)
             }
             
+            // Ensure gdk-pixbuf loaders.cache is generated for icon rendering
+            val gdkDir = File(env.libDir, "gdk-pixbuf-2.0/2.10.0")
+            val loadersCache = File(gdkDir, "loaders.cache")
+            val loadersDir = File(gdkDir, "loaders")
+            val queryLoadersBin = File(env.binDir, "gdk-pixbuf-query-loaders")
+            if (queryLoadersBin.exists() && loadersDir.exists()) {
+                try {
+                    val loaderFiles = loadersDir.listFiles { _, name -> name.endsWith(".so") }
+                    if (!loaderFiles.isNullOrEmpty()) {
+                        val cmd = mutableListOf(queryLoadersBin.absolutePath)
+                        loaderFiles.forEach { cmd.add(it.absolutePath) }
+                        val pb = ProcessBuilder(cmd)
+                            .redirectOutput(loadersCache)
+                            .redirectErrorStream(true)
+                        pb.environment().putAll(env.getEnvMap())
+                        val p = pb.start()
+                        p.waitFor()
+                        Log.i(TAG, "Generated gdk-pixbuf loaders.cache successfully")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to run gdk-pixbuf-query-loaders", e)
+                }
+            }
+
             val currentVersion = getCurrentAppVersionCode()
             val versionFile = File(env.rootDir, VERSION_FLAG)
             versionFile.writeText(currentVersion.toString())

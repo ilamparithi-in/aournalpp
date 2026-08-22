@@ -17,11 +17,10 @@ from typing import Dict, Set, List
 # Seed packages required for Xournal++ and Matchbox
 ROOT_PACKAGES = [
     "xournalpp",
-    "matchbox-window-manager",
+    "openbox",
+    "librsvg",
     "adwaita-icon-theme",
-    "dejavu-fonts",
-    "shared-mime-info",
-    "glib-bin"
+    "shared-mime-info"
 ]
 
 REPOS = {
@@ -174,15 +173,47 @@ def main():
         if os.path.basename(root) in ["man", "doc", "include", "gtk-doc"]:
             os.system(f"rm -rf '{root}'")
 
+    # Compile portaudio stub
+    ndk_clang = "/home/ilam/Android/Sdk/ndk/25.1.8937393/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang"
+    stub_c = os.path.join(os.path.dirname(__file__), "portaudio_stub.c")
+    out_pa = os.path.join(staging_usr, "lib", "libportaudio.so.2")
+    if os.path.exists(ndk_clang) and os.path.exists(stub_c):
+        print("[*] Compiling libportaudio stub...")
+        os.system(f"{ndk_clang} -shared -fPIC -Wl,-soname,libportaudio.so.2 -o {out_pa} {stub_c}")
+        os.system(f"cp {out_pa} {os.path.join(staging_usr, 'lib', 'libportaudio.so')}")
+
+    # Patch libxcb.so socket path
+    libxcb_path = os.path.join(staging_usr, "lib", "libxcb.so")
+    if os.path.exists(libxcb_path):
+        with open(libxcb_path, "rb") as f:
+            xcb_data = f.read()
+        old_str = b"/data/data/com.termux/files/usr/tmp/.X11-unix/X\x00"
+        new_str = b"/data/local/tmp/.X11-unix/X\x00".ljust(len(old_str), b"\x00")
+        if old_str in xcb_data:
+            xcb_data = xcb_data.replace(old_str, new_str)
+            with open(libxcb_path, "wb") as f:
+                f.write(xcb_data)
+
     # Generate font config and skeleton paths
     os.makedirs(os.path.join(staging_usr, "etc/fonts"), exist_ok=True)
     os.makedirs(os.path.join(staging_usr, "tmp"), exist_ok=True)
+    os.makedirs(os.path.join(staging_usr, "var/cache/fontconfig"), exist_ok=True)
+
+    fonts_conf_path = os.path.join(staging_usr, "etc", "fonts", "fonts.conf")
+    with open(fonts_conf_path, "w") as f:
+        f.write("""<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+<fontconfig>
+    <dir>/system/fonts</dir>
+    <dir prefix="default">share/fonts</dir>
+    <cachedir prefix="default">var/cache/fontconfig</cachedir>
+    <cachedir>/data/local/tmp</cachedir>
+</fontconfig>
+""")
 
     print(f"[*] Packaging final archive to {args.output}...")
     os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
-    
-    with tarfile.open(args.output, "w:xz") as tar:
-        tar.add(staging_usr, arcname="usr")
+    os.system(f"tar -cf - -C '{args.staging}' usr | xz -T0 > '{args.output}'")
 
     print("[✔] Bootstrap packaging complete.")
 

@@ -44,6 +44,8 @@ class CanvasActivity : ComponentActivity() {
         // Keep screen on during note-taking
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
+        com.termux.x11.MainActivity.setPrefs(com.termux.x11.Prefs(this))
+
         env = LinuxEnvironment(this)
         supervisor = ProcessSupervisor(env)
         sessionManager = CanvasSessionManager(

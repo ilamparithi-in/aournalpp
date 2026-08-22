@@ -11,7 +11,7 @@ android {
     defaultConfig {
         applicationId = "dev.ilamparithi.aournalpp"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 28
         versionCode = 1
         versionName = "1.0"
 
@@ -49,6 +49,7 @@ dependencies {
     implementation(project(":runtime-manager"))
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.appcompat)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)

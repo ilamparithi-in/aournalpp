@@ -14,22 +14,41 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val activeProcesses = CopyOnWriteArrayList<Process>()
 
-    fun startKioskWindowManager(): Process {
-        val wmPath = File(env.binDir, "matchbox-window-manager").absolutePath
-        val process = ProcessBuilder(wmPath, "-use_titlebar", "no")
+    fun startKioskWindowManager(): Process? {
+        val openboxFile = File(env.binDir, "openbox")
+        val matchboxFile = File(env.binDir, "matchbox-window-manager")
+        val wmFile = when {
+            openboxFile.exists() && openboxFile.canExecute() -> openboxFile
+            matchboxFile.exists() && matchboxFile.canExecute() -> matchboxFile
+            else -> null
+        }
+        if (wmFile == null) {
+            Log.w("ProcessSupervisor", "No window manager found in ${env.binDir.absolutePath}, skipping WM startup")
+            return null
+        }
+        val command = if (wmFile.name == "openbox") {
+            listOf(wmFile.absolutePath, "--sm-disable")
+        } else {
+            listOf(wmFile.absolutePath, "-use_titlebar", "no")
+        }
+        val process = ProcessBuilder(command)
             .directory(env.homeDir)
             .redirectErrorStream(true)
             .apply { environment().putAll(env.getEnvMap()) }
             .start()
             
         activeProcesses.add(process)
-        monitorProcessOutput(process, "NativeProcess:MatchboxWM")
+        monitorProcessOutput(process, "NativeProcess:WindowManager")
         return process
     }
 
-    fun startXournal(targetFilePath: String? = null): Process {
-        val xournalPath = File(env.binDir, "xournalpp").absolutePath
-        val command = mutableListOf(xournalPath)
+    fun startXournal(targetFilePath: String? = null): Process? {
+        val xournalFile = File(env.binDir, "xournalpp")
+        if (!xournalFile.exists() || !xournalFile.canExecute()) {
+            Log.e("ProcessSupervisor", "xournalpp not found at ${xournalFile.absolutePath}")
+            return null
+        }
+        val command = mutableListOf(xournalFile.absolutePath)
         if (targetFilePath != null) {
             command.add(targetFilePath)
         }
