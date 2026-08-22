@@ -55,6 +55,20 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.rememberCoroutineScope
+import dev.ilamparithi.aournalpp.runtime.ConfigFileType
+import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
+import dev.ilamparithi.aournalpp.runtime.XournalConfigManager
+import dev.ilamparithi.aournalpp.ui.ConfigViewerDialog
+import kotlinx.coroutines.launch
 import dev.ilamparithi.aournalpp.ui.theme.AournalTheme
 
 class SettingsActivity : ComponentActivity() {
@@ -75,7 +89,11 @@ class SettingsActivity : ComponentActivity() {
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
     val prefs = remember { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
+    val env = remember { LinuxEnvironment(context) }
+    val configManager = remember { XournalConfigManager(env) }
 
     var selectedScale by remember {
         mutableStateOf(prefs.getString("pref_ui_scale", "1.0") ?: "1.0")
@@ -90,6 +108,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     )
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -182,7 +201,6 @@ fun SettingsScreen(onBack: () -> Unit) {
             }
 
             // Category: Storage & Notes Directory
-            val env = remember { dev.ilamparithi.aournalpp.runtime.LinuxEnvironment(context) }
             var currentNotesDir by remember { mutableStateOf(env.getNotesDirectory().absolutePath) }
             var showCustomPathDialog by remember { mutableStateOf(false) }
             var customPathInput by remember { mutableStateOf(currentNotesDir) }
@@ -473,6 +491,308 @@ fun SettingsScreen(onBack: () -> Unit) {
                                 prefs.edit().putBoolean("pref_auto_show_ime_on_focus", it).apply()
                             }
                         )
+                    }
+                }
+            }
+
+            // Category: Xournal++ Preferences & Configuration
+            Text(
+                text = "Xournal++ Preferences & Configuration",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+
+            // Card 1: Preferences Editor
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "Open Xournal++ Preferences",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Launch directly into the native GTK settings dialog to configure toolbars, defaults, and canvas properties.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    androidx.compose.material3.FilledTonalButton(
+                        onClick = {
+                            val intent = Intent(context, CanvasActivity::class.java).apply {
+                                putExtra(CanvasActivity.EXTRA_OPEN_PREFERENCES, true)
+                            }
+                            context.startActivity(intent)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Tune,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Edit Settings",
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            // Card 2: Configuration Backup & Portability
+            var showConfigViewerDialog by remember { mutableStateOf(false) }
+            var exportTargetType by remember { mutableStateOf(ConfigFileType.SETTINGS_XML) }
+
+            val exportFileLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.CreateDocument("application/octet-stream")
+            ) { uri ->
+                if (uri != null) {
+                    val result = configManager.exportConfigFile(context, exportTargetType, uri)
+                    scope.launch {
+                        if (result.isSuccess) {
+                            snackbarHostState.showSnackbar("Successfully exported ${exportTargetType.fileName}")
+                        } else {
+                            snackbarHostState.showSnackbar("Export failed: ${result.exceptionOrNull()?.message}")
+                        }
+                    }
+                }
+            }
+
+            val exportZipLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.CreateDocument("application/zip")
+            ) { uri ->
+                if (uri != null) {
+                    val result = configManager.exportFullBackupZip(context, uri)
+                    scope.launch {
+                        if (result.isSuccess) {
+                            snackbarHostState.showSnackbar("Exported ${result.getOrNull()} configuration files to backup ZIP")
+                        } else {
+                            snackbarHostState.showSnackbar("ZIP export failed: ${result.exceptionOrNull()?.message}")
+                        }
+                    }
+                }
+            }
+
+            val importFileLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.OpenDocument()
+            ) { uri ->
+                if (uri != null) {
+                    val result = configManager.importConfigFile(context, uri)
+                    scope.launch {
+                        if (result.isSuccess) {
+                            val type = result.getOrNull()
+                            snackbarHostState.showSnackbar("Successfully imported ${type?.fileName ?: "configuration"}")
+                        } else {
+                            snackbarHostState.showSnackbar("Import failed: ${result.exceptionOrNull()?.message}")
+                        }
+                    }
+                }
+            }
+
+            val importZipLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.OpenDocument()
+            ) { uri ->
+                if (uri != null) {
+                    val result = configManager.importFullBackupZip(context, uri)
+                    scope.launch {
+                        if (result.isSuccess) {
+                            val count = result.getOrNull() ?: 0
+                            snackbarHostState.showSnackbar("Successfully restored $count config files from ZIP")
+                        } else {
+                            snackbarHostState.showSnackbar("ZIP restore failed: ${result.exceptionOrNull()?.message}")
+                        }
+                    }
+                }
+            }
+
+            if (showConfigViewerDialog) {
+                ConfigViewerDialog(
+                    configManager = configManager,
+                    onDismiss = { showConfigViewerDialog = false }
+                )
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "Backup & Portability",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Inspect, backup, and restore Xournal++ configuration (settings.xml), custom toolbars (toolbar.ini), palettes, or full ZIP archives.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    // Disclaimer Note
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "Config values are loaded directly by Xournal++. Semantic checking is not performed by Android.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // View XML / Toolbars Modal Button
+                    OutlinedButton(
+                        onClick = { showConfigViewerDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Code,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "View settings.xml",
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    HorizontalDivider()
+
+                    Text(
+                        text = "Export & Backup:",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                exportTargetType = ConfigFileType.SETTINGS_XML
+                                exportFileLauncher.launch("settings.xml")
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FileDownload,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Export Configuration", maxLines = 1, style = MaterialTheme.typography.labelMedium)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                exportTargetType = ConfigFileType.TOOLBAR_INI
+                                exportFileLauncher.launch("toolbar.ini")
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FileDownload,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("toolbar.ini", maxLines = 1, style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            exportZipLauncher.launch("xournalpp_config_backup.zip")
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Archive,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Export Full Backup (.zip)")
+                    }
+
+                    HorizontalDivider()
+
+                    Text(
+                        text = "Import & Restore:",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                importFileLauncher.launch(arrayOf("*/*"))
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FileUpload,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Import Configuration", maxLines = 1, style = MaterialTheme.typography.labelMedium)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                importZipLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Archive,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Restore ZIP", maxLines = 1, style = MaterialTheme.typography.labelMedium)
+                        }
                     }
                 }
             }

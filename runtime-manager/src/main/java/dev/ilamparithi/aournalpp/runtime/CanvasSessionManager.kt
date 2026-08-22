@@ -26,7 +26,11 @@ class CanvasSessionManager(
     private var isSessionRunning = false
     private var cmdEntryPoint: CmdEntryPoint? = null
 
-    fun startSession(lorieView: LorieView, targetFilePath: String? = null) {
+    fun startSession(
+        lorieView: LorieView,
+        targetFilePath: String? = null,
+        openPreferencesOnLaunch: Boolean = false
+    ) {
         if (isSessionRunning) return
         isSessionRunning = true
 
@@ -115,8 +119,59 @@ class CanvasSessionManager(
                 // 5. Start GTK IME Focus Bridge server
                 startImeBridgeServer(lorieView)
 
+                // 6. Direct Preferences Launcher injection if requested
+                if (openPreferencesOnLaunch) {
+                    monitorAndInjectPreferencesShortcut()
+                }
+
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to initialize canvas session", e)
+            }
+        }
+    }
+
+    private fun monitorAndInjectPreferencesShortcut() {
+        scope.launch(Dispatchers.IO) {
+            val xdotoolBin = File(env.binDir, "xdotool")
+            if (!xdotoolBin.exists() || !xdotoolBin.canExecute()) {
+                Log.w(TAG, "xdotool not found at ${xdotoolBin.absolutePath}, cannot inject preferences shortcut")
+                return@launch
+            }
+
+            // Initial settling delay
+            delay(500)
+
+            var attempts = 0
+            val maxAttempts = 30
+
+            while (isSessionRunning && attempts < maxAttempts) {
+                attempts++
+                try {
+                    // Check if Preferences window is already open
+                    val (searchCode, searchOut) = supervisor.runBinary(
+                        listOf(xdotoolBin.absolutePath, "search", "--name", "Preferences")
+                    )
+
+                    if (searchCode == 0 && searchOut.trim().isNotEmpty()) {
+                        Log.i(TAG, "Preferences dialog detected on display (attempt $attempts). Injection complete.")
+                        break
+                    }
+
+                    // Check if main Xournal++ window is visible
+                    val (winCode, winOut) = supervisor.runBinary(
+                        listOf(xdotoolBin.absolutePath, "search", "--onlyvisible", "--class", "xournalpp")
+                    )
+
+                    if (winCode == 0 && winOut.trim().isNotEmpty()) {
+                        Log.i(TAG, "Xournal++ window visible (attempt $attempts). Injecting Ctrl+Comma shortcut...")
+                        supervisor.runBinary(
+                            listOf(xdotoolBin.absolutePath, "key", "--clearmodifiers", "ctrl+comma")
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Exception during preferences shortcut check (attempt $attempts)", e)
+                }
+                delay(500)
             }
         }
     }

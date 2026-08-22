@@ -18,6 +18,7 @@ from typing import Dict, Set, List
 ROOT_PACKAGES = [
     "xournalpp",
     "openbox",
+    "xdotool",
     "librsvg",
     "adwaita-icon-theme",
     "shared-mime-info"

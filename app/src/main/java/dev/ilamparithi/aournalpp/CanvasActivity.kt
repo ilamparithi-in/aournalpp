@@ -73,6 +73,8 @@ class CanvasActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_NOTE_PATH = "dev.ilamparithi.aournalpp.extra.NOTE_PATH"
+        const val EXTRA_OPEN_PREFERENCES = "dev.ilamparithi.aournalpp.extra.OPEN_PREFERENCES"
+        const val EXTRA_OPEN_PREFS_ALIAS = "EXTRA_OPEN_PREFERENCES"
     }
 
     private lateinit var env: LinuxEnvironment
@@ -113,8 +115,16 @@ class CanvasActivity : ComponentActivity() {
             scope = lifecycleScope
         )
 
+        val openPreferences = intent.getBooleanExtra(EXTRA_OPEN_PREFERENCES, false)
+            || intent.getBooleanExtra(EXTRA_OPEN_PREFS_ALIAS, false)
+            || intent.getBooleanExtra("EXTRA_OPEN_PREFS", false)
+
         val targetPath = intent.getStringExtra(EXTRA_NOTE_PATH)
-        val initialTitle = targetPath?.let { File(it).name } ?: "New Note"
+        val initialTitle = when {
+            targetPath != null -> File(targetPath).name
+            openPreferences -> "Preferences"
+            else -> "New Note"
+        }
 
         setContent {
             AournalTheme {
@@ -133,7 +143,7 @@ class CanvasActivity : ComponentActivity() {
                             modifier = Modifier.fillMaxSize(),
                             onLorieViewReady = { lorieView ->
                                 activeLorieView = lorieView
-                                sessionManager.startSession(lorieView, targetPath)
+                                sessionManager.startSession(lorieView, targetPath, openPreferences)
                             },
                             onInputHandlerReady = { handler ->
                                 inputHandler = handler

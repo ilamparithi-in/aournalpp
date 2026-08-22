@@ -175,6 +175,49 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
         }
     }
 
+    fun launchBinary(name: String, command: List<String>): Process? {
+        val binFile = File(command.first())
+        if (!binFile.exists() || !binFile.canExecute()) {
+            Log.w("ProcessSupervisor", "$name binary not found or not executable at ${binFile.absolutePath}")
+            return null
+        }
+        return try {
+            Log.i("ProcessSupervisor", "Launching binary $name: $command")
+            val process = ProcessBuilder(command)
+                .directory(env.homeDir)
+                .redirectErrorStream(true)
+                .apply { environment().putAll(env.getEnvMap()) }
+                .start()
+            activeProcesses.add(process)
+            monitorProcessOutput(process, "NativeProcess:$name")
+            process
+        } catch (e: Exception) {
+            Log.e("ProcessSupervisor", "Failed to launch binary $name", e)
+            null
+        }
+    }
+
+    fun runBinary(command: List<String>): Pair<Int, String> {
+        val binFile = File(command.first())
+        if (!binFile.exists() || !binFile.canExecute()) {
+            Log.w("ProcessSupervisor", "Binary not found or not executable at ${binFile.absolutePath}")
+            return Pair(-1, "Binary not found: ${binFile.absolutePath}")
+        }
+        return try {
+            val process = ProcessBuilder(command)
+                .directory(env.homeDir)
+                .redirectErrorStream(true)
+                .apply { environment().putAll(env.getEnvMap()) }
+                .start()
+            val output = process.inputStream.bufferedReader().use { it.readText() }
+            val exitCode = process.waitFor()
+            Pair(exitCode, output)
+        } catch (e: Exception) {
+            Log.e("ProcessSupervisor", "Error running binary: $command", e)
+            Pair(-1, e.message ?: "Execution failed")
+        }
+    }
+
     fun terminateAll() {
         for (process in activeProcesses) {
             try {
@@ -192,3 +235,4 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
         activeProcesses.clear()
     }
 }
+
