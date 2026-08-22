@@ -34,6 +34,8 @@ class CanvasSessionManager(
             try {
                 Log.i(TAG, "Initializing X11 socket environment...")
                 File(env.tmpDir, ".X11-unix").mkdirs()
+                File(env.tmpDir, ".X0-lock").delete()
+                File(env.tmpDir, ".X11-unix/X0").delete()
 
                 // Set environment for embedded X server
                 try {
@@ -114,6 +116,8 @@ class CanvasSessionManager(
         if (!isSessionRunning) return
         Log.i(TAG, "Stopping canvas session...")
         supervisor.terminateAll()
+        File(env.tmpDir, ".X0-lock").delete()
+        File(env.tmpDir, ".X11-unix/X0").delete()
         isSessionRunning = false
     }
 }

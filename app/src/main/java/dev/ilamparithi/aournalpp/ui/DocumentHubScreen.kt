@@ -111,14 +111,12 @@ fun DocumentHubScreen() {
                 },
                 actions = {
                     IconButton(onClick = {
-                        val intent = Intent(context, com.termux.x11.LoriePreferences::class.java).apply {
-                            action = Intent.ACTION_MAIN
-                        }
+                        val intent = Intent(context, dev.ilamparithi.aournalpp.SettingsActivity::class.java)
                         context.startActivity(intent)
                     }) {
                         Icon(
                             imageVector = Icons.Default.Settings,
-                            contentDescription = "Termux-X11 Settings"
+                            contentDescription = "Settings"
                         )
                     }
                 },
