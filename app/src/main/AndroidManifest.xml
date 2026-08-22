@@ -29,7 +29,7 @@
             android:process=":canvas"
             android:theme="@style/Theme.Aournal"
             android:screenOrientation="unspecified"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|fontScale"
             android:hardwareAccelerated="true" />
 
         <activity

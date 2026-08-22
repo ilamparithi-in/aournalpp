@@ -137,8 +137,10 @@ class CanvasActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        sessionManager.stopSession()
-        // Terminate isolated :canvas process cleanly so reopening starts fresh
-        android.os.Process.killProcess(android.os.Process.myPid())
+        if (isFinishing) {
+            sessionManager.stopSession()
+            // Terminate isolated :canvas process cleanly so reopening starts fresh
+            android.os.Process.killProcess(android.os.Process.myPid())
+        }
     }
 }
