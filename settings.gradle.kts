@@ -24,4 +24,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "Aournal++"
 include(":app")
- 
+include(":x11-core")
+include(":runtime-manager")
+include(":scripts")
