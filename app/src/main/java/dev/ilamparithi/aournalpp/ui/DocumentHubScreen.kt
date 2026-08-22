@@ -12,11 +12,18 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -24,6 +31,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.round
@@ -58,6 +67,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.CompareArrows
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -148,6 +160,8 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
+import androidx.core.app.ActivityOptionsCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -260,6 +274,10 @@ fun DocumentHubScreen(
     var trashedNotes by remember { mutableStateOf<List<NoteDocument>>(emptyList()) }
     var isViewingTrash by remember { mutableStateOf(false) }
 
+    val recentNotes = remember(notes, folders, isViewingTrash) {
+        if (!isViewingTrash) repository.getAllRecentNotes(10) else emptyList()
+    }
+
     // Multi-Selection State & Drag Selection Tracker
     var isSelectionMode by remember { mutableStateOf(false) }
     var selectedNotePaths by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -370,12 +388,20 @@ fun DocumentHubScreen(
         }
     }
 
+    val localView = LocalView.current
     fun openNoteInCanvas(noteFile: File) {
         prefs.edit().putString("pref_last_opened_note_path", noteFile.absolutePath).apply()
         val intent = Intent(context, CanvasActivity::class.java).apply {
             putExtra(CanvasActivity.EXTRA_NOTE_PATH, noteFile.absolutePath)
         }
-        context.startActivity(intent)
+        val options = ActivityOptionsCompat.makeClipRevealAnimation(
+            localView,
+            localView.width / 2,
+            localView.height / 2,
+            localView.width / 4,
+            localView.height / 4
+        ).toBundle()
+        context.startActivity(intent, options)
     }
 
     // Handle Back Press in Subfolders or Selection Mode
@@ -1177,392 +1203,305 @@ fun DocumentHubScreen(
             }
 
             // Main Content Grid with Drag Selection Listener
-            val lastOpenedPath = prefs.getString("pref_last_opened_note_path", null)
-            val continueNote = remember(lastOpenedPath, notes, folders) {
-                if (lastOpenedPath != null) {
-                    val f = File(lastOpenedPath)
-                    if (f.exists() && !f.absolutePath.contains("/.Trash/")) {
-                        repository.getNoteDocumentForFile(f)
-                    } else null
-                } else {
-                    repository.getAllRecentNotes(1).firstOrNull()
-                }
-            }
+            AnimatedContent(
+                targetState = currentDirectory.canonicalPath to isViewingTrash,
+                transitionSpec = {
+                    if (targetState.first.length > initialState.first.length) {
+                        (slideInHorizontally(
+                            animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
+                            initialOffsetX = { it / 3 }
+                        ) + fadeIn(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f)))
+                            .togetherWith(
+                                slideOutHorizontally(
+                                    animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
+                                    targetOffsetX = { -it / 3 }
+                                ) + fadeOut(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f))
+                            )
+                    } else {
+                        (slideInHorizontally(
+                            animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
+                            initialOffsetX = { -it / 3 }
+                        ) + fadeIn(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f)))
+                            .togetherWith(
+                                slideOutHorizontally(
+                                    animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
+                                    targetOffsetX = { it / 3 }
+                                ) + fadeOut(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f))
+                            )
+                    }
+                },
+                label = "folderNavigationTransition",
+                modifier = Modifier.weight(1f)
+            ) { _ ->
+                LazyVerticalGrid(
+                    state = gridState,
+                    columns = if (isGridView) GridCells.Adaptive(minSize = 200.dp) else GridCells.Fixed(1),
+                    contentPadding = PaddingValues(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .notesGridDragSelect(
+                            lazyGridState = gridState,
+                            notes = { if (isViewingTrash) trashedNotes else notes },
+                            selectedPaths = { selectedNotePaths },
+                            setSelectedPaths = { selectedNotePaths = it },
+                            lastSelectedPath = { lastSelectedNotePath },
+                            setLastSelectedPath = { lastSelectedNotePath = it },
+                            isSelectionMode = { isSelectionMode },
+                            setIsSelectionMode = { isSelectionMode = it },
+                            hapticFeedback = hapticFeedback,
+                            autoScrollThreshold = with(LocalDensity.current) { 40.dp.toPx() },
+                            setAutoScrollSpeed = { autoScrollSpeed = it }
+                        )
+                ) {
+                    // Google Files Dynamic Multi-Browse Recents Carousel (only at Root & not searching/selecting)
+                    if (isRoot && !isViewingTrash && searchQuery.isBlank() && !isSelectionMode && recentNotes.isNotEmpty()) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            GoogleFilesDynamicRecentsCarousel(
+                                recentNotes = recentNotes,
+                                pdfExportManager = pdfExportManager,
+                                onOpenNote = { openNoteInCanvas(it) },
+                                onSharePdf = { note ->
+                                    scope.launch {
+                                        val result = repository.shareNoteAsPdf(context, note, pdfExportManager)
+                                        if (result.isFailure) {
+                                            snackbarHostState.showSnackbar("Failed to share PDF: ${result.exceptionOrNull()?.message}")
+                                        }
+                                    }
+                                },
+                                onShareXopp = { note -> repository.shareNoteAsXopp(context, note) },
+                                onDeleteNote = { note -> noteToDelete = note },
+                                onRenameNote = { note ->
+                                    noteToRename = note
+                                    renameInputText = note.title
+                                }
+                            )
+                        }
+                    }
 
-            LazyVerticalGrid(
-                state = gridState,
-                columns = if (isGridView) GridCells.Adaptive(minSize = 200.dp) else GridCells.Fixed(1),
-                contentPadding = PaddingValues(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier
-                    .weight(1f)
-                    .notesGridDragSelect(
-                        lazyGridState = gridState,
-                        notes = { if (isViewingTrash) trashedNotes else notes },
-                        selectedPaths = { selectedNotePaths },
-                        setSelectedPaths = { selectedNotePaths = it },
-                        lastSelectedPath = { lastSelectedNotePath },
-                        setLastSelectedPath = { lastSelectedNotePath = it },
-                        isSelectionMode = { isSelectionMode },
-                        setIsSelectionMode = { isSelectionMode = it },
-                        hapticFeedback = hapticFeedback,
-                        autoScrollThreshold = with(LocalDensity.current) { 40.dp.toPx() },
-                        setAutoScrollSpeed = { autoScrollSpeed = it }
-                    )
-            ) {
-                // M3E Dynamic Greeting & Quick Actions Header (only in Root & not searching)
-                if (isRoot && !isViewingTrash && searchQuery.isBlank() && !isSelectionMode) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Column {
-                                Text(
-                                    text = getGreeting(),
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = "Ready to create and annotate",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                    // Subfolders Section (if any exist)
+                    if (folders.isNotEmpty() && !isViewingTrash) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            Text(
+                                text = "Folders (${folders.size})",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
 
-                            // Quick Actions Pill Row
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.fillMaxWidth()
+                        items(folders, key = { it.file.absolutePath }) { folder ->
+                            var showFolderMenu by remember { mutableStateOf(false) }
+                            val accentColor = folder.colorHex?.let {
+                                try { Color(android.graphics.Color.parseColor(it)) } catch (e: Exception) { null }
+                            } ?: MaterialTheme.colorScheme.primary
+
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        currentDirectory = folder.file
+                                        loadContent()
+                                    },
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = accentColor.copy(alpha = 0.12f)
+                                )
                             ) {
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                Row(
                                     modifier = Modifier
-                                        .weight(1f)
-                                        .clickable {
-                                            val intent = Intent(context, CanvasActivity::class.java)
-                                            context.startActivity(intent)
-                                        }
+                                        .padding(14.dp)
+                                        .fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    Row(
-                                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center
-                                    ) {
-                                        Icon(Icons.Default.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("New Note", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                    }
-                                }
-
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.secondaryContainer,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clickable { importPdfLauncher.launch(arrayOf("application/pdf")) }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center
-                                    ) {
-                                        Icon(Icons.Default.PictureAsPdf, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Import PDF", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                                    }
-                                }
-
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clickable {
-                                            newFolderNameInput = ""
-                                            showNewFolderDialog = true
-                                        }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center
-                                    ) {
-                                        Icon(Icons.Default.CreateNewFolder, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Folder", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onTertiaryContainer)
-                                    }
-                                }
-                            }
-
-                            // Hero Recent Note Resume Card (Global Tracked)
-                            continueNote?.let { recent ->
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { openNoteInCanvas(recent.file) },
-                                    shape = RoundedCornerShape(18.dp),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                    Icon(
+                                        imageVector = Icons.Default.Folder,
+                                        contentDescription = null,
+                                        tint = accentColor,
+                                        modifier = Modifier.size(32.dp)
                                     )
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .padding(14.dp)
-                                            .fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(14.dp)
-                                    ) {
-                                        Surface(
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = MaterialTheme.colorScheme.primaryContainer,
-                                            modifier = Modifier.size(54.dp)
-                                        ) {
-                                            Box(contentAlignment = Alignment.Center) {
-                                                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(28.dp))
-                                            }
-                                        }
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = folder.name,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "${folder.itemCount} notes",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
 
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text("Continue Editing", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                                            Text(recent.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                            Text("${recent.folder} · Modified ${recent.lastModifiedFormatted}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Box {
+                                        IconButton(onClick = { showFolderMenu = true }, modifier = Modifier.size(28.dp)) {
+                                            Icon(Icons.Default.MoreVert, contentDescription = null, modifier = Modifier.size(18.dp))
                                         }
-
-                                        Button(
-                                            onClick = { openNoteInCanvas(recent.file) },
-                                            shape = RoundedCornerShape(12.dp)
+                                        androidx.compose.material3.DropdownMenu(
+                                            expanded = showFolderMenu,
+                                            onDismissRequest = { showFolderMenu = false }
                                         ) {
-                                            Text("Resume")
+                                            androidx.compose.material3.DropdownMenuItem(
+                                                text = { Text("Change Color") },
+                                                leadingIcon = { Icon(Icons.Default.ColorLens, contentDescription = null) },
+                                                onClick = {
+                                                    showFolderMenu = false
+                                                    folderToEditColor = folder
+                                                }
+                                            )
+                                            androidx.compose.material3.DropdownMenuItem(
+                                                text = { Text("Delete Folder", color = MaterialTheme.colorScheme.error) },
+                                                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                                onClick = {
+                                                    showFolderMenu = false
+                                                    scope.launch {
+                                                        repository.moveFolderToTrash(folder.file)
+                                                        snackbarHostState.showSnackbar("Moved folder \"${folder.name}\" to Trash")
+                                                        loadContent()
+                                                    }
+                                                }
+                                            )
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                }
 
-                // Subfolders Section (if any exist)
-                if (folders.isNotEmpty() && !isViewingTrash) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        Text(
-                            text = "Folders (${folders.size})",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                    // Documents Section
+                    val currentNotes = if (isViewingTrash) trashedNotes else notes
 
-                    items(folders, key = { it.file.absolutePath }) { folder ->
-                        var showFolderMenu by remember { mutableStateOf(false) }
-                        val accentColor = folder.colorHex?.let {
-                            try { Color(android.graphics.Color.parseColor(it)) } catch (e: Exception) { null }
-                        } ?: MaterialTheme.colorScheme.primary
-
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    currentDirectory = folder.file
-                                    loadContent()
-                                },
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = accentColor.copy(alpha = 0.12f)
+                    if (currentNotes.isNotEmpty()) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            Text(
+                                text = if (isViewingTrash) "Trashed Notes (${currentNotes.size})" else "Notes (${currentNotes.size})",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
                             )
-                        ) {
-                            Row(
+                        }
+
+                        items(currentNotes, key = { it.path }) { note ->
+                            val isSelected = selectedNotePaths.contains(note.path)
+
+                            ExpressiveNoteCard(
+                                note = note,
+                                isGridView = isGridView,
+                                isSelected = isSelected,
+                                isSelectionMode = isSelectionMode,
+                                isTrashMode = isViewingTrash,
+                                pdfExportManager = pdfExportManager,
+                                onClick = {
+                                    if (isSelectionMode) {
+                                        selectedNotePaths = if (isSelected) selectedNotePaths.minus(note.path) else selectedNotePaths.plus(note.path)
+                                        lastSelectedNotePath = note.path
+                                    } else if (isViewingTrash) {
+                                        // Trashed item tap
+                                    } else if (!hasPermission) {
+                                        showPermissionDialog = true
+                                    } else if (note.autosaveInfo != null) {
+                                        pendingAutosaveNote = note
+                                    } else {
+                                        openNoteInCanvas(note.file)
+                                    }
+                                },
+                                onLongClick = {
+                                    if (!isViewingTrash) {
+                                        if (isSelectionMode && !isSelected && selectedNotePaths.isNotEmpty()) {
+                                            val lastPath = lastSelectedNotePath ?: selectedNotePaths.lastOrNull()
+                                            val currentList = currentNotes.map { it.path }
+                                            val lastIdx = currentList.indexOf(lastPath)
+                                            val currentIdx = currentList.indexOf(note.path)
+                                            if (lastIdx >= 0 && currentIdx >= 0) {
+                                                val start = minOf(lastIdx, currentIdx)
+                                                val end = maxOf(lastIdx, currentIdx)
+                                                val range = currentNotes.subList(start, end + 1).map { it.path }.toSet()
+                                                selectedNotePaths = selectedNotePaths + range
+                                            } else {
+                                                selectedNotePaths = selectedNotePaths + note.path
+                                            }
+                                        } else {
+                                            isSelectionMode = true
+                                            selectedNotePaths = selectedNotePaths + note.path
+                                        }
+                                        lastSelectedNotePath = note.path
+                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    }
+                                },
+                                onExportPdf = {
+                                    pendingExportNote = note
+                                    exportPdfLauncher.launch("${note.title}.pdf")
+                                },
+                                onSharePdf = {
+                                    isPdfConverting = true
+                                    convertingMessage = "Rendering PDF for sharing..."
+                                    scope.launch {
+                                        val result = repository.shareNoteAsPdf(context, note, pdfExportManager)
+                                        isPdfConverting = false
+                                        if (result.isFailure) {
+                                            snackbarHostState.showSnackbar("Failed to share PDF: ${result.exceptionOrNull()?.message}")
+                                        }
+                                    }
+                                },
+                                onShareXopp = { repository.shareNoteAsXopp(context, note) },
+                                onRename = {
+                                    noteToRename = note
+                                    renameInputText = note.title
+                                },
+                                onDuplicate = {
+                                    scope.launch {
+                                        val result = repository.duplicateNote(note)
+                                        if (result.isSuccess) {
+                                            snackbarHostState.showSnackbar("Duplicated \"${note.title}\"")
+                                            loadContent()
+                                        }
+                                    }
+                                },
+                                onDelete = { noteToDelete = note },
+                                onRestore = {
+                                    scope.launch {
+                                        val res = repository.restoreFromTrash(note)
+                                        if (res.isSuccess) {
+                                            snackbarHostState.showSnackbar("Restored \"${note.title}\"")
+                                            loadContent()
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    } else if (folders.isEmpty()) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            Box(
                                 modifier = Modifier
-                                    .padding(14.dp)
-                                    .fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    .fillMaxWidth()
+                                    .padding(vertical = 48.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Folder,
-                                    contentDescription = null,
-                                    tint = accentColor,
-                                    modifier = Modifier.size(32.dp)
-                                )
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = folder.name,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isViewingTrash) Icons.Default.DeleteSweep else Icons.Default.Description,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(64.dp),
+                                        tint = MaterialTheme.colorScheme.outline
                                     )
                                     Text(
-                                        text = "${folder.itemCount} notes",
-                                        style = MaterialTheme.typography.labelSmall,
+                                        text = if (isViewingTrash) "Trash is empty" else "No notes found",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = if (isViewingTrash) "Deleted notes will appear here" else "Tap + to create your first note",
+                                        style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-
-                                Box {
-                                    IconButton(onClick = { showFolderMenu = true }, modifier = Modifier.size(28.dp)) {
-                                        Icon(Icons.Default.MoreVert, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    }
-                                    DropdownMenu(
-                                        expanded = showFolderMenu,
-                                        onDismissRequest = { showFolderMenu = false }
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = { Text("Change Color") },
-                                            leadingIcon = { Icon(Icons.Default.ColorLens, contentDescription = null) },
-                                            onClick = {
-                                                showFolderMenu = false
-                                                folderToEditColor = folder
-                                            }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("Delete Folder", color = MaterialTheme.colorScheme.error) },
-                                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                                            onClick = {
-                                                showFolderMenu = false
-                                                scope.launch {
-                                                    repository.moveFolderToTrash(folder.file)
-                                                    snackbarHostState.showSnackbar("Moved folder \"${folder.name}\" to Trash")
-                                                    loadContent()
-                                                }
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Documents Section
-                val currentNotes = if (isViewingTrash) trashedNotes else notes
-
-                if (currentNotes.isNotEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        Text(
-                            text = if (isViewingTrash) "Trashed Notes (${currentNotes.size})" else "Notes (${currentNotes.size})",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    items(currentNotes, key = { it.path }) { note ->
-                        val isSelected = selectedNotePaths.contains(note.path)
-
-                        ExpressiveNoteCard(
-                            note = note,
-                            isGridView = isGridView,
-                            isSelected = isSelected,
-                            isSelectionMode = isSelectionMode,
-                            isTrashMode = isViewingTrash,
-                            pdfExportManager = pdfExportManager,
-                            onClick = {
-                                if (isSelectionMode) {
-                                    selectedNotePaths = if (isSelected) selectedNotePaths.minus(note.path) else selectedNotePaths.plus(note.path)
-                                    lastSelectedNotePath = note.path
-                                } else if (isViewingTrash) {
-                                    // Trashed item tap
-                                } else if (!hasPermission) {
-                                    showPermissionDialog = true
-                                } else if (note.autosaveInfo != null) {
-                                    pendingAutosaveNote = note
-                                } else {
-                                    openNoteInCanvas(note.file)
-                                }
-                            },
-                            onLongClick = {
-                                if (!isViewingTrash) {
-                                    if (isSelectionMode && !isSelected && selectedNotePaths.isNotEmpty()) {
-                                        val lastPath = lastSelectedNotePath ?: selectedNotePaths.lastOrNull()
-                                        val currentList = currentNotes.map { it.path }
-                                        val lastIdx = currentList.indexOf(lastPath)
-                                        val currentIdx = currentList.indexOf(note.path)
-                                        if (lastIdx >= 0 && currentIdx >= 0) {
-                                            val start = minOf(lastIdx, currentIdx)
-                                            val end = maxOf(lastIdx, currentIdx)
-                                            val range = currentNotes.subList(start, end + 1).map { it.path }.toSet()
-                                            selectedNotePaths = selectedNotePaths + range
-                                        } else {
-                                            selectedNotePaths = selectedNotePaths + note.path
-                                        }
-                                    } else {
-                                        isSelectionMode = true
-                                        selectedNotePaths = selectedNotePaths + note.path
-                                    }
-                                    lastSelectedNotePath = note.path
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                }
-                            },
-                            onExportPdf = {
-                                pendingExportNote = note
-                                exportPdfLauncher.launch("${note.title}.pdf")
-                            },
-                            onSharePdf = {
-                                isPdfConverting = true
-                                convertingMessage = "Rendering PDF for sharing..."
-                                scope.launch {
-                                    val result = repository.shareNoteAsPdf(context, note, pdfExportManager)
-                                    isPdfConverting = false
-                                    if (result.isFailure) {
-                                        snackbarHostState.showSnackbar("Failed to share PDF: ${result.exceptionOrNull()?.message}")
-                                    }
-                                }
-                            },
-                            onShareXopp = { repository.shareNoteAsXopp(context, note) },
-                            onRename = {
-                                noteToRename = note
-                                renameInputText = note.title
-                            },
-                            onDuplicate = {
-                                scope.launch {
-                                    val result = repository.duplicateNote(note)
-                                    if (result.isSuccess) {
-                                        snackbarHostState.showSnackbar("Duplicated \"${note.title}\"")
-                                        loadContent()
-                                    }
-                                }
-                            },
-                            onDelete = { noteToDelete = note },
-                            onRestore = {
-                                scope.launch {
-                                    val res = repository.restoreFromTrash(note)
-                                    if (res.isSuccess) {
-                                        snackbarHostState.showSnackbar("Restored \"${note.title}\"")
-                                        loadContent()
-                                    }
-                                }
-                            }
-                        )
-                    }
-                } else if (folders.isEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 48.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (isViewingTrash) Icons.Default.DeleteSweep else Icons.Default.Description,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(64.dp),
-                                    tint = MaterialTheme.colorScheme.outline
-                                )
-                                Text(
-                                    text = if (isViewingTrash) "Trash is empty" else "No notes found",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = if (isViewingTrash) "Deleted notes will appear here" else "Tap + to create your first note",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
                             }
                         }
                     }
@@ -2232,6 +2171,380 @@ fun Modifier.notesGridDragSelect(
                     }
                 } finally {
                     setAutoScrollSpeed(0f)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Dynamic Multi-Browse Recents Carousel (Google Files app style)
+ * Items in focus are wider (up to 260dp) while edge items are narrower (145dp) with spring interpolation.
+ */
+@Composable
+fun GoogleFilesDynamicRecentsCarousel(
+    recentNotes: List<NoteDocument>,
+    pdfExportManager: PdfExportManager,
+    onOpenNote: (File) -> Unit,
+    onSharePdf: (NoteDocument) -> Unit,
+    onShareXopp: (NoteDocument) -> Unit,
+    onDeleteNote: (NoteDocument) -> Unit,
+    onRenameNote: (NoteDocument) -> Unit
+) {
+    val listState = rememberLazyListState()
+    val density = LocalDensity.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.History,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "Recent Files",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Text(
+                "${recentNotes.size} recent",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        LazyRow(
+            state = listState,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+        ) {
+            itemsIndexed(recentNotes, key = { _, note -> "recent_${note.path}" }) { index, note ->
+                val canScrollBackward = listState.canScrollBackward
+                val canScrollForward = listState.canScrollForward
+                val layoutInfo = listState.layoutInfo
+                val itemInfo = layoutInfo.visibleItemsInfo.find { it.index == index }
+                val viewportWidthPx = layoutInfo.viewportEndOffset.toFloat()
+
+                val targetWidthDp: androidx.compose.ui.unit.Dp = if (itemInfo != null && viewportWidthPx > 0f) {
+                    val itemCenter = itemInfo.offset + itemInfo.size / 2f
+                    val leftThresholdPx = with(density) { 150.dp.toPx() }
+                    val rightThresholdPx = with(density) { 150.dp.toPx() }
+
+                    val leftCompression = if (!canScrollBackward) 1f else (itemCenter / leftThresholdPx).coerceIn(0f, 1f)
+                    val rightDist = viewportWidthPx - itemCenter
+                    val rightCompression = if (!canScrollForward) 1f else (rightDist / rightThresholdPx).coerceIn(0f, 1f)
+                    val factor = minOf(leftCompression, rightCompression)
+
+                    when {
+                        factor < 0.22f -> 38.dp
+                        factor < 0.58f -> {
+                            val t = (factor - 0.22f) / 0.36f
+                            (38 + t * (85 - 38)).dp
+                        }
+                        else -> {
+                            val t = (factor - 0.58f) / 0.42f
+                            (85 + t * (255 - 85)).dp
+                        }
+                    }
+                } else {
+                    if (index < 2) 255.dp else if (index == 2) 85.dp else 38.dp
+                }
+
+                val animatedWidth by animateDpAsState(
+                    targetValue = targetWidthDp,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessLow
+                    ),
+                    label = "multiBrowseWidth"
+                )
+
+                GoogleFilesMultiBrowseCard(
+                    note = note,
+                    cardWidth = animatedWidth,
+                    pdfExportManager = pdfExportManager,
+                    onOpen = { onOpenNote(note.file) },
+                    onSharePdf = { onSharePdf(note) },
+                    onShareXopp = { onShareXopp(note) },
+                    onDelete = { onDeleteNote(note) },
+                    onRename = { onRenameNote(note) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GoogleFilesMultiBrowseCard(
+    note: NoteDocument,
+    cardWidth: androidx.compose.ui.unit.Dp,
+    pdfExportManager: PdfExportManager,
+    onOpen: () -> Unit,
+    onSharePdf: () -> Unit,
+    onShareXopp: () -> Unit,
+    onDelete: () -> Unit,
+    onRename: () -> Unit
+) {
+    val context = LocalContext.current
+    var showMenu by remember { mutableStateOf(false) }
+
+    val thumbnailFile by produceState<File?>(
+        initialValue = ThumbnailManager.getCachedThumbnailFile(context, note.file),
+        key1 = note.lastModifiedMs
+    ) {
+        value = ThumbnailManager.getOrCreateThumbnail(context, note.file, pdfExportManager)
+    }
+
+    val isPill = cardWidth < 50.dp
+    val isMedium = cardWidth in 50.dp..140.dp
+    val isLarge = cardWidth > 140.dp
+
+    val cardShape = when {
+        isPill -> RoundedCornerShape(percent = 50)
+        isMedium -> RoundedCornerShape(18.dp)
+        else -> RoundedCornerShape(24.dp)
+    }
+
+    Card(
+        modifier = Modifier
+            .width(cardWidth)
+            .height(170.dp)
+            .clickable(onClick = onOpen),
+        shape = cardShape,
+        colors = CardDefaults.cardColors(
+            containerColor = if (isLarge) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
+            }
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isLarge) 3.dp else 1.dp)
+    ) {
+        when {
+            // Extra-small pill state
+            isPill -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (note.fileType == NoteFileType.PDF) Icons.Default.PictureAsPdf else Icons.Default.Description,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            // Medium peeking preview state
+            isMedium -> {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    if (thumbnailFile != null && thumbnailFile!!.exists()) {
+                        val bitmap = remember(thumbnailFile) {
+                            try { BitmapFactory.decodeFile(thumbnailFile!!.absolutePath) } catch (e: Exception) { null }
+                        }
+                        if (bitmap != null) {
+                            Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = note.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    } else {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (note.fileType == NoteFileType.PDF) Icons.Default.PictureAsPdf else Icons.Default.Description,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                    }
+
+                    // Format pill badge at top
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.65f),
+                        shape = RoundedCornerShape(6.dp),
+                        modifier = Modifier.align(Alignment.TopCenter).padding(top = 6.dp)
+                    ) {
+                        Text(
+                            text = ".${note.file.extension}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
+
+            // Large full card state
+            else -> {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Thumbnail container
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        if (thumbnailFile != null && thumbnailFile!!.exists()) {
+                            val bitmap = remember(thumbnailFile) {
+                                try { BitmapFactory.decodeFile(thumbnailFile!!.absolutePath) } catch (e: Exception) { null }
+                            }
+                            if (bitmap != null) {
+                                Image(
+                                    bitmap = bitmap.asImageBitmap(),
+                                    contentDescription = note.title,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        } else {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = if (note.fileType == NoteFileType.PDF) Icons.Default.PictureAsPdf else Icons.Default.Description,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+                        }
+
+                        // Format pill badge
+                        Surface(
+                            color = Color.Black.copy(alpha = 0.65f),
+                            shape = RoundedCornerShape(6.dp),
+                            modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
+                        ) {
+                            Text(
+                                text = ".${note.file.extension}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+
+                        // 3-dot dropdown menu button
+                        Box(modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)) {
+                            IconButton(
+                                onClick = { showMenu = true },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color.Black.copy(alpha = 0.4f),
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.MoreVert, contentDescription = "Options", tint = Color.White, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            }
+
+                            androidx.compose.material3.DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("Open") },
+                                    leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null) },
+                                    onClick = {
+                                        showMenu = false
+                                        onOpen()
+                                    }
+                                )
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("Rename") },
+                                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                                    onClick = {
+                                        showMenu = false
+                                        onRename()
+                                    }
+                                )
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("Share as PDF") },
+                                    leadingIcon = { Icon(Icons.Default.PictureAsPdf, contentDescription = null) },
+                                    onClick = {
+                                        showMenu = false
+                                        onSharePdf()
+                                    }
+                                )
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("Share file (.xopp)") },
+                                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                                    onClick = {
+                                        showMenu = false
+                                        onShareXopp()
+                                    }
+                                )
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("Move to Trash", color = MaterialTheme.colorScheme.error) },
+                                    leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                    onClick = {
+                                        showMenu = false
+                                        onDelete()
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Bottom metadata bar
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = note.title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "${note.folder} • ${note.lastModifiedFormatted}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.clickable(onClick = onOpen)
+                        ) {
+                            Text(
+                                text = "Open",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
                 }
             }
         }

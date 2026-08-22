@@ -15,10 +15,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.FolderCopy
 import androidx.compose.material.icons.filled.Gavel
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.FolderCopy
 import androidx.compose.material.icons.outlined.Gavel
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -45,13 +51,24 @@ import dev.ilamparithi.aournalpp.ui.BootstrapScreen
 import dev.ilamparithi.aournalpp.ui.BootstrapState
 import dev.ilamparithi.aournalpp.ui.BootstrapViewModel
 import dev.ilamparithi.aournalpp.ui.DocumentHubScreen
+import dev.ilamparithi.aournalpp.ui.HomeScreen
 import dev.ilamparithi.aournalpp.ui.LicensesScreen
-import dev.ilamparithi.aournalpp.ui.theme.AournalTheme
+import dev.ilamparithi.aournalpp.SettingsScreen
+import dev.ilamparithi.aournalpp.CanvasActivity
 import dev.ilamparithi.aournalpp.utils.ExternalFileHandler
+import dev.ilamparithi.aournalpp.ui.theme.AournalTheme
+import dev.ilamparithi.aournalpp.ui.theme.ExpressiveSprings
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
-
     companion object {
         private const val TAG = "MainActivity"
     }
@@ -154,11 +171,11 @@ fun MainResponsiveAppShell() {
                         onClick = { selectedTab = 0 },
                         icon = {
                             Icon(
-                                imageVector = if (selectedTab == 0) Icons.Filled.Description else Icons.Outlined.Description,
-                                contentDescription = "Notes"
+                                imageVector = if (selectedTab == 0) Icons.Filled.Home else Icons.Outlined.Home,
+                                contentDescription = "Home"
                             )
                         },
-                        label = { Text("Notes", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal) }
+                        label = { Text("Home", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal) }
                     )
 
                     NavigationRailItem(
@@ -166,11 +183,11 @@ fun MainResponsiveAppShell() {
                         onClick = { selectedTab = 1 },
                         icon = {
                             Icon(
-                                imageVector = if (selectedTab == 1) Icons.Filled.Settings else Icons.Outlined.Settings,
-                                contentDescription = "Settings"
+                                imageVector = if (selectedTab == 1) Icons.Filled.FolderCopy else Icons.Outlined.FolderCopy,
+                                contentDescription = "Files"
                             )
                         },
-                        label = { Text("Settings", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal) }
+                        label = { Text("Files", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal) }
                     )
 
                     NavigationRailItem(
@@ -178,22 +195,69 @@ fun MainResponsiveAppShell() {
                         onClick = { selectedTab = 2 },
                         icon = {
                             Icon(
-                                imageVector = if (selectedTab == 2) Icons.Filled.Gavel else Icons.Outlined.Gavel,
-                                contentDescription = "Licenses"
+                                imageVector = if (selectedTab == 2) Icons.Filled.Settings else Icons.Outlined.Settings,
+                                contentDescription = "Settings"
                             )
                         },
-                        label = { Text("Licenses", fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal) }
+                        label = { Text("Settings", fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal) }
+                    )
+
+                    NavigationRailItem(
+                        selected = selectedTab == 3,
+                        onClick = { selectedTab = 3 },
+                        icon = {
+                            Icon(
+                                imageVector = if (selectedTab == 3) Icons.Filled.Info else Icons.Outlined.Info,
+                                contentDescription = "About"
+                            )
+                        },
+                        label = { Text("About", fontWeight = if (selectedTab == 3) FontWeight.Bold else FontWeight.Normal) }
                     )
                 }
 
                 Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                    when (selectedTab) {
-                        0 -> DocumentHubScreen(
-                            onNavigateToSettings = { selectedTab = 1 },
-                            onNavigateToLicenses = { selectedTab = 2 }
-                        )
-                        1 -> SettingsScreen(onBack = { selectedTab = 0 })
-                        2 -> LicensesScreen(onBack = { selectedTab = 0 })
+                    AnimatedContent(
+                        targetState = selectedTab,
+                        transitionSpec = {
+                            if (targetState > initialState) {
+                                (slideInHorizontally(
+                                    animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
+                                    initialOffsetX = { it / 3 }
+                                ) + fadeIn(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f)))
+                                    .togetherWith(
+                                        slideOutHorizontally(
+                                            animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
+                                            targetOffsetX = { -it / 3 }
+                                        ) + fadeOut(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f))
+                                    )
+                            } else {
+                                (slideInHorizontally(
+                                    animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
+                                    initialOffsetX = { -it / 3 }
+                                ) + fadeIn(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f)))
+                                    .togetherWith(
+                                        slideOutHorizontally(
+                                            animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
+                                            targetOffsetX = { it / 3 }
+                                        ) + fadeOut(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f))
+                                    )
+                            }
+                        },
+                        label = "railTabTransition"
+                    ) { tab ->
+                        when (tab) {
+                            0 -> HomeScreen(
+                                onNavigateToFiles = { selectedTab = 1 },
+                                onNavigateToSettings = { selectedTab = 2 },
+                                onNavigateToAbout = { selectedTab = 3 }
+                            )
+                            1 -> DocumentHubScreen(
+                                onNavigateToSettings = { selectedTab = 2 },
+                                onNavigateToLicenses = { selectedTab = 3 }
+                            )
+                            2 -> SettingsScreen(onBack = { selectedTab = 0 })
+                            3 -> LicensesScreen(onBack = { selectedTab = 0 })
+                        }
                     }
                 }
             }
@@ -209,11 +273,11 @@ fun MainResponsiveAppShell() {
                             onClick = { selectedTab = 0 },
                             icon = {
                                 Icon(
-                                    imageVector = if (selectedTab == 0) Icons.Filled.Description else Icons.Outlined.Description,
-                                    contentDescription = "Notes"
+                                    imageVector = if (selectedTab == 0) Icons.Filled.Home else Icons.Outlined.Home,
+                                    contentDescription = "Home"
                                 )
                             },
-                            label = { Text("Notes") }
+                            label = { Text("Home") }
                         )
 
                         NavigationBarItem(
@@ -221,11 +285,11 @@ fun MainResponsiveAppShell() {
                             onClick = { selectedTab = 1 },
                             icon = {
                                 Icon(
-                                    imageVector = if (selectedTab == 1) Icons.Filled.Settings else Icons.Outlined.Settings,
-                                    contentDescription = "Settings"
+                                    imageVector = if (selectedTab == 1) Icons.Filled.FolderCopy else Icons.Outlined.FolderCopy,
+                                    contentDescription = "Files"
                                 )
                             },
-                            label = { Text("Settings") }
+                            label = { Text("Files") }
                         )
 
                         NavigationBarItem(
@@ -233,23 +297,70 @@ fun MainResponsiveAppShell() {
                             onClick = { selectedTab = 2 },
                             icon = {
                                 Icon(
-                                    imageVector = if (selectedTab == 2) Icons.Filled.Gavel else Icons.Outlined.Gavel,
-                                    contentDescription = "Licenses"
+                                    imageVector = if (selectedTab == 2) Icons.Filled.Settings else Icons.Outlined.Settings,
+                                    contentDescription = "Settings"
                                 )
                             },
-                            label = { Text("Licenses") }
+                            label = { Text("Settings") }
+                        )
+
+                        NavigationBarItem(
+                            selected = selectedTab == 3,
+                            onClick = { selectedTab = 3 },
+                            icon = {
+                                Icon(
+                                    imageVector = if (selectedTab == 3) Icons.Filled.Info else Icons.Outlined.Info,
+                                    contentDescription = "About"
+                                )
+                            },
+                            label = { Text("About") }
                         )
                     }
                 }
             ) { padding ->
                 Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-                    when (selectedTab) {
-                        0 -> DocumentHubScreen(
-                            onNavigateToSettings = { selectedTab = 1 },
-                            onNavigateToLicenses = { selectedTab = 2 }
-                        )
-                        1 -> SettingsScreen(onBack = { selectedTab = 0 })
-                        2 -> LicensesScreen(onBack = { selectedTab = 0 })
+                    AnimatedContent(
+                        targetState = selectedTab,
+                        transitionSpec = {
+                            if (targetState > initialState) {
+                                (slideInHorizontally(
+                                    animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
+                                    initialOffsetX = { it / 3 }
+                                ) + fadeIn(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f)))
+                                    .togetherWith(
+                                        slideOutHorizontally(
+                                            animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
+                                            targetOffsetX = { -it / 3 }
+                                        ) + fadeOut(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f))
+                                    )
+                            } else {
+                                (slideInHorizontally(
+                                    animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
+                                    initialOffsetX = { -it / 3 }
+                                ) + fadeIn(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f)))
+                                    .togetherWith(
+                                        slideOutHorizontally(
+                                            animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
+                                            targetOffsetX = { it / 3 }
+                                        ) + fadeOut(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f))
+                                    )
+                            }
+                        },
+                        label = "bottomTabTransition"
+                    ) { tab ->
+                        when (tab) {
+                            0 -> HomeScreen(
+                                onNavigateToFiles = { selectedTab = 1 },
+                                onNavigateToSettings = { selectedTab = 2 },
+                                onNavigateToAbout = { selectedTab = 3 }
+                            )
+                            1 -> DocumentHubScreen(
+                                onNavigateToSettings = { selectedTab = 2 },
+                                onNavigateToLicenses = { selectedTab = 3 }
+                            )
+                            2 -> SettingsScreen(onBack = { selectedTab = 0 })
+                            3 -> LicensesScreen(onBack = { selectedTab = 0 })
+                        }
                     }
                 }
             }
