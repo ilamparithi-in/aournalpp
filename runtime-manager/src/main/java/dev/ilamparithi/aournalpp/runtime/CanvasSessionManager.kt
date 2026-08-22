@@ -32,6 +32,9 @@ class CanvasSessionManager(
 
         scope.launch(Dispatchers.IO) {
             try {
+                Log.i(TAG, "Ensuring runtime environment tree, storage symlinks, bookmarks, and settings...")
+                env.ensureDirectoryTree()
+
                 Log.i(TAG, "Initializing X11 socket environment...")
                 File(env.tmpDir, ".X11-unix").mkdirs()
                 File(env.tmpDir, ".X0-lock").delete()
@@ -106,11 +109,17 @@ class CanvasSessionManager(
                     supervisor.startXournal(targetFilePath)
                 }
 
+                // 4. Start X11 Title Watcher to monitor document renames & saves
+                supervisor.startTitleWatcher()
+
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to initialize canvas session", e)
             }
         }
     }
+
+    val documentTitle: kotlinx.coroutines.flow.StateFlow<String?>
+        get() = supervisor.documentTitle
 
     fun stopSession() {
         if (!isSessionRunning) return

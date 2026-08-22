@@ -174,6 +174,22 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
                 return@withContext Result.failure(e)
             }
             
+            // Ensure GSettings schemas are compiled for GTK file chooser and desktop settings
+            val schemasDir = File(env.shareDir, "glib-2.0/schemas")
+            val compileSchemasBin = File(env.binDir, "glib-compile-schemas")
+            if (compileSchemasBin.exists() && schemasDir.exists()) {
+                try {
+                    val pb = ProcessBuilder(compileSchemasBin.absolutePath, schemasDir.absolutePath)
+                        .redirectErrorStream(true)
+                    pb.environment().putAll(env.getEnvMap())
+                    val p = pb.start()
+                    p.waitFor()
+                    Log.i(TAG, "Compiled glib schemas successfully in ${schemasDir.absolutePath}")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to compile glib schemas", e)
+                }
+            }
+
             // Ensure gdk-pixbuf loaders.cache is generated for icon rendering
             val gdkDir = File(env.libDir, "gdk-pixbuf-2.0/2.10.0")
             val loadersCache = File(gdkDir, "loaders.cache")

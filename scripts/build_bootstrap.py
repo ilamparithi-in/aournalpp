@@ -211,6 +211,12 @@ def main():
 </fontconfig>
 """)
 
+    # Pre-compile GSettings schemas if glib-compile-schemas is available on the host
+    schemas_dir = os.path.join(staging_usr, "share", "glib-2.0", "schemas")
+    if os.path.exists(schemas_dir):
+        print("[*] Pre-compiling GSettings schemas...")
+        os.system(f"glib-compile-schemas '{schemas_dir}' 2>/dev/null || true")
+
     print(f"[*] Packaging final archive to {args.output}...")
     os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
     os.system(f"tar -cf - -C '{args.staging}' usr | xz -T0 > '{args.output}'")

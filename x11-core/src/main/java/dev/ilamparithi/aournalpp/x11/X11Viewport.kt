@@ -29,7 +29,8 @@ private fun findActivity(context: Context): Activity? {
 @Composable
 fun X11Viewport(
     modifier: Modifier = Modifier,
-    onLorieViewReady: (LorieView) -> Unit
+    onLorieViewReady: (LorieView) -> Unit,
+    onInputHandlerReady: ((TouchInputHandler) -> Unit)? = null
 ) {
     AndroidView(
         modifier = modifier.fillMaxSize(),
@@ -42,6 +43,8 @@ fun X11Viewport(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
+                isFocusable = true
+                isFocusableInTouchMode = true
             }
 
             val lorieView = LorieView(context).apply {
@@ -50,9 +53,12 @@ fun X11Viewport(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
+                isFocusable = true
+                isFocusableInTouchMode = true
             }
 
             frameLayout.addView(lorieView)
+            lorieView.requestFocus()
 
             if (activity != null) {
                 lorieView.requestStylusEnabled(true)
@@ -92,9 +98,20 @@ fun X11Viewport(
                     }
                     inputHandler.sendKeyEvent(event)
                 }
+                frameLayout.setOnKeyListener { _, keyCode, event ->
+                    if (keyCode == android.view.KeyEvent.KEYCODE_BACK) {
+                        return@setOnKeyListener false
+                    }
+                    if (penMapper.onKeyEvent(event)) {
+                        return@setOnKeyListener true
+                    }
+                    inputHandler.sendKeyEvent(event)
+                }
                 lorieView.setCallback { screenWidth, screenHeight, inputTransform ->
                     inputHandler.handleInputTransformChanged(screenWidth, screenHeight, inputTransform)
                 }
+
+                onInputHandlerReady?.invoke(inputHandler)
             }
 
             onLorieViewReady(lorieView)

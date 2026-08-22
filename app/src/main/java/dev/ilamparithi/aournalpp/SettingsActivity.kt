@@ -25,6 +25,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.DisplaySettings
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Tune
@@ -175,6 +177,187 @@ fun SettingsScreen(onBack: () -> Unit) {
                         if (index < scaleOptions.size - 1) {
                             HorizontalDivider(modifier = Modifier.padding(start = 40.dp))
                         }
+                    }
+                }
+            }
+
+            // Category: Storage & Notes Directory
+            val env = remember { dev.ilamparithi.aournalpp.runtime.LinuxEnvironment(context) }
+            var currentNotesDir by remember { mutableStateOf(env.getNotesDirectory().absolutePath) }
+            var showCustomPathDialog by remember { mutableStateOf(false) }
+            var customPathInput by remember { mutableStateOf(currentNotesDir) }
+
+            val folderPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()
+            ) { uri ->
+                if (uri != null) {
+                    val rawPath = uri.path ?: ""
+                    val resolved = if (rawPath.contains("primary:")) {
+                        val rel = rawPath.substringAfter("primary:").trim('/')
+                        java.io.File(android.os.Environment.getExternalStorageDirectory(), rel).absolutePath
+                    } else {
+                        rawPath
+                    }
+                    env.setNotesDirectory(resolved)
+                    currentNotesDir = resolved
+                    android.widget.Toast.makeText(context, "Notes folder set to: $resolved", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            if (showCustomPathDialog) {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { showCustomPathDialog = false },
+                    title = {
+                        Text(
+                            text = "Set Custom Notes Folder",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = "Enter an absolute path on device storage where Xournal++ notes should default and save:",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            androidx.compose.material3.OutlinedTextField(
+                                value = customPathInput,
+                                onValueChange = { customPathInput = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                label = { Text("Directory Path") }
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        androidx.compose.material3.Button(
+                            onClick = {
+                                if (customPathInput.isNotBlank()) {
+                                    val trimmed = customPathInput.trim()
+                                    env.setNotesDirectory(trimmed)
+                                    currentNotesDir = trimmed
+                                    showCustomPathDialog = false
+                                    android.widget.Toast.makeText(context, "Notes folder set to: $trimmed", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        ) {
+                            Text("Save")
+                        }
+                    },
+                    dismissButton = {
+                        androidx.compose.material3.TextButton(
+                            onClick = { showCustomPathDialog = false }
+                        ) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+
+            Text(
+                text = "Notes & Storage Location",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "Current Notes Directory:",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surface
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Folder,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = currentNotesDir,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = { folderPickerLauncher.launch(null) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FolderOpen,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Browse & Choose Folder...",
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    Text(
+                        text = "Or choose a preset storage directory:",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    val presets = listOf(
+                        "Documents/Notes (Default)" to java.io.File(android.os.Environment.getExternalStorageDirectory(), "Documents/Notes").absolutePath,
+                        "Documents/Xournal" to java.io.File(android.os.Environment.getExternalStorageDirectory(), "Documents/Xournal").absolutePath,
+                        "Download" to java.io.File(android.os.Environment.getExternalStorageDirectory(), "Download").absolutePath
+                    )
+
+                    presets.forEach { (label, path) ->
+                        OutlinedButton(
+                            onClick = {
+                                env.setNotesDirectory(path)
+                                currentNotesDir = path
+                                android.widget.Toast.makeText(context, "Notes folder set to: $path", android.widget.Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(text = label, style = MaterialTheme.typography.bodyMedium)
+                            Spacer(modifier = Modifier.weight(1f))
+                            if (currentNotesDir == path) {
+                                Text(text = "Active", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    androidx.compose.material3.TextButton(
+                        onClick = {
+                            customPathInput = currentNotesDir
+                            showCustomPathDialog = true
+                        },
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text("Enter Custom Path Manually")
                     }
                 }
             }
