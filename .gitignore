@@ -25,3 +25,6 @@ captures/
 .idea/assetWizardSettings.xml
 .idea/shelf/
 .vscode/
+
+# Generated runtime assets
+app/src/main/assets/bootstrap.tar.xz

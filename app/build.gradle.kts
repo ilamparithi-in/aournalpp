@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
 }
 
 android {
@@ -9,7 +10,7 @@ android {
 
     defaultConfig {
         applicationId = "dev.ilamparithi.aournalpp"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
@@ -30,17 +31,11 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-    kotlinOptions {
-        jvmTarget = "11"
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures {
         compose = true
-    }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.10"
     }
     packaging {
         resources {
@@ -71,4 +66,29 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
+val generateBootstrap = tasks.register<Exec>("generateBootstrap") {
+    description = "Downloads and builds bootstrap.tar.xz into app assets"
+    group = "build"
+    workingDir = rootDir.resolve("scripts")
+    commandLine(
+        "python3",
+        "build_bootstrap.py",
+        "--output",
+        "$rootDir/app/src/main/assets/bootstrap.tar.xz"
+    )
+}
+
+tasks.named("preBuild") {
+    val bootstrapAsset = file("src/main/assets/bootstrap.tar.xz")
+    if (!bootstrapAsset.exists()) {
+        dependsOn(generateBootstrap)
+    }
 }
