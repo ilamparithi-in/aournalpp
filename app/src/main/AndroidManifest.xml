@@ -20,5 +20,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".CanvasActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Aournal"
+            android:screenOrientation="unspecified"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:hardwareAccelerated="true" />
+
+        <activity
+            android:name="com.termux.x11.LoriePreferences"
+            android:exported="false"
+            android:theme="@style/Theme.AppCompat.DayNight"
+            android:label="Termux:X11 Preferences" />
     </application>
 </manifest>
