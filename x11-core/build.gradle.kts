@@ -4,17 +4,32 @@ plugins {
 }
 
 android {
-    namespace = "dev.ilamparithi.aournalpp.x11core"
+    namespace = "dev.ilamparithi.aournalpp.x11"
     compileSdk = 34
+    ndkVersion = "25.1.8937393"
 
     defaultConfig {
         minSdk = 24
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
+        
+        ndk {
+            abiFilters.add("arm64-v8a")
+            abiFilters.add("x86_64")
+        }
+
         externalNativeBuild {
             cmake {
-                cppFlags("")
+                cppFlags("-std=c++17 -fexceptions -frtti")
+                arguments("-DANDROID_STL=c++_shared")
             }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
         }
     }
 
