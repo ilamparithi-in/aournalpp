@@ -23,7 +23,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.round
+import androidx.compose.ui.unit.toIntRect
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,8 +47,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -128,21 +135,26 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInParent
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.round
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.toIntRect
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -158,6 +170,8 @@ import dev.ilamparithi.aournalpp.runtime.PdfExportManager
 import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
 import dev.ilamparithi.aournalpp.utils.ExternalFileHandler
 import dev.ilamparithi.aournalpp.utils.ThumbnailManager
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
@@ -246,10 +260,21 @@ fun DocumentHubScreen(
     var trashedNotes by remember { mutableStateOf<List<NoteDocument>>(emptyList()) }
     var isViewingTrash by remember { mutableStateOf(false) }
 
-    // Multi-Selection State & Bounds Tracker for Drag Selection
+    // Multi-Selection State & Drag Selection Tracker
     var isSelectionMode by remember { mutableStateOf(false) }
     var selectedNotePaths by remember { mutableStateOf<Set<String>>(emptySet()) }
-    val cardBoundsMap = remember { mutableStateMapOf<String, Rect>() }
+    var lastSelectedNotePath by remember { mutableStateOf<String?>(null) }
+    val gridState = rememberLazyGridState()
+    var autoScrollSpeed by remember { mutableStateOf(0f) }
+
+    LaunchedEffect(autoScrollSpeed) {
+        if (autoScrollSpeed != 0f) {
+            while (isActive) {
+                gridState.scrollBy(autoScrollSpeed)
+                delay(10)
+            }
+        }
+    }
 
     var showTopMenu by remember { mutableStateOf(false) }
 
@@ -418,6 +443,7 @@ fun DocumentHubScreen(
                         IconButton(onClick = {
                             isSelectionMode = false
                             selectedNotePaths = emptySet()
+                            lastSelectedNotePath = null
                         }) {
                             Icon(imageVector = Icons.Default.Close, contentDescription = "Exit Selection")
                         }
@@ -1164,32 +1190,26 @@ fun DocumentHubScreen(
             }
 
             LazyVerticalGrid(
+                state = gridState,
                 columns = if (isGridView) GridCells.Adaptive(minSize = 200.dp) else GridCells.Fixed(1),
                 contentPadding = PaddingValues(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier
                     .weight(1f)
-                    .pointerInput(notes, isSelectionMode) {
-                        detectDragGesturesAfterLongPress(
-                            onDragStart = { offset ->
-                                val hit = cardBoundsMap.entries.firstOrNull { it.value.contains(offset) }
-                                if (hit != null) {
-                                    isSelectionMode = true
-                                    selectedNotePaths = selectedNotePaths + hit.key
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                }
-                            },
-                            onDrag = { change, _ ->
-                                val currentPos = change.position
-                                val hit = cardBoundsMap.entries.firstOrNull { it.value.contains(currentPos) }
-                                if (hit != null && !selectedNotePaths.contains(hit.key)) {
-                                    selectedNotePaths = selectedNotePaths + hit.key
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                }
-                            }
-                        )
-                    }
+                    .notesGridDragSelect(
+                        lazyGridState = gridState,
+                        notes = { if (isViewingTrash) trashedNotes else notes },
+                        selectedPaths = { selectedNotePaths },
+                        setSelectedPaths = { selectedNotePaths = it },
+                        lastSelectedPath = { lastSelectedNotePath },
+                        setLastSelectedPath = { lastSelectedNotePath = it },
+                        isSelectionMode = { isSelectionMode },
+                        setIsSelectionMode = { isSelectionMode = it },
+                        hapticFeedback = hapticFeedback,
+                        autoScrollThreshold = with(LocalDensity.current) { 40.dp.toPx() },
+                        setAutoScrollSpeed = { autoScrollSpeed = it }
+                    )
             ) {
                 // M3E Dynamic Greeting & Quick Actions Header (only in Root & not searching)
                 if (isRoot && !isViewingTrash && searchQuery.isBlank() && !isSelectionMode) {
@@ -1437,12 +1457,10 @@ fun DocumentHubScreen(
                             isSelectionMode = isSelectionMode,
                             isTrashMode = isViewingTrash,
                             pdfExportManager = pdfExportManager,
-                            onPositionReported = { rect ->
-                                cardBoundsMap[note.path] = rect
-                            },
                             onClick = {
                                 if (isSelectionMode) {
                                     selectedNotePaths = if (isSelected) selectedNotePaths.minus(note.path) else selectedNotePaths.plus(note.path)
+                                    lastSelectedNotePath = note.path
                                 } else if (isViewingTrash) {
                                     // Trashed item tap
                                 } else if (!hasPermission) {
@@ -1455,8 +1473,24 @@ fun DocumentHubScreen(
                             },
                             onLongClick = {
                                 if (!isViewingTrash) {
-                                    isSelectionMode = true
-                                    selectedNotePaths = setOf(note.path)
+                                    if (isSelectionMode && !isSelected && selectedNotePaths.isNotEmpty()) {
+                                        val lastPath = lastSelectedNotePath ?: selectedNotePaths.lastOrNull()
+                                        val currentList = currentNotes.map { it.path }
+                                        val lastIdx = currentList.indexOf(lastPath)
+                                        val currentIdx = currentList.indexOf(note.path)
+                                        if (lastIdx >= 0 && currentIdx >= 0) {
+                                            val start = minOf(lastIdx, currentIdx)
+                                            val end = maxOf(lastIdx, currentIdx)
+                                            val range = currentNotes.subList(start, end + 1).map { it.path }.toSet()
+                                            selectedNotePaths = selectedNotePaths + range
+                                        } else {
+                                            selectedNotePaths = selectedNotePaths + note.path
+                                        }
+                                    } else {
+                                        isSelectionMode = true
+                                        selectedNotePaths = selectedNotePaths + note.path
+                                    }
+                                    lastSelectedNotePath = note.path
                                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                 }
                             },
@@ -1622,7 +1656,6 @@ fun ExpressiveNoteCard(
     isSelectionMode: Boolean,
     isTrashMode: Boolean,
     pdfExportManager: PdfExportManager,
-    onPositionReported: (Rect) -> Unit,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onExportPdf: () -> Unit,
@@ -1646,9 +1679,6 @@ fun ExpressiveNoteCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(cardShape)
-            .onGloballyPositioned { coords ->
-                onPositionReported(coords.boundsInParent())
-            }
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
@@ -2061,3 +2091,150 @@ fun AutosaveResolutionDialog(
         }
     )
 }
+
+fun Modifier.notesGridDragSelect(
+    lazyGridState: LazyGridState,
+    notes: () -> List<NoteDocument>,
+    selectedPaths: () -> Set<String>,
+    setSelectedPaths: (Set<String>) -> Unit,
+    lastSelectedPath: () -> String?,
+    setLastSelectedPath: (String?) -> Unit,
+    isSelectionMode: () -> Boolean,
+    setIsSelectionMode: (Boolean) -> Unit,
+    hapticFeedback: HapticFeedback,
+    autoScrollThreshold: Float,
+    setAutoScrollSpeed: (Float) -> Unit
+): Modifier = pointerInput(Unit) {
+    fun findNotePathAtOffset(point: Offset): String? {
+        val rounded = point.round()
+        val match = lazyGridState.layoutInfo.visibleItemsInfo.find { itemInfo ->
+            itemInfo.size.toIntRect().contains(rounded - itemInfo.offset)
+        }
+        val key = match?.key as? String ?: return null
+        val currentList = notes()
+        return if (currentList.any { it.path == key }) key else null
+    }
+
+    awaitPointerEventScope {
+        while (true) {
+            val downEvent = awaitPointerEvent(PointerEventPass.Initial)
+            val down = downEvent.changes.firstOrNull { it.pressed } ?: continue
+            val downId = down.id
+            val downPos = down.position
+            val hitPath = findNotePathAtOffset(downPos)
+
+            if (hitPath == null) {
+                continue
+            }
+
+            var isLongPressed = false
+
+            val longPressTimeout = viewConfiguration.longPressTimeoutMillis
+            val touchSlop = viewConfiguration.touchSlop
+
+            val dragCancelled = withTimeoutOrNull(longPressTimeout) {
+                while (true) {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    val change = event.changes.firstOrNull { it.id == downId } ?: break
+                    if (!change.pressed) {
+                        return@withTimeoutOrNull true
+                    }
+                    val dist = (change.position - downPos).getDistance()
+                    if (dist > touchSlop) {
+                        return@withTimeoutOrNull true
+                    }
+                }
+                true
+            }
+
+            if (dragCancelled == null) {
+                isLongPressed = true
+            }
+
+            if (isLongPressed) {
+                val currentNotesList = notes()
+                val currentSelected = selectedPaths()
+                val activeSelection = isSelectionMode()
+
+                val wasSelected = currentSelected.contains(hitPath)
+                val initialPath = hitPath
+                var lastReportedPath = hitPath
+                val baseSnapshot: Set<String>
+
+                if (activeSelection && !wasSelected && currentSelected.isNotEmpty()) {
+                    // Shift-click range selection when long-pressing a deselected item in selection mode
+                    val anchorPath = lastSelectedPath() ?: currentSelected.lastOrNull()
+                    val anchorIdx = currentNotesList.indexOfFirst { it.path == anchorPath }
+                    val hitIdx = currentNotesList.indexOfFirst { it.path == hitPath }
+
+                    val rangePaths = if (anchorIdx >= 0 && hitIdx >= 0) {
+                        val start = minOf(anchorIdx, hitIdx)
+                        val end = maxOf(anchorIdx, hitIdx)
+                        currentNotesList.subList(start, end + 1).map { it.path }.toSet()
+                    } else {
+                        setOf(hitPath)
+                    }
+
+                    val newSelection = currentSelected + rangePaths
+                    setSelectedPaths(newSelection)
+                    setLastSelectedPath(hitPath)
+                    baseSnapshot = newSelection
+                } else {
+                    // Standard selection mode entry / start drag
+                    setIsSelectionMode(true)
+                    val newSelection = currentSelected + hitPath
+                    setSelectedPaths(newSelection)
+                    setLastSelectedPath(hitPath)
+                    baseSnapshot = currentSelected
+                }
+
+                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+
+                try {
+                    while (true) {
+                        val dragEvent = awaitPointerEvent(PointerEventPass.Initial)
+                        val dragChange = dragEvent.changes.firstOrNull { it.id == downId } ?: break
+                        if (!dragChange.pressed) {
+                            dragChange.consume()
+                            break
+                        }
+                        dragChange.consume()
+                        val currentDragPos = dragChange.position
+
+                        val viewportHeight = lazyGridState.layoutInfo.viewportSize.height
+                        val distFromBottom = viewportHeight - currentDragPos.y
+                        val distFromTop = currentDragPos.y
+                        setAutoScrollSpeed(
+                            when {
+                                distFromBottom < autoScrollThreshold -> autoScrollThreshold - distFromBottom
+                                distFromTop < autoScrollThreshold -> -(autoScrollThreshold - distFromTop)
+                                else -> 0f
+                            }
+                        )
+
+                        val currentHit = findNotePathAtOffset(currentDragPos)
+                        if (currentHit != null && currentHit != lastReportedPath) {
+                            val initialIdx = currentNotesList.indexOfFirst { it.path == initialPath }
+                            val currentIdx = currentNotesList.indexOfFirst { it.path == currentHit }
+
+                            if (initialIdx >= 0 && currentIdx >= 0) {
+                                val start = minOf(initialIdx, currentIdx)
+                                val end = maxOf(initialIdx, currentIdx)
+                                val dragRange = currentNotesList.subList(start, end + 1).map { it.path }.toSet()
+
+                                val updatedSelection = baseSnapshot + dragRange
+                                setSelectedPaths(updatedSelection)
+                                setLastSelectedPath(currentHit)
+                                lastReportedPath = currentHit
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            }
+                        }
+                    }
+                } finally {
+                    setAutoScrollSpeed(0f)
+                }
+            }
+        }
+    }
+}
+
