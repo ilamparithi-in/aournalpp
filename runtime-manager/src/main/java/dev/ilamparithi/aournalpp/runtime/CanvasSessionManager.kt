@@ -112,8 +112,64 @@ class CanvasSessionManager(
                 // 4. Start X11 Title Watcher to monitor document renames & saves
                 supervisor.startTitleWatcher()
 
+                // 5. Start GTK IME Focus Bridge server
+                startImeBridgeServer(lorieView)
+
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to initialize canvas session", e)
+            }
+        }
+    }
+
+    private var imeServer: android.net.LocalServerSocket? = null
+    private var imeServerRunning = false
+
+    private fun startImeBridgeServer(lorieView: LorieView) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                imeServer?.close()
+                val server = android.net.LocalServerSocket("aournal_ime_bridge")
+                imeServer = server
+                imeServerRunning = true
+                Log.i(TAG, "IME focus bridge server listening on @aournal_ime_bridge")
+
+                while (imeServerRunning && isSessionRunning) {
+                    try {
+                        val client = server.accept()
+                        scope.launch(Dispatchers.IO) {
+                            try {
+                                client.inputStream.bufferedReader().use { reader ->
+                                    var line: String? = reader.readLine()
+                                    while (line != null && isSessionRunning) {
+                                        val cmd = line.trim()
+                                        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+                                        val autoShowEnabled = prefs.getBoolean("pref_auto_show_ime_on_focus", true)
+
+                                        if (autoShowEnabled) {
+                                            if (cmd == "FOCUS_IN") {
+                                                withContext(Dispatchers.Main) {
+                                                    lorieView.requestFocus()
+                                                    lorieView.setKeyboardVisible(true)
+                                                }
+                                            } else if (cmd == "FOCUS_OUT") {
+                                                withContext(Dispatchers.Main) {
+                                                    lorieView.setKeyboardVisible(false)
+                                                }
+                                            }
+                                        }
+                                        line = reader.readLine()
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                // Client socket closed
+                            }
+                        }
+                    } catch (e: Exception) {
+                        break
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to start IME focus bridge server", e)
             }
         }
     }
@@ -124,6 +180,13 @@ class CanvasSessionManager(
     fun stopSession() {
         if (!isSessionRunning) return
         Log.i(TAG, "Stopping canvas session...")
+        imeServerRunning = false
+        try {
+            imeServer?.close()
+            imeServer = null
+        } catch (e: Exception) {
+            // Ignore
+        }
         supervisor.terminateAll()
         File(env.tmpDir, ".X0-lock").delete()
         File(env.tmpDir, ".X11-unix/X0").delete()

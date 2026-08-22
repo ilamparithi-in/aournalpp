@@ -137,18 +137,35 @@ class LinuxEnvironment(private val context: Context) {
 
         // Provision xopp-title-watcher binary from assets if available
         val titleWatcherBin = File(binDir, "xopp-title-watcher")
-        if (!titleWatcherBin.exists() || !titleWatcherBin.canExecute()) {
-            try {
-                context.assets.open("bin/xopp-title-watcher").use { input ->
-                    titleWatcherBin.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
+        try {
+            context.assets.open("bin/xopp-title-watcher").use { input ->
+                titleWatcherBin.outputStream().use { output ->
+                    input.copyTo(output)
                 }
-                titleWatcherBin.setExecutable(true, false)
-                Log.i(TAG, "Provisioned xopp-title-watcher binary")
-            } catch (e: Exception) {
-                // If not in assets, it may already be in bootstrap
             }
+            titleWatcherBin.setExecutable(true, false)
+            Log.i(TAG, "Provisioned latest xopp-title-watcher binary")
+        } catch (e: Exception) {
+            if (titleWatcherBin.exists()) {
+                titleWatcherBin.setExecutable(true, false)
+            }
+        }
+
+        // Provision libgtk-android-ime.so GTK focus bridge module
+        val gtkModulesDir = File(libDir, "gtk-3.0/modules")
+        gtkModulesDir.mkdirs()
+        val imeModuleLib = File(libDir, "libgtk-android-ime.so")
+        val imeModuleInGtkDir = File(gtkModulesDir, "libgtk-android-ime.so")
+        try {
+            context.assets.open("lib/libgtk-android-ime.so").use { input ->
+                imeModuleLib.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            imeModuleLib.copyTo(imeModuleInGtkDir, overwrite = true)
+            Log.i(TAG, "Provisioned latest libgtk-android-ime.so GTK focus bridge module")
+        } catch (e: Exception) {
+            // Ignore if in bootstrap
         }
 
         setupStorageSymlinks()
@@ -320,7 +337,10 @@ class LinuxEnvironment(private val context: Context) {
             "LANG" to "en_US.UTF-8",
             // CRITICAL: Disable desktop portal lookup to prevent D-Bus freeze
             "GTK_USE_PORTAL" to "0",
-            "GIO_USE_VFS" to "local"
+            "GIO_USE_VFS" to "local",
+            // Text focus bridge module for soft keyboard auto-toggle
+            "GTK_MODULES" to "${libDir.absolutePath}/libgtk-android-ime.so",
+            "GTK_PATH" to "${libDir.absolutePath}/gtk-3.0"
         )
     }
 }

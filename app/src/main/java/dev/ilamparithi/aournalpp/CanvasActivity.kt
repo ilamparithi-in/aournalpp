@@ -6,6 +6,7 @@ import android.view.KeyEvent
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -79,10 +80,17 @@ class CanvasActivity : ComponentActivity() {
     private lateinit var sessionManager: CanvasSessionManager
     private var inputHandler: TouchInputHandler? = null
     private var activeLorieView: LorieView? = null
+    private val showExitDialogState = mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                showExitDialogState.value = true
+            }
+        })
 
         // Configure full-screen sticky immersive mode
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -110,13 +118,13 @@ class CanvasActivity : ComponentActivity() {
 
         setContent {
             AournalTheme {
-                var showExitDialog by remember { mutableStateOf(false) }
+                var showExitDialog by remember { showExitDialogState }
                 var isHeaderExpanded by remember { mutableStateOf(true) }
                 val liveTitle by sessionManager.documentTitle.collectAsState()
                 val displayTitle = liveTitle ?: initialTitle
 
                 BackHandler {
-                    showExitDialog = true
+                    showExitDialogState.value = true
                 }
 
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -311,7 +319,7 @@ class CanvasActivity : ComponentActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
+        if (event.keyCode == KeyEvent.KEYCODE_BACK) {
             return super.dispatchKeyEvent(event)
         }
         val handler = inputHandler

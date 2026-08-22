@@ -22,10 +22,11 @@ Accepted
      - Supports expanding and collapsing into a minimalist pill so users have 100% borderless canvas when writing with a stylus.
      - Includes a safe exit confirmation action.
 
-2. **Real-time X11 Title Watcher (`xopp-title-watcher`)**:
+2. **Real-time X11 Title Watcher (`xopp-title-watcher`) with Modal Dialog Filtering**:
    - Created a lightweight C companion binary [xopp-title-watcher.c](file:///home/ilam_common/DevHome/GitHub/xopp-android/scripts/xopp-title-watcher.c) compiled with NDK and linked with `libX11.so`.
    - Listens for X11 `PropertyNotify` events (`_NET_WM_NAME` / `WM_NAME`) and emits title updates to stdout.
-   - [ProcessSupervisor.kt](file:///home/ilam_common/DevHome/GitHub/xopp-android/runtime-manager/src/main/java/dev/ilamparithi/aournalpp/runtime/ProcessSupervisor.kt) reads title updates from the process stream, sanitizes the name, and exposes a reactive `documentTitle: StateFlow<String?>`.
+   - **Dialog & Transient Filtering**: Checks ICCCM `WM_TRANSIENT_FOR` hints and EWMH `_NET_WM_WINDOW_TYPE_DIALOG` to ignore temporary modal popups (such as "Save File", "Open Document", "Preferences"), ensuring the floating header exclusively displays the main document name.
+   - [ProcessSupervisor.kt](file:///home/ilam_common/DevHome/GitHub/xopp-android/runtime-manager/src/main/java/dev/ilamparithi/aournalpp/runtime/ProcessSupervisor.kt) reads title updates from the process stream, sanitizes the name, filters out system/window manager strings, and exposes a reactive `documentTitle: StateFlow<String?>`.
    - `CanvasActivity` observes `sessionManager.documentTitle.collectAsState()`, updating the floating top header instantly when a document is saved or renamed.
 
 3. **Full Key Event Forwarding in Activity Dispatch**:

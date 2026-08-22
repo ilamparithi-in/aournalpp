@@ -4,6 +4,7 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.File
@@ -69,45 +70,49 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
         return process
     }
 
-    fun startTitleWatcher(): Process? {
+    fun startTitleWatcher() {
         val watcherFile = File(env.binDir, "xopp-title-watcher")
         if (!watcherFile.exists() || !watcherFile.canExecute()) {
             Log.w("ProcessSupervisor", "xopp-title-watcher not found or not executable at ${watcherFile.absolutePath}")
-            return null
+            return
         }
-        val command = listOf(watcherFile.absolutePath)
-        Log.i("ProcessSupervisor", "Starting X11 title watcher: $command")
-        val process = ProcessBuilder(command)
-            .directory(env.homeDir)
-            .redirectErrorStream(true)
-            .apply { environment().putAll(env.getEnvMap()) }
-            .start()
-
-        activeProcesses.add(process)
 
         scope.launch {
-            try {
-                BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
-                    var line: String? = reader.readLine()
-                    while (line != null) {
-                        Log.d("NativeProcess:TitleWatcher", line)
-                        if (line.startsWith("TITLE:")) {
-                            val raw = line.removePrefix("TITLE:").trim()
-                            val clean = sanitizeWindowTitle(raw)
-                            if (clean.isNotBlank() && clean != "Xournal++") {
-                                _documentTitle.value = clean
+            while (isActive) {
+                var process: Process? = null
+                try {
+                    val command = listOf(watcherFile.absolutePath)
+                    Log.i("ProcessSupervisor", "Starting X11 title watcher: $command")
+                    val proc = ProcessBuilder(command)
+                        .directory(env.homeDir)
+                        .redirectErrorStream(true)
+                        .apply { environment().putAll(env.getEnvMap()) }
+                        .start()
+                    process = proc
+                    activeProcesses.add(proc)
+
+                    BufferedReader(InputStreamReader(proc.inputStream)).use { reader ->
+                        var line: String? = reader.readLine()
+                        while (line != null && isActive) {
+                            Log.d("NativeProcess:TitleWatcher", line)
+                            if (line.startsWith("TITLE:")) {
+                                val raw = line.removePrefix("TITLE:").trim()
+                                val clean = sanitizeWindowTitle(raw)
+                                if (clean.isNotBlank() && clean != "Xournal++") {
+                                    _documentTitle.value = clean
+                                }
                             }
+                            line = reader.readLine()
                         }
-                        line = reader.readLine()
                     }
+                } catch (e: Exception) {
+                    Log.e("NativeProcess:TitleWatcher", "Error in title watcher loop", e)
+                } finally {
+                    process?.let { activeProcesses.remove(it) }
                 }
-            } catch (e: Exception) {
-                Log.e("NativeProcess:TitleWatcher", "Error reading title watcher output", e)
-            } finally {
-                activeProcesses.remove(process)
+                kotlinx.coroutines.delay(1000)
             }
         }
-        return process
     }
 
     private val ignoredWindowTitles = setOf(
@@ -116,9 +121,22 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
         "Xournal++",
         "X11",
         "Desktop",
+        "Save File",
         "Save As",
+        "Save",
+        "Open File",
         "Open Document",
-        "Export as PDF"
+        "Open",
+        "Export as PDF",
+        "Export",
+        "Print",
+        "Page Setup",
+        "Preferences",
+        "About Xournal++",
+        "Select Font",
+        "Select Color",
+        "Select Folder",
+        "Choose Folder"
     )
 
     private fun sanitizeWindowTitle(raw: String): String {
@@ -128,8 +146,12 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
             .removeSuffix("*")
             .trim()
 
-        return if (ignoredWindowTitles.contains(cleaned) || ignoredWindowTitles.contains(raw)) {
-            ""
+        if (ignoredWindowTitles.contains(cleaned) || ignoredWindowTitles.contains(raw)) {
+            return ""
+        }
+
+        return if (cleaned.equals("Unsaved Document", ignoreCase = true) || cleaned.equals("Untitled", ignoreCase = true)) {
+            "New Note"
         } else {
             cleaned
         }

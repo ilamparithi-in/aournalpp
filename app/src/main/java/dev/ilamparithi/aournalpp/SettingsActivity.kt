@@ -362,6 +362,55 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
             }
 
+            // Category: Keyboard & Input Behavior
+            var autoShowIme by remember {
+                mutableStateOf(prefs.getBoolean("pref_auto_show_ime_on_focus", true))
+            }
+
+            Text(
+                text = "Keyboard & Input Behavior",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text(
+                                text = "Auto-toggle Keyboard on Text Focus",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Automatically open soft keyboard when tapping into a text box, file name field, or canvas text annotation.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        androidx.compose.material3.Switch(
+                            checked = autoShowIme,
+                            onCheckedChange = {
+                                autoShowIme = it
+                                prefs.edit().putBoolean("pref_auto_show_ime_on_focus", it).apply()
+                            }
+                        )
+                    }
+                }
+            }
+
             // Category: Termux-X11 Engine Preferences
             Text(
                 text = "X11 Display Server & Stylus Preferences",
