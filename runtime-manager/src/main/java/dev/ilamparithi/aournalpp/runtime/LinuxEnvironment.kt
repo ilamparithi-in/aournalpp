@@ -171,6 +171,87 @@ class LinuxEnvironment(private val context: Context) {
         setupStorageSymlinks()
         writeGtkBookmarks()
         ensureXournalppSettings()
+        checkAndQuarantineEmergencySave()
+    }
+
+    val quarantineRecoveryDir: File by lazy {
+        File(context.cacheDir, "recovery").apply { mkdirs() }
+    }
+
+    fun checkAndQuarantineEmergencySave(): File? {
+        try {
+            val emergencyFile = File(xournalConfigDir, "emergencysave.xopp")
+            if (emergencyFile.exists() && emergencyFile.length() > 0) {
+                if (isEmergencySaveDuplicateOfSavedFile(emergencyFile)) {
+                    Log.i(TAG, "emergencysave.xopp matches an existing saved note; discarding duplicate.")
+                    emergencyFile.delete()
+                    clearQuarantinedEmergencySave()
+                    return null
+                }
+                val quarantined = File(quarantineRecoveryDir, "quarantined_emergencysave.xopp")
+                emergencyFile.copyTo(quarantined, overwrite = true)
+                emergencyFile.delete()
+                Log.i(TAG, "Quarantined genuine unsaved emergencysave.xopp to ${quarantined.absolutePath}")
+                return quarantined
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to quarantine emergency save file", e)
+        }
+        return getQuarantinedEmergencySave()
+    }
+
+    private fun isEmergencySaveDuplicateOfSavedFile(emergencyFile: File): Boolean {
+        val emergencyBytes = getDecompressedBytes(emergencyFile)
+        if (emergencyBytes.isEmpty()) return true
+
+        val notesDir = getNotesDirectory()
+        val candidateNotes = notesDir.listFiles { f ->
+            f.isFile && f.extension.equals("xopp", ignoreCase = true) && !f.name.startsWith(".")
+        } ?: return false
+
+        for (note in candidateNotes) {
+            if (note.length() == 0L) continue
+            val noteBytes = getDecompressedBytes(note)
+            if (emergencyBytes.contentEquals(noteBytes)) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun getDecompressedBytes(file: File): ByteArray {
+        return try {
+            java.util.zip.GZIPInputStream(file.inputStream()).use { it.readBytes() }
+        } catch (e: Exception) {
+            file.readBytes()
+        }
+    }
+
+    fun getQuarantinedEmergencySave(): File? {
+        val file = File(quarantineRecoveryDir, "quarantined_emergencysave.xopp")
+        if (file.exists() && file.length() > 0) {
+            if (isEmergencySaveDuplicateOfSavedFile(file)) {
+                file.delete()
+                return null
+            }
+            return file
+        }
+        return null
+    }
+
+    fun clearQuarantinedEmergencySave() {
+        try {
+            val file = File(quarantineRecoveryDir, "quarantined_emergencysave.xopp")
+            if (file.exists()) {
+                file.delete()
+            }
+            val emergencyFile = File(xournalConfigDir, "emergencysave.xopp")
+            if (emergencyFile.exists()) {
+                emergencyFile.delete()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to clear quarantined emergency save", e)
+        }
     }
 
     fun setupStorageSymlinks() {
@@ -294,9 +375,31 @@ class LinuxEnvironment(private val context: Context) {
                     modified = true
                 }
 
+                if (content.contains("autosaveTimeout")) {
+                    content = content.replace(
+                        Regex("<property\\s+name=\"autosaveTimeout\"\\s+value=\"[^\"]*\"/>"),
+                        "<property name=\"autosaveTimeout\" value=\"1\"/>"
+                    )
+                    modified = true
+                } else {
+                    content = content.replace("</settings>", "  <property name=\"autosaveTimeout\" value=\"1\"/>\n</settings>")
+                    modified = true
+                }
+
+                if (content.contains("autosaveEnabled")) {
+                    content = content.replace(
+                        Regex("<property\\s+name=\"autosaveEnabled\"\\s+value=\"[^\"]*\"/>"),
+                        "<property name=\"autosaveEnabled\" value=\"true\"/>"
+                    )
+                    modified = true
+                } else {
+                    content = content.replace("</settings>", "  <property name=\"autosaveEnabled\" value=\"true\"/>\n</settings>")
+                    modified = true
+                }
+
                 if (modified) {
                     settingsFile.writeText(content)
-                    Log.i(TAG, "Updated existing settings.xml with defaultSaveDir=$defaultNotesPath")
+                    Log.i(TAG, "Updated existing settings.xml with defaultSaveDir=$defaultNotesPath and autosaveTimeout=1")
                 }
             }
         } catch (e: Exception) {

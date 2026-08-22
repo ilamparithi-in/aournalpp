@@ -359,6 +359,39 @@ fun SettingsScreen(onBack: () -> Unit) {
                     ) {
                         Text("Enter Custom Path Manually")
                     }
+
+                    HorizontalDivider()
+
+                    var showHiddenFilesPref by remember {
+                        mutableStateOf(prefs.getBoolean("pref_show_hidden_files", false))
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text(
+                                text = "Show Hidden & Backup Files",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Display hidden files and backup copies directly in the Document Hub list.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        androidx.compose.material3.Switch(
+                            checked = showHiddenFilesPref,
+                            onCheckedChange = {
+                                showHiddenFilesPref = it
+                                prefs.edit().putBoolean("pref_show_hidden_files", it).apply()
+                            }
+                        )
+                    }
                 }
             }
 
