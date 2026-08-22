@@ -178,7 +178,16 @@ class LinuxEnvironment(private val context: Context) {
         File(context.cacheDir, "recovery").apply { mkdirs() }
     }
 
+    fun isEmergencyRecoveryEnabled(): Boolean {
+        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        return prefs.getBoolean("pref_intelligent_emergency_recovery", true)
+    }
+
     fun checkAndQuarantineEmergencySave(): File? {
+        if (!isEmergencyRecoveryEnabled()) {
+            // Subsystem disabled: do not quarantine or delete; leave for native X11 Xournal++ dialog
+            return null
+        }
         try {
             val emergencyFile = File(xournalConfigDir, "emergencysave.xopp")
             if (emergencyFile.exists() && emergencyFile.length() > 0) {
@@ -228,6 +237,16 @@ class LinuxEnvironment(private val context: Context) {
     }
 
     fun getQuarantinedEmergencySave(): File? {
+        if (!isEmergencyRecoveryEnabled()) {
+            val file = File(quarantineRecoveryDir, "quarantined_emergencysave.xopp")
+            if (file.exists() && file.length() > 0) {
+                // If user disabled Android recovery subsystem, restore the quarantined file back to Xournal++ config dir
+                val emergencyFile = File(xournalConfigDir, "emergencysave.xopp")
+                file.copyTo(emergencyFile, overwrite = true)
+                file.delete()
+            }
+            return null
+        }
         val file = File(quarantineRecoveryDir, "quarantined_emergencysave.xopp")
         if (file.exists() && file.length() > 0) {
             if (isEmergencySaveDuplicateOfSavedFile(file)) {

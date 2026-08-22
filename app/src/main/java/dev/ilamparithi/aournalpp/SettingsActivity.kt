@@ -392,6 +392,39 @@ fun SettingsScreen(onBack: () -> Unit) {
                             }
                         )
                     }
+
+                    HorizontalDivider()
+
+                    var intelligentRecoveryPref by remember {
+                        mutableStateOf(prefs.getBoolean("pref_intelligent_emergency_recovery", true))
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text(
+                                text = "Intelligent Session Recovery",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Detect crashed or unsaved note sessions, filter out duplicate saves, and offer native Material 3 restoration.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        androidx.compose.material3.Switch(
+                            checked = intelligentRecoveryPref,
+                            onCheckedChange = {
+                                intelligentRecoveryPref = it
+                                prefs.edit().putBoolean("pref_intelligent_emergency_recovery", it).apply()
+                            }
+                        )
+                    }
                 }
             }
 
