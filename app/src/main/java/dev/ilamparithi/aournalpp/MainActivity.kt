@@ -20,7 +20,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             AournalTheme {
                 val viewModel: BootstrapViewModel = viewModel()
-                val state by viewModel.state.collectAsStateWithLifecycle()
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
 
                 when (state) {
                     is BootstrapState.Ready -> {

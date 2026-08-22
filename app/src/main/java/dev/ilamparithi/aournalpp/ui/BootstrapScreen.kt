@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -42,8 +42,8 @@ fun BootstrapScreen(
             val isError = state is BootstrapState.Error
             
             Icon(
-                imageVector = if (isError) Icons.Default.Warning else Icons.Default.Build,
-                contentDescription = "Bootstrap Icon",
+                imageVector = if (isError) Icons.Default.Warning else Icons.Default.Edit,
+                contentDescription = "Stylus Branding",
                 modifier = Modifier.size(64.dp),
                 tint = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
             )
@@ -51,8 +51,8 @@ fun BootstrapScreen(
             Spacer(modifier = Modifier.height(24.dp))
             
             Text(
-                text = "Preparing Linux Runtime",
-                style = MaterialTheme.typography.headlineMedium,
+                text = "Initializing Linux Environment",
+                style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center
             )
@@ -60,14 +60,19 @@ fun BootstrapScreen(
             Spacer(modifier = Modifier.height(32.dp))
             
             if (!isError) {
-                val progress = (state as? BootstrapState.Installing)?.progress
+                val installingState = state as? BootstrapState.Installing
+                val progress = installingState?.progress
 
                 val progressMessage = when (state) {
-                    is BootstrapState.Checking -> "Checking existing runtime..."
-                    is BootstrapState.Installing -> if (progress != null) {
-                        "Unpacking: ${progress.currentFile}"
-                    } else {
-                        "Starting extraction..."
+                    is BootstrapState.Checking -> "Checking runtime version and environment..."
+                    is BootstrapState.Installing -> {
+                        if (state.message.isNotEmpty()) {
+                            state.message
+                        } else if (state.progress != null) {
+                            "Extracting ${state.progress.currentFile}..."
+                        } else {
+                            "Extracting application packages..."
+                        }
                     }
                     else -> ""
                 }
@@ -104,7 +109,7 @@ fun BootstrapScreen(
                 )
             } else {
                 Text(
-                    text = (state as BootstrapState.Error).error.message ?: "Unknown error occurred.",
+                    text = (state as BootstrapState.Error).throwable.message ?: "Unknown initialization failure occurred.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error,
                     textAlign = TextAlign.Center

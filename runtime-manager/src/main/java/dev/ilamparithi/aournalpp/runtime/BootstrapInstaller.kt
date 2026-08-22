@@ -3,6 +3,7 @@ package dev.ilamparithi.aournalpp.runtime
 import android.content.Context
 import android.system.Os
 import android.util.Log
+import androidx.core.content.pm.PackageInfoCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
@@ -22,19 +23,31 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
         private const val TAG = "BootstrapInstaller"
         const val ASSET_NAME = "bootstrap.tar.xz"
         const val VERSION_FLAG = "bootstrap_installed.ver"
-        const val CURRENT_BOOTSTRAP_VERSION = 1
     }
 
-    fun isInstalled(): Boolean {
-        val versionFile = File(env.rootDir, VERSION_FLAG)
-        if (!versionFile.exists()) return false
+    fun getCurrentAppVersionCode(): Long {
         return try {
-            val version = versionFile.readText().trim().toInt()
-            version == CURRENT_BOOTSTRAP_VERSION
+            val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            PackageInfoCompat.getLongVersionCode(packageInfo)
         } catch (e: Exception) {
-            false
+            Log.w(TAG, "Failed to resolve app version code, fallback to 1", e)
+            1L
         }
     }
+
+    fun needsBootstrap(): Boolean {
+        val versionFile = File(env.rootDir, VERSION_FLAG)
+        if (!versionFile.exists()) return true
+        return try {
+            val installedVersion = versionFile.readText().trim().toLong()
+            val currentVersion = getCurrentAppVersionCode()
+            installedVersion < currentVersion
+        } catch (e: Exception) {
+            true
+        }
+    }
+
+    fun isInstalled(): Boolean = !needsBootstrap()
 
     fun clearInstallation() {
         try {
@@ -42,18 +55,23 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
             if (versionFile.exists()) {
                 versionFile.delete()
             }
-            // Clean up any accidental double nested usr/usr if it existed
-            val nestedUsr = File(env.usrDir, "usr")
-            if (nestedUsr.exists()) {
-                nestedUsr.deleteRecursively()
+            if (env.usrDir.exists()) {
+                env.usrDir.deleteRecursively()
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed during clearInstallation", e)
         }
     }
 
-    suspend fun installBootstrap(onProgress: (InstallProgress) -> Unit): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun installOrUpgrade(onProgress: (InstallProgress) -> Unit): Result<Unit> = withContext(Dispatchers.IO) {
         try {
+            // Safely purge system-only userland (/files/usr) to eliminate stale/mismatched binaries
+            // User data (/files/home and /files/home/.config) remains untouched
+            if (env.usrDir.exists()) {
+                Log.i(TAG, "Purging ${env.usrDir.absolutePath} for isolated upgrade...")
+                env.usrDir.deleteRecursively()
+            }
+
             env.ensureDirectoryTree()
             val assetManager = context.assets
             
@@ -148,14 +166,17 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
                 return@withContext Result.failure(e)
             }
             
+            val currentVersion = getCurrentAppVersionCode()
             val versionFile = File(env.rootDir, VERSION_FLAG)
-            versionFile.writeText(CURRENT_BOOTSTRAP_VERSION.toString())
-            Log.i(TAG, "Bootstrap extraction completed successfully.")
+            versionFile.writeText(currentVersion.toString())
+            Log.i(TAG, "Bootstrap installation/upgrade completed successfully. Stamped version: $currentVersion")
             
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "Bootstrap installation failed", e)
+            Log.e(TAG, "Bootstrap installation/upgrade failed", e)
             Result.failure(e)
         }
     }
+
+    suspend fun installBootstrap(onProgress: (InstallProgress) -> Unit): Result<Unit> = installOrUpgrade(onProgress)
 }
