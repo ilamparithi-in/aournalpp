@@ -1021,7 +1021,7 @@ private fun EnlargedContinueHeroSection(
         label = "heroScale"
     )
 
-    val thumbnailFile by produceState<File?>(initialValue = ThumbnailManager.getCachedThumbnailFile(context, note.file), key1 = note.lastModifiedMs) {
+    val thumbnailFile by produceState<File?>(initialValue = ThumbnailManager.getCachedThumbnailFile(note.file), key1 = note.lastModifiedMs) {
         value = ThumbnailManager.getOrCreateThumbnail(context, note.file, pdfExportManager)
     }
 

@@ -1855,7 +1855,7 @@ fun ExpressiveNoteCard(
     val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
 
-    val thumbnailFile by produceState<File?>(initialValue = ThumbnailManager.getCachedThumbnailFile(context, note.file), key1 = note.lastModifiedMs) {
+    val thumbnailFile by produceState<File?>(initialValue = ThumbnailManager.getCachedThumbnailFile(note.file), key1 = note.lastModifiedMs) {
         value = ThumbnailManager.getOrCreateThumbnail(context, note.file, pdfExportManager)
     }
 
@@ -2570,7 +2570,7 @@ private fun RecentsMultiBrowseCard(
     var showMenu by remember { mutableStateOf(false) }
 
     val thumbnailFile by produceState<File?>(
-        initialValue = ThumbnailManager.getCachedThumbnailFile(context, note.file),
+        initialValue = ThumbnailManager.getCachedThumbnailFile(note.file),
         key1 = note.lastModifiedMs
     ) {
         value = ThumbnailManager.getOrCreateThumbnail(context, note.file, pdfExportManager)
