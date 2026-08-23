@@ -531,11 +531,16 @@ class LinuxEnvironment(private val context: Context) {
         val isDark = isGtkDarkMode()
         val gtkThemeEnv = if (isDark) "Adwaita:dark" else "Adwaita"
 
+        val systemLibDir = when {
+            android.os.Process.is64Bit() && File("/system/lib64").exists() -> "/system/lib64"
+            else -> "/system/lib"
+        }
+
         return mapOf(
             "PREFIX" to usrDir.absolutePath,
             "HOME" to homeDir.absolutePath,
             "PATH" to "${binDir.absolutePath}:/system/bin:/system/xbin",
-            "LD_LIBRARY_PATH" to "${libDir.absolutePath}:/system/lib64",
+            "LD_LIBRARY_PATH" to "${libDir.absolutePath}:$systemLibDir",
             "XDG_CONFIG_HOME" to configDir.absolutePath,
             "XDG_DATA_DIRS" to "${shareDir.absolutePath}:/usr/share",
             "GSETTINGS_SCHEMA_DIR" to "${shareDir.absolutePath}/glib-2.0/schemas",

@@ -1,12 +1,4 @@
 plugins {
-    // This module is primarily for build scripts and packaging
-}
-
-tasks.register("buildBootstrapArchive") {
-    group = "build"
-    description = "Packages the aarch64 runtime environment into bootstrap.tar.xz"
-    
-    doLast {
-        println("Placeholder for building bootstrap.tar.xz")
-    }
+    // This module is primarily for build scripts and packaging.
+    // Bootstrap tasks are defined in :app — see app/build.gradle.kts.
 }

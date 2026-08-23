@@ -2,17 +2,16 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
 
 android {
     namespace = "com.termux.x11"
-    compileSdk = 34
-    ndkVersion = "25.1.8937393"
+    compileSdk = libs.versions.compileSdk.get().toInt()
+    ndkVersion = "27.0.12077973"
 
     defaultConfig {
-        minSdk = 26
+        minSdk = libs.versions.minSdk.get().toInt()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
         
@@ -28,6 +27,7 @@ android {
             cmake {
                 cppFlags("-std=c++17 -fexceptions -frtti")
                 arguments(
+                    "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON",
                     "-DANDROID_STL=c++_shared",
                     "-DPython3_EXECUTABLE=/usr/bin/python3"
                 )
@@ -82,8 +82,9 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        val jv = JavaVersion.toVersion(libs.versions.javaVersion.get())
+        sourceCompatibility = jv
+        targetCompatibility = jv
     }
 }
 

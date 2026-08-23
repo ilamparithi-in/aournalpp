@@ -1,14 +1,13 @@
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
 }
 
 android {
     namespace = "dev.ilamparithi.aournalpp.runtime"
-    compileSdk = 34
+    compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        minSdk = 26
+        minSdk = libs.versions.minSdk.get().toInt()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
     }
@@ -23,8 +22,9 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        val jv = JavaVersion.toVersion(libs.versions.javaVersion.get())
+        sourceCompatibility = jv
+        targetCompatibility = jv
     }
 }
 
@@ -32,8 +32,8 @@ dependencies {
     implementation(project(":x11-core"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
-    implementation("org.apache.commons:commons-compress:1.26.1")
-    implementation("org.tukaani:xz:1.9")
+    implementation(libs.commons.compress)
+    implementation(libs.xz)
     
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

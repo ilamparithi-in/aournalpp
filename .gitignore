@@ -8,10 +8,17 @@ captures/
 .cxx/
 **/.cxx/
 *.apk
+*.aab
 *.aar
 *.ap_
 *.dex
 *.class
+
+# Signing keys & keystores (never commit release keys)
+*.keystore
+*.jks
+*.p12
+*.pfx
 
 # Local properties & SDK configs
 local.properties
@@ -26,6 +33,7 @@ local.properties
 # Kotlin & JVM
 .kotlin/
 *.log
+*.hprof
 
 # Python & tools
 __pycache__/
@@ -37,10 +45,12 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Generated runtime assets & binaries
-app/src/main/assets/bootstrap.tar.xz
-app/src/main/assets/bin/
-app/src/main/assets/lib/
+# Generated runtime assets & binaries across all modules and flavors
+**/src/*/assets/bootstrap.tar.xz
+**/src/*/assets/bin/
+**/src/*/assets/lib/
 scripts/*-arm64
+scripts/*-x86_64
 scripts/*.so
 scripts/*.o
+
