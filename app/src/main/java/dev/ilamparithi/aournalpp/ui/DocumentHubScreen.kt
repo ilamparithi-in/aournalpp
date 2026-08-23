@@ -195,8 +195,10 @@ import dev.ilamparithi.aournalpp.utils.ExternalFileHandler
 import dev.ilamparithi.aournalpp.ui.preview.floatingPreviewLongPress
 import dev.ilamparithi.aournalpp.utils.ThumbnailManager
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -256,6 +258,8 @@ private fun getGreeting(): String {
     }
 }
 
+private const val SEARCH_DEBOUNCE_MS = 250L
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DocumentHubScreen(
@@ -290,8 +294,8 @@ fun DocumentHubScreen(
     var isRefreshing by remember { mutableStateOf(false) }
     val pullRefreshState = rememberPullToRefreshState()
 
-    val recentNotes = remember(notes, folders, isViewingTrash) {
-        if (!isViewingTrash) repository.getAllRecentNotes(10) else emptyList()
+    val recentNotes by produceState<List<NoteDocument>>(emptyList(), notes, folders, isViewingTrash) {
+        value = if (!isViewingTrash) repository.getAllRecentNotes(10) else emptyList()
     }
 
     // Multi-Selection State & Drag Selection Tracker
@@ -390,7 +394,7 @@ fun DocumentHubScreen(
         }
     }
 
-    fun loadContent() {
+    suspend fun loadContentNow() {
         if (!hasPermission) return
         if (isViewingTrash) {
             trashedNotes = repository.scanTrash()
@@ -403,12 +407,16 @@ fun DocumentHubScreen(
             folders = fList
             notes = nList
 
-            val emergencyFile = env.checkAndQuarantineEmergencySave()
+            val emergencyFile = withContext(Dispatchers.IO) { env.checkAndQuarantineEmergencySave() }
             if (emergencyFile != null && emergencyFile.exists() && emergencyFile.length() > 0) {
                 quarantinedEmergencySave = emergencyFile
                 showEmergencyDialog = true
             }
         }
+    }
+
+    fun loadContent() {
+        scope.launch { loadContentNow() }
     }
 
     val localView = LocalView.current
@@ -455,7 +463,9 @@ fun DocumentHubScreen(
     }
 
     LaunchedEffect(hasPermission, showHiddenFiles, searchQuery, currentDirectory, isViewingTrash) {
-        loadContent()
+        // Debounce search input.
+        if (searchQuery.isNotEmpty()) delay(SEARCH_DEBOUNCE_MS)
+        loadContentNow()
     }
 
     Scaffold(
@@ -943,7 +953,7 @@ fun DocumentHubScreen(
         // 5. Move to Folder Dialog
         if (showMoveToFolderDialog) {
             val selectedDocs = notes.filter { selectedNotePaths.contains(it.path) }
-            val allAvailableFolders = remember { repository.getAllFolders() }
+            val allAvailableFolders by produceState<List<FolderItem>>(emptyList()) { value = repository.getAllFolders() }
             var isCreatingInlineFolder by remember { mutableStateOf(false) }
             var inlineFolderName by remember { mutableStateOf("") }
             var inlineFolderColor by remember { mutableStateOf(PRESET_FOLDER_COLORS.first()) }

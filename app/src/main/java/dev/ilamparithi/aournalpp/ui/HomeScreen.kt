@@ -131,7 +131,9 @@ import dev.ilamparithi.aournalpp.ui.theme.SunnyShape
 import dev.ilamparithi.aournalpp.utils.ExternalFileHandler
 import dev.ilamparithi.aournalpp.ui.preview.floatingPreviewLongPress
 import dev.ilamparithi.aournalpp.utils.ThumbnailManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -185,20 +187,23 @@ fun HomeScreen(
     val scrollState = rememberScrollState()
     val isScrolled by remember { derivedStateOf { scrollState.value > 100 } }
 
-    fun loadHomeData() {
+    suspend fun loadHomeDataNow() {
         val homeNotes = repository.getHomeNotes(16)
         recentNotes = homeNotes
-        val allRecents = repository.getAllRecentNotes(500)
-        totalNotesCount = allRecents.size
+        totalNotesCount = repository.countAllNotes()
         totalFoldersCount = repository.scanDirectory(repository.getRootNotesDirectory()).first.size
 
-        continueNote = allRecents.firstOrNull()
+        continueNote = repository.getAllRecentNotes(1).firstOrNull()
 
-        val emergencyFile = env.checkAndQuarantineEmergencySave()
+        val emergencyFile = withContext(Dispatchers.IO) { env.checkAndQuarantineEmergencySave() }
         if (emergencyFile != null && emergencyFile.exists() && emergencyFile.length() > 0) {
             quarantinedEmergencySave = emergencyFile
             showEmergencyDialog = true
         }
+    }
+
+    fun loadHomeData() {
+        scope.launch { loadHomeDataNow() }
     }
 
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
