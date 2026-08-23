@@ -138,6 +138,29 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
         }
     }
 
+    fun setX11Wallpaper(ppmPath: String): Boolean {
+        val wallpaperBin = File(env.binDir, "xopp-wallpaper")
+        if (!wallpaperBin.exists() || !wallpaperBin.canExecute()) {
+            Log.w("ProcessSupervisor", "xopp-wallpaper not found or not executable at ${wallpaperBin.absolutePath}")
+            return false
+        }
+        return try {
+            val command = listOf(wallpaperBin.absolutePath, ppmPath)
+            Log.i("ProcessSupervisor", "Setting X11 root wallpaper via $command")
+            val process = ProcessBuilder(command)
+                .directory(env.homeDir)
+                .redirectErrorStream(true)
+                .apply { environment().putAll(env.getEnvMap()) }
+                .start()
+            val code = process.waitFor()
+            Log.i("ProcessSupervisor", "xopp-wallpaper finished with exit code $code")
+            code == 0
+        } catch (e: Exception) {
+            Log.w("ProcessSupervisor", "Failed to set X11 wallpaper", e)
+            false
+        }
+    }
+
     private val ignoredWindowTitles = setOf(
         "Openbox",
         "com.github.xournalpp.xournalpp",

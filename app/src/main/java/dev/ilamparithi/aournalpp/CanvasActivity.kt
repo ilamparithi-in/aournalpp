@@ -16,6 +16,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -53,6 +54,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -67,6 +70,7 @@ import com.termux.x11.input.TouchInputHandler
 import dev.ilamparithi.aournalpp.runtime.CanvasSessionManager
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
+import dev.ilamparithi.aournalpp.runtime.WallpaperHelper
 import dev.ilamparithi.aournalpp.ui.theme.AournalTheme
 import dev.ilamparithi.aournalpp.x11.X11Viewport
 import java.io.File
@@ -158,7 +162,19 @@ class CanvasActivity : ComponentActivity() {
                 }
 
                 Surface(modifier = Modifier.fillMaxSize()) {
+                    val wallpaperBitmap = remember {
+                        WallpaperHelper.resolveWallpaperBitmap(this@CanvasActivity)
+                    }
+
                     Box(modifier = Modifier.fillMaxSize()) {
+                        // Wallpaper Backdrop Layer
+                        Image(
+                            bitmap = wallpaperBitmap.asImageBitmap(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+
                         X11Viewport(
                             modifier = Modifier.fillMaxSize(),
                             onLorieViewReady = { lorieView ->

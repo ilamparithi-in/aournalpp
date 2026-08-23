@@ -99,12 +99,24 @@ class CanvasSessionManager(
 
                 delay(300) // Allow X server startup and connection settle
 
-                // 2. Start Kiosk Window Manager (Matchbox)
-                Log.i(TAG, "Starting Matchbox Window Manager...")
+                // 2. Start Kiosk Window Manager (Openbox / Matchbox)
+                Log.i(TAG, "Starting Kiosk Window Manager...")
                 supervisor.startKioskWindowManager()
                 delay(200) // Allow WM socket initialization
 
-                // 3. Launch Xournal++ (passes targetFilePath if opening an existing file; launches blank if null)
+                // 3. Paint X11 Root Window Wallpaper (System, Custom, or Theme Backdrop)
+                try {
+                    val ppmFile = File(env.tmpDir, "wallpaper.ppm")
+                    val wallpaperBitmap = WallpaperHelper.resolveWallpaperBitmap(context)
+                    WallpaperHelper.exportBitmapToPpm(wallpaperBitmap, ppmFile)
+                    if (ppmFile.exists()) {
+                        supervisor.setX11Wallpaper(ppmFile.absolutePath)
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to apply X11 root wallpaper", e)
+                }
+
+                // 4. Launch Xournal++ (passes targetFilePath if opening an existing file; launches blank if null)
                 if (targetFilePath.isNullOrBlank()) {
                     Log.i(TAG, "Launching Xournal++ without arguments (blank canvas)...")
                     supervisor.startXournal()
@@ -113,10 +125,10 @@ class CanvasSessionManager(
                     supervisor.startXournal(targetFilePath)
                 }
 
-                // 4. Start X11 Title Watcher to monitor document renames & saves
+                // 5. Start X11 Title Watcher to monitor document renames & saves
                 supervisor.startTitleWatcher()
 
-                // 5. Start GTK IME Focus Bridge server
+                // 6. Start GTK IME Focus Bridge server
                 startImeBridgeServer(lorieView)
 
                 // 6. Direct Preferences Launcher injection if requested

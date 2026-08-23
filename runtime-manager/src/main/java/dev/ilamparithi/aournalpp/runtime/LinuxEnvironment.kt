@@ -13,6 +13,7 @@ class LinuxEnvironment(private val context: Context) {
         const val PREF_KEY_NOTES_DIR = "pref_notes_dir"
         const val PREF_KEY_APP_THEME = "pref_app_theme"
         const val PREF_KEY_GTK_THEME = "pref_gtk_theme"
+        const val PREF_KEY_WALLPAPER_MODE = "pref_canvas_wallpaper_mode"
     }
 
     val rootDir: File = context.filesDir
@@ -168,6 +169,22 @@ class LinuxEnvironment(private val context: Context) {
             Log.i(TAG, "Provisioned latest libgtk-android-ime.so GTK focus bridge module")
         } catch (e: Exception) {
             // Ignore if in bootstrap
+        }
+
+        // Provision xopp-wallpaper binary from assets if available
+        val wallpaperBin = File(binDir, "xopp-wallpaper")
+        try {
+            context.assets.open("bin/xopp-wallpaper").use { input ->
+                wallpaperBin.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            wallpaperBin.setExecutable(true, false)
+            Log.i(TAG, "Provisioned latest xopp-wallpaper binary")
+        } catch (e: Exception) {
+            if (wallpaperBin.exists()) {
+                wallpaperBin.setExecutable(true, false)
+            }
         }
 
         setupStorageSymlinks()

@@ -66,10 +66,13 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.rememberCoroutineScope
 import dev.ilamparithi.aournalpp.runtime.ConfigFileType
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
+import dev.ilamparithi.aournalpp.runtime.WallpaperHelper
 import dev.ilamparithi.aournalpp.runtime.XournalConfigManager
 import dev.ilamparithi.aournalpp.ui.ConfigViewerDialog
 import kotlinx.coroutines.launch
 import dev.ilamparithi.aournalpp.ui.theme.AournalTheme
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Wallpaper
 
 class SettingsActivity : ComponentActivity() {
 
@@ -286,6 +289,139 @@ fun SettingsScreen(onBack: (() -> Unit)? = null) {
                             }
                             if (index < gtkThemeOptions.size - 1) {
                                 HorizontalDivider(modifier = Modifier.padding(start = 40.dp))
+                            }
+                        }
+                    }
+
+                    HorizontalDivider()
+
+                    var wallpaperModePref by remember {
+                        mutableStateOf(WallpaperHelper.getWallpaperMode(context))
+                    }
+                    var customWallpaperVersion by remember { mutableStateOf(0) }
+
+                    val wallpaperPickerLauncher = rememberLauncherForActivityResult(
+                        contract = ActivityResultContracts.GetContent()
+                    ) { uri ->
+                        if (uri != null) {
+                            val res = WallpaperHelper.saveCustomWallpaper(context, uri)
+                            if (res.isSuccess) {
+                                wallpaperModePref = WallpaperHelper.MODE_CUSTOM
+                                customWallpaperVersion++
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Custom wallpaper applied for Canvas")
+                                }
+                            } else {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Failed to set wallpaper: ${res.exceptionOrNull()?.message}")
+                                }
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = "Canvas Backdrop & Wallpaper",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Customize the backdrop visible behind dialogs and during canvas launch/exit transitions.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    val wallpaperOptions = listOf(
+                        WallpaperHelper.MODE_SYSTEM to ("System Wallpaper (Default)" to "Syncs automatically with your Android device wallpaper."),
+                        WallpaperHelper.MODE_CUSTOM to ("Custom Image" to "Choose a custom wallpaper image from your device gallery."),
+                        WallpaperHelper.MODE_THEME to ("Material 3 Theme Backdrop" to "Solid gradient styled to match your current light/dark theme.")
+                    )
+
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        wallpaperOptions.forEachIndexed { index, (value, meta) ->
+                            val (title, description) = meta
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .selectable(
+                                        selected = (wallpaperModePref == value),
+                                        onClick = {
+                                            if (value == WallpaperHelper.MODE_CUSTOM && !WallpaperHelper.getCustomWallpaperFile(context).exists()) {
+                                                wallpaperPickerLauncher.launch("image/*")
+                                            } else {
+                                                wallpaperModePref = value
+                                                WallpaperHelper.setWallpaperMode(context, value)
+                                            }
+                                        },
+                                        role = Role.RadioButton
+                                    )
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = (wallpaperModePref == value),
+                                    onClick = null
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = title,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = description,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            if (index < wallpaperOptions.size - 1) {
+                                HorizontalDivider(modifier = Modifier.padding(start = 40.dp))
+                            }
+                        }
+                    }
+
+                    if (wallpaperModePref == WallpaperHelper.MODE_CUSTOM) {
+                        val customFile = remember(customWallpaperVersion) { WallpaperHelper.getCustomWallpaperFile(context) }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedButton(
+                                onClick = { wallpaperPickerLauncher.launch("image/*") },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Image,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (customFile.exists()) "Change Image..." else "Select Image...",
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
+
+                            if (customFile.exists()) {
+                                androidx.compose.material3.TextButton(
+                                    onClick = {
+                                        WallpaperHelper.clearCustomWallpaper(context)
+                                        wallpaperModePref = WallpaperHelper.MODE_SYSTEM
+                                        customWallpaperVersion++
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Reset to System Wallpaper")
+                                        }
+                                    }
+                                ) {
+                                    Text("Reset")
+                                }
                             }
                         }
                     }

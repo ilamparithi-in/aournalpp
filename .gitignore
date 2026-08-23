@@ -37,5 +37,10 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Generated runtime assets
+# Generated runtime assets & binaries
 app/src/main/assets/bootstrap.tar.xz
+app/src/main/assets/bin/
+app/src/main/assets/lib/
+scripts/*-arm64
+scripts/*.so
+scripts/*.o
