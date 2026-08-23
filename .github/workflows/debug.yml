@@ -17,8 +17,12 @@ concurrency:
 
 jobs:
   build-debug:
-    name: Build Arm64 Debug APK
+    name: Build Debug APK (${{ matrix.flavor }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [arm64, x86_64]
 
     steps:
       - name: Checkout Repository
@@ -53,14 +57,16 @@ jobs:
       - name: Grant Execute Permissions for Gradle Wrapper
         run: chmod +x gradlew
 
-      - name: Build Arm64 Debug APK
-        run: ./gradlew assembleArm64Debug --stacktrace
+      - name: Build ${{ matrix.flavor }} Debug APK
+        run: |
+          capitalizedFlavor=$(echo "${{ matrix.flavor }}" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')
+          ./gradlew assemble${capitalizedFlavor}Debug --stacktrace
 
-      - name: Upload Arm64 Debug APK (Direct File)
+      - name: Upload ${{ matrix.flavor }} Debug APK (Direct File)
         uses: actions/upload-artifact@v7
         with:
-          name: aournalpp-arm64-debug.apk
-          path: app/build/outputs/apk/arm64/debug/*.apk
+          name: aournalpp-${{ matrix.flavor }}-debug.apk
+          path: app/build/outputs/apk/${{ matrix.flavor }}/debug/*.apk
           if-no-files-found: error
           archive: false
           compression-level: 0
