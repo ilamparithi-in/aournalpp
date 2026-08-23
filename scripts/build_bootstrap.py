@@ -175,10 +175,42 @@ def main():
             os.system(f"rm -rf '{root}'")
 
     # Compile portaudio stub
-    ndk_clang = "/home/ilam/Android/Sdk/ndk/25.1.8937393/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang"
+    ndk_clang = None
+    candidates = [
+        os.environ.get("ANDROID_NDK_HOME"),
+        os.environ.get("ANDROID_NDK_ROOT"),
+    ]
+    sdk_roots = [os.environ.get("ANDROID_SDK_ROOT"), os.environ.get("ANDROID_HOME")]
+    local_props = os.path.join(os.path.dirname(__file__), "..", "local.properties")
+    if os.path.exists(local_props):
+        with open(local_props) as f:
+            for line in f:
+                if line.startswith("sdk.dir="):
+                    sdk_roots.append(line.strip().split("=", 1)[1].replace("\\:", ":").replace("\\\\", "/"))
+                elif line.startswith("ndk.dir="):
+                    candidates.append(line.strip().split("=", 1)[1].replace("\\:", ":").replace("\\\\", "/"))
+    for sdk in sdk_roots:
+        if sdk and os.path.exists(os.path.join(sdk, "ndk")):
+            for ver in ["25.1.8937393", "25.2.9519653", "26.1.10909125", "27.0.12077973"]:
+                candidates.append(os.path.join(sdk, "ndk", ver))
+            try:
+                for entry in os.listdir(os.path.join(sdk, "ndk")):
+                    candidates.append(os.path.join(sdk, "ndk", entry))
+            except OSError:
+                pass
+    for cand in candidates:
+        if cand and os.path.exists(cand):
+            clang = os.path.join(cand, "toolchains", "llvm", "prebuilt", "linux-x86_64", "bin", "aarch64-linux-android26-clang")
+            if os.path.exists(clang):
+                ndk_clang = clang
+                break
+    if not ndk_clang:
+        import shutil
+        ndk_clang = shutil.which("aarch64-linux-android26-clang")
+
     stub_c = os.path.join(os.path.dirname(__file__), "portaudio_stub.c")
     out_pa = os.path.join(staging_usr, "lib", "libportaudio.so.2")
-    if os.path.exists(ndk_clang) and os.path.exists(stub_c):
+    if ndk_clang and os.path.exists(ndk_clang) and os.path.exists(stub_c):
         print("[*] Compiling libportaudio stub...")
         os.system(f"{ndk_clang} -shared -fPIC -Wl,-soname,libportaudio.so.2 -o {out_pa} {stub_c}")
         os.system(f"cp {out_pa} {os.path.join(staging_usr, 'lib', 'libportaudio.so')}")

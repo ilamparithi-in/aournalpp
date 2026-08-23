@@ -1,8 +1,5 @@
-*.iml
+# Android / Gradle build outputs
 .gradle/
-local.properties
-
-# Build outputs
 build/
 **/build/
 captures/
@@ -10,21 +7,35 @@ captures/
 **/.externalNativeBuild/
 .cxx/
 **/.cxx/
-
-# Artifacts
 *.apk
 *.aar
+*.ap_
+*.dex
+*.class
 
-# IDE & OS files
-.DS_Store
-.idea/caches/
-.idea/libraries/
-.idea/modules.xml
-.idea/workspace.xml
-.idea/navEditor.xml
-.idea/assetWizardSettings.xml
-.idea/shelf/
+# Local properties & SDK configs
+local.properties
+
+# IDEs and Editors
+.idea/
+*.iml
 .vscode/
+*.ipr
+*.iws
+
+# Kotlin & JVM
+.kotlin/
+*.log
+
+# Python & tools
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# OS generated files
+.DS_Store
+Thumbs.db
 
 # Generated runtime assets
 app/src/main/assets/bootstrap.tar.xz
