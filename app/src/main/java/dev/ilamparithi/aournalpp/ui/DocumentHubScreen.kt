@@ -17,10 +17,12 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -189,6 +191,7 @@ import dev.ilamparithi.aournalpp.model.NoteFileType
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
 import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
 import dev.ilamparithi.aournalpp.utils.ExternalFileHandler
+import dev.ilamparithi.aournalpp.ui.preview.floatingPreviewLongPress
 import dev.ilamparithi.aournalpp.utils.ThumbnailManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -288,6 +291,7 @@ fun DocumentHubScreen(
 
     // Multi-Selection State & Drag Selection Tracker
     var isSelectionMode by remember { mutableStateOf(false) }
+    var isDragSelecting by remember { mutableStateOf(false) }
     var selectedNotePaths by remember { mutableStateOf<Set<String>>(emptySet()) }
     var lastSelectedNotePath by remember { mutableStateOf<String?>(null) }
     val gridState = rememberLazyGridState()
@@ -1280,37 +1284,65 @@ fun DocumentHubScreen(
                             setLastSelectedPath = { lastSelectedNotePath = it },
                             isSelectionMode = { isSelectionMode },
                             setIsSelectionMode = { isSelectionMode = it },
+                            setIsDragSelecting = { isDragSelecting = it },
                             hapticFeedback = hapticFeedback,
                             autoScrollThreshold = with(LocalDensity.current) { 40.dp.toPx() },
                             setAutoScrollSpeed = { autoScrollSpeed = it }
                         )
                 ) {
-                    // Google Files Dynamic Multi-Browse Recents Carousel (only at Root & not searching/selecting)
-                    if (isRoot && !isViewingTrash && searchQuery.isBlank() && !isSelectionMode && recentNotes.isNotEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            GoogleFilesDynamicRecentsCarousel(
-                                recentNotes = recentNotes,
-                                pdfExportManager = pdfExportManager,
-                                onOpenNote = { openNoteInCanvas(it) },
-                                onTogglePin = { note ->
-                                    repository.togglePinNote(note.file.absolutePath)
-                                    loadContent()
-                                },
-                                onSharePdf = { note ->
-                                    scope.launch {
-                                        val result = repository.shareNoteAsPdf(context, note, pdfExportManager)
-                                        if (result.isFailure) {
-                                            snackbarHostState.showSnackbar("Failed to share PDF: ${result.exceptionOrNull()?.message}")
+                    // Dynamic Multi-Browse Recents Carousel
+                    // Animated with Material 3 Expressive motion physics (stays visible during active drag-select, smoothly collapses only after finger release)
+                    if (isRoot && !isViewingTrash && searchQuery.isBlank() && recentNotes.isNotEmpty()) {
+                        item(span = { GridItemSpan(maxLineSpan) }, key = "recents_carousel_section") {
+                            AnimatedVisibility(
+                                visible = !isSelectionMode || isDragSelecting,
+                                enter = expandVertically(
+                                    animationSpec = spring(
+                                        dampingRatio = 0.82f,
+                                        stiffness = 380f
+                                    )
+                                ) + fadeIn(
+                                    animationSpec = spring(
+                                        dampingRatio = 0.9f,
+                                        stiffness = 400f
+                                    )
+                                ),
+                                exit = shrinkVertically(
+                                    animationSpec = spring(
+                                        dampingRatio = 0.82f,
+                                        stiffness = 380f
+                                    )
+                                ) + fadeOut(
+                                    animationSpec = spring(
+                                        dampingRatio = 0.9f,
+                                        stiffness = 400f
+                                    )
+                                )
+                            ) {
+                                DynamicRecentsCarousel(
+                                    recentNotes = recentNotes,
+                                    pdfExportManager = pdfExportManager,
+                                    onOpenNote = { openNoteInCanvas(it) },
+                                    onTogglePin = { note ->
+                                        repository.togglePinNote(note.file.absolutePath)
+                                        loadContent()
+                                    },
+                                    onSharePdf = { note ->
+                                        scope.launch {
+                                            val result = repository.shareNoteAsPdf(context, note, pdfExportManager)
+                                            if (result.isFailure) {
+                                                snackbarHostState.showSnackbar("Failed to share PDF: ${result.exceptionOrNull()?.message}")
+                                            }
                                         }
+                                    },
+                                    onShareXopp = { note -> repository.shareNoteAsXopp(context, note) },
+                                    onDeleteNote = { note -> noteToDelete = note },
+                                    onRenameNote = { note ->
+                                        noteToRename = note
+                                        renameInputText = note.title
                                     }
-                                },
-                                onShareXopp = { note -> repository.shareNoteAsXopp(context, note) },
-                                onDeleteNote = { note -> noteToDelete = note },
-                                onRenameNote = { note ->
-                                    noteToRename = note
-                                    renameInputText = note.title
-                                }
-                            )
+                                )
+                            }
                         }
                     }
 
@@ -1677,6 +1709,9 @@ fun ExpressiveNoteCard(
     }
 
     val cardShape = RoundedCornerShape(16.dp)
+    val cardFolderAccent = note.folderColorHex?.let {
+        try { Color(android.graphics.Color.parseColor(it)) } catch (e: Exception) { null }
+    } ?: MaterialTheme.colorScheme.primary
 
     Card(
         modifier = Modifier
@@ -1905,6 +1940,10 @@ fun ExpressiveNoteCard(
                         }
                     }
                 } else {
+                    val cardFolderAccent = note.folderColorHex?.let {
+                        try { Color(android.graphics.Color.parseColor(it)) } catch (e: Exception) { null }
+                    } ?: MaterialTheme.colorScheme.primary
+
                     Surface(
                         shape = RoundedCornerShape(10.dp),
                         color = MaterialTheme.colorScheme.primaryContainer,
@@ -2150,6 +2189,7 @@ fun Modifier.notesGridDragSelect(
     setLastSelectedPath: (String?) -> Unit,
     isSelectionMode: () -> Boolean,
     setIsSelectionMode: (Boolean) -> Unit,
+    setIsDragSelecting: (Boolean) -> Unit = {},
     hapticFeedback: HapticFeedback,
     autoScrollThreshold: Float,
     setAutoScrollSpeed: (Float) -> Unit
@@ -2201,6 +2241,7 @@ fun Modifier.notesGridDragSelect(
             }
 
             if (isLongPressed) {
+                setIsDragSelecting(true)
                 val currentNotesList = notes()
                 val currentSelected = selectedPaths()
                 val activeSelection = isSelectionMode()
@@ -2281,6 +2322,7 @@ fun Modifier.notesGridDragSelect(
                     }
                 } finally {
                     setAutoScrollSpeed(0f)
+                    setIsDragSelecting(false)
                 }
             }
         }
@@ -2288,11 +2330,13 @@ fun Modifier.notesGridDragSelect(
 }
 
 /**
- * Dynamic Multi-Browse Recents Carousel (Google Files app style)
- * Items in focus are wider (up to 260dp) while edge items are narrower (145dp) with spring interpolation.
+ * Dynamic horizontal multi-browse carousel.
+ * Powered by Material 3 HorizontalMultiBrowseCarousel for authentic, adaptive responsive cards,
+ * buttery smooth gesture physics, and zero rubberband scroll contention.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GoogleFilesDynamicRecentsCarousel(
+fun DynamicRecentsCarousel(
     recentNotes: List<NoteDocument>,
     pdfExportManager: PdfExportManager,
     onOpenNote: (File) -> Unit,
@@ -2302,8 +2346,7 @@ fun GoogleFilesDynamicRecentsCarousel(
     onDeleteNote: (NoteDocument) -> Unit,
     onRenameNote: (NoteDocument) -> Unit
 ) {
-    val listState = rememberLazyListState()
-    val density = LocalDensity.current
+    if (recentNotes.isEmpty()) return
 
     Column(
         modifier = Modifier
@@ -2339,72 +2382,37 @@ fun GoogleFilesDynamicRecentsCarousel(
             )
         }
 
-        LazyRow(
-            state = listState,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
-        ) {
-            itemsIndexed(recentNotes, key = { _, note -> "recent_${note.path}" }) { index, note ->
-                val canScrollBackward = listState.canScrollBackward
-                val canScrollForward = listState.canScrollForward
-                val layoutInfo = listState.layoutInfo
-                val itemInfo = layoutInfo.visibleItemsInfo.find { it.index == index }
-                val viewportWidthPx = layoutInfo.viewportEndOffset.toFloat()
-
-                val targetWidthDp: androidx.compose.ui.unit.Dp = if (itemInfo != null && viewportWidthPx > 0f) {
-                    val itemCenter = itemInfo.offset + itemInfo.size / 2f
-                    val leftThresholdPx = with(density) { 150.dp.toPx() }
-                    val rightThresholdPx = with(density) { 150.dp.toPx() }
-
-                    val leftCompression = if (!canScrollBackward) 1f else (itemCenter / leftThresholdPx).coerceIn(0f, 1f)
-                    val rightDist = viewportWidthPx - itemCenter
-                    val rightCompression = if (!canScrollForward) 1f else (rightDist / rightThresholdPx).coerceIn(0f, 1f)
-                    val factor = minOf(leftCompression, rightCompression)
-
-                    when {
-                        factor < 0.22f -> 38.dp
-                        factor < 0.58f -> {
-                            val t = (factor - 0.22f) / 0.36f
-                            (38 + t * (85 - 38)).dp
-                        }
-                        else -> {
-                            val t = (factor - 0.58f) / 0.42f
-                            (85 + t * (255 - 85)).dp
-                        }
-                    }
-                } else {
-                    if (index < 2) 255.dp else if (index == 2) 85.dp else 38.dp
-                }
-
-                val animatedWidth by animateDpAsState(
-                    targetValue = targetWidthDp,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessLow
-                    ),
-                    label = "multiBrowseWidth"
-                )
-
-                GoogleFilesMultiBrowseCard(
-                    note = note,
-                    cardWidth = animatedWidth,
-                    pdfExportManager = pdfExportManager,
-                    onOpen = { onOpenNote(note.file) },
-                    onTogglePin = { onTogglePin(note) },
-                    onSharePdf = { onSharePdf(note) },
-                    onShareXopp = { onShareXopp(note) },
-                    onDelete = { onDeleteNote(note) },
-                    onRename = { onRenameNote(note) }
-                )
-            }
+        androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel(
+            state = androidx.compose.material3.carousel.rememberCarouselState { recentNotes.size },
+            preferredItemWidth = 230.dp,
+            itemSpacing = 10.dp,
+            contentPadding = PaddingValues(horizontal = 8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+        ) { index ->
+            val note = recentNotes[index]
+            RecentsMultiBrowseCard(
+                note = note,
+                modifier = Modifier
+                    .maskClip(MaterialTheme.shapes.extraLarge)
+                    .fillMaxSize(),
+                pdfExportManager = pdfExportManager,
+                onOpen = { onOpenNote(note.file) },
+                onTogglePin = { onTogglePin(note) },
+                onSharePdf = { onSharePdf(note) },
+                onShareXopp = { onShareXopp(note) },
+                onDelete = { onDeleteNote(note) },
+                onRename = { onRenameNote(note) }
+            )
         }
     }
 }
 
 @Composable
-private fun GoogleFilesMultiBrowseCard(
+private fun RecentsMultiBrowseCard(
     note: NoteDocument,
-    cardWidth: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier,
     pdfExportManager: PdfExportManager,
     onOpen: () -> Unit,
     onTogglePin: () -> Unit,
@@ -2423,101 +2431,35 @@ private fun GoogleFilesMultiBrowseCard(
         value = ThumbnailManager.getOrCreateThumbnail(context, note.file, pdfExportManager)
     }
 
-    val isPill = cardWidth < 50.dp
-    val isMedium = cardWidth in 50.dp..140.dp
-    val isLarge = cardWidth > 140.dp
-
-    val cardShape = when {
-        isPill -> RoundedCornerShape(percent = 50)
-        isMedium -> RoundedCornerShape(18.dp)
-        else -> RoundedCornerShape(24.dp)
-    }
+    val cardShape = RoundedCornerShape(22.dp)
+    val multiFolderAccent = note.folderColorHex?.let {
+        try { Color(android.graphics.Color.parseColor(it)) } catch (e: Exception) { null }
+    } ?: MaterialTheme.colorScheme.primary
 
     Card(
-        modifier = Modifier
-            .width(cardWidth)
-            .height(170.dp)
-            .clickable(onClick = onOpen),
+        modifier = modifier
+            .floatingPreviewLongPress(
+                note = note,
+                thumbnailFile = thumbnailFile,
+                folderColor = multiFolderAccent,
+                initialCornerRadiusDp = 22f,
+                onClick = onOpen
+            ),
         shape = cardShape,
         colors = CardDefaults.cardColors(
-            containerColor = if (isLarge) {
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
-            }
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isLarge) 3.dp else 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        when {
-            // Extra-small pill state
-            isPill -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (note.fileType == NoteFileType.PDF) Icons.Default.PictureAsPdf else Icons.Default.Description,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-
-            // Medium peeking preview state
-            isMedium -> {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    if (thumbnailFile != null && thumbnailFile!!.exists()) {
-                        val bitmap = remember(thumbnailFile) {
-                            try { BitmapFactory.decodeFile(thumbnailFile!!.absolutePath) } catch (e: Exception) { null }
-                        }
-                        if (bitmap != null) {
-                            Image(
-                                bitmap = bitmap.asImageBitmap(),
-                                contentDescription = note.title,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                    } else {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = if (note.fileType == NoteFileType.PDF) Icons.Default.PictureAsPdf else Icons.Default.Description,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                                modifier = Modifier.size(32.dp)
-                            )
-                        }
-                    }
-
-                    // Format pill badge at top
-                    Surface(
-                        color = Color.Black.copy(alpha = 0.65f),
-                        shape = RoundedCornerShape(6.dp),
-                        modifier = Modifier.align(Alignment.TopCenter).padding(top = 6.dp)
-                    ) {
-                        Text(
-                            text = ".${note.file.extension}",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-            }
-
-            // Large full card state
-            else -> {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    // Thumbnail container
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                            .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Thumbnail container
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            ) {
                         if (thumbnailFile != null && thumbnailFile!!.exists()) {
                             val bitmap = remember(thumbnailFile) {
                                 try { BitmapFactory.decodeFile(thumbnailFile!!.absolutePath) } catch (e: Exception) { null }
@@ -2698,6 +2640,3 @@ private fun GoogleFilesMultiBrowseCard(
                 }
             }
         }
-    }
-}
-

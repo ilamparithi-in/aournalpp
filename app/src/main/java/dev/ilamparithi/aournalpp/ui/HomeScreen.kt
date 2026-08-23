@@ -122,6 +122,7 @@ import dev.ilamparithi.aournalpp.ui.theme.ExpressiveSprings
 import dev.ilamparithi.aournalpp.ui.theme.ScallopShape
 import dev.ilamparithi.aournalpp.ui.theme.SunnyShape
 import dev.ilamparithi.aournalpp.utils.ExternalFileHandler
+import dev.ilamparithi.aournalpp.ui.preview.floatingPreviewLongPress
 import dev.ilamparithi.aournalpp.utils.ThumbnailManager
 import kotlinx.coroutines.launch
 import java.io.File
@@ -884,13 +885,19 @@ private fun EnlargedContinueHeroSection(
         }
     }
 
+    val heroFolderAccent = note.folderColorHex?.let {
+        try { Color(android.graphics.Color.parseColor(it)) } catch (e: Exception) { null }
+    } ?: MaterialTheme.colorScheme.primary
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .scale(cardScale)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
+            .floatingPreviewLongPress(
+                note = note,
+                thumbnailFile = thumbnailFile,
+                folderColor = heroFolderAccent,
+                initialCornerRadiusDp = 24f,
                 onClick = onResume
             ),
         shape = RoundedCornerShape(24.dp),

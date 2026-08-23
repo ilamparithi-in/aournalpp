@@ -56,6 +56,7 @@ import dev.ilamparithi.aournalpp.ui.LicensesScreen
 import dev.ilamparithi.aournalpp.SettingsScreen
 import dev.ilamparithi.aournalpp.CanvasActivity
 import dev.ilamparithi.aournalpp.utils.ExternalFileHandler
+import dev.ilamparithi.aournalpp.ui.preview.FloatingPreviewHost
 import dev.ilamparithi.aournalpp.ui.theme.AournalTheme
 import dev.ilamparithi.aournalpp.ui.theme.ExpressiveSprings
 import androidx.compose.animation.AnimatedContent
@@ -94,7 +95,9 @@ class MainActivity : ComponentActivity() {
                                 pendingIntentToProcess = null
                             }
                         }
-                        MainResponsiveAppShell()
+                        FloatingPreviewHost {
+                            MainResponsiveAppShell()
+                        }
                     }
                     else -> {
                         BootstrapScreen(

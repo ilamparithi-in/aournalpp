@@ -78,6 +78,7 @@ import dev.ilamparithi.aournalpp.ui.theme.ArchShape
 import dev.ilamparithi.aournalpp.ui.theme.CloverShape
 import dev.ilamparithi.aournalpp.ui.theme.ScallopShape
 import dev.ilamparithi.aournalpp.ui.theme.SunnyShape
+import dev.ilamparithi.aournalpp.ui.preview.floatingPreviewLongPress
 import dev.ilamparithi.aournalpp.utils.ThumbnailManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -525,9 +526,11 @@ fun CollageCardView(
             .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .border(1.dp, folderAccentColor.copy(alpha = 0.25f), shape)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
+            .floatingPreviewLongPress(
+                note = note,
+                thumbnailFile = thumbnailFile,
+                folderColor = folderAccentColor,
+                initialCornerRadiusDp = 14f,
                 onClick = onClick
             )
     ) {
