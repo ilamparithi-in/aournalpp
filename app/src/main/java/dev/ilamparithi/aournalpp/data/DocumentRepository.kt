@@ -27,6 +27,7 @@ class DocumentRepository(private val context: Context) {
     }
 
     private val env = LinuxEnvironment(context)
+    private val prefs = context.getSharedPreferences("aournal_doc_hub_prefs", Context.MODE_PRIVATE)
 
     fun getLinuxEnvironment(): LinuxEnvironment = env
 
@@ -39,6 +40,59 @@ class DocumentRepository(private val context: Context) {
     private fun isOpenableFile(file: File): Boolean {
         val ext = file.extension.lowercase()
         return SUPPORTED_EXTENSIONS.contains(ext)
+    }
+
+    // Pinned Notes Persistence
+    fun getPinnedNotePaths(): List<String> {
+        val raw = prefs.getString("pref_pinned_notes_order_json", null) ?: return emptyList()
+        return try {
+            val array = org.json.JSONArray(raw)
+            val list = mutableListOf<String>()
+            for (i in 0 until array.length()) {
+                val p = array.optString(i)
+                if (p.isNotBlank()) list.add(p)
+            }
+            list
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun isNotePinned(path: String): Boolean {
+        val pinned = getPinnedNotePaths()
+        return pinned.contains(path)
+    }
+
+    fun pinNote(path: String) {
+        val current = getPinnedNotePaths().toMutableList()
+        current.remove(path)
+        current.add(0, path)
+        savePinnedNotes(current)
+    }
+
+    fun unpinNote(path: String) {
+        val current = getPinnedNotePaths().toMutableList()
+        current.remove(path)
+        savePinnedNotes(current)
+    }
+
+    fun togglePinNote(path: String): Boolean {
+        val current = getPinnedNotePaths().toMutableList()
+        val willPin = if (current.contains(path)) {
+            current.remove(path)
+            false
+        } else {
+            current.add(0, path)
+            true
+        }
+        savePinnedNotes(current)
+        return willPin
+    }
+
+    private fun savePinnedNotes(paths: List<String>) {
+        val array = org.json.JSONArray()
+        paths.forEach { array.put(it) }
+        prefs.edit().putString("pref_pinned_notes_order_json", array.toString()).apply()
     }
 
     fun scanDirectory(
@@ -116,6 +170,8 @@ class DocumentRepository(private val context: Context) {
                 )
             }
 
+            val isRoot = targetDir.canonicalPath == getRootNotesDirectory().canonicalPath
+            val metaColor = if (!isRoot) readFolderColor(targetDir) else null
             val sizeKb = (file.length() + 1023) / 1024
             resultNotes.add(
                 NoteDocument(
@@ -128,7 +184,9 @@ class DocumentRepository(private val context: Context) {
                     sizeFormatted = "${sizeKb} KB",
                     autosaveInfo = autosaveInfo,
                     isHidden = false,
-                    folder = targetDir.name
+                    isPinned = isNotePinned(file.absolutePath),
+                    folder = if (isRoot) "Notes Home" else targetDir.name,
+                    folderColorHex = metaColor
                 )
             )
         }
@@ -657,7 +715,8 @@ class DocumentRepository(private val context: Context) {
         if (!file.exists() || !file.isFile || !isOpenableFile(file)) return null
         val dateFormat = SimpleDateFormat("MMM dd, yyyy · HH:mm", Locale.getDefault())
         val sizeKb = (file.length() + 1023) / 1024
-        val autosaveCandidate = findMatchingAutosave(file.parentFile ?: getRootNotesDirectory(), file)
+        val parentDir = file.parentFile ?: getRootNotesDirectory()
+        val autosaveCandidate = findMatchingAutosave(parentDir, file)
         val autosaveInfo = autosaveCandidate?.let { autoFile ->
             AutosaveInfo(
                 autosaveFile = autoFile,
@@ -669,6 +728,9 @@ class DocumentRepository(private val context: Context) {
             )
         }
 
+        val isRoot = parentDir.canonicalPath == getRootNotesDirectory().canonicalPath
+        val folderColor = if (!isRoot) readFolderColor(parentDir) else null
+
         return NoteDocument(
             file = file,
             title = file.nameWithoutExtension,
@@ -679,7 +741,9 @@ class DocumentRepository(private val context: Context) {
             sizeFormatted = "${sizeKb} KB",
             autosaveInfo = autosaveInfo,
             isHidden = file.name.startsWith("."),
-            folder = file.parentFile?.name ?: "Notes"
+            isPinned = isNotePinned(file.absolutePath),
+            folder = if (isRoot) "Notes Home" else parentDir.name,
+            folderColorHex = folderColor
         )
     }
 
@@ -700,6 +764,49 @@ class DocumentRepository(private val context: Context) {
             .sortedByDescending { it.lastModified() }
             .take(limit)
             .mapNotNull { getNoteDocumentForFile(it) }
+    }
+
+    fun getHomeNotes(limit: Int = 16): List<NoteDocument> {
+        val pinnedPaths = getPinnedNotePaths()
+        val pinnedDocs = mutableListOf<NoteDocument>()
+        val seenPaths = mutableSetOf<String>()
+
+        for (path in pinnedPaths) {
+            val file = File(path)
+            if (file.exists() && file.isFile && !file.absolutePath.contains("/.Trash/")) {
+                getNoteDocumentForFile(file)?.let { doc ->
+                    pinnedDocs.add(doc.copy(isPinned = true))
+                    seenPaths.add(doc.path)
+                    try { seenPaths.add(doc.file.canonicalPath) } catch (e: Exception) {}
+                }
+            }
+        }
+
+        val allOpenableFiles = mutableListOf<File>()
+        fun scan(dir: File) {
+            val children = dir.listFiles() ?: return
+            for (c in children) {
+                if (c.isDirectory && c.name != TRASH_DIR_NAME && !c.name.startsWith(".")) {
+                    scan(c)
+                } else if (c.isFile && isOpenableFile(c) && !c.name.startsWith(".") && !c.name.endsWith("~") && !c.name.contains(".autosave.")) {
+                    allOpenableFiles.add(c)
+                }
+            }
+        }
+        scan(getRootNotesDirectory())
+
+        val recentDocs = allOpenableFiles
+            .sortedByDescending { it.lastModified() }
+            .mapNotNull { file ->
+                val canonical = try { file.canonicalPath } catch (e: Exception) { file.absolutePath }
+                if (seenPaths.contains(file.absolutePath) || seenPaths.contains(canonical)) {
+                    null
+                } else {
+                    getNoteDocumentForFile(file)
+                }
+            }
+
+        return (pinnedDocs + recentDocs).take(limit)
     }
 }
 

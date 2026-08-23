@@ -98,7 +98,9 @@ data class NoteDocument(
     val autosaveInfo: AutosaveInfo? = null,
     val isHidden: Boolean = false,
     val isEmergencyRecovery: Boolean = false,
+    val isPinned: Boolean = false,
     val folder: String = "",
+    val folderColorHex: String? = null,
     val tags: List<String> = emptyList()
 ) {
     val fileType: NoteFileType

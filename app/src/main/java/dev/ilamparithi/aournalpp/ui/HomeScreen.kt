@@ -68,6 +68,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -96,12 +97,24 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.PushPin
 import dev.ilamparithi.aournalpp.CanvasActivity
 import dev.ilamparithi.aournalpp.data.DocumentRepository
 import dev.ilamparithi.aournalpp.model.NoteDocument
 import dev.ilamparithi.aournalpp.model.NoteFileType
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
 import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.runtime.mutableLongStateOf
+import dev.ilamparithi.aournalpp.ui.collage.CollageCardView
+import dev.ilamparithi.aournalpp.ui.collage.CreativeEmptyCollageState
+import dev.ilamparithi.aournalpp.ui.collage.FloatingDetailsPill
+import dev.ilamparithi.aournalpp.ui.collage.OrganicCollageView
+import kotlinx.coroutines.delay
 import dev.ilamparithi.aournalpp.ui.theme.ArchShape
 import dev.ilamparithi.aournalpp.ui.theme.AsymmetricCardShape
 import dev.ilamparithi.aournalpp.ui.theme.CloverShape
@@ -131,11 +144,15 @@ fun HomeScreen(
 
     val prefs = remember { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
     val lastOpenedPath = remember(prefs) { prefs.getString("pref_last_opened_note_path", null) }
+    var viewMode by remember { mutableStateOf(prefs.getString("pref_home_view_mode", "EXPRESSIVE") ?: "EXPRESSIVE") }
 
     var recentNotes by remember { mutableStateOf<List<NoteDocument>>(emptyList()) }
     var continueNote by remember { mutableStateOf<NoteDocument?>(null) }
     var totalNotesCount by remember { mutableStateOf(0) }
     var totalFoldersCount by remember { mutableStateOf(0) }
+    var isRefreshing by remember { mutableStateOf(false) }
+    var refreshSeed by remember { mutableLongStateOf(0L) }
+    val pullRefreshState = rememberPullToRefreshState()
 
     // Dialog states
     var showCreateFolderDialog by remember { mutableStateOf(false) }
@@ -149,8 +166,8 @@ fun HomeScreen(
     val isScrolled by remember { derivedStateOf { scrollState.value > 100 } }
 
     fun loadHomeData() {
-        val recents = repository.getAllRecentNotes(12)
-        recentNotes = recents
+        val homeNotes = repository.getHomeNotes(16)
+        recentNotes = homeNotes
         totalNotesCount = repository.getAllRecentNotes(500).size
         totalFoldersCount = repository.scanDirectory(repository.getRootNotesDirectory()).first.size
 
@@ -158,9 +175,22 @@ fun HomeScreen(
             val f = File(lastOpenedPath)
             if (f.exists() && !f.absolutePath.contains("/.Trash/")) {
                 repository.getNoteDocumentForFile(f)
-            } else recents.firstOrNull()
+            } else homeNotes.firstOrNull()
         } else {
-            recents.firstOrNull()
+            homeNotes.firstOrNull()
+        }
+    }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                loadHomeData()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -306,99 +336,122 @@ fun HomeScreen(
                 )
             }
         ) { innerPadding ->
-            Column(
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = {
+                    scope.launch {
+                        isRefreshing = true
+                        refreshSeed = System.currentTimeMillis()
+                        loadHomeData()
+                        delay(600)
+                        isRefreshing = false
+                    }
+                },
+                state = pullRefreshState,
+                indicator = {
+                    PullToRefreshDefaults.Indicator(
+                        state = pullRefreshState,
+                        isRefreshing = isRefreshing,
+                        modifier = Modifier.align(Alignment.TopCenter),
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                },
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .verticalScroll(scrollState)
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(28.dp)
             ) {
-                // 1. Dynamic Hero Header & Stats
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = greeting,
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        letterSpacing = (-0.5).sp
-                    )
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(28.dp)
+                ) {
+                    // 1. Dynamic Hero Header & Stats
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = greeting,
+                            style = MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            letterSpacing = (-0.5).sp
+                        )
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
 
-                    Text(
-                        text = funSubhero,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Medium
-                    )
+                        Text(
+                            text = funSubhero,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium
+                        )
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
 
-                    // Expressive Stats Row
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
+                        // Expressive Stats Row
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
                             ) {
-                                Icon(
-                                    Icons.Default.Description,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    "$totalNotesCount notes",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Description,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        "$totalNotesCount notes",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
-                        }
 
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
                             ) {
-                                Icon(
-                                    Icons.Default.Folder,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
-                                    tint = MaterialTheme.colorScheme.tertiary
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    "$totalFoldersCount folders",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Folder,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.tertiary
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        "$totalFoldersCount folders",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
                     }
-                }
 
-                // 2. Enlarged "Continue where you left off" Section
-                continueNote?.let { note ->
-                    EnlargedContinueHeroSection(
-                        note = note,
-                        pdfExportManager = pdfExportManager,
-                        onResume = { openNote(note.file) }
-                    )
-                }
+                    // 2. Enlarged "Continue where you left off" Section
+                    continueNote?.let { note ->
+                        EnlargedContinueHeroSection(
+                            note = note,
+                            pdfExportManager = pdfExportManager,
+                            onResume = { openNote(note.file) }
+                        )
+                    }
 
-                // 3. M3 Expressive Recent Notes Collage (Not a Carousel! Fills vertical space)
-                if (recentNotes.isNotEmpty()) {
+                    // 3. M3 Expressive Studio Notes (Collage vs Gallery)
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -414,48 +467,113 @@ fun HomeScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    "Recent Notes Collage",
+                                    "Studio Notes",
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Black
                                 )
                             }
 
-                            TextButton(onClick = onNavigateToFiles) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("Open Files Hub", fontWeight = FontWeight.Bold)
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                // View Mode Toggle (Expressive vs Normal)
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                ) {
+                                    Row(modifier = Modifier.padding(3.dp)) {
+                                        Surface(
+                                            shape = RoundedCornerShape(9.dp),
+                                            color = if (viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.primary else Color.Transparent,
+                                            modifier = Modifier.clickable {
+                                                viewMode = "EXPRESSIVE"
+                                                prefs.edit().putString("pref_home_view_mode", "EXPRESSIVE").apply()
+                                            }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.AutoAwesome,
+                                                    contentDescription = "Expressive Collage",
+                                                    tint = if (viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(
+                                                    "Collage",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+
+                                        Surface(
+                                            shape = RoundedCornerShape(9.dp),
+                                            color = if (viewMode == "NORMAL") MaterialTheme.colorScheme.primary else Color.Transparent,
+                                            modifier = Modifier.clickable {
+                                                viewMode = "NORMAL"
+                                                prefs.edit().putString("pref_home_view_mode", "NORMAL").apply()
+                                            }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.GridView,
+                                                    contentDescription = "Normal Gallery",
+                                                    tint = if (viewMode == "NORMAL") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(
+                                                    "Gallery",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (viewMode == "NORMAL") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                TextButton(onClick = onNavigateToFiles) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("Files Hub", fontWeight = FontWeight.Bold)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    }
                                 }
                             }
                         }
 
-                        ExpressiveRecentCollage(
-                            notes = recentNotes,
-                            pdfExportManager = pdfExportManager,
-                            onNoteClick = { openNote(it.file) }
-                        )
+                        if (recentNotes.isEmpty()) {
+                            CreativeEmptyCollageState(onNewNoteClick = { startNewNote() })
+                        } else if (viewMode == "EXPRESSIVE") {
+                            OrganicCollageView(
+                                notes = recentNotes,
+                                pdfExportManager = pdfExportManager,
+                                onNoteClick = { openNote(it.file) },
+                                onNewNoteClick = { startNewNote() },
+                                refreshSeed = refreshSeed
+                            )
+                        } else {
+                            NormalHomeGalleryView(
+                                notes = recentNotes,
+                                pdfExportManager = pdfExportManager,
+                                onNoteClick = { openNote(it.file) }
+                            )
+                        }
                     }
+
+                    Spacer(modifier = Modifier.height(60.dp))
                 }
-
-                Spacer(modifier = Modifier.height(60.dp))
             }
-        }
-
-        // 4. Expressive Speed Dial Floating Action Menu (Bottom Right)
-        AnimatedVisibility(
-            visible = isFabExpanded,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.45f))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { isFabExpanded = false }
-            )
         }
 
         // 4. Expressive Speed Dial Floating Action Menu (Bottom Right)
@@ -775,7 +893,7 @@ private fun EnlargedContinueHeroSection(
                 indication = null,
                 onClick = onResume
             ),
-        shape = AsymmetricCardShape(topStart = 36.dp, bottomEnd = 36.dp, topEnd = 16.dp, bottomStart = 16.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
         ),
@@ -891,177 +1009,107 @@ private fun EnlargedContinueHeroSection(
 }
 
 /**
- * M3 Expressive Recent Notes Collage (Fills vertical & horizontal space with organic shapes)
+ * Normal Gallery View for Home Screen (with Pinned section on top and folder palette detail pills).
  */
 @Composable
-private fun ExpressiveRecentCollage(
+private fun NormalHomeGalleryView(
     notes: List<NoteDocument>,
     pdfExportManager: PdfExportManager,
     onNoteClick: (NoteDocument) -> Unit
 ) {
-    val shapes: List<Shape> = remember {
-        listOf(
-            ArchShape(cornerRadiusRatio = 0.45f),
-            AsymmetricCardShape(topStart = 36.dp, topEnd = 14.dp, bottomEnd = 36.dp, bottomStart = 14.dp),
-            ScallopShape(lobes = 8, depth = 0.07f),
-            SunnyShape(vertices = 8, roundness = 0.22f),
-            CloverShape(),
-            AsymmetricCardShape(topStart = 14.dp, topEnd = 36.dp, bottomEnd = 14.dp, bottomStart = 36.dp)
-        )
-    }
+    val pinnedNotes = notes.filter { it.isPinned }
+    val regularNotes = notes.filter { !it.isPinned }
 
-    // Split notes into 3 vertical columns for an artistic mosaic collage layout
-    val col1Notes = notes.filterIndexed { index, _ -> index % 3 == 0 }
-    val col2Notes = notes.filterIndexed { index, _ -> index % 3 == 1 }
-    val col3Notes = notes.filterIndexed { index, _ -> index % 3 == 2 }
-
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        // Column 1
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            col1Notes.forEachIndexed { i, note ->
-                val shape = shapes[(i * 3) % shapes.size]
-                val cardHeight = if (i == 0) 240.dp else 170.dp
-                CollageItemCard(
-                    note = note,
-                    shape = shape,
-                    cardHeight = cardHeight,
-                    pdfExportManager = pdfExportManager,
-                    onClick = { onNoteClick(note) }
-                )
-            }
-        }
-
-        // Column 2
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            col2Notes.forEachIndexed { i, note ->
-                val shape = shapes[(i * 3 + 1) % shapes.size]
-                val cardHeight = if (i == 0) 180.dp else 230.dp
-                CollageItemCard(
-                    note = note,
-                    shape = shape,
-                    cardHeight = cardHeight,
-                    pdfExportManager = pdfExportManager,
-                    onClick = { onNoteClick(note) }
-                )
-            }
-        }
-
-        // Column 3
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            col3Notes.forEachIndexed { i, note ->
-                val shape = shapes[(i * 3 + 2) % shapes.size]
-                val cardHeight = if (i % 2 == 0) 210.dp else 180.dp
-                CollageItemCard(
-                    note = note,
-                    shape = shape,
-                    cardHeight = cardHeight,
-                    pdfExportManager = pdfExportManager,
-                    onClick = { onNoteClick(note) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun CollageItemCard(
-    note: NoteDocument,
-    shape: Shape,
-    cardHeight: androidx.compose.ui.unit.Dp,
-    pdfExportManager: PdfExportManager,
-    onClick: () -> Unit
-) {
-    val context = LocalContext.current
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-        label = "collageItemScale"
-    )
-
-    val thumbnailFile by produceState<File?>(initialValue = ThumbnailManager.getCachedThumbnailFile(context, note.file), key1 = note.lastModifiedMs) {
-        value = ThumbnailManager.getOrCreateThumbnail(context, note.file, pdfExportManager)
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(cardHeight)
-            .scale(scale)
-            .shadow(elevation = 6.dp, shape = shape)
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-    ) {
-        if (thumbnailFile != null && thumbnailFile!!.exists()) {
-            val bitmap = remember(thumbnailFile) {
-                try { BitmapFactory.decodeFile(thumbnailFile!!.absolutePath) } catch (e: Exception) { null }
-            }
-            if (bitmap != null) {
-                Image(
-                    bitmap = bitmap.asImageBitmap(),
-                    contentDescription = note.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        } else {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = if (note.fileType == NoteFileType.PDF) Icons.Default.PictureAsPdf else Icons.Default.Description,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                    modifier = Modifier.size(42.dp)
-                )
-            }
-        }
-
-        // Gradient & Title Overlay at bottom
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))
+        // 1. Pinned Notes Section (if any)
+        if (pinnedNotes.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        Icons.Default.PushPin,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
                     )
-                )
-                .padding(horizontal = 12.dp, vertical = 10.dp)
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = note.title,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = ".${note.file.extension} • ${note.lastModifiedFormatted}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.8f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                    Text(
+                        "Pinned Notes",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                val chunkedPinned = pinnedNotes.chunked(2)
+                chunkedPinned.forEach { rowNotes ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        rowNotes.forEach { note ->
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(240.dp)
+                            ) {
+                                CollageCardView(
+                                    note = note,
+                                    shape = RoundedCornerShape(18.dp),
+                                    pdfExportManager = pdfExportManager,
+                                    onClick = { onNoteClick(note) }
+                                )
+                            }
+                        }
+                        if (rowNotes.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Recent Notes Section
+        if (regularNotes.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (pinnedNotes.isNotEmpty()) {
+                    Text(
+                        "Recent Notes",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                val chunked = regularNotes.chunked(2)
+                chunked.forEach { rowNotes ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        rowNotes.forEach { note ->
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(230.dp)
+                            ) {
+                                CollageCardView(
+                                    note = note,
+                                    shape = RoundedCornerShape(16.dp),
+                                    pdfExportManager = pdfExportManager,
+                                    onClick = { onNoteClick(note) }
+                                )
+                            }
+                        }
+                        if (rowNotes.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
             }
         }
     }

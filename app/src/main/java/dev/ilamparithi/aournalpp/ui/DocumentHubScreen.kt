@@ -97,6 +97,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
@@ -106,6 +107,7 @@ import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -134,6 +136,10 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -273,6 +279,8 @@ fun DocumentHubScreen(
     var notes by remember { mutableStateOf<List<NoteDocument>>(emptyList()) }
     var trashedNotes by remember { mutableStateOf<List<NoteDocument>>(emptyList()) }
     var isViewingTrash by remember { mutableStateOf(false) }
+    var isRefreshing by remember { mutableStateOf(false) }
+    val pullRefreshState = rememberPullToRefreshState()
 
     val recentNotes = remember(notes, folders, isViewingTrash) {
         if (!isViewingTrash) repository.getAllRecentNotes(10) else emptyList()
@@ -1156,11 +1164,33 @@ fun DocumentHubScreen(
             }
         }
 
-        Column(
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = {
+                scope.launch {
+                    isRefreshing = true
+                    loadContent()
+                    delay(500)
+                    isRefreshing = false
+                }
+            },
+            state = pullRefreshState,
+            indicator = {
+                PullToRefreshDefaults.Indicator(
+                    state = pullRefreshState,
+                    isRefreshing = isRefreshing,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
             // Interactive Breadcrumbs Bar (if in subfolder)
             val isRoot = currentDirectory.canonicalPath == repository.getRootNotesDirectory().canonicalPath
             if (!isRoot && !isViewingTrash) {
@@ -1262,6 +1292,10 @@ fun DocumentHubScreen(
                                 recentNotes = recentNotes,
                                 pdfExportManager = pdfExportManager,
                                 onOpenNote = { openNoteInCanvas(it) },
+                                onTogglePin = { note ->
+                                    repository.togglePinNote(note.file.absolutePath)
+                                    loadContent()
+                                },
                                 onSharePdf = { note ->
                                     scope.launch {
                                         val result = repository.shareNoteAsPdf(context, note, pdfExportManager)
@@ -1432,6 +1466,10 @@ fun DocumentHubScreen(
                                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                     }
                                 },
+                                onTogglePin = {
+                                    repository.togglePinNote(note.file.absolutePath)
+                                    loadContent()
+                                },
                                 onExportPdf = {
                                     pendingExportNote = note
                                     exportPdfLauncher.launch("${note.title}.pdf")
@@ -1524,6 +1562,7 @@ fun DocumentHubScreen(
                         .padding(16.dp)
                 ) {
                     val selectedDocs = notes.filter { selectedNotePaths.contains(it.path) }
+                    val allSelectedPinned = selectedDocs.isNotEmpty() && selectedDocs.all { it.isPinned }
 
                     Row(
                         modifier = Modifier
@@ -1532,6 +1571,29 @@ fun DocumentHubScreen(
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // Pin / Unpin Selected Action
+                        IconButton(onClick = {
+                            selectedDocs.forEach { doc ->
+                                if (allSelectedPinned) {
+                                    repository.unpinNote(doc.file.absolutePath)
+                                } else {
+                                    repository.pinNote(doc.file.absolutePath)
+                                }
+                            }
+                            scope.launch {
+                                snackbarHostState.showSnackbar(if (allSelectedPinned) "Unpinned selected notes from Home" else "Pinned selected notes to Home")
+                            }
+                            loadContent()
+                        }) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    Icons.Default.PushPin,
+                                    contentDescription = if (allSelectedPinned) "Unpin" else "Pin to Home",
+                                    tint = if (allSelectedPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
                         // Move to Folder Action
                         IconButton(onClick = { showMoveToFolderDialog = true }) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1585,6 +1647,7 @@ fun DocumentHubScreen(
         }
     }
 }
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -1597,6 +1660,7 @@ fun ExpressiveNoteCard(
     pdfExportManager: PdfExportManager,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    onTogglePin: () -> Unit,
     onExportPdf: () -> Unit,
     onSharePdf: () -> Unit,
     onShareXopp: () -> Unit,
@@ -1688,6 +1752,28 @@ fun ExpressiveNoteCard(
                         )
                     }
 
+                    // Pinned Badge Overlay (Top Right, when not selecting)
+                    if (note.isPinned && !isSelectionMode) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shadowElevation = 3.dp,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(8.dp)
+                                .size(26.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.PushPin,
+                                    contentDescription = "Pinned Note",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                        }
+                    }
+
                     // Selection Checkbox Badge Overlay
                     if (isSelectionMode) {
                         Surface(
@@ -1763,7 +1849,9 @@ fun ExpressiveNoteCard(
                                 }
                                 NoteActionDropdown(
                                     expanded = showMenu,
+                                    isPinned = note.isPinned,
                                     onDismiss = { showMenu = false },
+                                    onTogglePin = onTogglePin,
                                     onExportPdf = onExportPdf,
                                     onSharePdf = onSharePdf,
                                     onShareXopp = onShareXopp,
@@ -1838,7 +1926,13 @@ fun ExpressiveNoteCard(
                 }
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(note.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(note.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        if (note.isPinned) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(Icons.Default.PushPin, contentDescription = "Pinned", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(15.dp))
+                        }
+                    }
                     Text("${note.lastModifiedFormatted} · ${note.sizeFormatted}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
 
@@ -1849,7 +1943,9 @@ fun ExpressiveNoteCard(
                         }
                         NoteActionDropdown(
                             expanded = showMenu,
+                            isPinned = note.isPinned,
                             onDismiss = { showMenu = false },
+                            onTogglePin = onTogglePin,
                             onExportPdf = onExportPdf,
                             onSharePdf = onSharePdf,
                             onShareXopp = onShareXopp,
@@ -1871,7 +1967,9 @@ fun ExpressiveNoteCard(
 @Composable
 fun NoteActionDropdown(
     expanded: Boolean,
+    isPinned: Boolean = false,
     onDismiss: () -> Unit,
+    onTogglePin: () -> Unit,
     onExportPdf: () -> Unit,
     onSharePdf: () -> Unit,
     onShareXopp: () -> Unit,
@@ -1880,6 +1978,18 @@ fun NoteActionDropdown(
     onDelete: () -> Unit
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        DropdownMenuItem(
+            text = { Text(if (isPinned) "Unpin from Home" else "Pin to Home") },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.PushPin,
+                    contentDescription = null,
+                    tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            onClick = { onDismiss(); onTogglePin() }
+        )
+        HorizontalDivider()
         DropdownMenuItem(
             text = { Text("Export to PDF") },
             leadingIcon = { Icon(Icons.Default.FileDownload, contentDescription = null) },
@@ -2186,6 +2296,7 @@ fun GoogleFilesDynamicRecentsCarousel(
     recentNotes: List<NoteDocument>,
     pdfExportManager: PdfExportManager,
     onOpenNote: (File) -> Unit,
+    onTogglePin: (NoteDocument) -> Unit,
     onSharePdf: (NoteDocument) -> Unit,
     onShareXopp: (NoteDocument) -> Unit,
     onDeleteNote: (NoteDocument) -> Unit,
@@ -2279,6 +2390,7 @@ fun GoogleFilesDynamicRecentsCarousel(
                     cardWidth = animatedWidth,
                     pdfExportManager = pdfExportManager,
                     onOpen = { onOpenNote(note.file) },
+                    onTogglePin = { onTogglePin(note) },
                     onSharePdf = { onSharePdf(note) },
                     onShareXopp = { onShareXopp(note) },
                     onDelete = { onDeleteNote(note) },
@@ -2295,6 +2407,7 @@ private fun GoogleFilesMultiBrowseCard(
     cardWidth: androidx.compose.ui.unit.Dp,
     pdfExportManager: PdfExportManager,
     onOpen: () -> Unit,
+    onTogglePin: () -> Unit,
     onSharePdf: () -> Unit,
     onShareXopp: () -> Unit,
     onDelete: () -> Unit,
@@ -2443,6 +2556,28 @@ private fun GoogleFilesMultiBrowseCard(
                             )
                         }
 
+                        // Pinned Indicator Badge
+                        if (note.isPinned) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shadowElevation = 2.dp,
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 8.dp, end = 40.dp)
+                                    .size(24.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.PushPin,
+                                        contentDescription = "Pinned",
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                        }
+
                         // 3-dot dropdown menu button
                         Box(modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)) {
                             IconButton(
@@ -2461,6 +2596,21 @@ private fun GoogleFilesMultiBrowseCard(
                             }
 
                             androidx.compose.material3.DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text(if (note.isPinned) "Unpin from Home" else "Pin to Home") },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.PushPin,
+                                            contentDescription = null,
+                                            tint = if (note.isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    },
+                                    onClick = {
+                                        showMenu = false
+                                        onTogglePin()
+                                    }
+                                )
+                                androidx.compose.material3.HorizontalDivider()
                                 androidx.compose.material3.DropdownMenuItem(
                                     text = { Text("Open") },
                                     leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null) },
