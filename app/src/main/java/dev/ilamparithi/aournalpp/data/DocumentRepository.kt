@@ -749,8 +749,8 @@ class DocumentRepository(private val context: Context) {
     }
 
     fun saveEmergencyRecoveryToNotes(recoveryFile: File, userSpecifiedName: String): File {
-        val notesDir = env.getNotesDirectory()
-        if (!notesDir.exists()) notesDir.mkdirs()
+        val emergencySavesDir = env.getEmergencySavesDirectory()
+        if (!emergencySavesDir.exists()) emergencySavesDir.mkdirs()
 
         val rawBase = if (userSpecifiedName.endsWith(".xopp", ignoreCase = true)) {
             userSpecifiedName.substring(0, userSpecifiedName.length - 5)
@@ -765,7 +765,7 @@ class DocumentRepository(private val context: Context) {
             "$cleanBase.xopp"
         }
 
-        val target = File(notesDir, effectiveName)
+        val target = File(emergencySavesDir, effectiveName)
         recoveryFile.copyTo(target, overwrite = true)
         recoveryFile.delete()
         env.clearQuarantinedEmergencySave()

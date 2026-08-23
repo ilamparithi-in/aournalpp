@@ -66,6 +66,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.rememberCoroutineScope
 import dev.ilamparithi.aournalpp.runtime.ConfigFileType
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
+import dev.ilamparithi.aournalpp.runtime.NotesHomeConfigManager
 import dev.ilamparithi.aournalpp.runtime.WallpaperHelper
 import dev.ilamparithi.aournalpp.runtime.XournalConfigManager
 import dev.ilamparithi.aournalpp.ui.ConfigViewerDialog
@@ -85,6 +86,12 @@ class SettingsActivity : ComponentActivity() {
                 SettingsScreen(onBack = { finish() })
             }
         }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        val env = LinuxEnvironment(this)
+        NotesHomeConfigManager.sync(this, env)
     }
 }
 

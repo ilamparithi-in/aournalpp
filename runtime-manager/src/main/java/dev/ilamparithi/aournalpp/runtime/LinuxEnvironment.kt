@@ -46,9 +46,20 @@ class LinuxEnvironment(private val context: Context) {
         }
     }
 
+    fun getEmergencySavesDirectory(): File {
+        val dir = File(getNotesDirectory(), "Emergency Saves")
+        if (!dir.exists()) {
+            dir.mkdirs()
+        }
+        return dir
+    }
+
     fun setNotesDirectory(newPath: String) {
+        val oldNotesDir = getNotesDirectory()
         val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
         prefs.edit().putString(PREF_KEY_NOTES_DIR, newPath).apply()
+        val newNotesDir = File(newPath)
+        NotesHomeConfigManager.copyConfigToNewNotesHome(oldNotesDir, newNotesDir, context, this)
         ensureDirectoryTree()
     }
 
@@ -191,7 +202,9 @@ class LinuxEnvironment(private val context: Context) {
         writeGtkBookmarks()
         writeGtkSettings()
         ensureXournalppSettings()
+        ensureMenuBarShortcuts()
         checkAndQuarantineEmergencySave()
+        NotesHomeConfigManager.sync(context, this)
     }
 
     val quarantineRecoveryDir: File by lazy {
@@ -478,6 +491,28 @@ class LinuxEnvironment(private val context: Context) {
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to configure Xournal++ settings.xml", e)
+        }
+    }
+
+    fun ensureMenuBarShortcuts() {
+        try {
+            val menuFile = File(shareDir, "xournalpp/ui/mainmenubar.xml")
+            if (menuFile.exists() && menuFile.canWrite()) {
+                var content = menuFile.readText()
+                if (!content.contains("<attribute name=\"accel\">&lt;Ctrl&gt;comma</attribute>")) {
+                    val regex = Regex("<attribute\\s+name=\"label\"\\s+translatable=\"yes\">Preferences</attribute>\\s*<attribute\\s+name=\"action\">app\\.preferences</attribute>")
+                    if (regex.containsMatchIn(content)) {
+                        content = content.replace(
+                            regex,
+                            "<attribute name=\"label\" translatable=\"yes\">_Preferences</attribute>\n     <attribute name=\"action\">app.preferences</attribute>\n     <attribute name=\"accel\">&lt;Ctrl&gt;comma</attribute>"
+                        )
+                        menuFile.writeText(content)
+                        Log.i(TAG, "Patched mainmenubar.xml with <Ctrl>comma shortcut and _Preferences mnemonic")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to patch mainmenubar.xml with preferences shortcut", e)
         }
     }
 

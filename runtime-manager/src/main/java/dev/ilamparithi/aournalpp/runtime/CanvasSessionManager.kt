@@ -150,22 +150,29 @@ class CanvasSessionManager(
                 return@launch
             }
 
-            // Initial settling delay
-            delay(500)
-
+            // Phase 1: Wait for Xournal++ and inject Preferences shortcut
+            delay(800)
             var attempts = 0
-            val maxAttempts = 30
+            val maxAttempts = 20
+            var preferencesOpened = false
+
+            fun isPreferencesWindowOpen(): Boolean {
+                val names = listOf("Preferences", "Settings", "Xournal++ Preferences")
+                for (name in names) {
+                    val (code, out) = supervisor.runBinary(listOf(xdotoolBin.absolutePath, "search", "--name", name))
+                    if (code == 0 && out.trim().isNotEmpty()) {
+                        return true
+                    }
+                }
+                return false
+            }
 
             while (isSessionRunning && attempts < maxAttempts) {
                 attempts++
                 try {
-                    // Check if Preferences window is already open
-                    val (searchCode, searchOut) = supervisor.runBinary(
-                        listOf(xdotoolBin.absolutePath, "search", "--name", "Preferences")
-                    )
-
-                    if (searchCode == 0 && searchOut.trim().isNotEmpty()) {
+                    if (isPreferencesWindowOpen()) {
                         Log.i(TAG, "Preferences dialog detected on display (attempt $attempts). Injection complete.")
+                        preferencesOpened = true
                         break
                     }
 
@@ -176,14 +183,51 @@ class CanvasSessionManager(
 
                     if (winCode == 0 && winOut.trim().isNotEmpty()) {
                         Log.i(TAG, "Xournal++ window visible (attempt $attempts). Injecting Ctrl+Comma shortcut...")
-                        supervisor.runBinary(
-                            listOf(xdotoolBin.absolutePath, "key", "--clearmodifiers", "ctrl+comma")
-                        )
+                        val winId = winOut.lines().firstOrNull { it.isNotBlank() }?.trim()
+                        if (winId != null) {
+                            supervisor.runBinary(
+                                listOf(xdotoolBin.absolutePath, "windowactivate", "--sync", winId, "key", "--clearmodifiers", "ctrl+comma")
+                            )
+                        } else {
+                            supervisor.runBinary(
+                                listOf(xdotoolBin.absolutePath, "key", "--clearmodifiers", "ctrl+comma")
+                            )
+                        }
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Exception during preferences shortcut check (attempt $attempts)", e)
                 }
-                delay(500)
+                delay(400)
+            }
+
+            if (!preferencesOpened) {
+                delay(1000)
+                preferencesOpened = isPreferencesWindowOpen()
+            }
+
+            // Phase 2: Monitor for dismissal (OK / Cancel) and auto-exit if no note was opened
+            if (preferencesOpened) {
+                Log.i(TAG, "Monitoring Preferences dialog for OK / Cancel dismissal...")
+                while (isSessionRunning) {
+                    delay(500)
+                    if (!isPreferencesWindowOpen()) {
+                        Log.i(TAG, "Preferences dialog dismissed by user.")
+                        val currentTitle = supervisor.documentTitle.value
+                        val isDefaultUntitled = currentTitle == null ||
+                                currentTitle.isBlank() ||
+                                currentTitle.equals("New Note", ignoreCase = true) ||
+                                currentTitle.equals("Unsaved Document", ignoreCase = true) ||
+                                currentTitle.equals("Untitled", ignoreCase = true)
+
+                        if (isDefaultUntitled) {
+                            Log.i(TAG, "No active note in progress; auto-closing canvas session.")
+                            requestCloseSession()
+                        } else {
+                            Log.i(TAG, "Active note '$currentTitle' in progress; keeping canvas session open.")
+                        }
+                        break
+                    }
+                }
             }
         }
     }
@@ -325,6 +369,7 @@ class CanvasSessionManager(
         File(env.tmpDir, ".X0-lock").delete()
         File(env.tmpDir, ".X11-unix/X0").delete()
         isSessionRunning = false
+        NotesHomeConfigManager.sync(context, env)
     }
 }
 

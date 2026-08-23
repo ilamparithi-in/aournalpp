@@ -250,6 +250,28 @@ def main():
         print("[*] Pre-compiling GSettings schemas...")
         os.system(f"glib-compile-schemas '{schemas_dir}' 2>/dev/null || true")
 
+    # Patch Xournal++ mainmenubar.xml with <Ctrl>comma shortcut and _Preferences mnemonic
+    menu_path = os.path.join(staging_usr, "share", "xournalpp", "ui", "mainmenubar.xml")
+    if os.path.exists(menu_path):
+        print("[*] Patching mainmenubar.xml with preferences shortcut...")
+        with open(menu_path, "r", encoding="utf-8") as f:
+            menu_data = f.read()
+        target_block = """    <item>
+     <attribute name="label" translatable="yes">Preferences</attribute>
+     <attribute name="action">app.preferences</attribute>
+     <attribute name="hidden-when">macos-menubar</attribute>
+    </item>"""
+        replacement_block = """    <item>
+     <attribute name="label" translatable="yes">_Preferences</attribute>
+     <attribute name="action">app.preferences</attribute>
+     <attribute name="accel">&lt;Ctrl&gt;comma</attribute>
+     <attribute name="hidden-when">macos-menubar</attribute>
+    </item>"""
+        if target_block in menu_data:
+            menu_data = menu_data.replace(target_block, replacement_block)
+            with open(menu_path, "w", encoding="utf-8") as f:
+                f.write(menu_data)
+
     print(f"[*] Packaging final archive to {args.output}...")
     os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
     os.system(f"tar -cf - -C '{args.staging}' usr | xz -T0 > '{args.output}'")

@@ -150,6 +150,19 @@ class CanvasActivity : ComponentActivity() {
             else -> "New Note"
         }
 
+        if (openPreferences) {
+            lifecycleScope.launch {
+                // Wait for X11 server & Xournal++ window initialization
+                kotlinx.coroutines.delay(1200)
+                var attempts = 0
+                while (attempts < 12 && !isFinishing) {
+                    attempts++
+                    injectPreferencesDirect()
+                    kotlinx.coroutines.delay(350)
+                }
+            }
+        }
+
         setContent {
             AournalTheme {
                 val showEmergencyForceCloseDialog by remember { showEmergencyForceCloseDialogState }
@@ -435,6 +448,30 @@ class CanvasActivity : ComponentActivity() {
             handler.sendKeyEvent(ctrlDown)
             handler.sendKeyEvent(qDown)
             handler.sendKeyEvent(qUp)
+            handler.sendKeyEvent(ctrlUp)
+        }
+    }
+
+    private fun injectPreferencesDirect() {
+        activeLorieView?.let { view ->
+            view.post {
+                view.sendKeyEvent(0, KeyEvent.KEYCODE_CTRL_LEFT, true)
+                view.sendKeyEvent(0, KeyEvent.KEYCODE_COMMA, true)
+                view.sendKeyEvent(0, KeyEvent.KEYCODE_COMMA, false)
+                view.sendKeyEvent(0, KeyEvent.KEYCODE_CTRL_LEFT, false)
+            }
+        }
+
+        inputHandler?.let { handler ->
+            val now = android.os.SystemClock.uptimeMillis()
+            val ctrlDown = KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_CTRL_LEFT, 0)
+            val commaDown = KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_COMMA, 0, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
+            val commaUp = KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_COMMA, 0, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
+            val ctrlUp = KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_CTRL_LEFT, 0)
+
+            handler.sendKeyEvent(ctrlDown)
+            handler.sendKeyEvent(commaDown)
+            handler.sendKeyEvent(commaUp)
             handler.sendKeyEvent(ctrlUp)
         }
     }
