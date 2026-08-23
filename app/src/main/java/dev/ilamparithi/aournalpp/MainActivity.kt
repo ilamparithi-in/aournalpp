@@ -67,7 +67,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -93,6 +95,12 @@ class MainActivity : ComponentActivity() {
                             pendingIntentToProcess?.let { intentToHandle ->
                                 handleExternalIntent(intentToHandle)
                                 pendingIntentToProcess = null
+                            }
+                        }
+                        // Provision the runtime tree once the bootstrap is ready.
+                        LaunchedEffect(Unit) {
+                            withContext(Dispatchers.IO) {
+                                LinuxEnvironment(this@MainActivity).ensureDirectoryTree()
                             }
                         }
                         FloatingPreviewHost {

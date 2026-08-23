@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -159,7 +158,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -195,8 +194,10 @@ import dev.ilamparithi.aournalpp.utils.ExternalFileHandler
 import dev.ilamparithi.aournalpp.ui.preview.floatingPreviewLongPress
 import dev.ilamparithi.aournalpp.utils.ThumbnailManager
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -256,6 +257,8 @@ private fun getGreeting(): String {
     }
 }
 
+private const val SEARCH_DEBOUNCE_MS = 250L
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DocumentHubScreen(
@@ -290,8 +293,8 @@ fun DocumentHubScreen(
     var isRefreshing by remember { mutableStateOf(false) }
     val pullRefreshState = rememberPullToRefreshState()
 
-    val recentNotes = remember(notes, folders, isViewingTrash) {
-        if (!isViewingTrash) repository.getAllRecentNotes(10) else emptyList()
+    val recentNotes by produceState<List<NoteDocument>>(emptyList(), notes, folders, isViewingTrash) {
+        value = if (!isViewingTrash) repository.getAllRecentNotes(10) else emptyList()
     }
 
     // Multi-Selection State & Drag Selection Tracker
@@ -390,7 +393,7 @@ fun DocumentHubScreen(
         }
     }
 
-    fun loadContent() {
+    suspend fun loadContentNow() {
         if (!hasPermission) return
         if (isViewingTrash) {
             trashedNotes = repository.scanTrash()
@@ -403,12 +406,16 @@ fun DocumentHubScreen(
             folders = fList
             notes = nList
 
-            val emergencyFile = env.checkAndQuarantineEmergencySave()
+            val emergencyFile = withContext(Dispatchers.IO) { env.checkAndQuarantineEmergencySave() }
             if (emergencyFile != null && emergencyFile.exists() && emergencyFile.length() > 0) {
                 quarantinedEmergencySave = emergencyFile
                 showEmergencyDialog = true
             }
         }
+    }
+
+    fun loadContent() {
+        scope.launch { loadContentNow() }
     }
 
     val localView = LocalView.current
@@ -455,7 +462,9 @@ fun DocumentHubScreen(
     }
 
     LaunchedEffect(hasPermission, showHiddenFiles, searchQuery, currentDirectory, isViewingTrash) {
-        loadContent()
+        // Debounce search input.
+        if (searchQuery.isNotEmpty()) delay(SEARCH_DEBOUNCE_MS)
+        loadContentNow()
     }
 
     Scaffold(
@@ -943,7 +952,7 @@ fun DocumentHubScreen(
         // 5. Move to Folder Dialog
         if (showMoveToFolderDialog) {
             val selectedDocs = notes.filter { selectedNotePaths.contains(it.path) }
-            val allAvailableFolders = remember { repository.getAllFolders() }
+            val allAvailableFolders by produceState<List<FolderItem>>(emptyList()) { value = repository.getAllFolders() }
             var isCreatingInlineFolder by remember { mutableStateOf(false) }
             var inlineFolderName by remember { mutableStateOf("") }
             var inlineFolderColor by remember { mutableStateOf(PRESET_FOLDER_COLORS.first()) }
@@ -1845,8 +1854,11 @@ fun ExpressiveNoteCard(
     val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
 
-    val thumbnailFile by produceState<File?>(initialValue = ThumbnailManager.getCachedThumbnailFile(context, note.file), key1 = note.lastModifiedMs) {
-        value = ThumbnailManager.getOrCreateThumbnail(context, note.file, pdfExportManager)
+    val thumbnailImage by produceState<ImageBitmap?>(
+        initialValue = ThumbnailManager.getCachedThumbnail(note.file),
+        key1 = note.lastModifiedMs
+    ) {
+        value = ThumbnailManager.getOrCreateThumbnailBitmap(context, note.file, pdfExportManager)
     }
 
     val cardShape = RoundedCornerShape(16.dp)
@@ -1883,18 +1895,13 @@ fun ExpressiveNoteCard(
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (thumbnailFile != null && thumbnailFile!!.exists()) {
-                        val bitmap = remember(thumbnailFile) {
-                            try { BitmapFactory.decodeFile(thumbnailFile!!.absolutePath) } catch (e: Exception) { null }
-                        }
-                        if (bitmap != null) {
-                            Image(
-                                bitmap = bitmap.asImageBitmap(),
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
+                    if (thumbnailImage != null) {
+                        Image(
+                            bitmap = thumbnailImage!!,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
                     } else {
                         Icon(
                             imageVector = when (note.fileType) {
@@ -2559,12 +2566,13 @@ private fun RecentsMultiBrowseCard(
     val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
 
-    val thumbnailFile by produceState<File?>(
-        initialValue = ThumbnailManager.getCachedThumbnailFile(context, note.file),
+    val thumbnailImage by produceState<ImageBitmap?>(
+        initialValue = ThumbnailManager.getCachedThumbnail(note.file),
         key1 = note.lastModifiedMs
     ) {
-        value = ThumbnailManager.getOrCreateThumbnail(context, note.file, pdfExportManager)
+        value = ThumbnailManager.getOrCreateThumbnailBitmap(context, note.file, pdfExportManager)
     }
+    val thumbnailFile = remember(thumbnailImage) { ThumbnailManager.getCachedThumbnailFile(note.file) }
 
     val cardShape = RoundedCornerShape(22.dp)
     val multiFolderAccent = note.folderColorHex?.let {
@@ -2595,18 +2603,13 @@ private fun RecentsMultiBrowseCard(
                     .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                        if (thumbnailFile != null && thumbnailFile!!.exists()) {
-                            val bitmap = remember(thumbnailFile) {
-                                try { BitmapFactory.decodeFile(thumbnailFile!!.absolutePath) } catch (e: Exception) { null }
-                            }
-                            if (bitmap != null) {
-                                Image(
-                                    bitmap = bitmap.asImageBitmap(),
-                                    contentDescription = note.title,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            }
+                        if (thumbnailImage != null) {
+                            Image(
+                                bitmap = thumbnailImage!!,
+                                contentDescription = note.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
                         } else {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Icon(

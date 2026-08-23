@@ -2,9 +2,13 @@ package dev.ilamparithi.aournalpp.utils
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import android.util.Log
+import android.util.LruCache
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -12,17 +16,60 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.ConcurrentHashMap
 
 object ThumbnailManager {
 
     private const val TAG = "ThumbnailManager"
+    private const val MAX_CACHE_BYTES = 32L * 1024 * 1024
+
     private val renderMutex = Mutex()
 
-    fun getCachedThumbnailFile(context: Context, noteFile: File): File? {
-        val thumbDir = File(context.cacheDir, "thumbnails")
-        val cacheKey = "${noteFile.nameWithoutExtension}_${noteFile.lastModified()}_thumb.png"
-        val cached = File(thumbDir, cacheKey)
-        return if (cached.exists() && cached.length() > 0) cached else null
+    /** Thumbnails resolved this session, so list items do not hit the disk to check. */
+    private val resolved = ConcurrentHashMap<String, File>()
+
+    /** Includes the folder so same-named notes in different folders do not collide. */
+    private fun cacheKeyFor(noteFile: File): String {
+        val folderHash = Integer.toHexString(noteFile.parent.orEmpty().hashCode())
+        return "${noteFile.nameWithoutExtension}_${folderHash}_${noteFile.lastModified()}_thumb.png"
+    }
+
+    fun getCachedThumbnailFile(noteFile: File): File? = resolved[cacheKeyFor(noteFile)]
+
+    /**
+     * Decoded thumbnails, bounded to an eighth of the heap. Decoding a 400px PNG
+     * takes long enough to drop frames, so list items read from here rather than
+     * decoding during composition.
+     */
+    private val decoded = object : LruCache<String, ImageBitmap>(
+        ((Runtime.getRuntime().maxMemory() / 1024) / 8).toInt().coerceAtLeast(4 * 1024)
+    ) {
+        override fun sizeOf(key: String, value: ImageBitmap): Int =
+            (value.width * value.height * 4) / 1024
+    }
+
+    fun getCachedThumbnail(noteFile: File): ImageBitmap? = decoded[cacheKeyFor(noteFile)]
+
+    /** Resolves the thumbnail and decodes it off the main thread. */
+    suspend fun getOrCreateThumbnailBitmap(
+        context: Context,
+        noteFile: File,
+        pdfExportManager: PdfExportManager
+    ): ImageBitmap? = withContext(Dispatchers.IO) {
+        val cacheKey = cacheKeyFor(noteFile)
+        decoded[cacheKey]?.let { return@withContext it }
+
+        val file = getOrCreateThumbnail(context, noteFile, pdfExportManager) ?: return@withContext null
+        val bitmap = try {
+            BitmapFactory.decodeFile(file.absolutePath)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to decode thumbnail for ${noteFile.name}", e)
+            null
+        } ?: return@withContext null
+
+        val image = bitmap.asImageBitmap()
+        decoded.put(cacheKey, image)
+        image
     }
 
     suspend fun getOrCreateThumbnail(
@@ -33,15 +80,17 @@ object ThumbnailManager {
         if (!noteFile.exists() || noteFile.length() == 0L) return@withContext null
 
         val thumbDir = File(context.cacheDir, "thumbnails").apply { if (!exists()) mkdirs() }
-        val cacheKey = "${noteFile.nameWithoutExtension}_${noteFile.lastModified()}_thumb.png"
+        val cacheKey = cacheKeyFor(noteFile)
         val cachedFile = File(thumbDir, cacheKey)
 
         if (cachedFile.exists() && cachedFile.length() > 0) {
+            resolved[cacheKey] = cachedFile
             return@withContext cachedFile
         }
 
         renderMutex.withLock {
             if (cachedFile.exists() && cachedFile.length() > 0) {
+                resolved[cacheKey] = cachedFile
                 return@withContext cachedFile
             }
 
@@ -65,7 +114,33 @@ object ThumbnailManager {
                 Log.w(TAG, "Failed to render thumbnail for ${noteFile.name}", e)
             }
 
-            if (cachedFile.exists() && cachedFile.length() > 0) cachedFile else null
+            if (cachedFile.exists() && cachedFile.length() > 0) {
+                resolved[cacheKey] = cachedFile
+                trimCache(thumbDir)
+                cachedFile
+            } else {
+                null
+            }
+        }
+    }
+
+    /** Drops the oldest thumbnails once the cache grows past [MAX_CACHE_BYTES]. */
+    private fun trimCache(thumbDir: File) {
+        try {
+            val files = thumbDir.listFiles()?.filter { it.isFile } ?: return
+            var total = files.sumOf { it.length() }
+            if (total <= MAX_CACHE_BYTES) return
+
+            for (file in files.sortedBy { it.lastModified() }) {
+                if (total <= MAX_CACHE_BYTES) break
+                val size = file.length()
+                if (file.delete()) {
+                    total -= size
+                    resolved.remove(file.name)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to trim thumbnail cache", e)
         }
     }
 

@@ -95,16 +95,36 @@ class DocumentRepository(private val context: Context) {
         prefs.edit().putString("pref_pinned_notes_order_json", array.toString()).apply()
     }
 
-    fun scanDirectory(
+    private fun canonicalOf(file: File): String =
+        try { file.canonicalPath } catch (e: Exception) { file.absolutePath }
+
+    /** Per-scan cache for the values every file in a scan shares. */
+    private inner class ScanCache {
+        val pinnedPaths: Set<String> by lazy { getPinnedNotePaths().toSet() }
+
+        val dateFormat: SimpleDateFormat by lazy {
+            SimpleDateFormat("MMM dd, yyyy · HH:mm", Locale.getDefault())
+        }
+
+        private val rootCanonical: String by lazy { canonicalOf(getRootNotesDirectory()) }
+        private val folderMetas = HashMap<String, Pair<String?, String?>>()
+
+        fun folderMeta(dir: File): Pair<String?, String?> =
+            folderMetas.getOrPut(dir.absolutePath) { readFolderMeta(dir) }
+
+        fun isRoot(dir: File): Boolean = canonicalOf(dir) == rootCanonical
+    }
+
+    suspend fun scanDirectory(
         targetDir: File,
         query: String = "",
         showHidden: Boolean = false
-    ): Pair<List<FolderItem>, List<NoteDocument>> {
-        env.ensureDirectoryTree()
+    ): Pair<List<FolderItem>, List<NoteDocument>> = withContext(Dispatchers.IO) {
         if (!targetDir.exists()) targetDir.mkdirs()
 
-        val allFiles = targetDir.listFiles() ?: return Pair(emptyList(), emptyList())
-        val dateFormat = SimpleDateFormat("MMM dd, yyyy · HH:mm", Locale.getDefault())
+        val allFiles = targetDir.listFiles() ?: return@withContext Pair(emptyList(), emptyList())
+        val cache = ScanCache()
+        val trimmedQuery = query.trim()
 
         // 1. Scan Subfolders
         val folderItems = mutableListOf<FolderItem>()
@@ -114,11 +134,11 @@ class DocumentRepository(private val context: Context) {
             val isHidden = dir.name.startsWith(".")
             if (isHidden && !showHidden) continue
 
-            if (query.isNotBlank() && !dir.name.contains(query.trim(), ignoreCase = true)) {
-                // If query is present and folder name doesn't match, check if any inner notes match
+            if (trimmedQuery.isNotEmpty() && !dir.name.contains(trimmedQuery, ignoreCase = true)) {
+                continue
             }
 
-            val (metaColor, metaEmoji) = readFolderMeta(dir)
+            val (metaColor, metaEmoji) = cache.folderMeta(dir)
             val itemCount = dir.listFiles()?.count { file ->
                 file.isFile && isOpenableFile(file) && !file.name.startsWith(".")
             } ?: 0
@@ -150,17 +170,19 @@ class DocumentRepository(private val context: Context) {
             !file.name.contains(".autosave.", ignoreCase = true)
         }
 
-        for (file in mainFiles) {
-            val canonical = try { file.canonicalPath } catch (e: Exception) { file.absolutePath }
-            if (!seenMainPaths.add(canonical)) continue
+        val isRoot = cache.isRoot(targetDir)
+        val (targetFolderColor, targetFolderEmoji) = if (!isRoot) cache.folderMeta(targetDir) else Pair(null, null)
 
-            if (query.isNotBlank() && !file.name.contains(query.trim(), ignoreCase = true)) {
+        for (file in mainFiles) {
+            if (!seenMainPaths.add(file.absolutePath)) continue
+
+            if (trimmedQuery.isNotEmpty() && !file.name.contains(trimmedQuery, ignoreCase = true)) {
                 continue
             }
 
             val autosaveCandidate = findMatchingAutosave(targetDir, file)
             val autosaveInfo = autosaveCandidate?.let { autoFile ->
-                matchedAutosavePaths.add(try { autoFile.canonicalPath } catch (e: Exception) { autoFile.absolutePath })
+                matchedAutosavePaths.add(autoFile.absolutePath)
                 AutosaveInfo(
                     autosaveFile = autoFile,
                     mainFile = file,
@@ -171,8 +193,6 @@ class DocumentRepository(private val context: Context) {
                 )
             }
 
-            val isRoot = targetDir.canonicalPath == getRootNotesDirectory().canonicalPath
-            val (metaColor, metaEmoji) = if (!isRoot) readFolderMeta(targetDir) else Pair(null, null)
             val sizeKb = (file.length() + 1023) / 1024
             resultNotes.add(
                 NoteDocument(
@@ -181,14 +201,14 @@ class DocumentRepository(private val context: Context) {
                     path = file.absolutePath,
                     lastModifiedMs = file.lastModified(),
                     sizeBytes = file.length(),
-                    lastModifiedFormatted = dateFormat.format(Date(file.lastModified())),
+                    lastModifiedFormatted = cache.dateFormat.format(Date(file.lastModified())),
                     sizeFormatted = "${sizeKb} KB",
                     autosaveInfo = autosaveInfo,
                     isHidden = false,
-                    isPinned = isNotePinned(file.absolutePath),
+                    isPinned = cache.pinnedPaths.contains(file.absolutePath),
                     folder = if (isRoot) "Notes Home" else targetDir.name,
-                    folderColorHex = metaColor,
-                    folderIconEmoji = metaEmoji
+                    folderColorHex = targetFolderColor,
+                    folderIconEmoji = targetFolderEmoji
                 )
             )
         }
@@ -202,10 +222,10 @@ class DocumentRepository(private val context: Context) {
             }
 
             for (file in hiddenOrBackupFiles) {
-                val canonical = try { file.canonicalPath } catch (e: Exception) { file.absolutePath }
-                if (matchedAutosavePaths.contains(canonical) || seenMainPaths.contains(canonical)) continue
+                val path = file.absolutePath
+                if (matchedAutosavePaths.contains(path) || seenMainPaths.contains(path)) continue
 
-                if (query.isNotBlank() && !file.name.contains(query.trim(), ignoreCase = true)) {
+                if (trimmedQuery.isNotEmpty() && !file.name.contains(trimmedQuery, ignoreCase = true)) {
                     continue
                 }
 
@@ -214,10 +234,10 @@ class DocumentRepository(private val context: Context) {
                     NoteDocument(
                         file = file,
                         title = file.name,
-                        path = file.absolutePath,
+                        path = path,
                         lastModifiedMs = file.lastModified(),
                         sizeBytes = file.length(),
-                        lastModifiedFormatted = dateFormat.format(Date(file.lastModified())),
+                        lastModifiedFormatted = cache.dateFormat.format(Date(file.lastModified())),
                         sizeFormatted = "${sizeKb} KB",
                         autosaveInfo = null,
                         isHidden = true,
@@ -227,7 +247,7 @@ class DocumentRepository(private val context: Context) {
             }
         }
 
-        return Pair(
+        Pair(
             folderItems.sortedBy { it.name.lowercase() },
             resultNotes.sortedByDescending { it.lastModifiedMs }
         )
@@ -351,12 +371,13 @@ class DocumentRepository(private val context: Context) {
         metaFile.writeText(json.toString(2))
     }
 
-    fun getAllFolders(root: File = getRootNotesDirectory()): List<FolderItem> {
+    suspend fun getAllFolders(root: File = getRootNotesDirectory()): List<FolderItem> = withContext(Dispatchers.IO) {
+        val cache = ScanCache()
         val list = mutableListOf<FolderItem>()
         fun recurse(dir: File) {
             val subdirs = dir.listFiles { f -> f.isDirectory && f.name != TRASH_DIR_NAME && !f.name.startsWith(".") } ?: return
             for (sub in subdirs) {
-                val (metaColor, metaEmoji) = readFolderMeta(sub)
+                val (metaColor, metaEmoji) = cache.folderMeta(sub)
                 val count = sub.listFiles { f -> f.isFile && isOpenableFile(f) && !f.name.startsWith(".") }?.size ?: 0
                 list.add(
                     FolderItem(
@@ -372,7 +393,7 @@ class DocumentRepository(private val context: Context) {
             }
         }
         recurse(root)
-        return list.sortedBy { it.name.lowercase() }
+        list.sortedBy { it.name.lowercase() }
     }
 
     private fun findAssociatedAutosaveAndBackupFiles(mainFile: File): List<File> {
@@ -504,12 +525,12 @@ class DocumentRepository(private val context: Context) {
         }
     }
 
-    fun scanTrash(): List<NoteDocument> {
+    suspend fun scanTrash(): List<NoteDocument> = withContext(Dispatchers.IO) {
         val trashDir = getTrashDirectory()
-        val allFiles = trashDir.listFiles() ?: return emptyList()
+        val allFiles = trashDir.listFiles() ?: return@withContext emptyList()
         val dateFormat = SimpleDateFormat("MMM dd, yyyy · HH:mm", Locale.getDefault())
 
-        return allFiles.filter { it.isFile && isOpenableFile(it) }
+        allFiles.filter { it.isFile && isOpenableFile(it) }
             .map { file ->
                 val sizeKb = (file.length() + 1023) / 1024
                 NoteDocument(
@@ -776,9 +797,25 @@ class DocumentRepository(private val context: Context) {
         env.clearQuarantinedEmergencySave()
     }
 
-    fun getNoteDocumentForFile(file: File): NoteDocument? {
+    /** Collects openable files under [root], skipping trash, hidden dirs, backups and autosaves. */
+    private fun collectOpenableFiles(root: File): List<File> {
+        val found = mutableListOf<File>()
+        fun scan(dir: File) {
+            val children = dir.listFiles() ?: return
+            for (c in children) {
+                if (c.isDirectory && c.name != TRASH_DIR_NAME && !c.name.startsWith(".")) {
+                    scan(c)
+                } else if (c.isFile && isOpenableFile(c) && !c.name.startsWith(".") && !c.name.endsWith("~") && !c.name.contains(".autosave.")) {
+                    found.add(c)
+                }
+            }
+        }
+        scan(root)
+        return found
+    }
+
+    private fun buildNoteDocument(file: File, cache: ScanCache): NoteDocument? {
         if (!file.exists() || !file.isFile || !isOpenableFile(file)) return null
-        val dateFormat = SimpleDateFormat("MMM dd, yyyy · HH:mm", Locale.getDefault())
         val sizeKb = (file.length() + 1023) / 1024
         val parentDir = file.parentFile ?: getRootNotesDirectory()
         val autosaveCandidate = findMatchingAutosave(parentDir, file)
@@ -793,8 +830,8 @@ class DocumentRepository(private val context: Context) {
             )
         }
 
-        val isRoot = parentDir.canonicalPath == getRootNotesDirectory().canonicalPath
-        val (folderColor, folderEmoji) = if (!isRoot) readFolderMeta(parentDir) else Pair(null, null)
+        val isRoot = cache.isRoot(parentDir)
+        val (folderColor, folderEmoji) = if (!isRoot) cache.folderMeta(parentDir) else Pair(null, null)
 
         return NoteDocument(
             file = file,
@@ -802,77 +839,58 @@ class DocumentRepository(private val context: Context) {
             path = file.absolutePath,
             lastModifiedMs = file.lastModified(),
             sizeBytes = file.length(),
-            lastModifiedFormatted = dateFormat.format(Date(file.lastModified())),
+            lastModifiedFormatted = cache.dateFormat.format(Date(file.lastModified())),
             sizeFormatted = "${sizeKb} KB",
             autosaveInfo = autosaveInfo,
             isHidden = file.name.startsWith("."),
-            isPinned = isNotePinned(file.absolutePath),
+            isPinned = cache.pinnedPaths.contains(file.absolutePath),
             folder = if (isRoot) "Notes Home" else parentDir.name,
             folderColorHex = folderColor,
             folderIconEmoji = folderEmoji
         )
     }
 
-    fun getAllRecentNotes(limit: Int = 1): List<NoteDocument> {
-        val allOpenableFiles = mutableListOf<File>()
-        fun scan(dir: File) {
-            val children = dir.listFiles() ?: return
-            for (c in children) {
-                if (c.isDirectory && c.name != TRASH_DIR_NAME && !c.name.startsWith(".")) {
-                    scan(c)
-                } else if (c.isFile && isOpenableFile(c) && !c.name.startsWith(".") && !c.name.endsWith("~") && !c.name.contains(".autosave.")) {
-                    allOpenableFiles.add(c)
-                }
-            }
-        }
-        scan(getRootNotesDirectory())
-        return allOpenableFiles
-            .sortedByDescending { it.lastModified() }
-            .take(limit)
-            .mapNotNull { getNoteDocumentForFile(it) }
+    suspend fun getNoteDocumentForFile(file: File): NoteDocument? = withContext(Dispatchers.IO) {
+        buildNoteDocument(file, ScanCache())
     }
 
-    fun getHomeNotes(limit: Int = 16): List<NoteDocument> {
-        val pinnedPaths = getPinnedNotePaths()
+    suspend fun countAllNotes(): Int = withContext(Dispatchers.IO) {
+        collectOpenableFiles(getRootNotesDirectory()).size
+    }
+
+    suspend fun getAllRecentNotes(limit: Int = 1): List<NoteDocument> = withContext(Dispatchers.IO) {
+        val cache = ScanCache()
+        collectOpenableFiles(getRootNotesDirectory())
+            .sortedByDescending { it.lastModified() }
+            .take(limit)
+            .mapNotNull { buildNoteDocument(it, cache) }
+    }
+
+    suspend fun getHomeNotes(limit: Int = 16): List<NoteDocument> = withContext(Dispatchers.IO) {
+        val cache = ScanCache()
         val pinnedDocs = mutableListOf<NoteDocument>()
         val seenPaths = mutableSetOf<String>()
 
-        for (path in pinnedPaths) {
+        for (path in getPinnedNotePaths()) {
             val file = File(path)
             if (file.exists() && file.isFile && !file.absolutePath.contains("/.Trash/")) {
-                getNoteDocumentForFile(file)?.let { doc ->
+                buildNoteDocument(file, cache)?.let { doc ->
                     pinnedDocs.add(doc.copy(isPinned = true))
                     seenPaths.add(doc.path)
-                    try { seenPaths.add(doc.file.canonicalPath) } catch (e: Exception) {}
+                    seenPaths.add(canonicalOf(doc.file))
                 }
             }
         }
 
-        val allOpenableFiles = mutableListOf<File>()
-        fun scan(dir: File) {
-            val children = dir.listFiles() ?: return
-            for (c in children) {
-                if (c.isDirectory && c.name != TRASH_DIR_NAME && !c.name.startsWith(".")) {
-                    scan(c)
-                } else if (c.isFile && isOpenableFile(c) && !c.name.startsWith(".") && !c.name.endsWith("~") && !c.name.contains(".autosave.")) {
-                    allOpenableFiles.add(c)
-                }
-            }
-        }
-        scan(getRootNotesDirectory())
-
-        val recentDocs = allOpenableFiles
+        val recentDocs = collectOpenableFiles(getRootNotesDirectory())
             .sortedByDescending { it.lastModified() }
-            .mapNotNull { file ->
-                val canonical = try { file.canonicalPath } catch (e: Exception) { file.absolutePath }
-                if (seenPaths.contains(file.absolutePath) || seenPaths.contains(canonical)) {
-                    null
-                } else {
-                    getNoteDocumentForFile(file)
-                }
-            }
+            .asSequence()
+            .filter { !seenPaths.contains(it.absolutePath) && !seenPaths.contains(canonicalOf(it)) }
+            .mapNotNull { buildNoteDocument(it, cache) }
+            .take(limit)
+            .toList()
 
-        return (pinnedDocs + recentDocs).take(limit)
+        (pinnedDocs + recentDocs).take(limit)
     }
 }
 
