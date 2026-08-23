@@ -194,7 +194,42 @@ val generateShortcuts = tasks.register("generateShortcuts") {
     }
 }
 
+val applySubmodulePatches = tasks.register("applySubmodulePatches") {
+    description = "Pre-applies termux-x11 submodule patches sequentially before CMake runs"
+    val lorieCppDir = file("../submodules/termux-x11/lorie/src/main/cpp")
+    val patches = listOf(
+        "libxtrans" to "patches/Xtrans.patch",
+        "xkbcomp" to "patches/xkbcomp.patch",
+        "libxkbfile" to "patches/xkbfile.patch",
+        "libx11" to "patches/x11.patch",
+        "xserver" to "patches/xserver.patch",
+        "libepoxy" to "patches/libepoxy.patch",
+        "pixman" to "patches/pixman.patch"
+    )
+
+    doLast {
+        patches.forEach { (dirName, patchName) ->
+            val targetDir = File(lorieCppDir, dirName)
+            val patchFile = File(lorieCppDir, patchName)
+            if (targetDir.exists() && patchFile.exists()) {
+                val checkCmd = ProcessBuilder("bash", "-c", "patch -p1 -d '${targetDir.absolutePath}' -i '${patchFile.absolutePath}' -R --dry-run > /dev/null 2>&1")
+                    .start()
+                if (checkCmd.waitFor() != 0) {
+                    val applyCmd = ProcessBuilder("bash", "-c", "patch -p1 -N -d '${targetDir.absolutePath}' -i '${patchFile.absolutePath}' -r -")
+                        .start()
+                    applyCmd.waitFor()
+                }
+            }
+        }
+    }
+}
+
 tasks.named("preBuild") {
     dependsOn(generatePrefs)
     dependsOn(generateShortcuts)
+    dependsOn(applySubmodulePatches)
+}
+
+tasks.matching { it.name.startsWith("configureCMake") }.configureEach {
+    dependsOn(applySubmodulePatches)
 }
