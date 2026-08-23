@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -159,7 +158,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -1855,8 +1854,11 @@ fun ExpressiveNoteCard(
     val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
 
-    val thumbnailFile by produceState<File?>(initialValue = ThumbnailManager.getCachedThumbnailFile(note.file), key1 = note.lastModifiedMs) {
-        value = ThumbnailManager.getOrCreateThumbnail(context, note.file, pdfExportManager)
+    val thumbnailImage by produceState<ImageBitmap?>(
+        initialValue = ThumbnailManager.getCachedThumbnail(note.file),
+        key1 = note.lastModifiedMs
+    ) {
+        value = ThumbnailManager.getOrCreateThumbnailBitmap(context, note.file, pdfExportManager)
     }
 
     val cardShape = RoundedCornerShape(16.dp)
@@ -1893,18 +1895,13 @@ fun ExpressiveNoteCard(
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (thumbnailFile != null && thumbnailFile!!.exists()) {
-                        val bitmap = remember(thumbnailFile) {
-                            try { BitmapFactory.decodeFile(thumbnailFile!!.absolutePath) } catch (e: Exception) { null }
-                        }
-                        if (bitmap != null) {
-                            Image(
-                                bitmap = bitmap.asImageBitmap(),
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
+                    if (thumbnailImage != null) {
+                        Image(
+                            bitmap = thumbnailImage!!,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
                     } else {
                         Icon(
                             imageVector = when (note.fileType) {
@@ -2569,12 +2566,13 @@ private fun RecentsMultiBrowseCard(
     val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
 
-    val thumbnailFile by produceState<File?>(
-        initialValue = ThumbnailManager.getCachedThumbnailFile(note.file),
+    val thumbnailImage by produceState<ImageBitmap?>(
+        initialValue = ThumbnailManager.getCachedThumbnail(note.file),
         key1 = note.lastModifiedMs
     ) {
-        value = ThumbnailManager.getOrCreateThumbnail(context, note.file, pdfExportManager)
+        value = ThumbnailManager.getOrCreateThumbnailBitmap(context, note.file, pdfExportManager)
     }
+    val thumbnailFile = remember(thumbnailImage) { ThumbnailManager.getCachedThumbnailFile(note.file) }
 
     val cardShape = RoundedCornerShape(22.dp)
     val multiFolderAccent = note.folderColorHex?.let {
@@ -2605,18 +2603,13 @@ private fun RecentsMultiBrowseCard(
                     .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                        if (thumbnailFile != null && thumbnailFile!!.exists()) {
-                            val bitmap = remember(thumbnailFile) {
-                                try { BitmapFactory.decodeFile(thumbnailFile!!.absolutePath) } catch (e: Exception) { null }
-                            }
-                            if (bitmap != null) {
-                                Image(
-                                    bitmap = bitmap.asImageBitmap(),
-                                    contentDescription = note.title,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            }
+                        if (thumbnailImage != null) {
+                            Image(
+                                bitmap = thumbnailImage!!,
+                                contentDescription = note.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
                         } else {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Icon(
