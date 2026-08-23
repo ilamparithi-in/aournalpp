@@ -30,7 +30,8 @@ private fun findActivity(context: Context): Activity? {
 fun X11Viewport(
     modifier: Modifier = Modifier,
     onLorieViewReady: (LorieView) -> Unit,
-    onInputHandlerReady: ((TouchInputHandler) -> Unit)? = null
+    onInputHandlerReady: ((TouchInputHandler) -> Unit)? = null,
+    onPenMapperReady: ((LenovoPenButtonMapper) -> Unit)? = null
 ) {
     AndroidView(
         modifier = modifier.fillMaxSize(),
@@ -112,6 +113,7 @@ fun X11Viewport(
                 }
 
                 onInputHandlerReady?.invoke(inputHandler)
+                onPenMapperReady?.invoke(penMapper)
             }
 
             onLorieViewReady(lorieView)

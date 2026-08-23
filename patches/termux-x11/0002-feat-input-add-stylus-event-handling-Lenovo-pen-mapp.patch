@@ -1,17 +1,17 @@
-From 357f93f6ce7b1088c3b617a0f0a31347c039ccb0 Mon Sep 17 00:00:00 2001
+From 7d5c42c5deb71825e4e236424089527a4d1c8b83 Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Sun, 23 Aug 2026 08:07:47 +0530
-Subject: [PATCH 2/3] feat(input): add stylus event handling, Lenovo pen
- mapper, and stylus state tracking
+Subject: [PATCH] feat(input): add stylus event handling, Lenovo pen mapper,
+ and stylus state tracking
 
 ---
  .../termux/x11/input/InputEventSender.java    |   2 +-
  .../x11/input/LenovoPenButtonMapper.java      | 241 ++++++++++++++++++
  .../com/termux/x11/input/StylusState.java     |  51 ++++
- .../termux/x11/input/TouchInputHandler.java   | 167 +++++++++---
+ .../termux/x11/input/TouchInputHandler.java   | 191 +++++++++++---
  .../helper/LenovoPenButtonListener.java       |  67 +++++
  .../lppdebug/helper/PenButtonEvent.java       |  26 ++
- 6 files changed, 511 insertions(+), 43 deletions(-)
+ 6 files changed, 535 insertions(+), 43 deletions(-)
  create mode 100644 lorie/src/main/java/com/termux/x11/input/LenovoPenButtonMapper.java
  create mode 100644 lorie/src/main/java/com/termux/x11/input/StylusState.java
  create mode 100644 lorie/src/main/java/dev/ilamparithi/lppdebug/helper/LenovoPenButtonListener.java
@@ -335,7 +335,7 @@ index 0000000..21e6de4
 +    }
 +}
 diff --git a/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java b/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java
-index c816bd2..6dffd02 100644
+index c816bd2..19816a4 100644
 --- a/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java
 +++ b/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java
 @@ -10,6 +10,7 @@ import static android.view.KeyEvent.KEYCODE_VOLUME_DOWN;
@@ -354,9 +354,11 @@ index c816bd2..6dffd02 100644
  import android.os.Build;
  import android.util.DisplayMetrics;
  import android.view.Display;
-@@ -42,9 +44,12 @@ import java.lang.annotation.Retention;
+@@ -41,10 +43,14 @@ import com.termux.x11.utils.SamsungDexUtils;
+ import java.lang.annotation.Retention;
  import java.lang.annotation.RetentionPolicy;
  import java.lang.reflect.InvocationTargetException;
++import java.util.ArrayList;
  import java.util.Arrays;
 +import java.util.List;
  import java.util.Objects;
@@ -367,7 +369,7 @@ index c816bd2..6dffd02 100644
  
  /**
   * This class is responsible for handling Touch input from the user.  Touch events which manipulate
-@@ -91,7 +96,17 @@ public class TouchInputHandler {
+@@ -91,7 +97,17 @@ public class TouchInputHandler {
  
      private InputStrategyInterface mInputStrategy;
      private final InputEventSender mInjector;
@@ -386,53 +388,95 @@ index c816bd2..6dffd02 100644
      private final InputManager.InputDeviceListener mInputDeviceListener;
      private final DisplayMetrics mMetrics = new DisplayMetrics();
      private final float[] mappedPoint = new float[2];
-@@ -107,6 +122,45 @@ public class TouchInputHandler {
+@@ -107,6 +123,87 @@ public class TouchInputHandler {
      private boolean keyIntercepting = false;
      private boolean ignoreGamepadEvents = false;
  
-+    private final List<Consumer<StylusState>> stylusStateListeners = new CopyOnWriteArrayList<>();
++    private final List<StylusStateListener> stylusStateListeners = new CopyOnWriteArrayList<>();
 +    private int stylusToggleMask = 0;
 +    private int stylusHoldMask = 0;
-+    private StylusState lastStylusState = new StylusState(0f, 0f, 0f, 0, 0, 0, 0, false, false);
++    private StylusState lastStylusState = new StylusState();
++    private StylusState lastRawStylusState = new StylusState();
 +
-+    public void addStylusStateListener(Consumer<StylusState> listener) {
-+        stylusStateListeners.add(listener);
++    public StylusState getLastStylusState() {
++        return lastStylusState.copy();
 +    }
 +
-+    public void removeStylusStateListener(Consumer<StylusState> listener) {
++    public StylusState getLastRawStylusState() {
++        return lastRawStylusState.copy();
++    }
++
++    public void addStylusStateListener(StylusStateListener listener) {
++        if (listener != null && !stylusStateListeners.contains(listener))
++            stylusStateListeners.add(listener);
++    }
++
++    public void removeStylusStateListener(StylusStateListener listener) {
 +        stylusStateListeners.remove(listener);
 +    }
 +
++    public int getStylusToggleMask() {
++        return stylusToggleMask;
++    }
++
 +    public void applyStylusToggleMask(int mask) {
-+        this.stylusToggleMask = mask;
++        stylusToggleMask = mask;
++        // Re-send current state so the overlay takes effect immediately.
++        sendStylusState(getLastRawStylusState());
 +    }
 +
 +    public void applyStylusHoldMask(int mask) {
-+        this.stylusHoldMask = mask;
++        stylusHoldMask = mask;
++        // Re-send current state so the overlay takes effect immediately.
++        sendStylusState(getLastRawStylusState());
 +    }
 +
-+    public StylusState getLastStylusState() {
-+        return lastStylusState;
-+    }
++    public void sendStylusState(StylusState state) {
++        if (state == null)
++            return;
 +
-+    public void sendStylusButtons(int buttons) {
-+        if (mInjector != null) {
-+            StylusState s = lastStylusState;
-+            mInjector.sendStylusEvent(
-+                    s.x, s.y,
-+                    (int) (s.pressure * 65535),
-+                    s.tiltX, s.tiltY,
-+                    s.orientation,
-+                    buttons,
-+                    s.eraser,
-+                    mInjector.stylusIsMouse);
++        StylusState next = state.copy();
++        if (Float.isNaN(next.x) || Float.isNaN(next.y)) {
++            PointF cursor = mRenderData.getCursorPosition();
++            next.x = cursor.x;
++            next.y = cursor.y;
 +        }
++
++        if (!next.mouse)
++            next.mouse = mInjector.stylusIsMouse;
++
++        next.buttons |= stylusToggleMask;
++        StylusState raw = next.copy();
++        raw.buttons &= ~(stylusToggleMask | stylusHoldMask);
++        lastRawStylusState.setFrom(raw);
++
++        int baseButtons = raw.buttons;
++        next.buttons = baseButtons | stylusToggleMask | stylusHoldMask;
++
++        lastStylusState.setFrom(next);
++        mInjector.sendStylusEvent(next.x, next.y, next.pressure, next.tiltX, next.tiltY, next.orientation, next.buttons, next.eraser, next.mouse);
++
++        if (!stylusStateListeners.isEmpty()) {
++            StylusState dispatch = next.copy();
++            for (StylusStateListener listener : new ArrayList<>(stylusStateListeners))
++                listener.onStylusState(dispatch);
++        }
++    }
++
++    public interface StylusStateListener {
++        void onStylusState(StylusState state);
++    }
++
++    public void sendStylusButtons(int newButtons) {
++        StylusState next = getLastStylusState();
++        next.buttons = newButtons;
++        sendStylusState(next);
 +    }
 +
      /**
       * Used for tracking swipe gestures. Only the Y-direction is needed for responding to swipe-up
       * or swipe-down.
-@@ -171,8 +225,8 @@ public class TouchInputHandler {
+@@ -171,8 +268,8 @@ public class TouchInputHandler {
          return ((currentBS & mask) != 0);
      }
  
@@ -443,7 +487,7 @@ index c816bd2..6dffd02 100644
          if (injector == null)
              throw new NullPointerException();
  
-@@ -236,7 +290,7 @@ public class TouchInputHandler {
+@@ -236,7 +333,7 @@ public class TouchInputHandler {
          ((InputManager) mActivity.getSystemService(Context.INPUT_SERVICE)).registerInputDeviceListener(mInputDeviceListener, null);
      }
  
@@ -452,7 +496,7 @@ index c816bd2..6dffd02 100644
          this(activity, null, injector, false);
      }
  
-@@ -268,8 +322,12 @@ public class TouchInputHandler {
+@@ -268,8 +365,12 @@ public class TouchInputHandler {
                  });
          android.util.Log.d("DEVICES", "requesting stylus " + stylusAvailable.get());
          android.util.Log.d("DEVICES", "external keyboard connected " + externalKeyboardAvailable.get());
@@ -467,7 +511,7 @@ index c816bd2..6dffd02 100644
      }
  
      boolean isDexEvent(MotionEvent event) {
-@@ -407,15 +465,15 @@ public class TouchInputHandler {
+@@ -407,15 +508,15 @@ public class TouchInputHandler {
      }
  
      private static boolean hasPointerCapture(View view) {
@@ -487,7 +531,7 @@ index c816bd2..6dffd02 100644
          }
  
          if (mInjector.pauseKeyInterceptingWithEsc) {
-@@ -470,10 +528,10 @@ public class TouchInputHandler {
+@@ -470,10 +571,10 @@ public class TouchInputHandler {
  
          MainActivity.getRealMetrics(mMetrics);
  
@@ -501,7 +545,7 @@ index c816bd2..6dffd02 100644
          SamsungDexUtils.dexMetaKeyCapture(mActivity, mInjector.dexMetaKeyCapture && keyIntercepting);
  
          swipeUpAction = extractUserActionFromPreferences(p, "swipeUp");
-@@ -496,14 +554,14 @@ public class TouchInputHandler {
+@@ -496,14 +597,14 @@ public class TouchInputHandler {
  
          switch(pref.asList().get()) {
              case "toggle soft keyboard": return (key, down) -> { if (down) MainActivity.toggleKeyboardVisibility(mActivity); };
@@ -521,7 +565,7 @@ index c816bd2..6dffd02 100644
              default: return noAction;
          }
      }
-@@ -604,7 +662,7 @@ public class TouchInputHandler {
+@@ -604,7 +705,7 @@ public class TouchInputHandler {
       * @noinspection NullableProblems */
      private class GestureListener extends GestureDetector.SimpleOnGestureListener
              implements TapGestureDetector.OnTapListener {
@@ -530,7 +574,7 @@ index c816bd2..6dffd02 100644
              if (msg.what == InputStub.BUTTON_LEFT)
                  mInputStrategy.onTap(InputStub.BUTTON_LEFT);
              return true;
-@@ -840,8 +898,10 @@ public class TouchInputHandler {
+@@ -840,8 +941,10 @@ public class TouchInputHandler {
              if (e.isFromSource(InputDevice.SOURCE_MOUSE) || e.isFromSource(InputDevice.SOURCE_MOUSE_RELATIVE)) {
                  if (e.getRepeatCount() != 0) // ignore auto-repeat
                      return true;
@@ -543,53 +587,16 @@ index c816bd2..6dffd02 100644
                  return true;
              }
  
-@@ -940,26 +1000,35 @@ public class TouchInputHandler {
+@@ -939,7 +1042,7 @@ public class TouchInputHandler {
+             return (e.getButtonState() & button) == button;
          }
  
-         int extractButtons(MotionEvent e) {
-+            int baseButtons = 0;
+-        int extractButtons(MotionEvent e) {
++        private int extractButtons(MotionEvent e) {
              if (mInjector.stylusButtonContactModifierMode) {
                  if (e.getPressure() > 0) {
                      if (hasButton(e, MotionEvent.BUTTON_STYLUS_SECONDARY))
--                        return (1 << 1);
--                    if (hasButton(e, MotionEvent.BUTTON_STYLUS_PRIMARY))
--                        return (1 << 2);
-+                        baseButtons = (1 << 1);
-+                    else if (hasButton(e, MotionEvent.BUTTON_STYLUS_PRIMARY))
-+                        baseButtons = (1 << 2);
-                     else
--                        return STYLUS_INPUT_HELPER_MODE;
--                } else return 0;
-+                        baseButtons = STYLUS_INPUT_HELPER_MODE;
-+                }
-             } else {
--                int buttons = 0;
-                 if (e.getPressure() > 0)
--                    buttons = STYLUS_INPUT_HELPER_MODE;
-+                    baseButtons = STYLUS_INPUT_HELPER_MODE;
-                 if (hasButton(e, MotionEvent.BUTTON_STYLUS_SECONDARY))
--                    buttons |= (1 << 1);
-+                    baseButtons |= (1 << 1);
-                 if (hasButton(e, MotionEvent.BUTTON_STYLUS_PRIMARY))
--                    buttons |= (1 << 2);
-+                    baseButtons |= (1 << 2);
-+            }
- 
--                return buttons;
-+            int mapped = baseButtons;
-+            if (stylusToggleMask != 0 || stylusHoldMask != 0) {
-+                if ((stylusToggleMask & MotionEvent.BUTTON_SECONDARY) != 0 || (stylusHoldMask & MotionEvent.BUTTON_SECONDARY) != 0) {
-+                    mapped |= (1 << 1);
-+                }
-+                if ((stylusToggleMask & MotionEvent.BUTTON_TERTIARY) != 0 || (stylusHoldMask & MotionEvent.BUTTON_TERTIARY) != 0) {
-+                    mapped |= (1 << 2);
-+                }
-             }
-+            return mapped;
-         }
- 
-         @SuppressLint("ClickableViewAccessibility")
-@@ -969,12 +1038,13 @@ public class TouchInputHandler {
+@@ -969,12 +1072,13 @@ public class TouchInputHandler {
              int newButtons = extractButtons(e);
              float newX = e.getX(e.getActionIndex()), newY = e.getY(e.getActionIndex());
              InputDevice dev = e.getDevice();
@@ -608,7 +615,7 @@ index c816bd2..6dffd02 100644
                      isExternal(dev) && rangeX != null && rangeY != null) {
                  newX *= (float) mMetrics.widthPixels / rangeX.getMax();
                  newY *= (float) mMetrics.heightPixels / rangeY.getMax();
-@@ -983,24 +1053,37 @@ public class TouchInputHandler {
+@@ -983,27 +1087,30 @@ public class TouchInputHandler {
              newX = mappedPoint[0];
              newY = mappedPoint[1];
  
@@ -623,35 +630,37 @@ index c816bd2..6dffd02 100644
                  tiltX = (int) Math.round((float) Math.asin(-Math.sin(orientation) * Math.sin(tilt)) * 63.5 - 0.5);
                  tiltY = (int) Math.round((float) Math.asin( Math.cos(orientation) * Math.sin(tilt)) * 63.5 - 0.5);
 +                orientationDegrees = convertOrientation(orientation);
-+            }
-+
-+            StylusState state = new StylusState(
-+                    newX, newY, e.getPressure(),
-+                    tiltX, tiltY, orientationDegrees,
-+                    newButtons,
-+                    e.getToolType(e.getActionIndex()) == MotionEvent.TOOL_TYPE_ERASER,
-+                    mInjector.stylusIsMouse);
-+            lastStylusState = state;
-+            for (Consumer<StylusState> l : stylusStateListeners) {
-+                l.accept(state);
              }
  
-+            if (x == newX && y == newY && pressure == e.getPressure() && tilt == e.getAxisValue(MotionEvent.AXIS_TILT) &&
-+                    orientation == e.getAxisValue(MotionEvent.AXIS_ORIENTATION) && buttons == newButtons)
-+                return true;
-+
-             mInjector.sendStylusEvent(
-                     x = newX,
-                     y = newY,
-                     (int) ((pressure = e.getPressure()) * 65535),
-                     tiltX,
-                     tiltY,
+-            mInjector.sendStylusEvent(
+-                    x = newX,
+-                    y = newY,
+-                    (int) ((pressure = e.getPressure()) * 65535),
+-                    tiltX,
+-                    tiltY,
 -                    convertOrientation(orientation),
-+                    orientationDegrees,
-                     buttons = newButtons,
-                     e.getToolType(e.getActionIndex()) == MotionEvent.TOOL_TYPE_ERASER,
-                     mInjector.stylusIsMouse);
-@@ -1020,7 +1103,7 @@ public class TouchInputHandler {
+-                    buttons = newButtons,
+-                    e.getToolType(e.getActionIndex()) == MotionEvent.TOOL_TYPE_ERASER,
+-                    mInjector.stylusIsMouse);
++            StylusState state = new StylusState();
++            x = newX;
++            y = newY;
++            pressure = e.getPressure();
++            buttons = newButtons;
++            state.x = x;
++            state.y = y;
++            state.pressure = (int) (pressure * 65535);
++            state.tiltX = tiltX;
++            state.tiltY = tiltY;
++            state.orientation = orientationDegrees;
++            state.buttons = newButtons;
++            state.eraser = e.getToolType(e.getActionIndex()) == MotionEvent.TOOL_TYPE_ERASER;
++            state.mouse = mInjector.stylusIsMouse;
++            sendStylusState(state);
+ 
+             return true;
+         }
+@@ -1020,7 +1127,7 @@ public class TouchInputHandler {
          DexListener(Context ctx) {
              mScroller = new GestureDetector(ctx, this, null, false);
          }

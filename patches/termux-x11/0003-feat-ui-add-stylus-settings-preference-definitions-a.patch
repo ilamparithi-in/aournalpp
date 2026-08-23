@@ -1,21 +1,21 @@
-From 9de183e4415c23a12d43241892c2122198b32a4b Mon Sep 17 00:00:00 2001
+From a7e5e3b9fbd439288ebc9bf9d66f3d40ae7ff9e0 Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Sun, 23 Aug 2026 08:07:54 +0530
-Subject: [PATCH 3/3] feat(ui): add stylus settings, preference definitions,
- and null-safety guards
+Subject: [PATCH] feat(ui): add stylus settings, preference definitions, and
+ null-safety guards
 
 ---
- .../java/com/termux/x11/CmdEntryPoint.java    | 52 +++++++++++--------
- .../java/com/termux/x11/LoriePreferences.java | 31 ++++++++++-
- .../main/java/com/termux/x11/LorieView.java   | 30 ++++++++---
+ .../java/com/termux/x11/CmdEntryPoint.java    | 52 ++++++++++-------
+ .../java/com/termux/x11/LoriePreferences.java | 58 ++++++++++++++++++-
+ .../main/java/com/termux/x11/LorieView.java   | 30 +++++++---
  .../java/com/termux/x11/MainActivity.java     | 17 +++++-
  .../termux/x11/extrakeys/ExtraKeysView.java   |  4 +-
  .../termux/x11/utils/ImeHeightProvider.java   |  8 ++-
- .../termux/x11/utils/TermuxX11ExtraKeys.java  | 15 +++---
+ .../termux/x11/utils/TermuxX11ExtraKeys.java  | 15 +++--
  lorie/src/main/res/values/arrays.xml          | 11 ++++
- lorie/src/main/res/values/strings.xml         | 19 +++++++
- lorie/src/main/res/xml/preferences.xml        | 52 +++++++++++++++++++
- 10 files changed, 197 insertions(+), 42 deletions(-)
+ lorie/src/main/res/values/strings.xml         | 21 +++++++
+ lorie/src/main/res/xml/preferences.xml        | 52 +++++++++++++++++
+ 10 files changed, 225 insertions(+), 43 deletions(-)
 
 diff --git a/lorie/src/main/java/com/termux/x11/CmdEntryPoint.java b/lorie/src/main/java/com/termux/x11/CmdEntryPoint.java
 index a18645f..55cb2d3 100644
@@ -104,7 +104,7 @@ index a18645f..55cb2d3 100644
  
      private static void initEntryPoint() {
 diff --git a/lorie/src/main/java/com/termux/x11/LoriePreferences.java b/lorie/src/main/java/com/termux/x11/LoriePreferences.java
-index 1b77423..d214646 100644
+index 1b77423..d6b8f1c 100644
 --- a/lorie/src/main/java/com/termux/x11/LoriePreferences.java
 +++ b/lorie/src/main/java/com/termux/x11/LoriePreferences.java
 @@ -30,6 +30,7 @@ import androidx.core.app.ActivityCompat;
@@ -127,15 +127,37 @@ index 1b77423..d214646 100644
          }
  
          /** @noinspection DataFlowIssue*/
-@@ -315,6 +319,7 @@ public class LoriePreferences extends AppCompatActivity implements PreferenceFra
+@@ -315,12 +319,29 @@ public class LoriePreferences extends AppCompatActivity implements PreferenceFra
              setVisible("showStylusClickOverride", stylusAvailable);
              setVisible("stylusIsMouse", stylusAvailable);
              setVisible("stylusButtonContactModifierMode", stylusAvailable);
 +            setVisible("lenovoPenMappingEntry", stylusAvailable);
++
++            setLenovoPenToggleSummary("lenovoPenSinglePressToggle");
++            setLenovoPenToggleSummary("lenovoPenDoublePressToggle");
++            setLenovoPenToggleSummary("lenovoPenTriplePressToggle");
++            setLenovoPenToggleSummary("lenovoPenLongPressToggle");
++            setLenovoPenToggleSummary("lenovoPenLongPressClickToggle");
  
              setNoActionOptionText(findPreference("volumeDownAction"), "android volume control");
              setNoActionOptionText(findPreference("volumeUpAction"), "android volume control");
-@@ -380,6 +385,30 @@ public class LoriePreferences extends AppCompatActivity implements PreferenceFra
+             setNoActionOptionText(findPreference("mediaKeysAction"), "android media control");
+         }
+ 
++        private void setLenovoPenToggleSummary(CharSequence key) {
++            Preference pref = findPreference(key);
++            if (pref instanceof SwitchPreferenceCompat) {
++                ((SwitchPreferenceCompat) pref).setSummaryProvider(p -> {
++                    boolean checked = ((SwitchPreferenceCompat) p).isChecked();
++                    return getString(checked ? R.string.pref_lenovoPenToggleSummary_on : R.string.pref_lenovoPenToggleSummary_off);
++                });
++            }
++        }
++
+         private void setSummary(CharSequence key, int disabled) {
+             Preference pref = findPreference(key);
+             if (pref != null)
+@@ -380,6 +401,30 @@ public class LoriePreferences extends AppCompatActivity implements PreferenceFra
              setVisible("requestNotificationPermission", requestNotificationPermissionVisible);
  
              updateScreenIdleTimeoutSummary();
@@ -166,6 +188,31 @@ index 1b77423..d214646 100644
          }
  
          private static String formatTimeoutMinutes(long timeoutMs) {
+@@ -503,6 +548,15 @@ public class LoriePreferences extends AppCompatActivity implements PreferenceFra
+             if ("showAdditionalKbd".contentEquals(key) && (Boolean) newValue)
+                 prefs.additionalKbdVisible.put(true);
+ 
++            if (key != null && key.startsWith("lenovoPen") && key.endsWith("DurationMs")) {
++                try {
++                    Integer.parseInt((String) newValue);
++                } catch (NumberFormatException ex) {
++                    Toast.makeText(getActivity(), "Please enter a number", Toast.LENGTH_SHORT).show();
++                    return false;
++                }
++            }
++
+             if ("enableAccessibilityServiceAutomatically".contentEquals(key)) {
+                 if (!((Boolean) newValue))
+                     KeyInterceptor.shutdown(false);
+@@ -924,7 +978,7 @@ public class LoriePreferences extends AppCompatActivity implements PreferenceFra
+                 try {
+                     prefsCtx = ctx.createPackageContext(BuildConfig.APPLICATION_ID, 0);
+                 } catch (PackageManager.NameNotFoundException e) {
+-                    throw new RuntimeException(e);
++                    prefsCtx = ctx;
+                 }
+             }
+ 
 diff --git a/lorie/src/main/java/com/termux/x11/LorieView.java b/lorie/src/main/java/com/termux/x11/LorieView.java
 index 2c550aa..85287f4 100644
 --- a/lorie/src/main/java/com/termux/x11/LorieView.java
@@ -434,32 +481,34 @@ index b34086f..2902d47 100644
 +    </string-array>
  </resources>
 diff --git a/lorie/src/main/res/values/strings.xml b/lorie/src/main/res/values/strings.xml
-index 62dd685..3a7c167 100644
+index 62dd685..c16e6bd 100644
 --- a/lorie/src/main/res/values/strings.xml
 +++ b/lorie/src/main/res/values/strings.xml
-@@ -123,4 +123,23 @@ E.g. <b>META</b> for <i>META key</i>, \n
+@@ -123,4 +123,25 @@ E.g. <b>META</b> for <i>META key</i>, \n
      <string name="lorie_pref_summary_requiresTrackpadAndNative">Requires "Touchscreen input mode" to be "Trackpad" and "Display resolution mode" to be not "native"</string>
      <string name="lorie_pref_summary_screenIdleTimeoutConflict">⚠️ System screen timeout (%s) is longer and takes priority</string>
      <string name="lorie_pref_screenIdleTimeoutSystem">System (%s)</string>
 +
-+    <string name="pref_lenovoPenMapping">Lenovo Pen Button Mapping</string>
-+    <string name="pref_lenovoPenShowDetections">Show Gesture Detections</string>
-+    <string name="pref_lenovoPenShowDetections_summary">Display a toast message when a pen gesture is detected</string>
-+    <string name="pref_lenovoPenDebugToggleToasts">Show Toggle State Detections</string>
-+    <string name="pref_lenovoPenDebugToggleToasts_summary">Display a toast message when a pen gesture toggles a button</string>
-+    <string name="pref_lenovoPenGestureMappings">Gesture Mappings</string>
-+    <string name="pref_lenovoPenSinglePressTitle">Single Press</string>
-+    <string name="pref_lenovoPenDoublePressTitle">Double Press</string>
-+    <string name="pref_lenovoPenTriplePressTitle">Triple Press</string>
-+    <string name="pref_lenovoPenLongPressTitle">Long Press</string>
-+    <string name="pref_lenovoPenLongPressClickTitle">Long Press + Click</string>
++    <string name="pref_lenovoPenMapping">Lenovo pen mapping</string>
++    <string name="pref_lenovoPenShowDetections">Show detections on screen</string>
++    <string name="pref_lenovoPenShowDetections_summary">Show toast for detected gestures</string>
++    <string name="pref_lenovoPenDebugToggleToasts">Show debug toggle toasts</string>
++    <string name="pref_lenovoPenDebugToggleToasts_summary">Show gesture/button state and hold duration when Lenovo pen mapping fires</string>
++    <string name="pref_lenovoPenGestureMappings">Gesture mappings</string>
 +    <string name="pref_lenovoPenMapTo">Map to</string>
-+    <string name="pref_lenovoPenToggleTitle">Toggle Mode</string>
-+    <string name="pref_lenovoPenToggleSummary">Toggle button on/off instead of momentary press</string>
-+    <string name="pref_lenovoPenToggleOffOnLiftTitle">Toggle OFF on Lift</string>
-+    <string name="pref_lenovoPenToggleOffOnLiftSummary">Automatically turn toggle OFF when pen is lifted from screen</string>
-+    <string name="pref_lenovoPenDurationTitle">Press Duration (ms)</string>
-+    <string name="pref_lenovoPenDurationDialog">Enter duration in milliseconds (10-8192)</string>
++    <string name="pref_lenovoPenToggleTitle">Toggle target button</string>
++    <string name="pref_lenovoPenToggleSummary">Off: press and hold target for the specified duration. On: toggle, gesture once for down and again for up.</string>
++    <string name="pref_lenovoPenToggleSummary_off">Off: press and hold target for the specified duration.</string>
++    <string name="pref_lenovoPenToggleSummary_on">On: toggle, gesture once for down and again for up.</string>
++    <string name="pref_lenovoPenToggleOffOnLiftTitle">Toggle OFF on lift</string>
++    <string name="pref_lenovoPenToggleOffOnLiftSummary">When toggled on and pen lifts after contact, release the mapped button automatically.</string>
++    <string name="pref_lenovoPenDurationTitle">Hold duration (ms)</string>
++    <string name="pref_lenovoPenDurationDialog">Hold duration in milliseconds</string>
++    <string name="pref_lenovoPenSinglePressTitle">Single Press (600)</string>
++    <string name="pref_lenovoPenDoublePressTitle">Double Press (601)</string>
++    <string name="pref_lenovoPenTriplePressTitle">Triple Press (602)</string>
++    <string name="pref_lenovoPenLongPressTitle">Long Press (603)</string>
++    <string name="pref_lenovoPenLongPressClickTitle">Long Press and Click (604)</string>
  </resources>
 diff --git a/lorie/src/main/res/xml/preferences.xml b/lorie/src/main/res/xml/preferences.xml
 index 902a923..cf28545 100644

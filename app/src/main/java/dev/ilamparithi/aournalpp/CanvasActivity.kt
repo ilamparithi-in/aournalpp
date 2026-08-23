@@ -66,6 +66,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.termux.x11.LorieView
+import com.termux.x11.input.LenovoPenButtonMapper
 import com.termux.x11.input.TouchInputHandler
 import dev.ilamparithi.aournalpp.runtime.CanvasSessionManager
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
@@ -87,6 +88,7 @@ class CanvasActivity : ComponentActivity() {
     private lateinit var supervisor: ProcessSupervisor
     private lateinit var sessionManager: CanvasSessionManager
     private var inputHandler: TouchInputHandler? = null
+    private var penMapper: LenovoPenButtonMapper? = null
     private var activeLorieView: LorieView? = null
 
     private val showEmergencyForceCloseDialogState = mutableStateOf(false)
@@ -188,6 +190,9 @@ class CanvasActivity : ComponentActivity() {
                             },
                             onInputHandlerReady = { handler ->
                                 inputHandler = handler
+                            },
+                            onPenMapperReady = { mapper ->
+                                penMapper = mapper
                             }
                         )
 
@@ -456,6 +461,10 @@ class CanvasActivity : ComponentActivity() {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.keyCode == KeyEvent.KEYCODE_BACK) {
             return super.dispatchKeyEvent(event)
+        }
+        val mapper = penMapper
+        if (mapper != null && mapper.onKeyEvent(event)) {
+            return true
         }
         val handler = inputHandler
         if (handler != null && handler.sendKeyEvent(event)) {
