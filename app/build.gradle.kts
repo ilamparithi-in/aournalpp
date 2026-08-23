@@ -190,10 +190,10 @@ android {
 
     sourceSets {
         getByName("arm64") {
-            assets.srcDirs("src/arm64/assets", "build/generated/bootstrap-assets/arm64/assets")
+            assets.directories += listOf("src/arm64/assets", "build/generated/bootstrap-assets/arm64/assets")
         }
         getByName("x86_64") {
-            assets.srcDirs("src/x86_64/assets", "build/generated/bootstrap-assets/x86_64/assets")
+            assets.directories += listOf("src/x86_64/assets", "build/generated/bootstrap-assets/x86_64/assets")
         }
     }
 }

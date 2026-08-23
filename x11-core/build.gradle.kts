@@ -37,21 +37,21 @@ android {
 
     sourceSets {
         getByName("main") {
-            java.srcDirs(
+            java.directories += listOf(
                 "src/main/java",
                 "../submodules/termux-x11/lorie/src/main/java",
                 "../submodules/termux-x11/shell-loader/stub/src/main/java",
                 layout.buildDirectory.dir("generated/java").get().asFile.absolutePath
             )
-            aidl.srcDirs(
+            aidl.directories += listOf(
                 "../submodules/termux-x11/lorie/src/main/aidl"
             )
-            res.srcDirs(
+            res.directories += listOf(
                 "src/main/res",
                 "../submodules/termux-x11/lorie/src/main/res",
                 layout.buildDirectory.dir("generated/templateRes").get().asFile.absolutePath
             )
-            jniLibs.srcDirs(
+            jniLibs.directories += listOf(
                 "src/main/jniLibs",
                 "../submodules/termux-x11/lorie/src/main/jniLibs"
             )
