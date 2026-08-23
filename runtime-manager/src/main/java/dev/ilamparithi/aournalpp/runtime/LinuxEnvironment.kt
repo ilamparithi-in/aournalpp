@@ -263,6 +263,12 @@ class LinuxEnvironment(private val context: Context) {
         try {
             val emergencyFile = File(xournalConfigDir, "emergencysave.xopp")
             if (emergencyFile.exists() && emergencyFile.length() > 0) {
+                if (isEmergencySaveBlank(emergencyFile)) {
+                    Log.i(TAG, "emergencysave.xopp is a blank default template (zero user content); discarding.")
+                    emergencyFile.delete()
+                    clearQuarantinedEmergencySave()
+                    return null
+                }
                 if (isEmergencySaveDuplicateOfSavedFile(emergencyFile)) {
                     Log.i(TAG, "emergencysave.xopp matches the cleanly saved active note; discarding duplicate.")
                     emergencyFile.delete()
@@ -279,6 +285,24 @@ class LinuxEnvironment(private val context: Context) {
             Log.w(TAG, "Failed to quarantine emergency save file", e)
         }
         return getQuarantinedEmergencySave()
+    }
+
+    private fun isEmergencySaveBlank(emergencyFile: File): Boolean {
+        if (!emergencyFile.exists() || emergencyFile.length() == 0L) return true
+        val bytes = getDecompressedBytes(emergencyFile)
+        if (bytes.isEmpty()) return true
+        val text = try {
+            String(bytes, Charsets.UTF_8)
+        } catch (e: Exception) {
+            ""
+        }
+        if (text.isBlank()) return true
+        // If it contains no strokes, text items, or images, it is an empty blank document
+        val hasContent = text.contains("<stroke") ||
+                text.contains("<text") ||
+                text.contains("<image") ||
+                text.contains("<teximage")
+        return !hasContent
     }
 
     private fun isEmergencySaveDuplicateOfSavedFile(emergencyFile: File): Boolean {
@@ -325,6 +349,11 @@ class LinuxEnvironment(private val context: Context) {
         }
         val file = File(quarantineRecoveryDir, "quarantined_emergencysave.xopp")
         if (file.exists() && file.length() > 0) {
+            if (isEmergencySaveBlank(file) || isEmergencySaveDuplicateOfSavedFile(file)) {
+                Log.i(TAG, "Quarantined emergency save is blank or duplicate of saved note; deleting.")
+                file.delete()
+                return null
+            }
             return file
         }
         return null

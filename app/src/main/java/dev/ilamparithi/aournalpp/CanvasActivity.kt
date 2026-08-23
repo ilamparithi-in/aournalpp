@@ -150,25 +150,17 @@ class CanvasActivity : ComponentActivity() {
             else -> "New Note"
         }
 
-        if (openPreferences) {
-            lifecycleScope.launch {
-                // Wait for X11 server & Xournal++ window initialization
-                kotlinx.coroutines.delay(1200)
-                var attempts = 0
-                while (attempts < 12 && !isFinishing) {
-                    attempts++
-                    injectPreferencesDirect()
-                    kotlinx.coroutines.delay(350)
-                }
-            }
-        }
+
 
         setContent {
             AournalTheme {
                 val showEmergencyForceCloseDialog by remember { showEmergencyForceCloseDialogState }
                 var isHeaderExpanded by remember { mutableStateOf(true) }
                 val liveTitle by sessionManager.documentTitle.collectAsState()
-                val displayTitle = liveTitle ?: initialTitle
+                val displayTitle = when {
+                    openPreferences && (liveTitle == null || liveTitle == "New Note" || liveTitle == "Unsaved Document") -> "Preferences"
+                    else -> liveTitle ?: initialTitle
+                }
 
                 BackHandler(enabled = true) {
                     handleSmartBackPress()
@@ -399,34 +391,41 @@ class CanvasActivity : ComponentActivity() {
         if (tripleBackEnabled && backPressTimestamps.size >= 3) {
             backPressTimestamps.clear()
             showEmergencyForceCloseDialogState.value = true
-        } else {
-            if (backPressTimestamps.size == 2) {
+            return
+        }
+
+        lifecycleScope.launch {
+            val dialogOpen = sessionManager.isModalOrDialogOpen()
+            if (dialogOpen) {
+                // If a dialog or prompt (e.g. Save confirmation, Preferences, Export) is open, notify user and keep it open
                 Toast.makeText(
-                    this,
+                    this@CanvasActivity,
                     "Please close any open dialogs or prompts in Xournal++ to exit",
                     Toast.LENGTH_SHORT
                 ).show()
-            }
+            } else {
+                // 1. Direct hardware-level X11 key injection through TouchInputHandler
+                injectCtrlQDirect()
 
-            // 1. Direct hardware-level X11 key injection through TouchInputHandler
-            injectCtrlQDirect()
+                // 2. Multi-strategy background X11 Ctrl+Q close
+                sessionManager.requestCloseSession()
 
-            // 2. Multi-strategy background X11 WM_DELETE_WINDOW / xdotool close
-            sessionManager.requestCloseSession()
-
-            // 3. If Xournal++ is still running after a delay (e.g. blocked by open modal or save prompt), notify the user
-            lifecycleScope.launch {
+                // 3. If a save dialog/prompt opened in response to close request, notify the user
                 kotlinx.coroutines.delay(1000)
                 if (!isFinishing && supervisor.isXournalRunning() && !showEmergencyForceCloseDialogState.value) {
-                    Toast.makeText(
-                        this@CanvasActivity,
-                        "Please close any open dialogs or prompts in Xournal++ to exit",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    if (sessionManager.isModalOrDialogOpen()) {
+                        Toast.makeText(
+                            this@CanvasActivity,
+                            "Please close any open dialogs or prompts in Xournal++ to exit",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 }
             }
         }
     }
+
+
 
     private fun injectCtrlQDirect() {
         activeLorieView?.let { view ->
@@ -452,29 +451,7 @@ class CanvasActivity : ComponentActivity() {
         }
     }
 
-    private fun injectPreferencesDirect() {
-        activeLorieView?.let { view ->
-            view.post {
-                view.sendKeyEvent(0, KeyEvent.KEYCODE_CTRL_LEFT, true)
-                view.sendKeyEvent(0, KeyEvent.KEYCODE_COMMA, true)
-                view.sendKeyEvent(0, KeyEvent.KEYCODE_COMMA, false)
-                view.sendKeyEvent(0, KeyEvent.KEYCODE_CTRL_LEFT, false)
-            }
-        }
 
-        inputHandler?.let { handler ->
-            val now = android.os.SystemClock.uptimeMillis()
-            val ctrlDown = KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_CTRL_LEFT, 0)
-            val commaDown = KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_COMMA, 0, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
-            val commaUp = KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_COMMA, 0, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
-            val ctrlUp = KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_CTRL_LEFT, 0)
-
-            handler.sendKeyEvent(ctrlDown)
-            handler.sendKeyEvent(commaDown)
-            handler.sendKeyEvent(commaUp)
-            handler.sendKeyEvent(ctrlUp)
-        }
-    }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.keyCode == KeyEvent.KEYCODE_BACK) {

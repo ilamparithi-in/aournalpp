@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.util.Log
 import org.json.JSONObject
 import java.io.File
+import java.security.MessageDigest
 
 object NotesHomeConfigManager {
     private const val TAG = "NotesHomeConfigManager"
@@ -19,9 +20,11 @@ object NotesHomeConfigManager {
     }
 
     /**
-     * Performs a bidirectional synchronization between internal app storage and Notes Home (.config):
-     * - If external files were modified more recently than the last sync, imports them.
-     * - Otherwise, exports the latest internal settings to Notes Home.
+     * Performs a bidirectional content-hash synchronization between internal app storage and Notes Home (.config):
+     * - Content hashing (SHA-256) guarantees that external changes (pasted, overwritten, or modified files)
+     *   are immediately imported without being clobbered by timestamp discrepancies.
+     * - Sanitizes Android storage paths on settings.xml import to prevent desktop path corruption.
+     * - Supports full recursive syncing of subdirectories (palettes, ui, plugins, etc.).
      */
     @Synchronized
     fun sync(context: Context, env: LinuxEnvironment) {
@@ -45,7 +48,7 @@ object NotesHomeConfigManager {
             // 2. Termux-X11 Preferences Sync
             syncX11Prefs(context, configDir, meta)
 
-            // 3. Xournal++ & GTK Settings Sync
+            // 3. Xournal++ & GTK Settings Sync (Recursive)
             syncXournalppConfigs(env, configDir, meta)
 
             // Save updated sync metadata
@@ -82,39 +85,43 @@ object NotesHomeConfigManager {
         }
     }
 
-    private fun syncAppSettings(context: Context, configDir: File, meta: MutableMap<String, Long>) {
+    private fun syncAppSettings(context: Context, configDir: File, meta: MutableMap<String, String>) {
         val externalFile = File(configDir, APP_SETTINGS_FILE)
         val appPrefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
-        val lastSyncTime = meta[APP_SETTINGS_FILE] ?: 0L
+        val metaKey = "hash_$APP_SETTINGS_FILE"
+        val lastSyncHash = meta[metaKey] ?: ""
 
-        if (externalFile.exists() && externalFile.lastModified() > lastSyncTime && lastSyncTime > 0L) {
-            // External file was edited since last sync -> Import into app
-            Log.i(TAG, "External $APP_SETTINGS_FILE was modified. Importing to SharedPreferences...")
+        val extHash = getFileHash(externalFile)
+
+        if (externalFile.exists() && extHash.isNotEmpty() && extHash != lastSyncHash) {
+            Log.i(TAG, "External $APP_SETTINGS_FILE modified. Importing to SharedPreferences...")
             importJsonToSharedPreferences(externalFile, appPrefs)
-            meta[APP_SETTINGS_FILE] = externalFile.lastModified()
+            meta[metaKey] = getFileHash(externalFile)
         } else {
-            // Internal settings are newer or external doesn't exist -> Export
             exportSharedPreferencesToJson(appPrefs, externalFile)
-            meta[APP_SETTINGS_FILE] = externalFile.lastModified()
+            meta[metaKey] = getFileHash(externalFile)
         }
     }
 
-    private fun syncX11Prefs(context: Context, configDir: File, meta: MutableMap<String, Long>) {
+    private fun syncX11Prefs(context: Context, configDir: File, meta: MutableMap<String, String>) {
         val externalFile = File(configDir, X11_PREFS_FILE)
         val x11Prefs = context.getSharedPreferences("com.termux.x11_preferences", Context.MODE_PRIVATE)
-        val lastSyncTime = meta[X11_PREFS_FILE] ?: 0L
+        val metaKey = "hash_$X11_PREFS_FILE"
+        val lastSyncHash = meta[metaKey] ?: ""
 
-        if (externalFile.exists() && externalFile.lastModified() > lastSyncTime && lastSyncTime > 0L) {
-            Log.i(TAG, "External $X11_PREFS_FILE was modified. Importing to X11 Preferences...")
+        val extHash = getFileHash(externalFile)
+
+        if (externalFile.exists() && extHash.isNotEmpty() && extHash != lastSyncHash) {
+            Log.i(TAG, "External $X11_PREFS_FILE modified. Importing to X11 Preferences...")
             importJsonToSharedPreferences(externalFile, x11Prefs)
-            meta[X11_PREFS_FILE] = externalFile.lastModified()
+            meta[metaKey] = getFileHash(externalFile)
         } else {
             exportSharedPreferencesToJson(x11Prefs, externalFile)
-            meta[X11_PREFS_FILE] = externalFile.lastModified()
+            meta[metaKey] = getFileHash(externalFile)
         }
     }
 
-    private fun syncXournalppConfigs(env: LinuxEnvironment, configDir: File, meta: MutableMap<String, Long>) {
+    private fun syncXournalppConfigs(env: LinuxEnvironment, configDir: File, meta: MutableMap<String, String>) {
         val extXoppDir = File(configDir, XOURNALPP_DIR_NAME)
         if (!extXoppDir.exists()) {
             extXoppDir.mkdirs()
@@ -125,33 +132,146 @@ object NotesHomeConfigManager {
             internalXoppDir.mkdirs()
         }
 
-        val baseConfigFiles = setOf("settings.xml", "toolbar.ini", "palette.gpl", "colornames.ini", "print-settings.ini", "settings.ini")
-        val internalFileNames = internalXoppDir.listFiles()?.filter { it.isFile }?.map { it.name } ?: emptyList()
-        val externalFileNames = extXoppDir.listFiles()?.filter { it.isFile }?.map { it.name } ?: emptyList()
-        val allConfigFiles = (baseConfigFiles + internalFileNames + externalFileNames).toSet()
+        // Collect all relative paths from internal and external trees
+        val relativePaths = mutableSetOf<String>()
 
-        for (fileName in allConfigFiles) {
-            val internalFile = if (fileName == "settings.ini") {
+        if (internalXoppDir.exists()) {
+            internalXoppDir.walkTopDown().filter { it.isFile }.forEach { file ->
+                val rel = file.relativeTo(internalXoppDir).path
+                if (!rel.startsWith(".") && !rel.endsWith(".tmp") && rel != "emergencysave.xopp") {
+                    relativePaths.add(rel)
+                }
+            }
+        }
+
+        if (extXoppDir.exists()) {
+            extXoppDir.walkTopDown().filter { it.isFile }.forEach { file ->
+                val rel = file.relativeTo(extXoppDir).path
+                if (!rel.startsWith(".") && !rel.endsWith(".tmp") && rel != "emergencysave.xopp") {
+                    relativePaths.add(rel)
+                }
+            }
+        }
+
+        // Base configuration names
+        relativePaths.addAll(listOf("settings.xml", "toolbar.ini", "palette.gpl", "colornames.ini", "print-settings.ini", "settings.ini"))
+
+        var settingsXmlImported = false
+
+        for (relPath in relativePaths) {
+            val internalFile = if (relPath == "settings.ini") {
                 File(File(env.configDir, "gtk-3.0"), "settings.ini")
             } else {
-                File(internalXoppDir, fileName)
+                File(internalXoppDir, relPath)
             }
 
-            val externalFile = File(extXoppDir, fileName)
-            val metaKey = "xopp_$fileName"
-            val lastSyncTime = meta[metaKey] ?: 0L
+            val externalFile = File(extXoppDir, relPath)
+            val metaKey = "hash_xopp_$relPath"
 
-            if (externalFile.exists() && externalFile.lastModified() > lastSyncTime && lastSyncTime > 0L) {
-                // External file was edited -> Import to internal
-                Log.i(TAG, "External Xournal++ config $fileName was modified. Importing...")
+            val imported = syncSingleFile(internalFile, externalFile, metaKey, meta)
+            if (imported && (relPath == "settings.xml" || relPath.endsWith("/settings.xml"))) {
+                settingsXmlImported = true
+            }
+        }
+
+        if (settingsXmlImported) {
+            Log.i(TAG, "Sanitizing Android storage paths for imported settings.xml...")
+            env.ensureXournalppSettings()
+            env.ensureMenuBarShortcuts()
+            val intSettings = File(internalXoppDir, "settings.xml")
+            val extSettings = File(extXoppDir, "settings.xml")
+            if (intSettings.exists() && extSettings.exists()) {
+                intSettings.copyTo(extSettings, overwrite = true)
+                meta["hash_xopp_settings.xml"] = getFileHash(intSettings)
+            }
+        }
+    }
+
+    /**
+     * Synchronizes a single file using SHA-256 hash detection.
+     * Returns true if external was imported into internal.
+     */
+    private fun syncSingleFile(
+        internalFile: File,
+        externalFile: File,
+        metaKey: String,
+        meta: MutableMap<String, String>
+    ): Boolean {
+        val lastSyncHash = meta[metaKey] ?: ""
+        val extHash = getFileHash(externalFile)
+        val intHash = getFileHash(internalFile)
+
+        if (extHash.isNotEmpty() && extHash == intHash) {
+            meta[metaKey] = extHash
+            return false
+        }
+
+        if (externalFile.exists() && !internalFile.exists()) {
+            // New external file -> Import
+            Log.i(TAG, "Importing new external config: ${externalFile.name}")
+            internalFile.parentFile?.mkdirs()
+            externalFile.copyTo(internalFile, overwrite = true)
+            meta[metaKey] = getFileHash(internalFile)
+            return true
+        }
+
+        if (internalFile.exists() && !externalFile.exists()) {
+            // New internal file -> Export
+            externalFile.parentFile?.mkdirs()
+            internalFile.copyTo(externalFile, overwrite = true)
+            meta[metaKey] = getFileHash(externalFile)
+            return false
+        }
+
+        if (externalFile.exists() && internalFile.exists()) {
+            if (extHash.isNotEmpty() && extHash != lastSyncHash && intHash == lastSyncHash) {
+                // User modified external file -> Import
+                Log.i(TAG, "User modified external config ${externalFile.name}. Importing...")
                 internalFile.parentFile?.mkdirs()
                 externalFile.copyTo(internalFile, overwrite = true)
-                meta[metaKey] = externalFile.lastModified()
-            } else if (internalFile.exists() && internalFile.length() > 0L) {
-                // Internal file exists -> Export copy to external
+                meta[metaKey] = getFileHash(internalFile)
+                return true
+            } else if (intHash.isNotEmpty() && intHash != lastSyncHash && extHash == lastSyncHash) {
+                // Internal file modified by app -> Export
+                externalFile.parentFile?.mkdirs()
                 internalFile.copyTo(externalFile, overwrite = true)
-                meta[metaKey] = externalFile.lastModified()
+                meta[metaKey] = getFileHash(externalFile)
+                return false
+            } else {
+                // Conflict or initial sync without hash: compare timestamps
+                if (externalFile.lastModified() >= internalFile.lastModified()) {
+                    Log.i(TAG, "External config ${externalFile.name} is newer. Importing...")
+                    internalFile.parentFile?.mkdirs()
+                    externalFile.copyTo(internalFile, overwrite = true)
+                    meta[metaKey] = getFileHash(internalFile)
+                    return true
+                } else {
+                    Log.i(TAG, "Internal config ${internalFile.name} is newer. Exporting...")
+                    externalFile.parentFile?.mkdirs()
+                    internalFile.copyTo(externalFile, overwrite = true)
+                    meta[metaKey] = getFileHash(externalFile)
+                    return false
+                }
             }
+        }
+
+        return false
+    }
+
+    private fun getFileHash(file: File): String {
+        if (!file.exists() || !file.isFile || file.length() == 0L) return ""
+        return try {
+            val digest = MessageDigest.getInstance("SHA-256")
+            file.inputStream().use { input ->
+                val buffer = ByteArray(8192)
+                var bytesRead: Int
+                while (input.read(buffer).also { bytesRead = it } != -1) {
+                    digest.update(buffer, 0, bytesRead)
+                }
+            }
+            digest.digest().joinToString("") { "%02x".format(it) }
+        } catch (e: Exception) {
+            ""
         }
     }
 
@@ -192,15 +312,15 @@ object NotesHomeConfigManager {
         }
     }
 
-    private fun loadSyncMetadata(file: File): MutableMap<String, Long> {
-        val map = mutableMapOf<String, Long>()
+    private fun loadSyncMetadata(file: File): MutableMap<String, String> {
+        val map = mutableMapOf<String, String>()
         if (file.exists()) {
             try {
                 val json = JSONObject(file.readText(Charsets.UTF_8))
                 val keys = json.keys()
                 while (keys.hasNext()) {
                     val k = keys.next()
-                    map[k] = json.optLong(k, 0L)
+                    map[k] = json.optString(k, "")
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to read sync metadata", e)
@@ -209,7 +329,7 @@ object NotesHomeConfigManager {
         return map
     }
 
-    private fun saveSyncMetadata(file: File, meta: Map<String, Long>) {
+    private fun saveSyncMetadata(file: File, meta: Map<String, String>) {
         try {
             val json = JSONObject()
             for ((k, v) in meta) {

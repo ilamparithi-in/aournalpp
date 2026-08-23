@@ -24,6 +24,7 @@ class CanvasSessionManager(
     }
 
     private var isSessionRunning = false
+    private var isPreferencesSession = false
     private var cmdEntryPoint: CmdEntryPoint? = null
 
     fun startSession(
@@ -33,6 +34,7 @@ class CanvasSessionManager(
     ) {
         if (isSessionRunning) return
         isSessionRunning = true
+        isPreferencesSession = openPreferencesOnLaunch
 
         scope.launch(Dispatchers.IO) {
             try {
@@ -150,22 +152,29 @@ class CanvasSessionManager(
                 return@launch
             }
 
+            fun isPreferencesWindowOpen(): Boolean {
+                val (code, out) = supervisor.runBinary(
+                    listOf(xdotoolBin.absolutePath, "search", "--onlyvisible", "--class", "xournalpp")
+                )
+                if (code == 0 && out.isNotBlank()) {
+                    val windowIds = out.trim().lines().map { it.trim() }.filter { it.isNotEmpty() }
+                    for (wid in windowIds) {
+                        val (nameCode, nameOut) = supervisor.runBinary(
+                            listOf(xdotoolBin.absolutePath, "getwindowname", wid)
+                        )
+                        if (nameCode == 0 && nameOut.contains("Preferences", ignoreCase = true)) {
+                            return true
+                        }
+                    }
+                }
+                return false
+            }
+
             // Phase 1: Wait for Xournal++ and inject Preferences shortcut
             delay(800)
             var attempts = 0
             val maxAttempts = 20
             var preferencesOpened = false
-
-            fun isPreferencesWindowOpen(): Boolean {
-                val names = listOf("Preferences", "Settings", "Xournal++ Preferences")
-                for (name in names) {
-                    val (code, out) = supervisor.runBinary(listOf(xdotoolBin.absolutePath, "search", "--name", name))
-                    if (code == 0 && out.trim().isNotEmpty()) {
-                        return true
-                    }
-                }
-                return false
-            }
 
             while (isSessionRunning && attempts < maxAttempts) {
                 attempts++
@@ -182,15 +191,11 @@ class CanvasSessionManager(
                     )
 
                     if (winCode == 0 && winOut.trim().isNotEmpty()) {
-                        Log.i(TAG, "Xournal++ window visible (attempt $attempts). Injecting Ctrl+Comma shortcut...")
                         val winId = winOut.lines().firstOrNull { it.isNotBlank() }?.trim()
                         if (winId != null) {
+                            Log.i(TAG, "Xournal++ window visible (attempt $attempts). Injecting Ctrl+Comma shortcut...")
                             supervisor.runBinary(
                                 listOf(xdotoolBin.absolutePath, "windowactivate", "--sync", winId, "key", "--clearmodifiers", "ctrl+comma")
-                            )
-                        } else {
-                            supervisor.runBinary(
-                                listOf(xdotoolBin.absolutePath, "key", "--clearmodifiers", "ctrl+comma")
                             )
                         }
                     }
@@ -209,19 +214,24 @@ class CanvasSessionManager(
             if (preferencesOpened) {
                 Log.i(TAG, "Monitoring Preferences dialog for OK / Cancel dismissal...")
                 while (isSessionRunning) {
-                    delay(500)
+                    delay(350)
                     if (!isPreferencesWindowOpen()) {
                         Log.i(TAG, "Preferences dialog dismissed by user.")
                         val currentTitle = supervisor.documentTitle.value
-                        val isDefaultUntitled = currentTitle == null ||
-                                currentTitle.isBlank() ||
-                                currentTitle.equals("New Note", ignoreCase = true) ||
-                                currentTitle.equals("Unsaved Document", ignoreCase = true) ||
-                                currentTitle.equals("Untitled", ignoreCase = true)
+                        val cleanTitle = currentTitle?.removePrefix("*")?.removeSuffix("*")?.trim()
+                        val isDefaultUntitled = cleanTitle == null ||
+                                cleanTitle.isBlank() ||
+                                cleanTitle.equals("New Note", ignoreCase = true) ||
+                                cleanTitle.equals("Unsaved Document", ignoreCase = true) ||
+                                cleanTitle.equals("Untitled", ignoreCase = true)
 
                         if (isDefaultUntitled) {
                             Log.i(TAG, "No active note in progress; auto-closing canvas session.")
                             requestCloseSession()
+                            delay(500)
+                            if (isSessionRunning) {
+                                supervisor.triggerXournalExit()
+                            }
                         } else {
                             Log.i(TAG, "Active note '$currentTitle' in progress; keeping canvas session open.")
                         }
@@ -292,6 +302,57 @@ class CanvasSessionManager(
         supervisor.setOnXournalExitListener(listener)
     }
 
+    suspend fun isModalOrDialogOpen(): Boolean = withContext(Dispatchers.IO) {
+        val xdotoolBin = env.resolveExecutable("xdotool")
+        if (!xdotoolBin.exists() || !xdotoolBin.canExecute()) return@withContext false
+
+        val searchQueries = listOf(
+            listOf("search", "--onlyvisible", "--class", "xournalpp"),
+            listOf("search", "--onlyvisible", "--class", "xournal")
+        )
+        for (query in searchQueries) {
+            val cmd = mutableListOf(xdotoolBin.absolutePath).apply { addAll(query) }
+            val (code, out) = supervisor.runBinary(cmd)
+            if (code == 0 && out.isNotBlank()) {
+                val ids = out.trim().lines().map { it.trim() }.filter { it.isNotEmpty() }
+                if (ids.size > 1) {
+                    return@withContext true
+                }
+            }
+        }
+        false
+    }
+
+    fun dismissTopDialogOrModal() {
+        if (!isSessionRunning) return
+        scope.launch(Dispatchers.IO) {
+            val xdotoolBin = env.resolveExecutable("xdotool")
+            if (!xdotoolBin.exists() || !xdotoolBin.canExecute()) return@launch
+
+            val (code, out) = supervisor.runBinary(
+                listOf(xdotoolBin.absolutePath, "search", "--onlyvisible", "--class", "xournalpp")
+            )
+            val windowIds = if (code == 0 && out.isNotBlank()) {
+                out.trim().lines().map { it.trim() }.filter { it.isNotEmpty() }
+            } else {
+                emptyList()
+            }
+
+            if (windowIds.size > 1) {
+                val topWid = windowIds.last()
+                Log.i(TAG, "Dismissing top dialog window $topWid via Escape...")
+                supervisor.runBinary(listOf(xdotoolBin.absolutePath, "windowactivate", "--sync", topWid))
+                supervisor.runBinary(
+                    listOf(xdotoolBin.absolutePath, "key", "--window", topWid, "--clearmodifiers", "Escape")
+                )
+            } else {
+                supervisor.runBinary(
+                    listOf(xdotoolBin.absolutePath, "key", "--clearmodifiers", "Escape")
+                )
+            }
+        }
+    }
+
     fun requestCloseSession() {
         if (!isSessionRunning) return
         scope.launch(Dispatchers.IO) {
@@ -307,8 +368,7 @@ class CanvasSessionManager(
                 listOf("search", "--onlyvisible", "--class", "xournalpp"),
                 listOf("search", "--onlyvisible", "--class", "xournal"),
                 listOf("search", "--onlyvisible", "--name", "Xournal"),
-                listOf("search", "--onlyvisible", "--classname", "xournalpp"),
-                listOf("search", "--onlyvisible", "")
+                listOf("search", "--onlyvisible", "--classname", "xournalpp")
             )
 
             val windowIds = mutableListOf<String>()
@@ -326,30 +386,16 @@ class CanvasSessionManager(
             }
 
             if (windowIds.isNotEmpty()) {
-                // Focus and close the topmost / active X11 window
-                val topWid = windowIds.last()
-                Log.i(TAG, "Found visible windows $windowIds. Sending WM_DELETE_WINDOW & Ctrl+Q to top window $topWid...")
-
-                // 1. Activate window so GTK receives focus
-                supervisor.runBinary(listOf(xdotoolBin.absolutePath, "windowactivate", "--sync", topWid))
-
-                // 2. Send WM_DELETE_WINDOW (native X11 window close message)
-                supervisor.runBinary(listOf(xdotoolBin.absolutePath, "windowclose", topWid))
-
-                // 3. Inject Ctrl+Q directly to the window structure
+                val mainWid = windowIds.first()
+                Log.i(TAG, "Sending Ctrl+Q to main window $mainWid...")
+                supervisor.runBinary(listOf(xdotoolBin.absolutePath, "windowactivate", "--sync", mainWid))
                 supervisor.runBinary(
-                    listOf(xdotoolBin.absolutePath, "key", "--window", topWid, "--clearmodifiers", "ctrl+q")
-                )
-                supervisor.runBinary(
-                    listOf(xdotoolBin.absolutePath, "key", "--window", topWid, "--clearmodifiers", "Control_L+q")
+                    listOf(xdotoolBin.absolutePath, "key", "--window", mainWid, "--clearmodifiers", "ctrl+q")
                 )
             } else {
                 Log.w(TAG, "No visible X11 window found via search, falling back to global keystrokes...")
                 supervisor.runBinary(
                     listOf(xdotoolBin.absolutePath, "key", "--clearmodifiers", "ctrl+q")
-                )
-                supervisor.runBinary(
-                    listOf(xdotoolBin.absolutePath, "key", "--clearmodifiers", "Control_L+q")
                 )
             }
         }
@@ -368,6 +414,13 @@ class CanvasSessionManager(
         supervisor.terminateAll()
         File(env.tmpDir, ".X0-lock").delete()
         File(env.tmpDir, ".X11-unix/X0").delete()
+        if (isPreferencesSession) {
+            env.clearQuarantinedEmergencySave()
+            val emergencyFile = File(env.xournalConfigDir, "emergencysave.xopp")
+            if (emergencyFile.exists()) {
+                emergencyFile.delete()
+            }
+        }
         isSessionRunning = false
         NotesHomeConfigManager.sync(context, env)
     }

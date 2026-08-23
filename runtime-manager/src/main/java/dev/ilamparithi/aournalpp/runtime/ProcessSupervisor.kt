@@ -186,10 +186,15 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
         "Choose Folder"
     )
 
+    fun triggerXournalExit() {
+        onXournalExitListener?.invoke()
+    }
+
     private fun sanitizeWindowTitle(raw: String): String {
         val cleaned = raw.replace(Regex("\\s*-\\s*Xournal\\+\\+.*$"), "")
             .replace(Regex("\\s*\\[autosaved\\]"), "")
             .trim()
+            .removePrefix("*")
             .removeSuffix("*")
             .trim()
 
