@@ -1,6 +1,8 @@
 package dev.ilamparithi.aournalpp.ui.theme
 
 import android.app.Activity
+import android.content.Context
+import android.content.SharedPreferences
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
@@ -9,7 +11,12 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -74,8 +81,35 @@ private val DarkColors = darkColorScheme(
 )
 
 @Composable
+fun rememberAppDarkTheme(context: Context = LocalContext.current): Boolean {
+    val systemInDark = isSystemInDarkTheme()
+    val prefs = remember(context) { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
+    var currentSetting by remember {
+        mutableStateOf(prefs.getString("pref_app_theme", "system") ?: "system")
+    }
+
+    DisposableEffect(prefs) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { sp, key ->
+            if (key == "pref_app_theme") {
+                currentSetting = sp.getString("pref_app_theme", "system") ?: "system"
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            prefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+
+    return when (currentSetting) {
+        "light" -> false
+        "dark" -> true
+        else -> systemInDark
+    }
+}
+
+@Composable
 fun AournalTheme(
-    useDarkTheme: Boolean = isSystemInDarkTheme(),
+    useDarkTheme: Boolean = rememberAppDarkTheme(),
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
@@ -89,7 +123,7 @@ fun AournalTheme(
         else -> LightColors
     }
     val view = LocalView.current
-    if (!view.isInEditMode) {
+    if (!view.isInEditMode && view.context is Activity) {
         SideEffect {
             val window = (view.context as Activity).window
             window.statusBarColor = colorScheme.background.toArgb()

@@ -16,6 +16,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -45,10 +46,15 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -58,6 +64,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -126,7 +133,10 @@ import dev.ilamparithi.aournalpp.ui.preview.floatingPreviewLongPress
 import dev.ilamparithi.aournalpp.utils.ThumbnailManager
 import kotlinx.coroutines.launch
 import java.io.File
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -144,7 +154,6 @@ fun HomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     val prefs = remember { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
-    val lastOpenedPath = remember(prefs) { prefs.getString("pref_last_opened_note_path", null) }
     var viewMode by remember { mutableStateOf(prefs.getString("pref_home_view_mode", "EXPRESSIVE") ?: "EXPRESSIVE") }
 
     var recentNotes by remember { mutableStateOf<List<NoteDocument>>(emptyList()) }
@@ -155,10 +164,20 @@ fun HomeScreen(
     var refreshSeed by remember { mutableLongStateOf(0L) }
     val pullRefreshState = rememberPullToRefreshState()
 
+    // Emergency recovery state
+    var quarantinedEmergencySave by remember { mutableStateOf<File?>(null) }
+    var showEmergencyDialog by remember { mutableStateOf(false) }
+    var showEmergencySaveNameDialog by remember { mutableStateOf(false) }
+    var emergencySaveNameInput by remember { mutableStateOf("") }
+
+    // Autosave on-open resolution state
+    var pendingAutosaveNote by remember { mutableStateOf<NoteDocument?>(null) }
+
     // Dialog states
     var showCreateFolderDialog by remember { mutableStateOf(false) }
     var newFolderName by remember { mutableStateOf("") }
     var selectedFolderColor by remember { mutableStateOf("#4CAF50") }
+    var selectedFolderEmoji by remember { mutableStateOf<String?>("📁") }
 
     // Speed Dial FAB state
     var isFabExpanded by remember { mutableStateOf(false) }
@@ -169,16 +188,16 @@ fun HomeScreen(
     fun loadHomeData() {
         val homeNotes = repository.getHomeNotes(16)
         recentNotes = homeNotes
-        totalNotesCount = repository.getAllRecentNotes(500).size
+        val allRecents = repository.getAllRecentNotes(500)
+        totalNotesCount = allRecents.size
         totalFoldersCount = repository.scanDirectory(repository.getRootNotesDirectory()).first.size
 
-        continueNote = if (lastOpenedPath != null) {
-            val f = File(lastOpenedPath)
-            if (f.exists() && !f.absolutePath.contains("/.Trash/")) {
-                repository.getNoteDocumentForFile(f)
-            } else homeNotes.firstOrNull()
-        } else {
-            homeNotes.firstOrNull()
+        continueNote = allRecents.firstOrNull()
+
+        val emergencyFile = env.checkAndQuarantineEmergencySave()
+        if (emergencyFile != null && emergencyFile.exists() && emergencyFile.length() > 0) {
+            quarantinedEmergencySave = emergencyFile
+            showEmergencyDialog = true
         }
     }
 
@@ -448,7 +467,13 @@ fun HomeScreen(
                         EnlargedContinueHeroSection(
                             note = note,
                             pdfExportManager = pdfExportManager,
-                            onResume = { openNote(note.file) }
+                            onResume = {
+                                if (note.autosaveInfo != null) {
+                                    pendingAutosaveNote = note
+                                } else {
+                                    openNote(note.file)
+                                }
+                            }
                         )
                     }
 
@@ -559,7 +584,13 @@ fun HomeScreen(
                             OrganicCollageView(
                                 notes = recentNotes,
                                 pdfExportManager = pdfExportManager,
-                                onNoteClick = { openNote(it.file) },
+                                onNoteClick = { note ->
+                                    if (note.autosaveInfo != null) {
+                                        pendingAutosaveNote = note
+                                    } else {
+                                        openNote(note.file)
+                                    }
+                                },
                                 onNewNoteClick = { startNewNote() },
                                 refreshSeed = refreshSeed
                             )
@@ -567,7 +598,13 @@ fun HomeScreen(
                             NormalHomeGalleryView(
                                 notes = recentNotes,
                                 pdfExportManager = pdfExportManager,
-                                onNoteClick = { openNote(it.file) }
+                                onNoteClick = { note ->
+                                    if (note.autosaveInfo != null) {
+                                        pendingAutosaveNote = note
+                                    } else {
+                                        openNote(note.file)
+                                    }
+                                }
                             )
                         }
                     }
@@ -693,6 +730,8 @@ fun HomeScreen(
     // Create Folder Dialog
     if (showCreateFolderDialog) {
         val folderColors = listOf("#4CAF50", "#3F51B5", "#FF5722", "#FFC107", "#9C27B0", "#00BCD4")
+        val folderEmojis = listOf("📁", "📝", "📚", "🎨", "💡", "🔬", "📐", "💼", "🏠", "⭐", "🚀", "🧪", "📓", "🏷️", "🎯", "🌿")
+
         Dialog(onDismissRequest = { showCreateFolderDialog = false }) {
             Surface(
                 shape = RoundedCornerShape(24.dp),
@@ -721,28 +760,19 @@ fun HomeScreen(
                     )
 
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Folder Icon / Emoji", style = MaterialTheme.typography.labelMedium)
+                        FolderEmojiPickerRow(
+                            selectedEmoji = selectedFolderEmoji,
+                            onEmojiSelected = { selectedFolderEmoji = it }
+                        )
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Folder Color Accent", style = MaterialTheme.typography.labelMedium)
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            folderColors.forEach { colorHex ->
-                                val color = Color(android.graphics.Color.parseColor(colorHex))
-                                val isSelected = selectedFolderColor == colorHex
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(color)
-                                        .clickable { selectedFolderColor = colorHex }
-                                        .border(
-                                            width = if (isSelected) 3.dp else 0.dp,
-                                            color = if (isSelected) MaterialTheme.colorScheme.onSurface else Color.Transparent,
-                                            shape = CircleShape
-                                        )
-                                )
-                            }
-                        }
+                        FolderColorPickerRow(
+                            selectedColorHex = selectedFolderColor,
+                            onColorSelected = { selectedFolderColor = it }
+                        )
                     }
 
                     Row(
@@ -762,7 +792,8 @@ fun HomeScreen(
                                         val res = repository.createFolder(
                                             parentDir = repository.getRootNotesDirectory(),
                                             name = newFolderName.trim(),
-                                            colorHex = selectedFolderColor
+                                            colorHex = selectedFolderColor,
+                                            iconEmoji = selectedFolderEmoji
                                         )
                                         if (res.isSuccess) {
                                             snackbarHostState.showSnackbar("Created folder \"${newFolderName.trim()}\"")
@@ -780,6 +811,123 @@ fun HomeScreen(
                     }
                 }
             }
+        }
+    }
+
+    // Emergency Recovery Launch Dialog
+    if (showEmergencyDialog && quarantinedEmergencySave != null) {
+        val file = quarantinedEmergencySave!!
+        val dateStr = SimpleDateFormat("MMM dd, yyyy · HH:mm", Locale.getDefault()).format(Date(file.lastModified()))
+
+        AlertDialog(
+            onDismissRequest = { showEmergencyDialog = false },
+            icon = { Icon(Icons.Default.Restore, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp)) },
+            title = { Text("Unsaved Session Recovered", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("Xournal++ closed unexpectedly during a previous session. An emergency recovery copy from $dateStr was saved.")
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showEmergencyDialog = false
+                    val staged = repository.openEmergencyRecoverySession(file)
+                    quarantinedEmergencySave = null
+                    loadHomeData()
+                    openNote(staged)
+                }) { Text("Open Now") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        showEmergencyDialog = false
+                        val defaultName = "Recovered_Note_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date(file.lastModified()))
+                        emergencySaveNameInput = defaultName
+                        showEmergencySaveNameDialog = true
+                    }) { Text("Save to Notes") }
+                    TextButton(onClick = {
+                        showEmergencyDialog = false
+                        repository.discardEmergencyRecovery()
+                        quarantinedEmergencySave = null
+                        loadHomeData()
+                    }) { Text("Discard", color = MaterialTheme.colorScheme.error) }
+                }
+            }
+        )
+    }
+
+    // Save Emergency Recovery Name Dialog
+    if (showEmergencySaveNameDialog && quarantinedEmergencySave != null) {
+        val file = quarantinedEmergencySave!!
+        AlertDialog(
+            onDismissRequest = { showEmergencySaveNameDialog = false },
+            icon = { Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp)) },
+            title = { Text("Save Recovered Note", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Enter a name for the recovered note. It will be saved into your Notes folder.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    OutlinedTextField(
+                        value = emergencySaveNameInput,
+                        onValueChange = { emergencySaveNameInput = it },
+                        label = { Text("Note Name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (emergencySaveNameInput.isNotBlank()) {
+                            showEmergencySaveNameDialog = false
+                            val savedFile = repository.saveEmergencyRecoveryToNotes(file, emergencySaveNameInput)
+                            quarantinedEmergencySave = null
+                            loadHomeData()
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Saved recovered note as \"${savedFile.name}\"")
+                            }
+                        }
+                    }
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEmergencySaveNameDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Autosave Resolution Dialog
+    pendingAutosaveNote?.let { note ->
+        val autoInfo = note.autosaveInfo
+        if (autoInfo != null) {
+            AutosaveResolutionDialog(
+                note = note,
+                autosaveInfo = autoInfo,
+                onDismiss = { pendingAutosaveNote = null },
+                onReplaceWithAutosave = {
+                    val target = repository.replaceWithAutosave(note)
+                    pendingAutosaveNote = null
+                    loadHomeData()
+                    openNote(target)
+                },
+                onKeepBoth = {
+                    val target = repository.keepBoth(note)
+                    pendingAutosaveNote = null
+                    loadHomeData()
+                    openNote(target)
+                },
+                onKeepExisting = {
+                    val target = repository.discardAutosave(note)
+                    pendingAutosaveNote = null
+                    loadHomeData()
+                    openNote(target)
+                }
+            )
         }
     }
 }
@@ -902,8 +1050,9 @@ private fun EnlargedContinueHeroSection(
             ),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+            containerColor = heroFolderAccent.copy(alpha = 0.14f)
         ),
+        border = BorderStroke(1.dp, heroFolderAccent.copy(alpha = 0.35f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Row(
@@ -939,25 +1088,16 @@ private fun EnlargedContinueHeroSection(
                             imageVector = if (note.fileType == NoteFileType.PDF) Icons.Default.PictureAsPdf else Icons.Default.Description,
                             contentDescription = null,
                             modifier = Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                            tint = heroFolderAccent.copy(alpha = 0.7f)
                         )
                     }
                 }
 
                 // Format pill badge
-                Surface(
-                    color = Color.Black.copy(alpha = 0.7f),
-                    shape = RoundedCornerShape(6.dp),
+                FileTypePill(
+                    fileType = note.fileType,
                     modifier = Modifier.align(Alignment.BottomStart).padding(8.dp)
-                ) {
-                    Text(
-                        text = ".${note.file.extension}",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
+                )
             }
 
             // Info & Expanded Resume Button
@@ -965,19 +1105,13 @@ private fun EnlargedContinueHeroSection(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                ) {
-                    Text(
-                        text = "CONTINUE WHERE YOU LEFT OFF",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.primary,
-                        letterSpacing = 1.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
+                Text(
+                    text = "CONTINUE WHERE YOU LEFT OFF",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = heroFolderAccent,
+                    letterSpacing = 1.2.sp
+                )
 
                 Text(
                     text = note.title,
@@ -987,27 +1121,64 @@ private fun EnlargedContinueHeroSection(
                     overflow = TextOverflow.Ellipsis
                 )
 
-                Text(
-                    text = "In ${note.folder.ifEmpty { "Notes Home" }} • Modified $relativeTime",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (note.folder.isBlank() || note.folder == "Notes Home") {
+                        Icon(
+                            imageVector = Icons.Default.Home,
+                            contentDescription = null,
+                            tint = heroFolderAccent,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Notes Home • Modified $relativeTime",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        if (!note.folderIconEmoji.isNullOrBlank()) {
+                            Text(
+                                text = note.folderIconEmoji,
+                                fontSize = 14.sp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Folder,
+                                contentDescription = null,
+                                tint = heroFolderAccent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "In ${note.folder} • Modified $relativeTime",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(6.dp))
+
+                val resumeBtnTextColor = remember(heroFolderAccent) {
+                    val lum = 0.299f * heroFolderAccent.red + 0.587f * heroFolderAccent.green + 0.114f * heroFolderAccent.blue
+                    if (lum > 0.55f) Color(0xFF191C1D) else Color.White
+                }
 
                 Button(
                     onClick = onResume,
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
+                        containerColor = heroFolderAccent,
+                        contentColor = resumeBtnTextColor
                     ),
                     contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
                     modifier = Modifier.height(42.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp), tint = resumeBtnTextColor)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Resume Editing", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        Text("Resume Editing", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = resumeBtnTextColor)
                     }
                 }
             }

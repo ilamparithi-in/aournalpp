@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.view.KeyEvent
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.BackHandler
@@ -60,6 +61,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import com.termux.x11.LorieView
 import com.termux.x11.input.TouchInputHandler
 import dev.ilamparithi.aournalpp.runtime.CanvasSessionManager
@@ -131,9 +133,11 @@ class CanvasActivity : ComponentActivity() {
             || intent.getBooleanExtra("EXTRA_OPEN_PREFS", false)
 
         val targetPath = intent.getStringExtra(EXTRA_NOTE_PATH)
+        val prefs = getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
         if (targetPath != null) {
-            val prefs = getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
             prefs.edit().putString("pref_last_opened_note_path", targetPath).apply()
+        } else {
+            prefs.edit().remove("pref_last_opened_note_path").apply()
         }
 
         val initialTitle = when {
@@ -367,11 +371,31 @@ class CanvasActivity : ComponentActivity() {
             backPressTimestamps.clear()
             showEmergencyForceCloseDialogState.value = true
         } else {
+            if (backPressTimestamps.size == 2) {
+                Toast.makeText(
+                    this,
+                    "Please close any open dialogs or prompts in Xournal++ to exit",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+
             // 1. Direct hardware-level X11 key injection through TouchInputHandler
             injectCtrlQDirect()
 
             // 2. Multi-strategy background X11 WM_DELETE_WINDOW / xdotool close
             sessionManager.requestCloseSession()
+
+            // 3. If Xournal++ is still running after a delay (e.g. blocked by open modal or save prompt), notify the user
+            lifecycleScope.launch {
+                kotlinx.coroutines.delay(1000)
+                if (!isFinishing && supervisor.isXournalRunning() && !showEmergencyForceCloseDialogState.value) {
+                    Toast.makeText(
+                        this@CanvasActivity,
+                        "Please close any open dialogs or prompts in Xournal++ to exit",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
         }
     }
 

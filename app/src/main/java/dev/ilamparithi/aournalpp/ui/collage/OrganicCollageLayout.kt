@@ -42,6 +42,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.Button
@@ -74,6 +75,7 @@ import androidx.compose.ui.unit.sp
 import dev.ilamparithi.aournalpp.model.NoteDocument
 import dev.ilamparithi.aournalpp.model.NoteFileType
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
+import dev.ilamparithi.aournalpp.ui.FileTypePill
 import dev.ilamparithi.aournalpp.ui.theme.ArchShape
 import dev.ilamparithi.aournalpp.ui.theme.CloverShape
 import dev.ilamparithi.aournalpp.ui.theme.ScallopShape
@@ -566,6 +568,15 @@ fun CollageCardView(
             }
         }
 
+        // Top-Left: Standardized File Type Pill in thumbnail
+        FileTypePill(
+            fileType = note.fileType,
+            fontSize = 9f,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(8.dp)
+        )
+
         // Top-Right: Pinned Pushpin Badge (if pinned)
         if (note.isPinned) {
             Surface(
@@ -622,44 +633,16 @@ fun FloatingDetailsPill(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            // Top Row: Title + Uniform Format Chip
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = note.title,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Black,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-
-                Spacer(modifier = Modifier.width(6.dp))
-
-                // Uniform format chip color per file type across all notes
-                val formatBgColor = when (note.fileType) {
-                    NoteFileType.PDF -> Color(0xFFE53935)       // Crimson Red for PDF
-                    NoteFileType.XOJ -> Color(0xFFF57C00)       // Vibrant Amber for XOJ
-                    else -> Color(0xFF3F51B5)                   // Indigo Blue for XOPP
-                }
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = formatBgColor.copy(alpha = 0.20f)
-                ) {
-                    Text(
-                        text = ".${note.file.extension.uppercase()}",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = formatBgColor,
-                        fontSize = 9.sp,
-                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                    )
-                }
-            }
+            // Title
+            Text(
+                text = note.title,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             // Bottom Row: Folder & Timestamp
             Row(
@@ -668,12 +651,20 @@ fun FloatingDetailsPill(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 if (note.folder.isNotBlank()) {
-                    Icon(
-                        imageVector = Icons.Default.Folder,
-                        contentDescription = null,
-                        tint = folderColor,
-                        modifier = Modifier.size(12.dp)
-                    )
+                    if (!note.folderIconEmoji.isNullOrBlank()) {
+                        Text(
+                            text = note.folderIconEmoji,
+                            fontSize = 11.sp
+                        )
+                    } else {
+                        val isRoot = note.folder == "Notes Home"
+                        Icon(
+                            imageVector = if (isRoot) Icons.Default.Home else Icons.Default.Folder,
+                            contentDescription = null,
+                            tint = folderColor,
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
                     Text(
                         text = note.folder,
                         style = MaterialTheme.typography.labelSmall,

@@ -7,15 +7,16 @@ import java.util.Locale
 import kotlin.math.abs
 
 enum class NoteFileType(val extension: String, val displayName: String) {
-    XOPP("xopp", "XOPP Note"),
-    XOJ("xoj", "Legacy XOJ"),
-    PDF("pdf", "PDF Document")
+    XOPP("xopp", ".xopp"),
+    XOJ("xoj", ".xoj"),
+    PDF("pdf", ".pdf")
 }
 
 data class FolderItem(
     val file: File,
     val name: String,
     val colorHex: String? = null,
+    val iconEmoji: String? = null,
     val itemCount: Int = 0,
     val lastModifiedMs: Long = 0L,
     val isHidden: Boolean = false
@@ -101,6 +102,7 @@ data class NoteDocument(
     val isPinned: Boolean = false,
     val folder: String = "",
     val folderColorHex: String? = null,
+    val folderIconEmoji: String? = null,
     val tags: List<String> = emptyList()
 ) {
     val fileType: NoteFileType

@@ -144,6 +144,154 @@ fun SettingsScreen(onBack: (() -> Unit)? = null) {
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
+            // Category: Appearance & Theme
+            var appThemePref by remember {
+                mutableStateOf(prefs.getString(LinuxEnvironment.PREF_KEY_APP_THEME, "system") ?: "system")
+            }
+            var gtkThemePref by remember {
+                mutableStateOf(prefs.getString(LinuxEnvironment.PREF_KEY_GTK_THEME, "system") ?: "system")
+            }
+
+            val appThemeOptions = listOf(
+                "system" to ("Match System" to "Follow device system light/dark theme settings."),
+                "light" to ("Light Mode" to "Clean, high-contrast light theme for Android menus."),
+                "dark" to ("Dark Mode" to "Sleek, battery-saving dark theme for Android menus.")
+            )
+
+            val gtkThemeOptions = listOf(
+                "system" to ("Match System" to "Follow device system light/dark theme settings."),
+                "light" to ("Light Theme (Adwaita)" to "Classic light toolbars, menus, and canvas dialogs."),
+                "dark" to ("Dark Theme (Adwaita Dark)" to "Dark toolbars, menus, and dialogs for reduced glare.")
+            )
+
+            Text(
+                text = "Appearance & Theme",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "Android App UI Theme",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Choose the visual theme for Document Hub, settings, and navigation interfaces.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        appThemeOptions.forEachIndexed { index, (value, meta) ->
+                            val (title, description) = meta
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .selectable(
+                                        selected = (appThemePref == value),
+                                        onClick = {
+                                            appThemePref = value
+                                            prefs.edit().putString(LinuxEnvironment.PREF_KEY_APP_THEME, value).apply()
+                                        },
+                                        role = Role.RadioButton
+                                    )
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = (appThemePref == value),
+                                    onClick = null
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = title,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = description,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            if (index < appThemeOptions.size - 1) {
+                                HorizontalDivider(modifier = Modifier.padding(start = 40.dp))
+                            }
+                        }
+                    }
+
+                    HorizontalDivider()
+
+                    Text(
+                        text = "Xournal++ (GTK Canvas) Theme",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Choose the GTK theme used for canvas toolbars, top menus, and dialogs.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        gtkThemeOptions.forEachIndexed { index, (value, meta) ->
+                            val (title, description) = meta
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .selectable(
+                                        selected = (gtkThemePref == value),
+                                        onClick = {
+                                            gtkThemePref = value
+                                            prefs.edit().putString(LinuxEnvironment.PREF_KEY_GTK_THEME, value).apply()
+                                            env.writeGtkSettings()
+                                        },
+                                        role = Role.RadioButton
+                                    )
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = (gtkThemePref == value),
+                                    onClick = null
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = title,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = description,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            if (index < gtkThemeOptions.size - 1) {
+                                HorizontalDivider(modifier = Modifier.padding(start = 40.dp))
+                            }
+                        }
+                    }
+                }
+            }
+
             // Category: UI & Display Scaling
             Text(
                 text = "Display & Canvas Scaling",

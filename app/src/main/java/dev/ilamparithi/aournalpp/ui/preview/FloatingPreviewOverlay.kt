@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.Icon
@@ -288,19 +289,27 @@ private fun FloatingPreviewOverlay(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        data.note.folder.takeIf { it.isNotBlank() }?.let { _ ->
-                            Surface(
-                                shape = CircleShape,
-                                color = data.folderColor.copy(alpha = 0.2f),
-                                modifier = Modifier.size(20.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Folder,
-                                        contentDescription = null,
-                                        tint = data.folderColor,
-                                        modifier = Modifier.size(12.dp)
-                                    )
+                        data.note.folder.takeIf { it.isNotBlank() }?.let { folderName ->
+                            if (!data.note.folderIconEmoji.isNullOrBlank()) {
+                                Text(
+                                    text = data.note.folderIconEmoji,
+                                    fontSize = 13.sp
+                                )
+                            } else {
+                                val isRoot = folderName == "Notes Home"
+                                Surface(
+                                    shape = CircleShape,
+                                    color = data.folderColor.copy(alpha = 0.2f),
+                                    modifier = Modifier.size(20.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = if (isRoot) Icons.Default.Home else Icons.Default.Folder,
+                                            contentDescription = null,
+                                            tint = data.folderColor,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                    }
                                 }
                             }
                         }

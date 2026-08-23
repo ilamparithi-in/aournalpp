@@ -26,6 +26,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -213,6 +214,10 @@ val PRESET_FOLDER_COLORS = listOf(
     "#F44336"  // Coral Red
 )
 
+val PRESET_FOLDER_EMOJIS = listOf(
+    "📁", "📝", "📚", "🎨", "💡", "🔬", "📐", "💼", "🏠", "⭐", "🚀", "🧪", "📓", "🏷️", "🎯", "🌿", "💻", "☕"
+)
+
 private fun hasStoragePermission(context: Context): Boolean {
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         Environment.isExternalStorageManager()
@@ -292,6 +297,7 @@ fun DocumentHubScreen(
     // Multi-Selection State & Drag Selection Tracker
     var isSelectionMode by remember { mutableStateOf(false) }
     var isDragSelecting by remember { mutableStateOf(false) }
+    var isInitialEntryDrag by remember { mutableStateOf(false) }
     var selectedNotePaths by remember { mutableStateOf<Set<String>>(emptySet()) }
     var lastSelectedNotePath by remember { mutableStateOf<String?>(null) }
     val gridState = rememberLazyGridState()
@@ -320,7 +326,12 @@ fun DocumentHubScreen(
     var showNewFolderDialog by remember { mutableStateOf(false) }
     var newFolderNameInput by remember { mutableStateOf("") }
     var selectedFolderColor by remember { mutableStateOf(PRESET_FOLDER_COLORS.first()) }
-    var folderToEditColor by remember { mutableStateOf<FolderItem?>(null) }
+    var selectedFolderEmoji by remember { mutableStateOf<String?>("📁") }
+    var folderToEdit by remember { mutableStateOf<FolderItem?>(null) }
+    var editFolderSelectedColor by remember { mutableStateOf(PRESET_FOLDER_COLORS.first()) }
+    var editFolderSelectedEmoji by remember { mutableStateOf<String?>("📁") }
+    var folderToRename by remember { mutableStateOf<FolderItem?>(null) }
+    var renameFolderNameInput by remember { mutableStateOf("") }
     var showMoveToFolderDialog by remember { mutableStateOf(false) }
 
     // Emergency recovery
@@ -793,30 +804,21 @@ fun DocumentHubScreen(
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
-                        Text("Folder Color Accent:", style = MaterialTheme.typography.labelMedium)
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(PRESET_FOLDER_COLORS) { colorHex ->
-                                val color = Color(android.graphics.Color.parseColor(colorHex))
-                                val isSelected = colorHex == selectedFolderColor
-                                Surface(
-                                    shape = CircleShape,
-                                    color = color,
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clickable { selectedFolderColor = colorHex }
-                                        .border(
-                                            width = if (isSelected) 3.dp else 0.dp,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            shape = CircleShape
-                                        )
-                                ) {
-                                    if (isSelected) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                                        }
-                                    }
-                                }
-                            }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("Folder Icon / Emoji:", style = MaterialTheme.typography.labelMedium)
+                            FolderEmojiPickerRow(
+                                selectedEmoji = selectedFolderEmoji,
+                                onEmojiSelected = { selectedFolderEmoji = it }
+                            )
+                        }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("Folder Color Accent:", style = MaterialTheme.typography.labelMedium)
+                            FolderColorPickerRow(
+                                selectedColorHex = selectedFolderColor,
+                                onColorSelected = { selectedFolderColor = it }
+                            )
                         }
                     }
                 },
@@ -824,7 +826,7 @@ fun DocumentHubScreen(
                     Button(onClick = {
                         if (newFolderNameInput.isNotBlank()) {
                             showNewFolderDialog = false
-                            val result = repository.createFolder(currentDirectory, newFolderNameInput, selectedFolderColor)
+                            val result = repository.createFolder(currentDirectory, newFolderNameInput, selectedFolderColor, selectedFolderEmoji)
                             scope.launch {
                                 if (result.isSuccess) {
                                     snackbarHostState.showSnackbar("Created folder \"${newFolderNameInput.trim()}\"")
@@ -844,43 +846,96 @@ fun DocumentHubScreen(
             )
         }
 
-        // 4. Edit Folder Color Dialog
-        folderToEditColor?.let { folder ->
+        // 4. Edit Folder Appearance Dialog (Icon & Color)
+        folderToEdit?.let { folder ->
             AlertDialog(
-                onDismissRequest = { folderToEditColor = null },
+                onDismissRequest = { folderToEdit = null },
                 icon = { Icon(Icons.Default.ColorLens, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                title = { Text("Folder Accent Color", fontWeight = FontWeight.Bold) },
+                title = { Text("Customize \"${folder.name}\"", fontWeight = FontWeight.Bold) },
                 text = {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(PRESET_FOLDER_COLORS) { colorHex ->
-                            val color = Color(android.graphics.Color.parseColor(colorHex))
-                            val isSelected = colorHex == folder.colorHex
-                            Surface(
-                                shape = CircleShape,
-                                color = color,
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clickable {
-                                        val target = folderToEditColor
-                                        folderToEditColor = null
-                                        target?.let {
-                                            repository.setFolderColor(it.file, colorHex)
-                                            loadContent()
-                                        }
-                                    }
-                            ) {
-                                if (isSelected) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                                    }
-                                }
-                            }
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("Folder Icon / Emoji:", style = MaterialTheme.typography.labelMedium)
+                            FolderEmojiPickerRow(
+                                selectedEmoji = editFolderSelectedEmoji,
+                                onEmojiSelected = { editFolderSelectedEmoji = it }
+                            )
+                        }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("Folder Color Accent:", style = MaterialTheme.typography.labelMedium)
+                            FolderColorPickerRow(
+                                selectedColorHex = editFolderSelectedColor,
+                                onColorSelected = { editFolderSelectedColor = it }
+                            )
                         }
                     }
                 },
-                confirmButton = {},
+                confirmButton = {
+                    Button(onClick = {
+                        val target = folderToEdit
+                        folderToEdit = null
+                        target?.let {
+                            repository.updateFolderMeta(it.file, editFolderSelectedColor, editFolderSelectedEmoji)
+                            loadContent()
+                        }
+                    }) {
+                        Text("Save")
+                    }
+                },
                 dismissButton = {
-                    TextButton(onClick = { folderToEditColor = null }) { Text("Cancel") }
+                    TextButton(onClick = { folderToEdit = null }) { Text("Cancel") }
+                }
+            )
+        }
+
+        // 4b. Rename Folder Dialog
+        folderToRename?.let { folder ->
+            AlertDialog(
+                onDismissRequest = { folderToRename = null },
+                icon = {
+                    Icon(
+                        imageVector = Icons.Default.DriveFileRenameOutline,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp)
+                    )
+                },
+                title = { Text("Rename Folder", fontWeight = FontWeight.Bold) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = renameFolderNameInput,
+                            onValueChange = { renameFolderNameInput = it },
+                            label = { Text("Folder Name") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        val target = folderToRename
+                        folderToRename = null
+                        if (target != null && renameFolderNameInput.isNotBlank()) {
+                            scope.launch {
+                                val result = repository.renameFolder(target.file, renameFolderNameInput)
+                                if (result.isSuccess) {
+                                    snackbarHostState.showSnackbar("Renamed folder to \"${renameFolderNameInput.trim()}\"")
+                                    loadContent()
+                                } else {
+                                    snackbarHostState.showSnackbar("Failed to rename: ${result.exceptionOrNull()?.message}")
+                                }
+                            }
+                        }
+                    }) {
+                        Text("Rename")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { folderToRename = null }) {
+                        Text("Cancel")
+                    }
                 }
             )
         }
@@ -1004,7 +1059,11 @@ fun DocumentHubScreen(
                                             }
                                     ) {
                                         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Default.Folder, contentDescription = null, tint = fColor, modifier = Modifier.size(20.dp))
+                                            if (!folder.iconEmoji.isNullOrBlank()) {
+                                                Text(folder.iconEmoji, fontSize = 18.sp)
+                                            } else {
+                                                Icon(Icons.Default.Folder, contentDescription = null, tint = fColor, modifier = Modifier.size(20.dp))
+                                            }
                                             Spacer(modifier = Modifier.width(10.dp))
                                             Text(folder.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                                             Text("${folder.itemCount} notes", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1138,6 +1197,53 @@ fun DocumentHubScreen(
             )
         }
 
+        // 8b. Save Emergency Recovery Name Dialog
+        if (showEmergencySaveNameDialog && quarantinedEmergencySave != null) {
+            val file = quarantinedEmergencySave!!
+            AlertDialog(
+                onDismissRequest = { showEmergencySaveNameDialog = false },
+                icon = { Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp)) },
+                title = { Text("Save Recovered Note", fontWeight = FontWeight.Bold) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "Enter a name for the recovered note. It will be saved into your Notes folder.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        OutlinedTextField(
+                            value = emergencySaveNameInput,
+                            onValueChange = { emergencySaveNameInput = it },
+                            label = { Text("Note Name") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (emergencySaveNameInput.isNotBlank()) {
+                                showEmergencySaveNameDialog = false
+                                val savedFile = repository.saveEmergencyRecoveryToNotes(file, emergencySaveNameInput)
+                                quarantinedEmergencySave = null
+                                loadContent()
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Saved recovered note as \"${savedFile.name}\"")
+                                }
+                            }
+                        }
+                    ) {
+                        Text("Save")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showEmergencySaveNameDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
         // 9. Autosave Resolution Dialog
         pendingAutosaveNote?.let { note ->
             val autoInfo = note.autosaveInfo
@@ -1226,6 +1332,17 @@ fun DocumentHubScreen(
                                 .padding(horizontal = 2.dp),
                             tint = MaterialTheme.colorScheme.outline
                         )
+                        val isRoot = currentDirectory.canonicalPath == repository.getRootNotesDirectory().canonicalPath
+                        val currentFolderMeta = remember(currentDirectory) {
+                            if (!isRoot) repository.getFolderMeta(currentDirectory) else null
+                        }
+                        if (currentFolderMeta?.second?.isNotBlank() == true) {
+                            Text(
+                                text = currentFolderMeta.second!!,
+                                fontSize = 13.sp
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                        }
                         Text(
                             text = currentDirectory.name,
                             style = MaterialTheme.typography.labelMedium,
@@ -1285,17 +1402,17 @@ fun DocumentHubScreen(
                             isSelectionMode = { isSelectionMode },
                             setIsSelectionMode = { isSelectionMode = it },
                             setIsDragSelecting = { isDragSelecting = it },
+                            setIsInitialEntryDrag = { isInitialEntryDrag = it },
                             hapticFeedback = hapticFeedback,
                             autoScrollThreshold = with(LocalDensity.current) { 40.dp.toPx() },
                             setAutoScrollSpeed = { autoScrollSpeed = it }
                         )
                 ) {
                     // Dynamic Multi-Browse Recents Carousel
-                    // Animated with Material 3 Expressive motion physics (stays visible during active drag-select, smoothly collapses only after finger release)
                     if (isRoot && !isViewingTrash && searchQuery.isBlank() && recentNotes.isNotEmpty()) {
                         item(span = { GridItemSpan(maxLineSpan) }, key = "recents_carousel_section") {
                             AnimatedVisibility(
-                                visible = !isSelectionMode || isDragSelecting,
+                                visible = !isSelectionMode || isInitialEntryDrag,
                                 enter = expandVertically(
                                     animationSpec = spring(
                                         dampingRatio = 0.82f,
@@ -1322,7 +1439,13 @@ fun DocumentHubScreen(
                                 DynamicRecentsCarousel(
                                     recentNotes = recentNotes,
                                     pdfExportManager = pdfExportManager,
-                                    onOpenNote = { openNoteInCanvas(it) },
+                                    onOpenNote = { note ->
+                                        if (note.autosaveInfo != null) {
+                                            pendingAutosaveNote = note
+                                        } else {
+                                            openNoteInCanvas(note.file)
+                                        }
+                                    },
                                     onTogglePin = { note ->
                                         repository.togglePinNote(note.file.absolutePath)
                                         loadContent()
@@ -1382,12 +1505,19 @@ fun DocumentHubScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Folder,
-                                        contentDescription = null,
-                                        tint = accentColor,
-                                        modifier = Modifier.size(32.dp)
-                                    )
+                                    if (!folder.iconEmoji.isNullOrBlank()) {
+                                        Text(
+                                            text = folder.iconEmoji,
+                                            fontSize = 28.sp
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.Folder,
+                                            contentDescription = null,
+                                            tint = accentColor,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                    }
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = folder.name,
@@ -1412,11 +1542,22 @@ fun DocumentHubScreen(
                                             onDismissRequest = { showFolderMenu = false }
                                         ) {
                                             androidx.compose.material3.DropdownMenuItem(
-                                                text = { Text("Change Color") },
+                                                text = { Text("Rename Folder") },
+                                                leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null) },
+                                                onClick = {
+                                                    showFolderMenu = false
+                                                    renameFolderNameInput = folder.name
+                                                    folderToRename = folder
+                                                }
+                                            )
+                                            androidx.compose.material3.DropdownMenuItem(
+                                                text = { Text("Customize Icon & Color") },
                                                 leadingIcon = { Icon(Icons.Default.ColorLens, contentDescription = null) },
                                                 onClick = {
                                                     showFolderMenu = false
-                                                    folderToEditColor = folder
+                                                    editFolderSelectedColor = folder.colorHex ?: PRESET_FOLDER_COLORS.first()
+                                                    editFolderSelectedEmoji = folder.iconEmoji ?: "📁"
+                                                    folderToEdit = folder
                                                 }
                                             )
                                             androidx.compose.material3.DropdownMenuItem(
@@ -1768,24 +1909,12 @@ fun ExpressiveNoteCard(
                     }
 
                     // Format Badge Overlay
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = when (note.fileType) {
-                            NoteFileType.PDF -> MaterialTheme.colorScheme.secondaryContainer
-                            NoteFileType.XOJ -> MaterialTheme.colorScheme.tertiaryContainer
-                            else -> MaterialTheme.colorScheme.primaryContainer
-                        },
+                    FileTypePill(
+                        fileType = note.fileType,
                         modifier = Modifier
                             .align(Alignment.TopStart)
                             .padding(8.dp)
-                    ) {
-                        Text(
-                            text = note.fileType.displayName,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                        )
-                    }
+                    )
 
                     // Pinned Badge Overlay (Top Right, when not selecting)
                     if (note.isPinned && !isSelectionMode) {
@@ -2190,6 +2319,7 @@ fun Modifier.notesGridDragSelect(
     isSelectionMode: () -> Boolean,
     setIsSelectionMode: (Boolean) -> Unit,
     setIsDragSelecting: (Boolean) -> Unit = {},
+    setIsInitialEntryDrag: (Boolean) -> Unit = {},
     hapticFeedback: HapticFeedback,
     autoScrollThreshold: Float,
     setAutoScrollSpeed: (Float) -> Unit
@@ -2241,10 +2371,14 @@ fun Modifier.notesGridDragSelect(
             }
 
             if (isLongPressed) {
+                val activeSelection = isSelectionMode()
+                val isFirstEntry = !activeSelection
+                if (isFirstEntry) {
+                    setIsInitialEntryDrag(true)
+                }
                 setIsDragSelecting(true)
                 val currentNotesList = notes()
                 val currentSelected = selectedPaths()
-                val activeSelection = isSelectionMode()
 
                 val wasSelected = currentSelected.contains(hitPath)
                 val initialPath = hitPath
@@ -2323,6 +2457,7 @@ fun Modifier.notesGridDragSelect(
                 } finally {
                     setAutoScrollSpeed(0f)
                     setIsDragSelecting(false)
+                    setIsInitialEntryDrag(false)
                 }
             }
         }
@@ -2339,7 +2474,7 @@ fun Modifier.notesGridDragSelect(
 fun DynamicRecentsCarousel(
     recentNotes: List<NoteDocument>,
     pdfExportManager: PdfExportManager,
-    onOpenNote: (File) -> Unit,
+    onOpenNote: (NoteDocument) -> Unit,
     onTogglePin: (NoteDocument) -> Unit,
     onSharePdf: (NoteDocument) -> Unit,
     onShareXopp: (NoteDocument) -> Unit,
@@ -2398,7 +2533,7 @@ fun DynamicRecentsCarousel(
                     .maskClip(MaterialTheme.shapes.extraLarge)
                     .fillMaxSize(),
                 pdfExportManager = pdfExportManager,
-                onOpen = { onOpenNote(note.file) },
+                onOpen = { onOpenNote(note) },
                 onTogglePin = { onTogglePin(note) },
                 onSharePdf = { onSharePdf(note) },
                 onShareXopp = { onShareXopp(note) },
@@ -2484,19 +2619,12 @@ private fun RecentsMultiBrowseCard(
                         }
 
                         // Format pill badge
-                        Surface(
-                            color = Color.Black.copy(alpha = 0.65f),
-                            shape = RoundedCornerShape(6.dp),
-                            modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
-                        ) {
-                            Text(
-                                text = ".${note.file.extension}",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
+                        FileTypePill(
+                            fileType = note.fileType,
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(8.dp)
+                        )
 
                         // Pinned Indicator Badge
                         if (note.isPinned) {
@@ -2613,13 +2741,30 @@ private fun RecentsMultiBrowseCard(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            Text(
-                                text = "${note.folder} • ${note.lastModifiedFormatted}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (!note.folderIconEmoji.isNullOrBlank()) {
+                                    Text(
+                                        text = note.folderIconEmoji,
+                                        fontSize = 11.sp
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                } else if (note.folder.isNotBlank() && note.folder != "Notes Home") {
+                                    Icon(
+                                        imageVector = Icons.Default.Folder,
+                                        contentDescription = null,
+                                        tint = multiFolderAccent,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                }
+                                Text(
+                                    text = "${note.folder} • ${note.lastModifiedFormatted}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
 
                         Spacer(modifier = Modifier.width(8.dp))

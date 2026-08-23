@@ -11,6 +11,8 @@ class LinuxEnvironment(private val context: Context) {
     companion object {
         private const val TAG = "LinuxEnvironment"
         const val PREF_KEY_NOTES_DIR = "pref_notes_dir"
+        const val PREF_KEY_APP_THEME = "pref_app_theme"
+        const val PREF_KEY_GTK_THEME = "pref_gtk_theme"
     }
 
     val rootDir: File = context.filesDir
@@ -170,6 +172,7 @@ class LinuxEnvironment(private val context: Context) {
 
         setupStorageSymlinks()
         writeGtkBookmarks()
+        writeGtkSettings()
         ensureXournalppSettings()
         checkAndQuarantineEmergencySave()
     }
@@ -192,7 +195,7 @@ class LinuxEnvironment(private val context: Context) {
             val emergencyFile = File(xournalConfigDir, "emergencysave.xopp")
             if (emergencyFile.exists() && emergencyFile.length() > 0) {
                 if (isEmergencySaveDuplicateOfSavedFile(emergencyFile)) {
-                    Log.i(TAG, "emergencysave.xopp matches an existing saved note; discarding duplicate.")
+                    Log.i(TAG, "emergencysave.xopp matches the cleanly saved active note; discarding duplicate.")
                     emergencyFile.delete()
                     clearQuarantinedEmergencySave()
                     return null
@@ -210,19 +213,19 @@ class LinuxEnvironment(private val context: Context) {
     }
 
     private fun isEmergencySaveDuplicateOfSavedFile(emergencyFile: File): Boolean {
-        val emergencyBytes = getDecompressedBytes(emergencyFile)
-        if (emergencyBytes.isEmpty()) return true
+        if (!emergencyFile.exists() || emergencyFile.length() == 0L) return true
 
-        val notesDir = getNotesDirectory()
-        val candidateNotes = notesDir.listFiles { f ->
-            f.isFile && f.extension.equals("xopp", ignoreCase = true) && !f.name.startsWith(".")
-        } ?: return false
+        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        val lastOpenedPath = prefs.getString("pref_last_opened_note_path", null)
 
-        for (note in candidateNotes) {
-            if (note.length() == 0L) continue
-            val noteBytes = getDecompressedBytes(note)
-            if (emergencyBytes.contentEquals(noteBytes)) {
-                return true
+        if (!lastOpenedPath.isNullOrBlank()) {
+            val lastNote = File(lastOpenedPath)
+            if (lastNote.exists() && lastNote.isFile && lastNote.length() > 0L) {
+                val emergencyBytes = getDecompressedBytes(emergencyFile)
+                val noteBytes = getDecompressedBytes(lastNote)
+                if (emergencyBytes.isNotEmpty() && emergencyBytes.contentEquals(noteBytes)) {
+                    return true
+                }
             }
         }
         return false
@@ -232,7 +235,11 @@ class LinuxEnvironment(private val context: Context) {
         return try {
             java.util.zip.GZIPInputStream(file.inputStream()).use { it.readBytes() }
         } catch (e: Exception) {
-            file.readBytes()
+            try {
+                file.readBytes()
+            } catch (e2: Exception) {
+                ByteArray(0)
+            }
         }
     }
 
@@ -249,10 +256,6 @@ class LinuxEnvironment(private val context: Context) {
         }
         val file = File(quarantineRecoveryDir, "quarantined_emergencysave.xopp")
         if (file.exists() && file.length() > 0) {
-            if (isEmergencySaveDuplicateOfSavedFile(file)) {
-                file.delete()
-                return null
-            }
             return file
         }
         return null
@@ -352,6 +355,41 @@ class LinuxEnvironment(private val context: Context) {
         }
     }
 
+    fun isGtkDarkMode(): Boolean {
+        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        return when (prefs.getString(PREF_KEY_GTK_THEME, "system")) {
+            "light" -> false
+            "dark" -> true
+            else -> {
+                val nightModeFlags = context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
+                nightModeFlags == android.content.res.Configuration.UI_MODE_NIGHT_YES
+            }
+        }
+    }
+
+    fun writeGtkSettings() {
+        try {
+            val gtk3ConfigDir = File(configDir, "gtk-3.0")
+            if (!gtk3ConfigDir.exists()) {
+                gtk3ConfigDir.mkdirs()
+            }
+
+            val settingsFile = File(gtk3ConfigDir, "settings.ini")
+            val isDark = isGtkDarkMode()
+            val content = buildString {
+                appendLine("[Settings]")
+                appendLine("gtk-theme-name = Adwaita")
+                appendLine("gtk-application-prefer-dark-theme = ${if (isDark) "1" else "0"}")
+                appendLine("gtk-icon-theme-name = Adwaita")
+            }
+
+            settingsFile.writeText(content)
+            Log.i(TAG, "Provisioned GTK settings.ini with isDark=$isDark at ${settingsFile.absolutePath}")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to write GTK settings.ini", e)
+        }
+    }
+
     fun ensureXournalppSettings() {
         try {
             val settingsFile = File(xournalConfigDir, "settings.xml")
@@ -438,6 +476,9 @@ class LinuxEnvironment(private val context: Context) {
             else -> Pair("1", "1.0")
         }
 
+        val isDark = isGtkDarkMode()
+        val gtkThemeEnv = if (isDark) "Adwaita:dark" else "Adwaita"
+
         return mapOf(
             "PREFIX" to usrDir.absolutePath,
             "HOME" to homeDir.absolutePath,
@@ -457,6 +498,7 @@ class LinuxEnvironment(private val context: Context) {
             "GDK_DPI_SCALE" to gdkDpiScale,
             "DISPLAY" to ":0",
             "LANG" to "en_US.UTF-8",
+            "GTK_THEME" to gtkThemeEnv,
             // CRITICAL: Disable desktop portal lookup to prevent D-Bus freeze
             "GTK_USE_PORTAL" to "0",
             "GIO_USE_VFS" to "local",

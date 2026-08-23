@@ -118,7 +118,7 @@ class DocumentRepository(private val context: Context) {
                 // If query is present and folder name doesn't match, check if any inner notes match
             }
 
-            val metaColor = readFolderColor(dir)
+            val (metaColor, metaEmoji) = readFolderMeta(dir)
             val itemCount = dir.listFiles()?.count { file ->
                 file.isFile && isOpenableFile(file) && !file.name.startsWith(".")
             } ?: 0
@@ -128,6 +128,7 @@ class DocumentRepository(private val context: Context) {
                     file = dir,
                     name = dir.name,
                     colorHex = metaColor,
+                    iconEmoji = metaEmoji,
                     itemCount = itemCount,
                     lastModifiedMs = dir.lastModified(),
                     isHidden = isHidden
@@ -171,7 +172,7 @@ class DocumentRepository(private val context: Context) {
             }
 
             val isRoot = targetDir.canonicalPath == getRootNotesDirectory().canonicalPath
-            val metaColor = if (!isRoot) readFolderColor(targetDir) else null
+            val (metaColor, metaEmoji) = if (!isRoot) readFolderMeta(targetDir) else Pair(null, null)
             val sizeKb = (file.length() + 1023) / 1024
             resultNotes.add(
                 NoteDocument(
@@ -186,7 +187,8 @@ class DocumentRepository(private val context: Context) {
                     isHidden = false,
                     isPinned = isNotePinned(file.absolutePath),
                     folder = if (isRoot) "Notes Home" else targetDir.name,
-                    folderColorHex = metaColor
+                    folderColorHex = metaColor,
+                    folderIconEmoji = metaEmoji
                 )
             )
         }
@@ -253,7 +255,7 @@ class DocumentRepository(private val context: Context) {
     }
 
     // Folder Management
-    fun createFolder(parentDir: File, name: String, colorHex: String? = null): Result<File> {
+    fun createFolder(parentDir: File, name: String, colorHex: String? = null, iconEmoji: String? = null): Result<File> {
         val cleanName = name.trim().replace(Regex("[/\\\\:*?\"<>|]"), "_")
         if (cleanName.isBlank()) return Result.failure(IllegalArgumentException("Folder name cannot be blank"))
 
@@ -264,33 +266,88 @@ class DocumentRepository(private val context: Context) {
             return Result.failure(IllegalStateException("Failed to create folder '$cleanName'"))
         }
 
-        colorHex?.let { writeFolderColor(newDir, it) }
+        if (colorHex != null || iconEmoji != null) {
+            writeFolderMeta(newDir, colorHex, iconEmoji)
+        }
         return Result.success(newDir)
     }
 
     fun setFolderColor(folderDir: File, colorHex: String): Result<Unit> {
-        return writeFolderColor(folderDir, colorHex)
+        val (_, currentEmoji) = readFolderMeta(folderDir)
+        return writeFolderMeta(folderDir, colorHex, currentEmoji)
     }
 
-    private fun readFolderColor(folderDir: File): String? {
-        val metaFile = File(folderDir, FOLDER_META_FILE)
-        if (!metaFile.exists()) return null
-        return try {
-            val json = JSONObject(metaFile.readText())
-            json.optString("color").takeIf { it.isNotBlank() }
-        } catch (e: Exception) {
-            null
+    fun setFolderEmoji(folderDir: File, emoji: String?): Result<Unit> {
+        val (currentColor, _) = readFolderMeta(folderDir)
+        return writeFolderMeta(folderDir, currentColor, emoji)
+    }
+
+    fun updateFolderMeta(folderDir: File, colorHex: String?, iconEmoji: String?): Result<Unit> {
+        return writeFolderMeta(folderDir, colorHex, iconEmoji)
+    }
+
+    suspend fun renameFolder(folderDir: File, newFolderName: String): Result<File> = withContext(Dispatchers.IO) {
+        runCatching {
+            val cleanName = newFolderName.trim().replace(Regex("[/\\\\:*?\"<>|]"), "_")
+            if (cleanName.isBlank()) error("Folder name cannot be blank")
+
+            if (folderDir.canonicalPath == getRootNotesDirectory().canonicalPath) {
+                error("Cannot rename root Notes directory")
+            }
+
+            val parentDir = folderDir.parentFile ?: error("Parent directory not found")
+            val targetDir = File(parentDir, cleanName)
+
+            if (targetDir.exists() && targetDir.canonicalPath != folderDir.canonicalPath) {
+                error("A folder named '$cleanName' already exists")
+            }
+
+            if (targetDir.canonicalPath == folderDir.canonicalPath) {
+                return@runCatching folderDir
+            }
+
+            if (!folderDir.renameTo(targetDir)) {
+                error("Failed to rename folder to '$cleanName'")
+            }
+
+            targetDir
         }
     }
 
-    private fun writeFolderColor(folderDir: File, colorHex: String): Result<Unit> = runCatching {
+    fun getFolderMeta(folderDir: File): Pair<String?, String?> {
+        return readFolderMeta(folderDir)
+    }
+
+    private fun readFolderMeta(folderDir: File): Pair<String?, String?> {
+        val metaFile = File(folderDir, FOLDER_META_FILE)
+        if (!metaFile.exists()) return Pair(null, null)
+        return try {
+            val json = JSONObject(metaFile.readText())
+            val color = json.optString("color").takeIf { it.isNotBlank() }
+            val emoji = json.optString("emoji").takeIf { it.isNotBlank() }
+            Pair(color, emoji)
+        } catch (e: Exception) {
+            Pair(null, null)
+        }
+    }
+
+    private fun writeFolderMeta(folderDir: File, colorHex: String?, iconEmoji: String?): Result<Unit> = runCatching {
         val metaFile = File(folderDir, FOLDER_META_FILE)
         val json = if (metaFile.exists()) {
             try { JSONObject(metaFile.readText()) } catch (e: Exception) { JSONObject() }
         } else {
             JSONObject()
         }
-        json.put("color", colorHex)
+        if (colorHex != null) {
+            json.put("color", colorHex)
+        } else {
+            json.remove("color")
+        }
+        if (iconEmoji != null && iconEmoji.isNotBlank()) {
+            json.put("emoji", iconEmoji.trim())
+        } else {
+            json.remove("emoji")
+        }
         metaFile.writeText(json.toString(2))
     }
 
@@ -299,13 +356,14 @@ class DocumentRepository(private val context: Context) {
         fun recurse(dir: File) {
             val subdirs = dir.listFiles { f -> f.isDirectory && f.name != TRASH_DIR_NAME && !f.name.startsWith(".") } ?: return
             for (sub in subdirs) {
-                val metaColor = readFolderColor(sub)
+                val (metaColor, metaEmoji) = readFolderMeta(sub)
                 val count = sub.listFiles { f -> f.isFile && isOpenableFile(f) && !f.name.startsWith(".") }?.size ?: 0
                 list.add(
                     FolderItem(
                         file = sub,
                         name = sub.name,
                         colorHex = metaColor,
+                        iconEmoji = metaEmoji,
                         itemCount = count,
                         lastModifiedMs = sub.lastModified()
                     )
@@ -694,13 +752,20 @@ class DocumentRepository(private val context: Context) {
         val notesDir = env.getNotesDirectory()
         if (!notesDir.exists()) notesDir.mkdirs()
 
-        val cleanName = if (userSpecifiedName.endsWith(".xopp", ignoreCase = true)) {
-            userSpecifiedName
+        val rawBase = if (userSpecifiedName.endsWith(".xopp", ignoreCase = true)) {
+            userSpecifiedName.substring(0, userSpecifiedName.length - 5)
         } else {
-            "$userSpecifiedName.xopp"
+            userSpecifiedName
+        }
+        val cleanBase = rawBase.trim().replace(Regex("[/\\\\:*?\"<>|]"), "_")
+        val effectiveName = if (cleanBase.isBlank()) {
+            val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+            "Recovered_Session_${sdf.format(Date(recoveryFile.lastModified()))}.xopp"
+        } else {
+            "$cleanBase.xopp"
         }
 
-        val target = File(notesDir, cleanName)
+        val target = File(notesDir, effectiveName)
         recoveryFile.copyTo(target, overwrite = true)
         recoveryFile.delete()
         env.clearQuarantinedEmergencySave()
@@ -729,7 +794,7 @@ class DocumentRepository(private val context: Context) {
         }
 
         val isRoot = parentDir.canonicalPath == getRootNotesDirectory().canonicalPath
-        val folderColor = if (!isRoot) readFolderColor(parentDir) else null
+        val (folderColor, folderEmoji) = if (!isRoot) readFolderMeta(parentDir) else Pair(null, null)
 
         return NoteDocument(
             file = file,
@@ -743,7 +808,8 @@ class DocumentRepository(private val context: Context) {
             isHidden = file.name.startsWith("."),
             isPinned = isNotePinned(file.absolutePath),
             folder = if (isRoot) "Notes Home" else parentDir.name,
-            folderColorHex = folderColor
+            folderColorHex = folderColor,
+            folderIconEmoji = folderEmoji
         )
     }
 
