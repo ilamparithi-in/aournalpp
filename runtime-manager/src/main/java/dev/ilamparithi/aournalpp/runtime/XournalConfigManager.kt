@@ -42,6 +42,12 @@ enum class ConfigFileType(
         displayName = "Color Names (colornames.ini)",
         mimeType = "text/plain",
         description = "Human-readable names mapped to custom palette colors"
+    ),
+    PRINT_SETTINGS_INI(
+        fileName = "print-settings.ini",
+        displayName = "Print & Export Setup (print-settings.ini)",
+        mimeType = "text/plain",
+        description = "Saved printer preferences, page setup, orientation, and PDF export defaults"
     )
 }
 
@@ -80,6 +86,8 @@ class XournalConfigManager(private val env: LinuxEnvironment) {
                     "# palette.gpl has not been created yet.\n# Custom color palettes imported or saved in Xournal++ will appear here."
                 ConfigFileType.COLORNAMES_INI ->
                     "# colornames.ini has not been created yet.\n# Custom color names will appear here."
+                ConfigFileType.PRINT_SETTINGS_INI ->
+                    "# print-settings.ini has not been created yet.\n# Saved print and PDF export options configured in Xournal++ will appear here."
             }
         } else {
             target.readText(Charsets.UTF_8)
@@ -154,7 +162,7 @@ class XournalConfigManager(private val env: LinuxEnvironment) {
         // Basic structural validation (schema/semantic values are not validated by Android layer)
         when (detectedType) {
             ConfigFileType.SETTINGS_XML -> validateXmlStructure(rawContent)
-            ConfigFileType.TOOLBAR_INI, ConfigFileType.COLORNAMES_INI -> validateIniStructure(rawContent)
+            ConfigFileType.TOOLBAR_INI, ConfigFileType.COLORNAMES_INI, ConfigFileType.PRINT_SETTINGS_INI -> validateIniStructure(rawContent)
             ConfigFileType.PALETTE_GPL -> validateGplStructure(rawContent)
         }
 
@@ -211,6 +219,8 @@ class XournalConfigManager(private val env: LinuxEnvironment) {
                 ConfigFileType.PALETTE_GPL
             path.endsWith("colornames.ini") ->
                 ConfigFileType.COLORNAMES_INI
+            path.endsWith("print-settings.ini") || content.contains("[Print Settings]") ->
+                ConfigFileType.PRINT_SETTINGS_INI
             path.endsWith(".xml") || content.trimStart().startsWith("<?xml") || content.contains("<settings") ->
                 ConfigFileType.SETTINGS_XML
             else -> null

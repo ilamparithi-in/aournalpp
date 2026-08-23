@@ -125,9 +125,12 @@ object NotesHomeConfigManager {
             internalXoppDir.mkdirs()
         }
 
-        val configFiles = listOf("settings.xml", "toolbar.ini", "palette.gpl", "colornames.ini", "settings.ini")
+        val baseConfigFiles = setOf("settings.xml", "toolbar.ini", "palette.gpl", "colornames.ini", "print-settings.ini", "settings.ini")
+        val internalFileNames = internalXoppDir.listFiles()?.filter { it.isFile }?.map { it.name } ?: emptyList()
+        val externalFileNames = extXoppDir.listFiles()?.filter { it.isFile }?.map { it.name } ?: emptyList()
+        val allConfigFiles = (baseConfigFiles + internalFileNames + externalFileNames).toSet()
 
-        for (fileName in configFiles) {
+        for (fileName in allConfigFiles) {
             val internalFile = if (fileName == "settings.ini") {
                 File(File(env.configDir, "gtk-3.0"), "settings.ini")
             } else {
@@ -144,7 +147,7 @@ object NotesHomeConfigManager {
                 internalFile.parentFile?.mkdirs()
                 externalFile.copyTo(internalFile, overwrite = true)
                 meta[metaKey] = externalFile.lastModified()
-            } else if (internalFile.exists()) {
+            } else if (internalFile.exists() && internalFile.length() > 0L) {
                 // Internal file exists -> Export copy to external
                 internalFile.copyTo(externalFile, overwrite = true)
                 meta[metaKey] = externalFile.lastModified()

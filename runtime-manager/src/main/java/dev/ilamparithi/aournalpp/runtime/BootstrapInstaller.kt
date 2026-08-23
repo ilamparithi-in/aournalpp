@@ -203,7 +203,6 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
                         loaderFiles.forEach { cmd.add(it.absolutePath) }
                         val pb = ProcessBuilder(cmd)
                             .redirectOutput(loadersCache)
-                            .redirectErrorStream(true)
                         pb.environment().putAll(env.getEnvMap())
                         val p = pb.start()
                         p.waitFor()

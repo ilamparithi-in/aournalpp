@@ -125,12 +125,12 @@ class LinuxEnvironment(private val context: Context) {
             }
         }
 
-        // Self-heal: Generate GDK Pixbuf loaders.cache if missing
+        // Self-heal: Generate GDK Pixbuf loaders.cache if missing or empty
         val gdkDir = File(libDir, "gdk-pixbuf-2.0/2.10.0")
         val loadersCache = File(gdkDir, "loaders.cache")
         val loadersDir = File(gdkDir, "loaders")
         val queryLoadersBin = File(binDir, "gdk-pixbuf-query-loaders")
-        if (!loadersCache.exists() && queryLoadersBin.exists() && loadersDir.exists()) {
+        if ((!loadersCache.exists() || loadersCache.length() == 0L) && queryLoadersBin.exists() && loadersDir.exists()) {
             try {
                 val loaderFiles = loadersDir.listFiles { _, name -> name.endsWith(".so") }
                 if (!loaderFiles.isNullOrEmpty()) {
@@ -138,7 +138,6 @@ class LinuxEnvironment(private val context: Context) {
                     loaderFiles.forEach { cmd.add(it.absolutePath) }
                     val pb = ProcessBuilder(cmd)
                         .redirectOutput(loadersCache)
-                        .redirectErrorStream(true)
                     pb.environment().putAll(getEnvMap())
                     val p = pb.start()
                     p.waitFor()
