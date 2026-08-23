@@ -1,0 +1,215 @@
+From 6c7b09c9af7dd6696e8e478c604dae15697163f9 Mon Sep 17 00:00:00 2001
+From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
+Date: Sun, 23 Aug 2026 08:07:38 +0530
+Subject: [PATCH 1/3] fix(native): address event threading, socket error check
+ and choreographer safety
+
+---
+ lorie/src/main/cpp/lorie/InitInput.c       |   7 +-
+ lorie/src/main/cpp/lorie/activity.cpp      |  10 +-
+ lorie/src/main/cpp/lorie/cmdentrypoint.cpp | 102 ++++++++++++---------
+ 3 files changed, 68 insertions(+), 51 deletions(-)
+
+diff --git a/lorie/src/main/cpp/lorie/InitInput.c b/lorie/src/main/cpp/lorie/InitInput.c
+index a344700..1ff6e52 100644
+--- a/lorie/src/main/cpp/lorie/InitInput.c
++++ b/lorie/src/main/cpp/lorie/InitInput.c
+@@ -284,11 +284,8 @@ InitInput(__unused int argc, __unused char *argv[]) {
+     AttachDevice(NULL, lorieTouch, inputInfo.pointer);
+     AttachDevice(NULL, lorieKeyboard, inputInfo.keyboard);
+ 
+-    // We should explicitly create stylus pen and eraser devices here for the case of X server reset.
+-    if (loriePen && lorieEraser) {
+-        loriePen = lorieEraser = NULL;
+-        lorieSetStylusEnabled(true);
+-    }
++    loriePen = lorieEraser = NULL;
++    lorieSetStylusEnabled(TRUE);
+ 
+     (void) mieqInit();
+ }
+diff --git a/lorie/src/main/cpp/lorie/activity.cpp b/lorie/src/main/cpp/lorie/activity.cpp
+index eb6057c..b94936c 100644
+--- a/lorie/src/main/cpp/lorie/activity.cpp
++++ b/lorie/src/main/cpp/lorie/activity.cpp
+@@ -143,7 +143,8 @@ static jlong nativeInit(JNIEnv *env, jobject thiz) {
+         MainActivity.self = FindClassOrDie(env,  "com/termux/x11/MainActivity");
+         MainActivity.getInstance = FindMethodOrDie(env, MainActivity.self, "getInstance", "()Lcom/termux/x11/MainActivity;", JNI_TRUE);
+         MainActivity.clientConnectedStateChanged = FindMethodOrDie(env, MainActivity.self, "clientConnectedStateChanged", "()V", JNI_FALSE);
+-        MainActivity.resetIme = FindMethodOrDie(env, env->GetObjectClass(thiz), "resetIme", "()V", JNI_FALSE);
++        MainActivity.resetIme = env->GetMethodID(env->GetObjectClass(thiz), "resetIme", "()V");
++        if (env->ExceptionCheck()) env->ExceptionClear();
+     }
+ 
+     return (jlong) (intptr_t) new (malloc(sizeof(LorieViewResources))) LorieViewResources(env, thiz);
+@@ -253,7 +254,7 @@ int LorieViewResources::xcallback(int fd, int events) {
+                     break;
+                 }
+                 case EVENT_WINDOW_FOCUS_CHANGED: {
+-                    env->CallVoidMethod(thiz, MainActivity.resetIme);
++                    if (MainActivity.resetIme && thiz) env->CallVoidMethod(thiz, MainActivity.resetIme);
+                 }
+             }
+         }
+@@ -444,7 +445,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, __unused void *reserved) {
+                 lastInputTimestampMs = nowMs();
+                 auto* r = (LorieViewResources*) ptr;
+                 if (r && r->connFd != -1) {
+-                    if (which_button > 0)
++                    if (which_button > 0 && MainActivity.resetIme && r->thiz)
+                         env->CallVoidMethod(r->thiz, MainActivity.resetIme);
+                     sendEvent(r, .mouse = { .t = EVENT_MOUSE, .x = x, .y = y, .detail = (uint8_t) which_button, .down = button_down, .relative = relative });
+                 }
+@@ -455,11 +456,10 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, __unused void *reserved) {
+                 if (action != -1)
+                     sendEvent(r, .touch = { .t = EVENT_TOUCH, .type = (uint16_t) action, .id = (uint16_t) id, .x = (uint16_t) x, .y = (uint16_t) y });
+             }},
+-            {"sendStylusEvent", "(JFFIIIIIZZ)V", (void *) +[](JNIEnv *env, __unused jobject thiz, jlong ptr, jfloat x, jfloat y, jint pressure, jint tilt_x, jint tilt_y, jint orientation, jint buttons, jboolean eraser, jboolean mouse) {
++            {"sendStylusEvent", "(JFFIIIIIZZ)V", (void *) +[](__unused JNIEnv *env, __unused jobject thiz, jlong ptr, jfloat x, jfloat y, jint pressure, jint tilt_x, jint tilt_y, jint orientation, jint buttons, jboolean eraser, jboolean mouse) {
+                 lastInputTimestampMs = nowMs();
+                 auto* r = (LorieViewResources*) ptr;
+                 if (r && r->connFd != -1) {
+-                    env->CallVoidMethod(r->thiz, MainActivity.resetIme);
+                     sendEvent(r, .stylus = { .t = EVENT_STYLUS, .x = x, .y = y, .pressure = (uint16_t) pressure, .tilt_x = (int8_t) tilt_x, .tilt_y = (int8_t) tilt_y, .orientation = (int16_t) orientation, .buttons = (uint8_t) buttons, .eraser = eraser, .mouse = mouse });
+                 }
+             }},
+diff --git a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
+index 48ac97a..d111f41 100644
+--- a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
++++ b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
+@@ -200,7 +200,9 @@ Java_com_termux_x11_CmdEntryPoint_start(JNIEnv *env, __unused jclass cls, jobjec
+ 
+     AChoreographer *choreographer = AChoreographer_getInstance();
+     // Trigger it first time
+-    AChoreographer_postFrameCallback(choreographer, (AChoreographer_frameCallback) lorieChoreographerFrameCallback, choreographer);
++    if (choreographer) {
++        AChoreographer_postFrameCallback(choreographer, (AChoreographer_frameCallback) lorieChoreographerFrameCallback, choreographer);
++    }
+ 
+     xorg_list_init(&registeredBuffers);
+     pthread_create(&t, nullptr, +[](__unused void* cookie) -> void* {
+@@ -244,6 +246,54 @@ static Bool handleTouchEvent(__unused ClientPtr pClient, void *closure) {
+     return TRUE;
+ }
+ 
++static Bool handleStylusEvent(__unused ClientPtr pClient, void *closure) {
++    auto *e = (lorieEvent*) closure;
++    if (!pScreenPtr) {
++        free(e);
++        return TRUE;
++    }
++    ValuatorMask mask;
++    valuator_mask_zero(&mask);
++    static int buttons_prev = 0;
++    uint32_t released, pressed, diff;
++    DeviceIntPtr device = e->stylus.mouse ? lorieMouse : (e->stylus.eraser ? lorieEraser : loriePen);
++    if (!device) {
++        free(e);
++        return TRUE;
++    }
++
++    double x = max(min((float) e->stylus.x, (float) pScreenPtr->width), 0.0f);
++    double y = max(min((float) e->stylus.y, (float) pScreenPtr->height), 0.0f);
++    valuator_mask_set_double(&mask, 0, x);
++    valuator_mask_set_double(&mask, 1, y);
++    if (device != lorieMouse) {
++        valuator_mask_set_double(&mask, 2, e->stylus.pressure);
++        valuator_mask_set_double(&mask, 3, e->stylus.tilt_x);
++        valuator_mask_set_double(&mask, 4, e->stylus.tilt_y);
++        valuator_mask_set_double(&mask, 5, e->stylus.orientation);
++    }
++    QueuePointerEvents(device, MotionNotify, 0, POINTER_ABSOLUTE | POINTER_DESKTOP | (device == lorieMouse ? POINTER_NORAW : 0), &mask);
++
++    diff = buttons_prev ^ e->stylus.buttons;
++    released = diff & ~e->stylus.buttons;
++    pressed = diff & e->stylus.buttons;
++
++    for (int i=0; i<3; i++) {
++        if (released & 0x1) {
++            QueuePointerEvents(device, ButtonRelease, i + 1, POINTER_RELATIVE, nullptr);
++        }
++        if (pressed & 0x1) {
++            QueuePointerEvents(device, ButtonPress, i + 1, POINTER_RELATIVE, nullptr);
++        }
++        released >>= 1;
++        pressed >>= 1;
++    }
++    buttons_prev = e->stylus.buttons;
++
++    free(e);
++    return TRUE;
++}
++
+ void handleLorieEvents(int fd, __unused int ready, __unused void *ignored) {
+     ValuatorMask mask;
+     lorieEvent e = {0};
+@@ -288,48 +338,18 @@ void handleLorieEvents(int fd, __unused int ready, __unused void *ignored) {
+                 break;
+             }
+             case EVENT_STYLUS: {
+-                static int buttons_prev = 0;
+-                uint32_t released, pressed, diff;
+-                DeviceIntPtr device = e.stylus.mouse ? lorieMouse : (e.stylus.eraser ? lorieEraser : loriePen);
+-                if (!device) {
+-                    __android_log_print(ANDROID_LOG_DEBUG, "LorieNative", "got stylus event but device is not requested\n");
+-                    break;
+-                }
+-                __android_log_print(ANDROID_LOG_DEBUG, "LorieNative", "got stylus event %f %f %d %d %d %d %s\n", e.stylus.x, e.stylus.y, e.stylus.pressure, e.stylus.tilt_x, e.stylus.tilt_y, e.stylus.orientation,
+-                                    device == lorieMouse ? "lorieMouse" : (device == loriePen ? "loriePen" : "lorieEraser"));
+-
+-                valuator_mask_set_double(&mask, 0, max(min(e.stylus.x, pScreenPtr->width), 0));
+-                valuator_mask_set_double(&mask, 1, max(min(e.stylus.y, pScreenPtr->height), 0));
+-                if (device != lorieMouse) {
+-                    valuator_mask_set_double(&mask, 2, e.stylus.pressure);
+-                    valuator_mask_set_double(&mask, 3, e.stylus.tilt_x);
+-                    valuator_mask_set_double(&mask, 4, e.stylus.tilt_y);
+-                    valuator_mask_set_double(&mask, 5, e.stylus.orientation);
+-                }
+-                QueuePointerEvents(device, MotionNotify, 0, POINTER_ABSOLUTE | POINTER_DESKTOP | (device == lorieMouse ? POINTER_NORAW : 0), &mask);
+-
+-                diff = buttons_prev ^ e.stylus.buttons;
+-                released = diff & ~e.stylus.buttons;
+-                pressed = diff & e.stylus.buttons;
+-
+-                for (int i=0; i<3; i++) {
+-                    if (released & 0x1) {
+-                        QueuePointerEvents(device, ButtonRelease, i + 1, POINTER_RELATIVE, nullptr);
+-                        __android_log_print(ANDROID_LOG_DEBUG, "LorieNative", "sending %d press", i+1);
+-                    }
+-                    if (pressed & 0x1) {
+-                        QueuePointerEvents(device, ButtonPress, i + 1, POINTER_RELATIVE, nullptr);
+-                        __android_log_print(ANDROID_LOG_DEBUG, "LorieNative", "sending %d release", i+1);
+-                    }
+-                    released >>= 1;
+-                    pressed >>= 1;
+-                }
+-                buttons_prev = e.stylus.buttons;
+-
++                auto *copy = (lorieEvent*) calloc(1, sizeof(lorieEvent));
++                memcpy(copy, &e, sizeof(e));
++                QueueWorkProc(handleStylusEvent, nullptr, copy);
++                lorieWakeServer();
+                 break;
+             }
+             case EVENT_STYLUS_ENABLE: {
+-                lorieSetStylusEnabled(e.stylusEnable.enable);
++                QueueWorkProc(+[](__unused ClientPtr pClient, void *closure) -> Bool {
++                    lorieSetStylusEnabled((Bool) (intptr_t) closure);
++                    return TRUE;
++                }, nullptr, (void*) (intptr_t) e.stylusEnable.enable);
++                lorieWakeServer();
+                 break;
+             }
+             case EVENT_MOUSE: {
+@@ -558,7 +578,7 @@ Java_com_termux_x11_CmdEntryPoint_listenForConnections(JNIEnv *env, jobject thiz
+     // Even in the case if it will fail for some reason everything will work fine
+     // But connection will be delayed a bit
+ 
+-    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
++    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+         log(ERROR, "Socket creation failed: %s", strerror(errno));
+         return;
+     }
+-- 
+2.55.0
+

@@ -1,0 +1,770 @@
+From 357f93f6ce7b1088c3b617a0f0a31347c039ccb0 Mon Sep 17 00:00:00 2001
+From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
+Date: Sun, 23 Aug 2026 08:07:47 +0530
+Subject: [PATCH 2/3] feat(input): add stylus event handling, Lenovo pen
+ mapper, and stylus state tracking
+
+---
+ .../termux/x11/input/InputEventSender.java    |   2 +-
+ .../x11/input/LenovoPenButtonMapper.java      | 241 ++++++++++++++++++
+ .../com/termux/x11/input/StylusState.java     |  51 ++++
+ .../termux/x11/input/TouchInputHandler.java   | 167 +++++++++---
+ .../helper/LenovoPenButtonListener.java       |  67 +++++
+ .../lppdebug/helper/PenButtonEvent.java       |  26 ++
+ 6 files changed, 511 insertions(+), 43 deletions(-)
+ create mode 100644 lorie/src/main/java/com/termux/x11/input/LenovoPenButtonMapper.java
+ create mode 100644 lorie/src/main/java/com/termux/x11/input/StylusState.java
+ create mode 100644 lorie/src/main/java/dev/ilamparithi/lppdebug/helper/LenovoPenButtonListener.java
+ create mode 100644 lorie/src/main/java/dev/ilamparithi/lppdebug/helper/PenButtonEvent.java
+
+diff --git a/lorie/src/main/java/com/termux/x11/input/InputEventSender.java b/lorie/src/main/java/com/termux/x11/input/InputEventSender.java
+index 00cf267..27b404d 100644
+--- a/lorie/src/main/java/com/termux/x11/input/InputEventSender.java
++++ b/lorie/src/main/java/com/termux/x11/input/InputEventSender.java
+@@ -237,7 +237,7 @@ public final class InputEventSender {
+         // For Enter getUnicodeChar() returns 10 (line feed), but we still
+         // want to send it as KeyEvent.
+         char unicode = keyCode != KEYCODE_ENTER ? (char) e.getUnicodeChar() : 0;
+-        int scancode = (preferScancodes || !no_modifiers) ? e.getScanCode(): 0;
++        int scancode = preferScancodes ? e.getScanCode() : 0;
+ 
+         if (!preferScancodes) {
+             if (pressed && unicode != 0 && no_modifiers) {
+diff --git a/lorie/src/main/java/com/termux/x11/input/LenovoPenButtonMapper.java b/lorie/src/main/java/com/termux/x11/input/LenovoPenButtonMapper.java
+new file mode 100644
+index 0000000..72c6de9
+--- /dev/null
++++ b/lorie/src/main/java/com/termux/x11/input/LenovoPenButtonMapper.java
+@@ -0,0 +1,241 @@
++package com.termux.x11.input;
++
++import android.content.Context;
++import android.os.Handler;
++import android.os.Looper;
++import android.view.KeyEvent;
++import android.view.MotionEvent;
++import android.widget.Toast;
++import android.util.Log;
++
++import com.termux.x11.Prefs;
++
++import java.util.EnumMap;
++import java.util.Locale;
++import java.util.Map;
++
++import dev.ilamparithi.lppdebug.helper.LenovoPenButtonListener;
++import dev.ilamparithi.lppdebug.helper.PenButtonEvent;
++
++/**
++ * Maps Lenovo pen barrel button keycodes (600-604) into stylus button state changes.
++ */
++public final class LenovoPenButtonMapper {
++    private final Context context;
++    private final TouchInputHandler inputHandler;
++    private final LenovoPenButtonListener listener;
++    private final Handler handler = new Handler(Looper.getMainLooper());
++    private final Map<PenButtonEvent, GestureConfig> configs = new EnumMap<>(PenButtonEvent.class);
++    private final Map<PenButtonEvent, Runnable> pendingReleases = new EnumMap<>(PenButtonEvent.class);
++    private int toggledMask = 0;
++    private int pressHoldMask = 0;
++    private int offOnLiftMask = 0;
++    private boolean tipDown = false;
++    private boolean showDetections;
++    private boolean showToggleDebug;
++
++    public LenovoPenButtonMapper(Context context, TouchInputHandler inputHandler) {
++        this.context = context.getApplicationContext();
++        this.inputHandler = inputHandler;
++        this.listener = new LenovoPenButtonListener(this::handlePenEvent, msg -> {});
++        this.inputHandler.addStylusStateListener(this::onStylusState);
++    }
++
++    public boolean onKeyEvent(KeyEvent event) {
++        return listener.onKeyEvent(event);
++    }
++
++    public void reloadPreferences(Prefs prefs) {
++        showDetections = prefs.lenovoPenShowDetections.get();
++        showToggleDebug = prefs.lenovoPenDebugToggleToasts.get();
++        // Clear toggle state and pending releases when preferences change so we don't carry stale bits.
++        toggledMask = 0;
++        pressHoldMask = 0;
++        offOnLiftMask = 0;
++        inputHandler.applyStylusToggleMask(0);
++        inputHandler.applyStylusHoldMask(0);
++        pendingReleases.values().forEach(handler::removeCallbacks);
++        pendingReleases.clear();
++        configs.put(PenButtonEvent.SINGLE_PRESS, buildConfig(
++                prefs.get().getString("lenovoPenSinglePressAction", "disabled"),
++                prefs.get().getBoolean("lenovoPenSinglePressToggle", false),
++            prefs.get().getBoolean("lenovoPenSinglePressToggleOffOnLift", false),
++                prefs.get().getString("lenovoPenSinglePressDurationMs", "150")));
++        configs.put(PenButtonEvent.DOUBLE_PRESS, buildConfig(
++                prefs.get().getString("lenovoPenDoublePressAction", "disabled"),
++                prefs.get().getBoolean("lenovoPenDoublePressToggle", false),
++            prefs.get().getBoolean("lenovoPenDoublePressToggleOffOnLift", false),
++                prefs.get().getString("lenovoPenDoublePressDurationMs", "150")));
++        configs.put(PenButtonEvent.TRIPLE_PRESS, buildConfig(
++                prefs.get().getString("lenovoPenTriplePressAction", "disabled"),
++                prefs.get().getBoolean("lenovoPenTriplePressToggle", false),
++            prefs.get().getBoolean("lenovoPenTriplePressToggleOffOnLift", false),
++                prefs.get().getString("lenovoPenTriplePressDurationMs", "150")));
++        configs.put(PenButtonEvent.LONG_PRESS, buildConfig(
++                prefs.get().getString("lenovoPenLongPressAction", "disabled"),
++                prefs.get().getBoolean("lenovoPenLongPressToggle", false),
++            prefs.get().getBoolean("lenovoPenLongPressToggleOffOnLift", false),
++                prefs.get().getString("lenovoPenLongPressDurationMs", "150")));
++        configs.put(PenButtonEvent.LONG_PRESS_AND_CLICK, buildConfig(
++                prefs.get().getString("lenovoPenLongPressClickAction", "disabled"),
++                prefs.get().getBoolean("lenovoPenLongPressClickToggle", false),
++            prefs.get().getBoolean("lenovoPenLongPressClickToggleOffOnLift", false),
++                prefs.get().getString("lenovoPenLongPressClickDurationMs", "150")));
++
++        validateConfigs();
++    }
++
++    private GestureConfig buildConfig(String action, boolean toggle, boolean toggleOffOnLift, String durationMs) {
++        GestureConfig cfg = new GestureConfig();
++        cfg.buttonMask = mapActionToButtonMask(action);
++        cfg.toggle = toggle;
++        cfg.toggleOffOnLift = toggleOffOnLift;
++        try {
++            cfg.durationMs = Long.parseLong(durationMs);
++        } catch (NumberFormatException e) {
++            cfg.durationMs = 150L;
++        }
++        cfg.durationMs = Math.max(10L, Math.min(8192L, cfg.durationMs));
++        return cfg;
++    }
++
++    private int mapActionToButtonMask(String action) {
++        if (action == null || "disabled".contentEquals(action))
++            return 0;
++        // Map UI actions to stylus button mask: secondary (right) -> BUTTON_SECONDARY, tertiary (middle) -> BUTTON_TERTIARY.
++        if ("2".contentEquals(action))
++            return MotionEvent.BUTTON_SECONDARY;
++        else if ("3".contentEquals(action))
++            return MotionEvent.BUTTON_TERTIARY;
++        return 0;
++    }
++
++    private void handlePenEvent(PenButtonEvent event) {
++        GestureConfig cfg = configs.get(event);
++        if (cfg == null)
++            return;
++
++        if (showDetections && !(cfg.toggle && showToggleDebug))
++            Toast.makeText(context, event.name(), Toast.LENGTH_SHORT).show();
++
++        if (cfg.buttonMask == 0)
++            return;
++
++        Runnable pending = pendingReleases.remove(event);
++        if (pending != null)
++            handler.removeCallbacks(pending);
++
++        // Latest gesture wins: cancel pending releases touching the same buttons.
++        cancelPendingForButtons(cfg.buttonMask);
++
++        if (cfg.toggle) {
++            applyToggle(cfg.buttonMask, event);
++        } else {
++            applyPress(cfg.buttonMask, cfg.durationMs, event);
++        }
++    }
++
++    private void cancelPendingForButtons(int buttonMask) {
++        for (Map.Entry<PenButtonEvent, GestureConfig> entry : configs.entrySet()) {
++            Runnable pending = pendingReleases.get(entry.getKey());
++            if (pending == null)
++                continue;
++            GestureConfig cfg = entry.getValue();
++            if (cfg != null && (cfg.buttonMask & buttonMask) != 0) {
++                handler.removeCallbacks(pending);
++                pendingReleases.remove(entry.getKey());
++            }
++        }
++    }
++
++    private void applyToggle(int buttonMask, PenButtonEvent event) {
++        // Toggle overrides any active press on the same buttons.
++        if ((pressHoldMask & buttonMask) != 0) {
++            pressHoldMask &= ~buttonMask;
++            inputHandler.applyStylusHoldMask(pressHoldMask);
++        }
++        toggledMask ^= buttonMask;
++        boolean on = (toggledMask & buttonMask) != 0;
++        inputHandler.applyStylusToggleMask(toggledMask);
++
++        GestureConfig cfg = configs.get(event);
++        if (cfg != null && cfg.toggleOffOnLift) {
++            if (on)
++                offOnLiftMask |= buttonMask;
++            else
++                offOnLiftMask &= ~buttonMask;
++        } else {
++            offOnLiftMask &= ~buttonMask;
++        }
++
++        if (showToggleDebug) {
++            String msg = String.format(Locale.US, "%s toggle %d %s", event.name(), buttonMask, on ? "ON" : "OFF");
++            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show();
++        }
++    }
++
++    private void applyPress(int buttonMask, long durationMs, PenButtonEvent event) {
++        // Press overrides toggle state for these buttons.
++        if ((toggledMask & buttonMask) != 0) {
++            toggledMask &= ~buttonMask;
++            inputHandler.applyStylusToggleMask(toggledMask);
++        }
++        offOnLiftMask &= ~buttonMask;
++        pressHoldMask |= buttonMask;
++        inputHandler.applyStylusHoldMask(pressHoldMask);
++
++        Runnable release = () -> {
++            pressHoldMask &= ~buttonMask;
++            inputHandler.applyStylusHoldMask(pressHoldMask);
++        };
++        pendingReleases.put(event, release);
++        handler.postDelayed(release, Math.max(0, durationMs));
++    }
++
++    private static final class GestureConfig {
++        int buttonMask;
++        boolean toggle;
++        boolean toggleOffOnLift;
++        long durationMs;
++    }
++
++    private void onStylusState(StylusState state) {
++        boolean nowTipDown = (state.buttons & MotionEvent.BUTTON_PRIMARY) != 0 || state.pressure > 0;
++        boolean wasTipDown = tipDown;
++        tipDown = nowTipDown;
++
++        if (!wasTipDown && nowTipDown) {
++            // Arm cycle; nothing else needed.
++            return;
++        }
++
++        if (wasTipDown && !nowTipDown && offOnLiftMask != 0) {
++            int mask = offOnLiftMask;
++            toggledMask &= ~mask;
++            offOnLiftMask &= ~mask;
++            inputHandler.applyStylusToggleMask(toggledMask);
++            StylusState current = inputHandler.getLastStylusState();
++            int targetButtons = current.buttons & ~mask;
++            inputHandler.sendStylusButtons(targetButtons);
++        }
++    }
++
++    private void validateConfigs() {
++        // Disable conflicting mappings: same button mask with the same mode.
++        PenButtonEvent[] events = PenButtonEvent.values();
++        for (int i = 0; i < events.length; i++) {
++            GestureConfig a = configs.get(events[i]);
++            if (a == null || a.buttonMask == 0)
++                continue;
++            for (int j = i + 1; j < events.length; j++) {
++                GestureConfig b = configs.get(events[j]);
++                if (b == null || b.buttonMask == 0)
++                    continue;
++                if (a.buttonMask == b.buttonMask && a.toggle == b.toggle) {
++                    Log.w("LenovoPenButtonMapper", "Conflicting mapping for " + events[i] + " and " + events[j] + " with mask " + a.buttonMask + " and mode " + (a.toggle ? "toggle" : "press") + "; disabling " + events[j]);
++                    b.buttonMask = 0;
++                }
++            }
++        }
++    }
++}
+diff --git a/lorie/src/main/java/com/termux/x11/input/StylusState.java b/lorie/src/main/java/com/termux/x11/input/StylusState.java
+new file mode 100644
+index 0000000..21e6de4
+--- /dev/null
++++ b/lorie/src/main/java/com/termux/x11/input/StylusState.java
+@@ -0,0 +1,51 @@
++package com.termux.x11.input;
++
++public final class StylusState {
++    public float x;
++    public float y;
++    public int pressure;
++    public int tiltX;
++    public int tiltY;
++    public int orientation;
++    public int buttons;
++    public boolean eraser;
++    public boolean mouse;
++
++    public StylusState() {}
++
++    public StylusState(float x, float y, float pressure, int tiltX, int tiltY, int orientation, int buttons, boolean eraser, boolean mouse) {
++        this.x = x;
++        this.y = y;
++        this.pressure = (int) (pressure * 65535);
++        this.tiltX = tiltX;
++        this.tiltY = tiltY;
++        this.orientation = orientation;
++        this.buttons = buttons;
++        this.eraser = eraser;
++        this.mouse = mouse;
++    }
++
++    public StylusState copy() {
++        StylusState copy = new StylusState();
++        copy.setFrom(this);
++        return copy;
++    }
++
++    public StylusState withButtons(int newButtons) {
++        StylusState copy = copy();
++        copy.buttons = newButtons;
++        return copy;
++    }
++
++    public void setFrom(StylusState other) {
++        x = other.x;
++        y = other.y;
++        pressure = other.pressure;
++        tiltX = other.tiltX;
++        tiltY = other.tiltY;
++        orientation = other.orientation;
++        buttons = other.buttons;
++        eraser = other.eraser;
++        mouse = other.mouse;
++    }
++}
+diff --git a/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java b/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java
+index c816bd2..6dffd02 100644
+--- a/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java
++++ b/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java
+@@ -10,6 +10,7 @@ import static android.view.KeyEvent.KEYCODE_VOLUME_DOWN;
+ import static android.view.KeyEvent.KEYCODE_VOLUME_UP;
+ 
+ import android.annotation.SuppressLint;
++import android.app.Activity;
+ import android.app.PendingIntent;
+ import android.content.Context;
+ import android.content.Intent;
+@@ -18,6 +19,7 @@ import android.graphics.PointF;
+ import android.hardware.display.DisplayManager;
+ import android.hardware.input.InputManager;
+ import android.os.Handler;
++import android.os.Looper;
+ import android.os.Build;
+ import android.util.DisplayMetrics;
+ import android.view.Display;
+@@ -42,9 +44,12 @@ import java.lang.annotation.Retention;
+ import java.lang.annotation.RetentionPolicy;
+ import java.lang.reflect.InvocationTargetException;
+ import java.util.Arrays;
++import java.util.List;
+ import java.util.Objects;
++import java.util.concurrent.CopyOnWriteArrayList;
+ import java.util.concurrent.atomic.AtomicBoolean;
+ import java.util.function.BiConsumer;
++import java.util.function.Consumer;
+ 
+ /**
+  * This class is responsible for handling Touch input from the user.  Touch events which manipulate
+@@ -91,7 +96,17 @@ public class TouchInputHandler {
+ 
+     private InputStrategyInterface mInputStrategy;
+     private final InputEventSender mInjector;
+-    private final MainActivity mActivity;
++    private final Activity mActivity;
++
++    private LorieView getLorieView() {
++        if (MainActivity.getInstance() != null && MainActivity.getInstance().getLorieView() != null)
++            return MainActivity.getInstance().getLorieView();
++        if (mActivity != null) {
++            View v = mActivity.findViewById(com.termux.x11.R.id.lorieView);
++            if (v instanceof LorieView) return (LorieView) v;
++        }
++        return null;
++    }
+     private final InputManager.InputDeviceListener mInputDeviceListener;
+     private final DisplayMetrics mMetrics = new DisplayMetrics();
+     private final float[] mappedPoint = new float[2];
+@@ -107,6 +122,45 @@ public class TouchInputHandler {
+     private boolean keyIntercepting = false;
+     private boolean ignoreGamepadEvents = false;
+ 
++    private final List<Consumer<StylusState>> stylusStateListeners = new CopyOnWriteArrayList<>();
++    private int stylusToggleMask = 0;
++    private int stylusHoldMask = 0;
++    private StylusState lastStylusState = new StylusState(0f, 0f, 0f, 0, 0, 0, 0, false, false);
++
++    public void addStylusStateListener(Consumer<StylusState> listener) {
++        stylusStateListeners.add(listener);
++    }
++
++    public void removeStylusStateListener(Consumer<StylusState> listener) {
++        stylusStateListeners.remove(listener);
++    }
++
++    public void applyStylusToggleMask(int mask) {
++        this.stylusToggleMask = mask;
++    }
++
++    public void applyStylusHoldMask(int mask) {
++        this.stylusHoldMask = mask;
++    }
++
++    public StylusState getLastStylusState() {
++        return lastStylusState;
++    }
++
++    public void sendStylusButtons(int buttons) {
++        if (mInjector != null) {
++            StylusState s = lastStylusState;
++            mInjector.sendStylusEvent(
++                    s.x, s.y,
++                    (int) (s.pressure * 65535),
++                    s.tiltX, s.tiltY,
++                    s.orientation,
++                    buttons,
++                    s.eraser,
++                    mInjector.stylusIsMouse);
++        }
++    }
++
+     /**
+      * Used for tracking swipe gestures. Only the Y-direction is needed for responding to swipe-up
+      * or swipe-down.
+@@ -171,8 +225,8 @@ public class TouchInputHandler {
+         return ((currentBS & mask) != 0);
+     }
+ 
+-    private TouchInputHandler(MainActivity activity, RenderData renderData,
+-                              final InputEventSender injector, boolean isTouchpad) {
++    public TouchInputHandler(Activity activity, RenderData renderData,
++                             final InputEventSender injector, boolean isTouchpad) {
+         if (injector == null)
+             throw new NullPointerException();
+ 
+@@ -236,7 +290,7 @@ public class TouchInputHandler {
+         ((InputManager) mActivity.getSystemService(Context.INPUT_SERVICE)).registerInputDeviceListener(mInputDeviceListener, null);
+     }
+ 
+-    public TouchInputHandler(MainActivity activity, final InputEventSender injector) {
++    public TouchInputHandler(Activity activity, final InputEventSender injector) {
+         this(activity, null, injector, false);
+     }
+ 
+@@ -268,8 +322,12 @@ public class TouchInputHandler {
+                 });
+         android.util.Log.d("DEVICES", "requesting stylus " + stylusAvailable.get());
+         android.util.Log.d("DEVICES", "external keyboard connected " + externalKeyboardAvailable.get());
+-        MainActivity.getInstance().getLorieView().requestStylusEnabled(stylusAvailable.get());
+-        MainActivity.getInstance().setExternalKeyboardConnected(externalKeyboardAvailable.get());
++        MainActivity mainActivity = MainActivity.getInstance();
++        if (mainActivity != null) {
++            if (mainActivity.getLorieView() != null)
++                mainActivity.getLorieView().requestStylusEnabled(stylusAvailable.get());
++            mainActivity.setExternalKeyboardConnected(externalKeyboardAvailable.get());
++        }
+     }
+ 
+     boolean isDexEvent(MotionEvent event) {
+@@ -407,15 +465,15 @@ public class TouchInputHandler {
+     }
+ 
+     private static boolean hasPointerCapture(View view) {
+-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && view.hasPointerCapture();
++        return view != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && view.hasPointerCapture();
+     }
+ 
+     public void setCapturingEnabled(boolean enabled) {
+-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && getLorieView() != null) {
+             if (mInjector.pointerCapture && enabled)
+-                mActivity.getLorieView().requestPointerCapture();
++                getLorieView().requestPointerCapture();
+             else
+-                mActivity.getLorieView().releasePointerCapture();
++                getLorieView().releasePointerCapture();
+         }
+ 
+         if (mInjector.pauseKeyInterceptingWithEsc) {
+@@ -470,10 +528,10 @@ public class TouchInputHandler {
+ 
+         MainActivity.getRealMetrics(mMetrics);
+ 
+-        if (!p.pointerCapture.get() && hasPointerCapture(mActivity.getLorieView()))
+-            mActivity.getLorieView().releasePointerCapture();
++        if (!p.pointerCapture.get() && getLorieView() != null && hasPointerCapture(getLorieView()))
++            getLorieView().releasePointerCapture();
+ 
+-        keyIntercepting = !mInjector.pauseKeyInterceptingWithEsc || hasPointerCapture(mActivity.getLorieView());
++        keyIntercepting = !mInjector.pauseKeyInterceptingWithEsc || (getLorieView() != null && hasPointerCapture(getLorieView()));
+         SamsungDexUtils.dexMetaKeyCapture(mActivity, mInjector.dexMetaKeyCapture && keyIntercepting);
+ 
+         swipeUpAction = extractUserActionFromPreferences(p, "swipeUp");
+@@ -496,14 +554,14 @@ public class TouchInputHandler {
+ 
+         switch(pref.asList().get()) {
+             case "toggle soft keyboard": return (key, down) -> { if (down) MainActivity.toggleKeyboardVisibility(mActivity); };
+-            case "toggle additional key bar": return (key, down) -> { if (down) mActivity.toggleExtraKeys(); };
++            case "toggle additional key bar": return (key, down) -> { if (down && mActivity instanceof MainActivity) ((MainActivity) mActivity).toggleExtraKeys(); };
+             case "open preferences": return (key, down) -> { if (down) mActivity.startActivity(new Intent(mActivity, LoriePreferences.class) {{ setAction(Intent.ACTION_MAIN); }}); };
+             case "release pointer and keyboard capture": return (key, down) -> { if (down) setCapturingEnabled(false); };
+             case "toggle fullscreen": return (key, down) -> { if (down) MainActivity.prefs.fullscreen.put(!MainActivity.prefs.fullscreen.get()); };
+-            case "exit": return (key, down) -> { if (down) mActivity.finish(); };
+-            case "send volume up": return (key, down) -> mActivity.getLorieView().sendKeyEvent(0, KEYCODE_VOLUME_UP, down);
+-            case "send volume down": return (key, down) -> mActivity.getLorieView().sendKeyEvent(0, KEYCODE_VOLUME_DOWN, down);
+-            case "send media action": return (key, down) -> mActivity.getLorieView().sendKeyEvent(0, key, down);
++            case "exit": return (key, down) -> { if (down && mActivity instanceof MainActivity) mActivity.finish(); };
++            case "send volume up": return (key, down) -> { if (getLorieView() != null) getLorieView().sendKeyEvent(0, KEYCODE_VOLUME_UP, down); };
++            case "send volume down": return (key, down) -> { if (getLorieView() != null) getLorieView().sendKeyEvent(0, KEYCODE_VOLUME_DOWN, down); };
++            case "send media action": return (key, down) -> { if (getLorieView() != null) getLorieView().sendKeyEvent(0, key, down); };
+             default: return noAction;
+         }
+     }
+@@ -604,7 +662,7 @@ public class TouchInputHandler {
+      * @noinspection NullableProblems */
+     private class GestureListener extends GestureDetector.SimpleOnGestureListener
+             implements TapGestureDetector.OnTapListener {
+-        private final Handler mGestureListenerHandler = new Handler(msg -> {
++        private final Handler mGestureListenerHandler = new Handler(Looper.getMainLooper(), msg -> {
+             if (msg.what == InputStub.BUTTON_LEFT)
+                 mInputStrategy.onTap(InputStub.BUTTON_LEFT);
+             return true;
+@@ -840,8 +898,10 @@ public class TouchInputHandler {
+             if (e.isFromSource(InputDevice.SOURCE_MOUSE) || e.isFromSource(InputDevice.SOURCE_MOUSE_RELATIVE)) {
+                 if (e.getRepeatCount() != 0) // ignore auto-repeat
+                     return true;
+-                if (e.getAction() == KeyEvent.ACTION_UP || e.getAction() == KeyEvent.ACTION_DOWN)
+-                    mActivity.getLorieView().sendMouseEvent(-1, -1, InputStub.BUTTON_RIGHT, e.getAction() == KeyEvent.ACTION_DOWN, true);
++                if (e.getAction() == KeyEvent.ACTION_UP || e.getAction() == KeyEvent.ACTION_DOWN) {
++                    if (getLorieView() != null)
++                        getLorieView().sendMouseEvent(-1, -1, InputStub.BUTTON_RIGHT, e.getAction() == KeyEvent.ACTION_DOWN, true);
++                }
+                 return true;
+             }
+ 
+@@ -940,26 +1000,35 @@ public class TouchInputHandler {
+         }
+ 
+         int extractButtons(MotionEvent e) {
++            int baseButtons = 0;
+             if (mInjector.stylusButtonContactModifierMode) {
+                 if (e.getPressure() > 0) {
+                     if (hasButton(e, MotionEvent.BUTTON_STYLUS_SECONDARY))
+-                        return (1 << 1);
+-                    if (hasButton(e, MotionEvent.BUTTON_STYLUS_PRIMARY))
+-                        return (1 << 2);
++                        baseButtons = (1 << 1);
++                    else if (hasButton(e, MotionEvent.BUTTON_STYLUS_PRIMARY))
++                        baseButtons = (1 << 2);
+                     else
+-                        return STYLUS_INPUT_HELPER_MODE;
+-                } else return 0;
++                        baseButtons = STYLUS_INPUT_HELPER_MODE;
++                }
+             } else {
+-                int buttons = 0;
+                 if (e.getPressure() > 0)
+-                    buttons = STYLUS_INPUT_HELPER_MODE;
++                    baseButtons = STYLUS_INPUT_HELPER_MODE;
+                 if (hasButton(e, MotionEvent.BUTTON_STYLUS_SECONDARY))
+-                    buttons |= (1 << 1);
++                    baseButtons |= (1 << 1);
+                 if (hasButton(e, MotionEvent.BUTTON_STYLUS_PRIMARY))
+-                    buttons |= (1 << 2);
++                    baseButtons |= (1 << 2);
++            }
+ 
+-                return buttons;
++            int mapped = baseButtons;
++            if (stylusToggleMask != 0 || stylusHoldMask != 0) {
++                if ((stylusToggleMask & MotionEvent.BUTTON_SECONDARY) != 0 || (stylusHoldMask & MotionEvent.BUTTON_SECONDARY) != 0) {
++                    mapped |= (1 << 1);
++                }
++                if ((stylusToggleMask & MotionEvent.BUTTON_TERTIARY) != 0 || (stylusHoldMask & MotionEvent.BUTTON_TERTIARY) != 0) {
++                    mapped |= (1 << 2);
++                }
+             }
++            return mapped;
+         }
+ 
+         @SuppressLint("ClickableViewAccessibility")
+@@ -969,12 +1038,13 @@ public class TouchInputHandler {
+             int newButtons = extractButtons(e);
+             float newX = e.getX(e.getActionIndex()), newY = e.getY(e.getActionIndex());
+             InputDevice dev = e.getDevice();
+-            InputDevice.MotionRange rangeX = dev.getMotionRange(MotionEvent.AXIS_X);
+-            InputDevice.MotionRange rangeY = dev.getMotionRange(MotionEvent.AXIS_Y);
+-            boolean hasTilt = e.getDevice().getMotionRange(MotionEvent.AXIS_TILT) != null;
+-            boolean hasOrientation = e.getDevice().getMotionRange(MotionEvent.AXIS_ORIENTATION) != null;
++            InputDevice.MotionRange rangeX = dev != null ? dev.getMotionRange(MotionEvent.AXIS_X) : null;
++            InputDevice.MotionRange rangeY = dev != null ? dev.getMotionRange(MotionEvent.AXIS_Y) : null;
++            boolean hasTilt = dev != null && dev.getMotionRange(MotionEvent.AXIS_TILT) != null;
++            boolean hasOrientation = dev != null && dev.getMotionRange(MotionEvent.AXIS_ORIENTATION) != null;
+ 
+-            if (hasPointerCapture(MainActivity.getInstance().getLorieView()) &&
++            LorieView lv = getLorieView();
++            if (hasPointerCapture(lv) &&
+                     isExternal(dev) && rangeX != null && rangeY != null) {
+                 newX *= (float) mMetrics.widthPixels / rangeX.getMax();
+                 newY *= (float) mMetrics.heightPixels / rangeY.getMax();
+@@ -983,24 +1053,37 @@ public class TouchInputHandler {
+             newX = mappedPoint[0];
+             newY = mappedPoint[1];
+ 
+-            if (x == newX && y == newY && pressure == e.getPressure() && tilt == e.getAxisValue(MotionEvent.AXIS_TILT) &&
+-                    orientation == e.getAxisValue(MotionEvent.AXIS_ORIENTATION) && buttons == newButtons)
+-                return true;
+-
++            int orientationDegrees = convertOrientation(orientation);
+             if (hasTilt && hasOrientation) {
+                 orientation = e.getAxisValue(MotionEvent.AXIS_ORIENTATION);
+                 tilt = e.getAxisValue(MotionEvent.AXIS_TILT);
+                 tiltX = (int) Math.round((float) Math.asin(-Math.sin(orientation) * Math.sin(tilt)) * 63.5 - 0.5);
+                 tiltY = (int) Math.round((float) Math.asin( Math.cos(orientation) * Math.sin(tilt)) * 63.5 - 0.5);
++                orientationDegrees = convertOrientation(orientation);
++            }
++
++            StylusState state = new StylusState(
++                    newX, newY, e.getPressure(),
++                    tiltX, tiltY, orientationDegrees,
++                    newButtons,
++                    e.getToolType(e.getActionIndex()) == MotionEvent.TOOL_TYPE_ERASER,
++                    mInjector.stylusIsMouse);
++            lastStylusState = state;
++            for (Consumer<StylusState> l : stylusStateListeners) {
++                l.accept(state);
+             }
+ 
++            if (x == newX && y == newY && pressure == e.getPressure() && tilt == e.getAxisValue(MotionEvent.AXIS_TILT) &&
++                    orientation == e.getAxisValue(MotionEvent.AXIS_ORIENTATION) && buttons == newButtons)
++                return true;
++
+             mInjector.sendStylusEvent(
+                     x = newX,
+                     y = newY,
+                     (int) ((pressure = e.getPressure()) * 65535),
+                     tiltX,
+                     tiltY,
+-                    convertOrientation(orientation),
++                    orientationDegrees,
+                     buttons = newButtons,
+                     e.getToolType(e.getActionIndex()) == MotionEvent.TOOL_TYPE_ERASER,
+                     mInjector.stylusIsMouse);
+@@ -1020,7 +1103,7 @@ public class TouchInputHandler {
+         DexListener(Context ctx) {
+             mScroller = new GestureDetector(ctx, this, null, false);
+         }
+-        private final Handler handler = new Handler();
++        private final Handler handler = new Handler(Looper.getMainLooper());
+         private final Runnable mouseDownRunnable = () -> mInjector.sendMouseEvent(mRenderData.getCursorPosition(), InputStub.BUTTON_LEFT, true, false);
+ 
+         private final int[][] buttons = {
+diff --git a/lorie/src/main/java/dev/ilamparithi/lppdebug/helper/LenovoPenButtonListener.java b/lorie/src/main/java/dev/ilamparithi/lppdebug/helper/LenovoPenButtonListener.java
+new file mode 100644
+index 0000000..a4727f5
+--- /dev/null
++++ b/lorie/src/main/java/dev/ilamparithi/lppdebug/helper/LenovoPenButtonListener.java
+@@ -0,0 +1,67 @@
++package dev.ilamparithi.lppdebug.helper;
++
++import android.view.KeyEvent;
++
++import java.util.function.Consumer;
++
++/**
++ * Portable listener for Lenovo Pen Plus button keycodes (600-604).
++ * Emits a single event per gesture and consumes the KeyEvent when handled.
++ */
++public class LenovoPenButtonListener {
++    private final Consumer<PenButtonEvent> onButtonPressed;
++    private final Consumer<String> onDebug;
++    private Integer pendingKeyCode = null;
++    private long lastEmittedAt = 0L;
++
++    public LenovoPenButtonListener(Consumer<PenButtonEvent> onButtonPressed, Consumer<String> onDebug) {
++        this.onButtonPressed = onButtonPressed;
++        this.onDebug = onDebug;
++    }
++
++    /**
++     * Drop-in handler for dispatchKeyEvent() or onKeyUp().
++     * Consumes stylus keycodes 600-604 and emits exactly once per press.
++     */
++    public boolean onKeyEvent(KeyEvent event) {
++        if (event == null || !isLenovoPenButton(event.getKeyCode()))
++            return false;
++
++        if (event.getRepeatCount() > 0)
++            return true; // ignore repeats to avoid noise
++
++        switch (event.getAction()) {
++            case KeyEvent.ACTION_DOWN:
++                pendingKeyCode = event.getKeyCode();
++                debug("Pen button DOWN code=" + event.getKeyCode());
++                return true;
++            case KeyEvent.ACTION_UP:
++                int codeToEmit = pendingKeyCode != null ? pendingKeyCode : event.getKeyCode();
++                pendingKeyCode = null;
++                PenButtonEvent.fromKeyCode(codeToEmit).ifPresent(buttonEvent -> {
++                    if (event.getEventTime() != lastEmittedAt) {
++                        lastEmittedAt = event.getEventTime();
++                        onButtonPressed.accept(buttonEvent);
++                        debug("Pen button UP code=" + codeToEmit + " -> " + buttonEvent);
++                    }
++                });
++                return true;
++            default:
++                return false;
++        }
++    }
++
++    /** Convenience wrapper matching Activity.onKeyUp signature. */
++    public boolean onKeyUp(int keyCode, KeyEvent event) {
++        return onKeyEvent(event);
++    }
++
++    private boolean isLenovoPenButton(int keyCode) {
++        return keyCode >= 600 && keyCode <= 604;
++    }
++
++    private void debug(String msg) {
++        if (onDebug != null)
++            onDebug.accept(msg);
++    }
++}
+diff --git a/lorie/src/main/java/dev/ilamparithi/lppdebug/helper/PenButtonEvent.java b/lorie/src/main/java/dev/ilamparithi/lppdebug/helper/PenButtonEvent.java
+new file mode 100644
+index 0000000..25516ff
+--- /dev/null
++++ b/lorie/src/main/java/dev/ilamparithi/lppdebug/helper/PenButtonEvent.java
+@@ -0,0 +1,26 @@
++package dev.ilamparithi.lppdebug.helper;
++
++import java.util.Arrays;
++import java.util.Optional;
++
++public enum PenButtonEvent {
++    SINGLE_PRESS(600),
++    DOUBLE_PRESS(601),
++    TRIPLE_PRESS(602),
++    LONG_PRESS(603),
++    LONG_PRESS_AND_CLICK(604);
++
++    private final int keyCode;
++
++    PenButtonEvent(int keyCode) {
++        this.keyCode = keyCode;
++    }
++
++    public int getKeyCode() {
++        return keyCode;
++    }
++
++    public static Optional<PenButtonEvent> fromKeyCode(int keyCode) {
++        return Arrays.stream(values()).filter(v -> v.keyCode == keyCode).findFirst();
++    }
++}
+-- 
+2.55.0
+

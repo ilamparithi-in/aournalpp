@@ -1,0 +1,534 @@
+From 9de183e4415c23a12d43241892c2122198b32a4b Mon Sep 17 00:00:00 2001
+From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
+Date: Sun, 23 Aug 2026 08:07:54 +0530
+Subject: [PATCH 3/3] feat(ui): add stylus settings, preference definitions,
+ and null-safety guards
+
+---
+ .../java/com/termux/x11/CmdEntryPoint.java    | 52 +++++++++++--------
+ .../java/com/termux/x11/LoriePreferences.java | 31 ++++++++++-
+ .../main/java/com/termux/x11/LorieView.java   | 30 ++++++++---
+ .../java/com/termux/x11/MainActivity.java     | 17 +++++-
+ .../termux/x11/extrakeys/ExtraKeysView.java   |  4 +-
+ .../termux/x11/utils/ImeHeightProvider.java   |  8 ++-
+ .../termux/x11/utils/TermuxX11ExtraKeys.java  | 15 +++---
+ lorie/src/main/res/values/arrays.xml          | 11 ++++
+ lorie/src/main/res/values/strings.xml         | 19 +++++++
+ lorie/src/main/res/xml/preferences.xml        | 52 +++++++++++++++++++
+ 10 files changed, 197 insertions(+), 42 deletions(-)
+
+diff --git a/lorie/src/main/java/com/termux/x11/CmdEntryPoint.java b/lorie/src/main/java/com/termux/x11/CmdEntryPoint.java
+index a18645f..55cb2d3 100644
+--- a/lorie/src/main/java/com/termux/x11/CmdEntryPoint.java
++++ b/lorie/src/main/java/com/termux/x11/CmdEntryPoint.java
+@@ -45,8 +45,15 @@ public class CmdEntryPoint extends ICmdEntryInterface.Stub {
+         Looper.loop();
+     }
+ 
+-    CmdEntryPoint(String[] args) {
+-        if (!start(args))
++    public CmdEntryPoint(String[] args) {
++        this(null, args);
++    }
++
++    public CmdEntryPoint(Context context, String[] args) {
++        if (context != null) {
++            ctx = context.getApplicationContext();
++        }
++        if (!connected() && !start(args))
+             System.exit(1);
+ 
+         spawnListeningThread();
+@@ -76,13 +83,15 @@ public class CmdEntryPoint extends ICmdEntryInterface.Stub {
+ 
+     static void sendBroadcast(Intent intent) {
+         try {
+-            ctx.sendBroadcast(intent);
+-        } catch (Exception e) {
+-            if (e instanceof NullPointerException && ctx == null)
+-                Log.i("Broadcast", "Context is null, falling back to manual broadcasting");
+-            else
+-                Log.e("Broadcast", "Falling back to manual broadcasting, failed to broadcast intent through Context:", e);
++            if (ctx != null) {
++                ctx.sendBroadcast(intent);
++                return;
++            }
++        } catch (Throwable e) {
++            Log.e("Broadcast", "Failed to broadcast intent through Context:", e);
++        }
+ 
++        try {
+             String packageName;
+             try {
+                 packageName = android.app.ActivityThread.getPackageManager().getPackagesForUid(getuid())[0];
+@@ -105,19 +114,20 @@ public class CmdEntryPoint extends ICmdEntryInterface.Stub {
+                 }
+             }
+ 
+-            assert am != null;
+-            IIntentSender sender = am.getIntentSender(1, packageName, null, null, 0, new Intent[] { intent },
+-                    null, PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_ONE_SHOT, null, 0);
+-            try {
+-                //noinspection JavaReflectionMemberAccess
+-                IIntentSender.class
+-                        .getMethod("send", int.class, Intent.class, String.class, IBinder.class, IIntentReceiver.class, String.class, Bundle.class)
+-                        .invoke(sender, 0, intent, null, null, new IIntentReceiver.Stub() {
+-                            @Override public void performReceive(Intent i, int r, String d, Bundle e, boolean o, boolean s, int a) {}
+-                        }, null, null);
+-            } catch (Exception ex) {
+-                throw new RuntimeException(ex);
++            if (am != null) {
++                IIntentSender sender = am.getIntentSender(1, packageName, null, null, 0, new Intent[] { intent },
++                        null, PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_ONE_SHOT, null, 0);
++                if (sender != null) {
++                    //noinspection JavaReflectionMemberAccess
++                    IIntentSender.class
++                            .getMethod("send", int.class, Intent.class, String.class, IBinder.class, IIntentReceiver.class, String.class, Bundle.class)
++                            .invoke(sender, 0, intent, null, null, new IIntentReceiver.Stub() {
++                                @Override public void performReceive(Intent i, int r, String d, Bundle e, boolean o, boolean s, int a) {}
++                            }, null, null);
++                }
+             }
++        } catch (Throwable ex) {
++            Log.w("Broadcast", "Manual broadcast via reflection not supported on this Android platform version: " + ex.getMessage());
+         }
+     }
+ 
+@@ -177,7 +187,7 @@ public class CmdEntryPoint extends ICmdEntryInterface.Stub {
+         } catch (Exception e) {
+             Log.e("CmdEntryPoint", "Something went wrong when preparing MainLooper", e);
+         }
+-        handler = new Handler();
++        handler = new Handler(Looper.getMainLooper());
+     }
+ 
+     private static void initEntryPoint() {
+diff --git a/lorie/src/main/java/com/termux/x11/LoriePreferences.java b/lorie/src/main/java/com/termux/x11/LoriePreferences.java
+index 1b77423..d214646 100644
+--- a/lorie/src/main/java/com/termux/x11/LoriePreferences.java
++++ b/lorie/src/main/java/com/termux/x11/LoriePreferences.java
+@@ -30,6 +30,7 @@ import androidx.core.app.ActivityCompat;
+ import androidx.core.content.ContextCompat;
+ import androidx.preference.ListPreference;
+ import androidx.preference.Preference;
++import androidx.preference.SwitchPreferenceCompat;
+ 
+ import android.os.Handler;
+ import android.os.IBinder;
+@@ -251,7 +252,10 @@ public class LoriePreferences extends AppCompatActivity implements PreferenceFra
+         @SuppressLint("DiscouragedApi")
+         int findId(String name) {
+             //noinspection DataFlowIssue
+-            return getResources().getIdentifier("lorie_pref_" + name, "string", getContext().getPackageName());
++            int id = getResources().getIdentifier("lorie_pref_" + name, "string", getContext().getPackageName());
++            if (id == 0)
++                id = getResources().getIdentifier("pref_" + name, "string", getContext().getPackageName());
++            return id;
+         }
+ 
+         /** @noinspection DataFlowIssue*/
+@@ -315,6 +319,7 @@ public class LoriePreferences extends AppCompatActivity implements PreferenceFra
+             setVisible("showStylusClickOverride", stylusAvailable);
+             setVisible("stylusIsMouse", stylusAvailable);
+             setVisible("stylusButtonContactModifierMode", stylusAvailable);
++            setVisible("lenovoPenMappingEntry", stylusAvailable);
+ 
+             setNoActionOptionText(findPreference("volumeDownAction"), "android volume control");
+             setNoActionOptionText(findPreference("volumeUpAction"), "android volume control");
+@@ -380,6 +385,30 @@ public class LoriePreferences extends AppCompatActivity implements PreferenceFra
+             setVisible("requestNotificationPermission", requestNotificationPermissionVisible);
+ 
+             updateScreenIdleTimeoutSummary();
++            updateLenovoPenPreferences();
++        }
++
++        private void updateLenovoPenPreferences() {
++            updateLenovoPenGesture("lenovoPenSinglePress");
++            updateLenovoPenGesture("lenovoPenDoublePress");
++            updateLenovoPenGesture("lenovoPenTriplePress");
++            updateLenovoPenGesture("lenovoPenLongPress");
++            updateLenovoPenGesture("lenovoPenLongPressClick");
++        }
++
++        private void updateLenovoPenGesture(String prefix) {
++            Preference actionPref = findPreference(prefix + "Action");
++            Preference togglePref = findPreference(prefix + "Toggle");
++            Preference offOnLiftPref = findPreference(prefix + "ToggleOffOnLift");
++            Preference durationPref = findPreference(prefix + "DurationMs");
++            if (actionPref instanceof ListPreference) {
++                String actionVal = ((ListPreference) actionPref).getValue();
++                boolean enabled = actionVal != null && !"disabled".contentEquals(actionVal);
++                if (togglePref != null) togglePref.setEnabled(enabled);
++                boolean isToggle = togglePref instanceof SwitchPreferenceCompat && ((SwitchPreferenceCompat) togglePref).isChecked();
++                if (offOnLiftPref != null) offOnLiftPref.setEnabled(enabled && isToggle);
++                if (durationPref != null) durationPref.setEnabled(enabled && !isToggle);
++            }
+         }
+ 
+         private static String formatTimeoutMinutes(long timeoutMs) {
+diff --git a/lorie/src/main/java/com/termux/x11/LorieView.java b/lorie/src/main/java/com/termux/x11/LorieView.java
+index 2c550aa..85287f4 100644
+--- a/lorie/src/main/java/com/termux/x11/LorieView.java
++++ b/lorie/src/main/java/com/termux/x11/LorieView.java
+@@ -208,7 +208,7 @@ public class LorieView extends SurfaceView implements InputStub {
+ 
+             currentComposingText = reuse ? newText : null;
+ 
+-            if (a.useTermuxEKBarBehaviour && a.mExtraKeys != null)
++            if (a != null && a.useTermuxEKBarBehaviour && a.mExtraKeys != null)
+                 a.mExtraKeys.unsetSpecialKeys();
+             commitedText = true;
+             return true;
+@@ -354,8 +354,17 @@ public class LorieView extends SurfaceView implements InputStub {
+         setKeyboardVisible(!keyboardVisible);
+     }
+ 
++    public Prefs getPrefs() {
++        Prefs p = MainActivity.getPrefs();
++        if (p == null) {
++            p = new Prefs(getContext());
++            MainActivity.setPrefs(p);
++        }
++        return p;
++    }
++
+     void getDimensionsFromSettings(int width, int height) {
+-        Prefs prefs = MainActivity.getPrefs();
++        Prefs prefs = getPrefs();
+         int w = width;
+         int h = height;
+         switch(prefs.displayResolutionMode.get()) {
+@@ -419,7 +428,7 @@ public class LorieView extends SurfaceView implements InputStub {
+ 
+         if (getDisplay() == null || getDisplay().getDisplayId() == Display.DEFAULT_DISPLAY)
+             name = "builtin";
+-        else if (SamsungDexUtils.checkDeXEnabled(MainActivity.getInstance()))
++        else if (MainActivity.getInstance() != null && SamsungDexUtils.checkDeXEnabled(MainActivity.getInstance()))
+             name = "dex";
+         else
+             name = "external";
+@@ -479,7 +488,7 @@ public class LorieView extends SurfaceView implements InputStub {
+     }
+ 
+     private void updateViewport() {
+-        Prefs prefs = MainActivity.getPrefs();
++        Prefs prefs = getPrefs();
+ 
+         int surfaceW = getMeasuredWidth(), surfaceH = getMeasuredHeight();
+         // Views the insets reserve room for are hidden while the dimensions are frozen.
+@@ -566,7 +575,10 @@ public class LorieView extends SurfaceView implements InputStub {
+         if (hardwareKbdScancodesWorkaround)
+             return false;
+ 
+-        return MainActivity.getInstance().handleKey(event);
++        if (MainActivity.getInstance() != null)
++            return MainActivity.getInstance().handleKey(event);
++
++        return super.dispatchKeyEventPreIme(event);
+     }
+ 
+     @Override
+@@ -652,7 +664,7 @@ public class LorieView extends SurfaceView implements InputStub {
+ 
+     @Override
+     public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
+-        if (MainActivity.getPrefs().enforceCharBasedInput.get())
++        if (getPrefs().enforceCharBasedInput.get())
+             outAttrs.inputType = InputType.TYPE_NULL;
+         else
+             outAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS | InputType.TYPE_TEXT_VARIATION_NORMAL;
+@@ -694,8 +706,10 @@ public class LorieView extends SurfaceView implements InputStub {
+     @FastNative private native void setViewport(long ptr, int x, int y, int width, int height, int expectedWidth, int expectedHeight, int hiddenBottom);
+     @FastNative private native void setRendererZoom(long ptr, int percent);
+ 
+-    // Public API stays free of the native pointer; it's threaded through to an overload below.
+-    public void connect(int fd) { connect(mNativeContext, fd); }
++    public void connect(int fd) {
++        connect(mNativeContext, fd);
++        post(this::updateViewport);
++    }
+     @FastNative private static native void connect(long ptr, int fd);
+ 
+     public boolean connected() { return connected(mNativeContext); }
+diff --git a/lorie/src/main/java/com/termux/x11/MainActivity.java b/lorie/src/main/java/com/termux/x11/MainActivity.java
+index 105b30a..1d4dd78 100644
+--- a/lorie/src/main/java/com/termux/x11/MainActivity.java
++++ b/lorie/src/main/java/com/termux/x11/MainActivity.java
+@@ -32,6 +32,7 @@ import android.os.Build.VERSION_CODES;
+ import android.os.Bundle;
+ import android.os.Handler;
+ import android.os.IBinder;
++import android.os.Looper;
+ import android.os.ParcelFileDescriptor;
+ import android.os.RemoteException;
+ import android.os.SystemClock;
+@@ -74,6 +75,7 @@ import androidx.viewpager.widget.ViewPager;
+ 
+ import com.termux.x11.input.InputEventSender;
+ import com.termux.x11.input.InputStub;
++import com.termux.x11.input.LenovoPenButtonMapper;
+ import com.termux.x11.input.TouchInputHandler;
+ import com.termux.x11.utils.ImeHeightProvider;
+ import com.termux.x11.utils.KeyInterceptor;
+@@ -89,9 +91,10 @@ public class MainActivity extends AppCompatActivity {
+     public static final String ACTION_STOP = "com.termux.x11.ACTION_STOP";
+     public static final String ACTION_CUSTOM = "com.termux.x11.ACTION_CUSTOM";
+ 
+-    public static Handler handler = new Handler();
++    public static Handler handler = new Handler(Looper.getMainLooper());
+     FrameLayout frm;
+     private TouchInputHandler mInputHandler;
++    private LenovoPenButtonMapper mLenovoPenMapper;
+     protected ICmdEntryInterface service = null;
+     public TermuxX11ExtraKeys mExtraKeys;
+     private Notification mNotification;
+@@ -163,10 +166,14 @@ public class MainActivity extends AppCompatActivity {
+         instance = this;
+     }
+ 
+-    public static Prefs getPrefs() {
++    public static synchronized Prefs getPrefs() {
+         return prefs;
+     }
+ 
++    public static synchronized void setPrefs(Prefs p) {
++        prefs = p;
++    }
++
+     public static MainActivity getInstance() {
+         return instance;
+     }
+@@ -199,6 +206,8 @@ public class MainActivity extends AppCompatActivity {
+         View lorieParent = (View) lorieView.getParent();
+ 
+         mInputHandler = new TouchInputHandler(this, new InputEventSender(lorieView));
++        mLenovoPenMapper = new LenovoPenButtonMapper(this, mInputHandler);
++        mLenovoPenMapper.reloadPreferences(prefs);
+         mLorieKeyListener = (v, k, e) -> {
+             InputDevice dev = e.getDevice();
+             boolean result = mInputHandler.sendKeyEvent(e);
+@@ -632,6 +641,8 @@ public class MainActivity extends AppCompatActivity {
+         LorieView lorieView = getLorieView();
+ 
+         mInputHandler.reloadPreferences(prefs);
++        if (mLenovoPenMapper != null)
++            mLenovoPenMapper.reloadPreferences(prefs);
+         lorieView.reloadPreferences(prefs);
+ 
+         if (mExtraKeys != null)
+@@ -831,6 +842,8 @@ public class MainActivity extends AppCompatActivity {
+     }
+ 
+     public boolean handleKey(KeyEvent e) {
++        if (mLenovoPenMapper != null && mLenovoPenMapper.onKeyEvent(e))
++            return true;
+         if (filterOutWinKey && (e.getKeyCode() == KEYCODE_META_LEFT || e.getKeyCode() == KEYCODE_META_RIGHT || e.isMetaPressed()))
+             return false;
+         return mLorieKeyListener.onKey(getLorieView(), e.getKeyCode(), e);
+diff --git a/lorie/src/main/java/com/termux/x11/extrakeys/ExtraKeysView.java b/lorie/src/main/java/com/termux/x11/extrakeys/ExtraKeysView.java
+index 4bb8d8d..df0f265 100644
+--- a/lorie/src/main/java/com/termux/x11/extrakeys/ExtraKeysView.java
++++ b/lorie/src/main/java/com/termux/x11/extrakeys/ExtraKeysView.java
+@@ -321,7 +321,7 @@ public final class ExtraKeysView extends GridLayout {
+         setRowCount(buttons.length);
+         setColumnCount(maximumLength(buttons));
+ 
+-        boolean reverseRows = MainActivity.getInstance().getPagerPosition() == PAGER_POSITION_TOP;
++        boolean reverseRows = MainActivity.getInstance() != null && MainActivity.getInstance().getPagerPosition() == PAGER_POSITION_TOP;
+ 
+         for (int row = 0; row < buttons.length; row++) {
+             int actualRow = reverseRows ? buttons.length - 1 - row : row;
+@@ -519,7 +519,7 @@ public final class ExtraKeysView extends GridLayout {
+     }
+ 
+     void showPopup(View view, ExtraKeyButton extraButton) {
+-        int pos = MainActivity.getInstance().getPagerPosition();
++        int pos = MainActivity.getInstance() != null ? MainActivity.getInstance().getPagerPosition() : PAGER_POSITION_BOTTOM;
+         int width = pos == PAGER_POSITION_TOP || pos == PAGER_POSITION_BOTTOM ? view.getMeasuredWidth() : view.getMeasuredHeight();
+         int height = pos == PAGER_POSITION_TOP || pos == PAGER_POSITION_BOTTOM ? view.getMeasuredHeight() : view.getMeasuredWidth();
+         Button button;
+diff --git a/lorie/src/main/java/com/termux/x11/utils/ImeHeightProvider.java b/lorie/src/main/java/com/termux/x11/utils/ImeHeightProvider.java
+index 835bf71..147ddfd 100644
+--- a/lorie/src/main/java/com/termux/x11/utils/ImeHeightProvider.java
++++ b/lorie/src/main/java/com/termux/x11/utils/ImeHeightProvider.java
+@@ -68,8 +68,12 @@ public class ImeHeightProvider {
+     // whenever it is shown below the keyboard - that space is already handled by fitsSystemWindows.
+     private static void report(Activity activity, FrameLayout content, int bottom, WindowInsetsCompat insets) {
+         View child = content.getChildAt(0);
++        MainActivity instance = MainActivity.getInstance();
++        if (instance == null)
++            return;
++
+         // Whatever part of the caption bar is left here is the one the window was not laid out below.
+-        MainActivity.getInstance().setCaptionHeight((insets != null && !child.getFitsSystemWindows())
++        instance.setCaptionHeight((insets != null && !child.getFitsSystemWindows())
+                 ? insets.getInsets(WindowInsetsCompat.Type.captionBar()).top : 0);
+ 
+         int imeHeight = 0;
+@@ -78,6 +82,6 @@ public class ImeHeightProvider {
+                     ? insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom : 0;
+             imeHeight = Math.max(0, bottom - navBottom);
+         }
+-        MainActivity.getInstance().setImeHeight(imeHeight);
++        instance.setImeHeight(imeHeight);
+     }
+ }
+diff --git a/lorie/src/main/java/com/termux/x11/utils/TermuxX11ExtraKeys.java b/lorie/src/main/java/com/termux/x11/utils/TermuxX11ExtraKeys.java
+index aa95871..cd7cce0 100644
+--- a/lorie/src/main/java/com/termux/x11/utils/TermuxX11ExtraKeys.java
++++ b/lorie/src/main/java/com/termux/x11/utils/TermuxX11ExtraKeys.java
+@@ -22,6 +22,7 @@ import androidx.annotation.NonNull;
+ import com.termux.x11.extrakeys.*;
+ import com.termux.x11.LoriePreferences;
+ import com.termux.x11.MainActivity;
++import com.termux.x11.Prefs;
+ 
+ import org.json.JSONException;
+ 
+@@ -207,19 +208,21 @@ public class TermuxX11ExtraKeys implements ExtraKeysView.IExtraKeysView {
+         mExtraKeysInfo = null;
+ 
+         try {
+-            // The mMap stores the extra key and style string values while loading properties
+-            // Check {@link #getExtraKeysInternalPropertyValueFromValue(String)} and
+-            // {@link #getExtraKeysStyleInternalPropertyValueFromValue(String)}
+-            String extrakeys = MainActivity.getPrefs().extra_keys_config.get();
++            Prefs p = MainActivity.getPrefs();
++            String extrakeys = p != null ? p.extra_keys_config.get() : TermuxX11ExtraKeys.DEFAULT_IVALUE_EXTRA_KEYS;
+             mExtraKeysInfo = new ExtraKeysInfo(extrakeys, "extra-keys-style", ExtraKeysConstants.CONTROL_CHARS_ALIASES);
+         } catch (JSONException e) {
+-            Toast.makeText(MainActivity.getInstance(), "Could not load and set the \"extra-keys\" property from the properties file: " + e, Toast.LENGTH_LONG).show();
++            if (MainActivity.getInstance() != null) {
++                Toast.makeText(MainActivity.getInstance(), "Could not load and set the \"extra-keys\" property from the properties file: " + e, Toast.LENGTH_LONG).show();
++            }
+             Log.e(LOG_TAG, "Could not load and set the \"extra-keys\" property from the properties file: ", e);
+ 
+             try {
+                 mExtraKeysInfo = new ExtraKeysInfo(TermuxX11ExtraKeys.DEFAULT_IVALUE_EXTRA_KEYS, "default", ExtraKeysConstants.CONTROL_CHARS_ALIASES);
+             } catch (JSONException e2) {
+-                Toast.makeText(MainActivity.getInstance(), "Can't create default extra keys", Toast.LENGTH_LONG).show();
++                if (MainActivity.getInstance() != null) {
++                    Toast.makeText(MainActivity.getInstance(), "Can't create default extra keys", Toast.LENGTH_LONG).show();
++                }
+                 Log.e(LOG_TAG, "Could create default extra keys: ", e);
+                 mExtraKeysInfo = null;
+             }
+diff --git a/lorie/src/main/res/values/arrays.xml b/lorie/src/main/res/values/arrays.xml
+index b34086f..2902d47 100644
+--- a/lorie/src/main/res/values/arrays.xml
++++ b/lorie/src/main/res/values/arrays.xml
+@@ -113,4 +113,15 @@
+         <item>left</item>
+         <item>right</item>
+     </string-array>
++
++    <string-array name="lenovoPenActionEntries">
++        <item>Disabled</item>
++        <item>Secondary (Right Click)</item>
++        <item>Tertiary (Middle Click)</item>
++    </string-array>
++    <string-array name="lenovoPenActionValues">
++        <item>disabled</item>
++        <item>2</item>
++        <item>3</item>
++    </string-array>
+ </resources>
+diff --git a/lorie/src/main/res/values/strings.xml b/lorie/src/main/res/values/strings.xml
+index 62dd685..3a7c167 100644
+--- a/lorie/src/main/res/values/strings.xml
++++ b/lorie/src/main/res/values/strings.xml
+@@ -123,4 +123,23 @@ E.g. <b>META</b> for <i>META key</i>, \n
+     <string name="lorie_pref_summary_requiresTrackpadAndNative">Requires "Touchscreen input mode" to be "Trackpad" and "Display resolution mode" to be not "native"</string>
+     <string name="lorie_pref_summary_screenIdleTimeoutConflict">⚠️ System screen timeout (%s) is longer and takes priority</string>
+     <string name="lorie_pref_screenIdleTimeoutSystem">System (%s)</string>
++
++    <string name="pref_lenovoPenMapping">Lenovo Pen Button Mapping</string>
++    <string name="pref_lenovoPenShowDetections">Show Gesture Detections</string>
++    <string name="pref_lenovoPenShowDetections_summary">Display a toast message when a pen gesture is detected</string>
++    <string name="pref_lenovoPenDebugToggleToasts">Show Toggle State Detections</string>
++    <string name="pref_lenovoPenDebugToggleToasts_summary">Display a toast message when a pen gesture toggles a button</string>
++    <string name="pref_lenovoPenGestureMappings">Gesture Mappings</string>
++    <string name="pref_lenovoPenSinglePressTitle">Single Press</string>
++    <string name="pref_lenovoPenDoublePressTitle">Double Press</string>
++    <string name="pref_lenovoPenTriplePressTitle">Triple Press</string>
++    <string name="pref_lenovoPenLongPressTitle">Long Press</string>
++    <string name="pref_lenovoPenLongPressClickTitle">Long Press + Click</string>
++    <string name="pref_lenovoPenMapTo">Map to</string>
++    <string name="pref_lenovoPenToggleTitle">Toggle Mode</string>
++    <string name="pref_lenovoPenToggleSummary">Toggle button on/off instead of momentary press</string>
++    <string name="pref_lenovoPenToggleOffOnLiftTitle">Toggle OFF on Lift</string>
++    <string name="pref_lenovoPenToggleOffOnLiftSummary">Automatically turn toggle OFF when pen is lifted from screen</string>
++    <string name="pref_lenovoPenDurationTitle">Press Duration (ms)</string>
++    <string name="pref_lenovoPenDurationDialog">Enter duration in milliseconds (10-8192)</string>
+ </resources>
+diff --git a/lorie/src/main/res/xml/preferences.xml b/lorie/src/main/res/xml/preferences.xml
+index 902a923..cf28545 100644
+--- a/lorie/src/main/res/xml/preferences.xml
++++ b/lorie/src/main/res/xml/preferences.xml
+@@ -36,6 +36,7 @@
+         <SeekBarPreference app:key="capturedPointerSpeedFactor" app:defaultValue="100" app:min="1" android:max="300" app:seekBarIncrement="1" app:showSeekBarValue="true" app:updatesContinuously="true" />
+         <SwitchPreferenceCompat app:key="tapToMove" app:defaultValue="false" />
+         <SwitchPreferenceCompat app:key="ignoreGamepadEvents" app:defaultValue="false" />
++        <Preference app:key="lenovoPenMappingEntry" app:title="@string/pref_lenovoPenMapping" app:fragment="lenovoPenMapping" />
+     </PreferenceScreen>
+     <PreferenceScreen app:key="kbd">
+         <SwitchPreferenceCompat app:key="showAdditionalKbd" app:defaultValue="true" />
+@@ -78,4 +79,55 @@
+         <ListPreference app:key="notificationButton1Action" app:defaultValue="exit" app:entries="@array/userActionsValues" app:entryValues="@array/userActionsValues" />
+         <ListPreference app:key="mediaKeysAction" app:defaultValue="no action" app:entries="@array/userActionsMediaKeyValues" app:entryValues="@array/userActionsMediaKeyValues" />
+     </PreferenceScreen>
++
++    <PreferenceScreen app:key="lenovoPenMapping" app:title="@string/pref_lenovoPenMapping">
++        <SwitchPreferenceCompat
++            app:key="lenovoPenShowDetections"
++            app:defaultValue="false"
++            app:title="@string/pref_lenovoPenShowDetections"
++            app:summary="@string/pref_lenovoPenShowDetections_summary" />
++
++        <SwitchPreferenceCompat
++            app:key="lenovoPenDebugToggleToasts"
++            app:defaultValue="false"
++            app:title="@string/pref_lenovoPenDebugToggleToasts"
++            app:summary="@string/pref_lenovoPenDebugToggleToasts_summary" />
++
++        <Preference app:key="lenovoPenGestureMappings" app:title="@string/pref_lenovoPenGestureMappings" app:selectable="false" app:enabled="false" />
++
++        <PreferenceCategory app:title="@string/pref_lenovoPenSinglePressTitle">
++            <ListPreference app:key="lenovoPenSinglePressAction" app:defaultValue="disabled" app:title="@string/pref_lenovoPenMapTo" app:entries="@array/lenovoPenActionEntries" app:entryValues="@array/lenovoPenActionValues" app:useSimpleSummaryProvider="true" />
++            <SwitchPreferenceCompat app:key="lenovoPenSinglePressToggle" app:defaultValue="false" app:title="@string/pref_lenovoPenToggleTitle" app:summary="@string/pref_lenovoPenToggleSummary" />
++            <SwitchPreferenceCompat app:key="lenovoPenSinglePressToggleOffOnLift" app:defaultValue="false" app:title="@string/pref_lenovoPenToggleOffOnLiftTitle" app:summary="@string/pref_lenovoPenToggleOffOnLiftSummary" />
++            <EditTextPreference app:key="lenovoPenSinglePressDurationMs" app:defaultValue="150" app:title="@string/pref_lenovoPenDurationTitle" app:dialogTitle="@string/pref_lenovoPenDurationDialog" app:useSimpleSummaryProvider="true" android:inputType="number" />
++        </PreferenceCategory>
++
++        <PreferenceCategory app:title="@string/pref_lenovoPenDoublePressTitle">
++            <ListPreference app:key="lenovoPenDoublePressAction" app:defaultValue="disabled" app:title="@string/pref_lenovoPenMapTo" app:entries="@array/lenovoPenActionEntries" app:entryValues="@array/lenovoPenActionValues" app:useSimpleSummaryProvider="true" />
++            <SwitchPreferenceCompat app:key="lenovoPenDoublePressToggle" app:defaultValue="false" app:title="@string/pref_lenovoPenToggleTitle" app:summary="@string/pref_lenovoPenToggleSummary" />
++            <SwitchPreferenceCompat app:key="lenovoPenDoublePressToggleOffOnLift" app:defaultValue="false" app:title="@string/pref_lenovoPenToggleOffOnLiftTitle" app:summary="@string/pref_lenovoPenToggleOffOnLiftSummary" />
++            <EditTextPreference app:key="lenovoPenDoublePressDurationMs" app:defaultValue="150" app:title="@string/pref_lenovoPenDurationTitle" app:dialogTitle="@string/pref_lenovoPenDurationDialog" app:useSimpleSummaryProvider="true" android:inputType="number" />
++        </PreferenceCategory>
++
++        <PreferenceCategory app:title="@string/pref_lenovoPenTriplePressTitle">
++            <ListPreference app:key="lenovoPenTriplePressAction" app:defaultValue="disabled" app:title="@string/pref_lenovoPenMapTo" app:entries="@array/lenovoPenActionEntries" app:entryValues="@array/lenovoPenActionValues" app:useSimpleSummaryProvider="true" />
++            <SwitchPreferenceCompat app:key="lenovoPenTriplePressToggle" app:defaultValue="false" app:title="@string/pref_lenovoPenToggleTitle" app:summary="@string/pref_lenovoPenToggleSummary" />
++            <SwitchPreferenceCompat app:key="lenovoPenTriplePressToggleOffOnLift" app:defaultValue="false" app:title="@string/pref_lenovoPenToggleOffOnLiftTitle" app:summary="@string/pref_lenovoPenToggleOffOnLiftSummary" />
++            <EditTextPreference app:key="lenovoPenTriplePressDurationMs" app:defaultValue="150" app:title="@string/pref_lenovoPenDurationTitle" app:dialogTitle="@string/pref_lenovoPenDurationDialog" app:useSimpleSummaryProvider="true" android:inputType="number" />
++        </PreferenceCategory>
++
++        <PreferenceCategory app:title="@string/pref_lenovoPenLongPressTitle">
++            <ListPreference app:key="lenovoPenLongPressAction" app:defaultValue="disabled" app:title="@string/pref_lenovoPenMapTo" app:entries="@array/lenovoPenActionEntries" app:entryValues="@array/lenovoPenActionValues" app:useSimpleSummaryProvider="true" />
++            <SwitchPreferenceCompat app:key="lenovoPenLongPressToggle" app:defaultValue="false" app:title="@string/pref_lenovoPenToggleTitle" app:summary="@string/pref_lenovoPenToggleSummary" />
++            <SwitchPreferenceCompat app:key="lenovoPenLongPressToggleOffOnLift" app:defaultValue="false" app:title="@string/pref_lenovoPenToggleOffOnLiftTitle" app:summary="@string/pref_lenovoPenToggleOffOnLiftSummary" />
++            <EditTextPreference app:key="lenovoPenLongPressDurationMs" app:defaultValue="150" app:title="@string/pref_lenovoPenDurationTitle" app:dialogTitle="@string/pref_lenovoPenDurationDialog" app:useSimpleSummaryProvider="true" android:inputType="number" />
++        </PreferenceCategory>
++
++        <PreferenceCategory app:title="@string/pref_lenovoPenLongPressClickTitle">
++            <ListPreference app:key="lenovoPenLongPressClickAction" app:defaultValue="disabled" app:title="@string/pref_lenovoPenMapTo" app:entries="@array/lenovoPenActionEntries" app:entryValues="@array/lenovoPenActionValues" app:useSimpleSummaryProvider="true" />
++            <SwitchPreferenceCompat app:key="lenovoPenLongPressClickToggle" app:defaultValue="false" app:title="@string/pref_lenovoPenToggleTitle" app:summary="@string/pref_lenovoPenToggleSummary" />
++            <SwitchPreferenceCompat app:key="lenovoPenLongPressClickToggleOffOnLift" app:defaultValue="false" app:title="@string/pref_lenovoPenToggleOffOnLiftTitle" app:summary="@string/pref_lenovoPenToggleOffOnLiftSummary" />
++            <EditTextPreference app:key="lenovoPenLongPressClickDurationMs" app:defaultValue="150" app:title="@string/pref_lenovoPenDurationTitle" app:dialogTitle="@string/pref_lenovoPenDurationDialog" app:useSimpleSummaryProvider="true" android:inputType="number" />
++        </PreferenceCategory>
++    </PreferenceScreen>
+ </PreferenceScreen>
+-- 
+2.55.0
+

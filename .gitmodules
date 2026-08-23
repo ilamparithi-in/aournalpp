@@ -1,3 +1,4 @@
 [submodule "submodules/termux-x11"]
 	path = submodules/termux-x11
-	url = https://github.com/termux/termux-x11
+	url = https://github.com/ilamparithi-in/termux-x11.git
+	branch = aournalpp-main
