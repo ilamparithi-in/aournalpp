@@ -144,7 +144,7 @@ class CanvasSessionManager(
 
     private fun monitorAndInjectPreferencesShortcut() {
         scope.launch(Dispatchers.IO) {
-            val xdotoolBin = File(env.binDir, "xdotool")
+            val xdotoolBin = env.resolveExecutable("xdotool")
             if (!xdotoolBin.exists() || !xdotoolBin.canExecute()) {
                 Log.w(TAG, "xdotool not found at ${xdotoolBin.absolutePath}, cannot inject preferences shortcut")
                 return@launch
@@ -295,7 +295,7 @@ class CanvasSessionManager(
     fun requestCloseSession() {
         if (!isSessionRunning) return
         scope.launch(Dispatchers.IO) {
-            val xdotoolBin = File(env.binDir, "xdotool")
+            val xdotoolBin = env.resolveExecutable("xdotool")
             if (!xdotoolBin.exists() || !xdotoolBin.canExecute()) {
                 Log.w(TAG, "xdotool not available at ${xdotoolBin.absolutePath}, cannot send graceful close shortcut")
                 return@launch

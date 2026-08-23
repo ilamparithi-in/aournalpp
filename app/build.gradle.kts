@@ -183,6 +183,9 @@ android {
         compose = true
     }
     packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
@@ -191,9 +194,11 @@ android {
     sourceSets {
         getByName("arm64") {
             assets.directories += listOf("src/arm64/assets", "build/generated/bootstrap-assets/arm64/assets")
+            jniLibs.directories += listOf("src/arm64/jniLibs", "build/generated/bootstrap-assets/arm64/jniLibs")
         }
         getByName("x86_64") {
             assets.directories += listOf("src/x86_64/assets", "build/generated/bootstrap-assets/x86_64/assets")
+            jniLibs.directories += listOf("src/x86_64/jniLibs", "build/generated/bootstrap-assets/x86_64/jniLibs")
         }
     }
 }
@@ -241,21 +246,25 @@ bootstrapTasksMap.forEach { (flavorName, archName) ->
     val capitalizedFlavor = flavorName.replaceFirstChar { it.uppercase() }
     val taskName = "generateBootstrap$capitalizedFlavor"
     val flavorOutDir = file("build/generated/bootstrap-assets/$flavorName/assets")
+    val flavorJniDir = file("build/generated/bootstrap-assets/$flavorName/jniLibs")
     val flavorOutputFile = File(flavorOutDir, "bootstrap.tar.xz")
 
     tasks.register<Exec>(taskName) {
-        description = "Downloads and builds bootstrap.tar.xz for $flavorName ($archName)"
+        description = "Downloads and builds bootstrap.tar.xz and jniLibs for $flavorName ($archName)"
         group = "build"
         workingDir = rootDir.resolve("scripts")
         outputs.file(flavorOutputFile)
+        outputs.dir(flavorJniDir)
         doFirst {
             flavorOutDir.mkdirs()
+            flavorJniDir.mkdirs()
         }
         commandLine(
             "python3",
             "build_bootstrap.py",
             "--arch", archName,
-            "--output", flavorOutputFile.absolutePath
+            "--output", flavorOutputFile.absolutePath,
+            "--jnilibs-dir", flavorJniDir.absolutePath
         )
     }
 }
@@ -275,6 +284,8 @@ androidComponents.onVariants { variant ->
     val prefixes = listOf(
         "pre${capitalizedFlavor}${buildTypeName}Build",
         "merge${capitalizedFlavor}${buildTypeName}Assets",
+        "merge${capitalizedFlavor}${buildTypeName}JniLibFolders",
+        "merge${capitalizedFlavor}${buildTypeName}NativeLibs",
         "generate${capitalizedFlavor}${buildTypeName}LintModel",
         "generate${capitalizedFlavor}${buildTypeName}LintVitalModel",
         "generate${capitalizedFlavor}${buildTypeName}LintVitalReportModel"

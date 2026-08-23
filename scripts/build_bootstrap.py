@@ -179,6 +179,7 @@ def main():
     parser.add_argument("--output", "-o", required=True, help="Destination path for bootstrap.tar.xz")
     parser.add_argument("--staging", default=None, help="Working staging directory")
     parser.add_argument("--cache-dir", default=None, help="Local .deb package cache directory")
+    parser.add_argument("--jnilibs-dir", default=None, help="Output directory for packaged native library executables (lib*.so)")
     args = parser.parse_args()
 
     arch_key = args.arch.lower().strip()
@@ -276,7 +277,7 @@ def main():
         os.makedirs(gtk_mod_dir, exist_ok=True)
         if os.path.exists(ime_c):
             print("[*] Compiling GTK IME bridge module (libgtk-android-ime.so, 16KB aligned)...")
-            os.system(f"{ndk_clang} -shared -fPIC {page_size_flags} -Wl,-soname,libgtk-android-ime.so -o '{out_ime}' '{ime_c}'")
+            os.system(f"{ndk_clang} -shared -fPIC {page_size_flags} -Wl,-soname,libgtk-android-ime.so -o '{out_ime}' '{ime_c}' -ldl")
             os.system(f"cp '{out_ime}' '{os.path.join(gtk_mod_dir, 'libgtk-android-ime.so')}'")
 
         # 3. xopp-title-watcher Binary
@@ -298,6 +299,13 @@ def main():
             res = os.system(f"{ndk_clang} -O2 {page_size_flags} -I'{staging_usr}/include' -L'{staging_usr}/lib' -lX11 -o '{out_wallpaper}' '{wallpaper_c}'")
             if res == 0 and os.path.exists(out_wallpaper):
                 os.chmod(out_wallpaper, 0o755)
+
+        # 5. Lightweight /proc/self/exe translation shim (LD_PRELOAD)
+        shim_c = os.path.join(scripts_dir, "xopp-shim.c")
+        out_shim = os.path.join(staging_usr, "lib", "libxopp-shim.so")
+        if os.path.exists(shim_c):
+            print("[*] Compiling xopp-shim library (libxopp-shim.so, 16KB aligned)...")
+            os.system(f"{ndk_clang} -shared -fPIC {page_size_flags} -Wl,-soname,libxopp_shim.so -o '{out_shim}' '{shim_c}' -ldl")
 
     # Clean unneeded headers, docs, and static archives to keep payload lean
     print("[*] Stripping documentation, headers, and static archives...")
@@ -367,6 +375,41 @@ def main():
             menu_data = menu_data.replace(target_block, replacement_block)
             with open(menu_path, "w", encoding="utf-8") as f:
                 f.write(menu_data)
+
+    if args.jnilibs_dir:
+        target_abi_dir = os.path.join(args.jnilibs_dir, abi_name)
+        os.makedirs(target_abi_dir, exist_ok=True)
+        # Export executables with lib*.so naming convention so Android extracts them into nativeLibraryDir
+        bin_mappings = [
+            ("xournalpp", "libxournalpp.so"),
+            ("openbox", "libopenbox.so"),
+            ("xopp-title-watcher", "libxopp_title_watcher.so"),
+            ("xopp-wallpaper", "libxopp_wallpaper.so"),
+            ("gdk-pixbuf-query-loaders", "libgdk_pixbuf_query_loaders.so"),
+            ("glib-compile-schemas", "libglib_compile_schemas.so"),
+            ("xdotool", "libxdotool.so")
+        ]
+        for bin_name, so_name in bin_mappings:
+            src_bin = os.path.join(staging_usr, "bin", bin_name)
+            if os.path.exists(src_bin):
+                dest_so = os.path.join(target_abi_dir, so_name)
+                shutil.copy2(src_bin, dest_so)
+                os.chmod(dest_so, 0o755)
+                print(f"[*] Exported native executable: {bin_name} -> {dest_so}")
+
+        src_ime = os.path.join(staging_usr, "lib", "libgtk-android-ime.so")
+        if os.path.exists(src_ime):
+            dest_ime = os.path.join(target_abi_dir, "libgtk-android-ime.so")
+            shutil.copy2(src_ime, dest_ime)
+            os.chmod(dest_ime, 0o755)
+            print(f"[*] Exported native module: libgtk-android-ime.so -> {dest_ime}")
+
+        src_shim = os.path.join(staging_usr, "lib", "libxopp-shim.so")
+        if os.path.exists(src_shim):
+            dest_shim = os.path.join(target_abi_dir, "libxopp_shim.so")
+            shutil.copy2(src_shim, dest_shim)
+            os.chmod(dest_shim, 0o755)
+            print(f"[*] Exported native shim: libxopp-shim.so -> {dest_shim}")
 
     print(f"[*] Packaging final archive to {args.output}...")
     os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)

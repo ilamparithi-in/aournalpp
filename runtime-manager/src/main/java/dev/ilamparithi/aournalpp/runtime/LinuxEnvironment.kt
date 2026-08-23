@@ -26,6 +26,23 @@ class LinuxEnvironment(private val context: Context) {
     val configDir: File = File(homeDir, ".config")
     val xournalConfigDir: File = File(configDir, "xournalpp")
     val openboxConfigDir: File = File(configDir, "openbox")
+    val nativeLibDir: File
+        get() = File(context.applicationInfo.nativeLibraryDir)
+
+    fun resolveExecutable(name: String): File {
+        val candidates = listOf(
+            "lib" + name.replace('-', '_') + ".so",
+            "lib$name.so",
+            name
+        )
+        for (candidate in candidates) {
+            val nativeFile = File(nativeLibDir, candidate)
+            if (nativeFile.exists() && nativeFile.canExecute()) {
+                return nativeFile
+            }
+        }
+        return File(binDir, name)
+    }
 
     val defaultNotesDir: File
         get() = File(Environment.getExternalStorageDirectory(), "Documents/Notes")
@@ -107,10 +124,33 @@ class LinuxEnvironment(private val context: Context) {
 </openbox_config>
 """.trimIndent()
         )
+        // Symlink xournalpp share assets into homeDir for runtime lookup
+        val xoppShareDir = File(shareDir, "xournalpp")
+        if (xoppShareDir.exists()) {
+            listOf("ui", "palettes", "plugins", "resources").forEach { subDirName ->
+                val targetSub = File(xoppShareDir, subDirName)
+                val homeLink = File(homeDir, subDirName)
+                if (targetSub.exists() && !homeLink.exists()) {
+                    try {
+                        java.nio.file.Files.createSymbolicLink(homeLink.toPath(), targetSub.toPath())
+                    } catch (e: Exception) {
+                        // ignore
+                    }
+                }
+            }
+            val homeShareLink = File(homeDir, "share")
+            if (!homeShareLink.exists()) {
+                try {
+                    java.nio.file.Files.createSymbolicLink(homeShareLink.toPath(), shareDir.toPath())
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
+        }
 
         // Self-heal: Compile GLib GSettings schemas if gschemas.compiled is missing
         val schemasDir = File(shareDir, "glib-2.0/schemas")
-        val compileSchemasBin = File(binDir, "glib-compile-schemas")
+        val compileSchemasBin = resolveExecutable("glib-compile-schemas")
         val compiledSchema = File(schemasDir, "gschemas.compiled")
         if (!compiledSchema.exists() && compileSchemasBin.exists() && schemasDir.exists()) {
             try {
@@ -129,7 +169,7 @@ class LinuxEnvironment(private val context: Context) {
         val gdkDir = File(libDir, "gdk-pixbuf-2.0/2.10.0")
         val loadersCache = File(gdkDir, "loaders.cache")
         val loadersDir = File(gdkDir, "loaders")
-        val queryLoadersBin = File(binDir, "gdk-pixbuf-query-loaders")
+        val queryLoadersBin = resolveExecutable("gdk-pixbuf-query-loaders")
         if ((!loadersCache.exists() || loadersCache.length() == 0L) && queryLoadersBin.exists() && loadersDir.exists()) {
             try {
                 val loaderFiles = loadersDir.listFiles { _, name -> name.endsWith(".so") }
@@ -535,11 +575,15 @@ class LinuxEnvironment(private val context: Context) {
             else -> "/system/lib"
         }
 
-        return mapOf(
+        val shimModule = File(nativeLibDir, "libxopp_shim.so").takeIf { it.exists() } ?: File(libDir, "libxopp-shim.so")
+        val imeModule = File(nativeLibDir, "libgtk-android-ime.so").takeIf { it.exists() } ?: File(libDir, "libgtk-android-ime.so")
+
+        val envMap = mutableMapOf(
             "PREFIX" to usrDir.absolutePath,
             "HOME" to homeDir.absolutePath,
-            "PATH" to "${binDir.absolutePath}:/system/bin:/system/xbin",
-            "LD_LIBRARY_PATH" to "${libDir.absolutePath}:$systemLibDir",
+            "PATH" to "${nativeLibDir.absolutePath}:${binDir.absolutePath}:/system/bin:/system/xbin",
+            "LD_LIBRARY_PATH" to "${nativeLibDir.absolutePath}:${libDir.absolutePath}:$systemLibDir",
+            "XOPP_FAKE_EXE" to "${binDir.absolutePath}/xournalpp",
             "XDG_CONFIG_HOME" to configDir.absolutePath,
             "XDG_DATA_DIRS" to "${shareDir.absolutePath}:/usr/share",
             "GSETTINGS_SCHEMA_DIR" to "${shareDir.absolutePath}/glib-2.0/schemas",
@@ -558,9 +602,16 @@ class LinuxEnvironment(private val context: Context) {
             // CRITICAL: Disable desktop portal lookup to prevent D-Bus freeze
             "GTK_USE_PORTAL" to "0",
             "GIO_USE_VFS" to "local",
-            // Text focus bridge module for soft keyboard auto-toggle
-            "GTK_MODULES" to "${libDir.absolutePath}/libgtk-android-ime.so",
             "GTK_PATH" to "${libDir.absolutePath}/gtk-3.0"
         )
+
+        if (shimModule.exists()) {
+            envMap["LD_PRELOAD"] = shimModule.absolutePath
+        }
+        if (imeModule.exists()) {
+            envMap["GTK_MODULES"] = imeModule.absolutePath
+        }
+
+        return envMap
     }
 }

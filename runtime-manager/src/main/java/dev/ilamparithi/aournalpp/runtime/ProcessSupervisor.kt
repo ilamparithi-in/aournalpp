@@ -16,18 +16,18 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
     private val activeProcesses = CopyOnWriteArrayList<Process>()
 
     fun startKioskWindowManager(): Process? {
-        val matchboxFile = File(env.binDir, "matchbox-window-manager")
-        val openboxFile = File(env.binDir, "openbox")
+        val openboxFile = env.resolveExecutable("openbox")
+        val matchboxFile = env.resolveExecutable("matchbox-window-manager")
         val wmFile = when {
-            matchboxFile.exists() && matchboxFile.canExecute() -> matchboxFile
             openboxFile.exists() && openboxFile.canExecute() -> openboxFile
+            matchboxFile.exists() && matchboxFile.canExecute() -> matchboxFile
             else -> null
         }
         if (wmFile == null) {
-            Log.w("ProcessSupervisor", "No window manager found in ${env.binDir.absolutePath}, skipping WM startup")
+            Log.w("ProcessSupervisor", "No window manager found in ${env.nativeLibDir.absolutePath} or ${env.binDir.absolutePath}, skipping WM startup")
             return null
         }
-        val command = if (wmFile.name == "openbox") {
+        val command = if (wmFile.name.contains("openbox")) {
             listOf(wmFile.absolutePath, "--sm-disable")
         } else {
             listOf(wmFile.absolutePath, "-use_titlebar", "no", "-use_cursor", "no")
@@ -60,7 +60,7 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
     }
 
     fun startXournal(targetFilePath: String? = null): Process? {
-        val xournalFile = File(env.binDir, "xournalpp")
+        val xournalFile = env.resolveExecutable("xournalpp")
         if (!xournalFile.exists() || !xournalFile.canExecute()) {
             Log.e("ProcessSupervisor", "xournalpp not found at ${xournalFile.absolutePath}")
             return null
@@ -70,8 +70,9 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
             command.add(targetFilePath)
         }
         
+        val xoppWorkingDir = File(env.shareDir, "xournalpp").takeIf { it.exists() } ?: env.homeDir
         val process = ProcessBuilder(command)
-            .directory(env.homeDir)
+            .directory(xoppWorkingDir)
             .redirectErrorStream(true)
             .apply { environment().putAll(env.getEnvMap()) }
             .start()
@@ -94,7 +95,7 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
     }
 
     fun startTitleWatcher() {
-        val watcherFile = File(env.binDir, "xopp-title-watcher")
+        val watcherFile = env.resolveExecutable("xopp-title-watcher")
         if (!watcherFile.exists() || !watcherFile.canExecute()) {
             Log.w("ProcessSupervisor", "xopp-title-watcher not found or not executable at ${watcherFile.absolutePath}")
             return
@@ -139,7 +140,7 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
     }
 
     fun setX11Wallpaper(ppmPath: String): Boolean {
-        val wallpaperBin = File(env.binDir, "xopp-wallpaper")
+        val wallpaperBin = env.resolveExecutable("xopp-wallpaper")
         if (!wallpaperBin.exists() || !wallpaperBin.canExecute()) {
             Log.w("ProcessSupervisor", "xopp-wallpaper not found or not executable at ${wallpaperBin.absolutePath}")
             return false
@@ -222,14 +223,21 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
     }
 
     fun launchBinary(name: String, command: List<String>): Process? {
-        val binFile = File(command.first())
+        val rawPath = command.first()
+        val binFile = if (File(rawPath).isAbsolute) {
+            val f = File(rawPath)
+            if (f.exists() && f.canExecute()) f else env.resolveExecutable(f.name)
+        } else {
+            env.resolveExecutable(rawPath)
+        }
         if (!binFile.exists() || !binFile.canExecute()) {
             Log.w("ProcessSupervisor", "$name binary not found or not executable at ${binFile.absolutePath}")
             return null
         }
+        val resolvedCommand = listOf(binFile.absolutePath) + command.drop(1)
         return try {
-            Log.i("ProcessSupervisor", "Launching binary $name: $command")
-            val process = ProcessBuilder(command)
+            Log.i("ProcessSupervisor", "Launching binary $name: $resolvedCommand")
+            val process = ProcessBuilder(resolvedCommand)
                 .directory(env.homeDir)
                 .redirectErrorStream(true)
                 .apply { environment().putAll(env.getEnvMap()) }
@@ -244,14 +252,26 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
     }
 
     fun runBinary(command: List<String>): Pair<Int, String> {
-        val binFile = File(command.first())
+        val rawPath = command.first()
+        val binFile = if (File(rawPath).isAbsolute) {
+            val f = File(rawPath)
+            if (f.exists() && f.canExecute()) f else env.resolveExecutable(f.name)
+        } else {
+            env.resolveExecutable(rawPath)
+        }
         if (!binFile.exists() || !binFile.canExecute()) {
             Log.w("ProcessSupervisor", "Binary not found or not executable at ${binFile.absolutePath}")
             return Pair(-1, "Binary not found: ${binFile.absolutePath}")
         }
+        val resolvedCommand = listOf(binFile.absolutePath) + command.drop(1)
+        val workingDir = if (binFile.name.contains("xournalpp")) {
+            File(env.shareDir, "xournalpp").takeIf { it.exists() } ?: env.homeDir
+        } else {
+            env.homeDir
+        }
         return try {
-            val process = ProcessBuilder(command)
-                .directory(env.homeDir)
+            val process = ProcessBuilder(resolvedCommand)
+                .directory(workingDir)
                 .redirectErrorStream(true)
                 .apply { environment().putAll(env.getEnvMap()) }
                 .start()
@@ -259,7 +279,7 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
             val exitCode = process.waitFor()
             Pair(exitCode, output)
         } catch (e: Exception) {
-            Log.e("ProcessSupervisor", "Error running binary: $command", e)
+            Log.e("ProcessSupervisor", "Error running binary: $resolvedCommand", e)
             Pair(-1, e.message ?: "Execution failed")
         }
     }

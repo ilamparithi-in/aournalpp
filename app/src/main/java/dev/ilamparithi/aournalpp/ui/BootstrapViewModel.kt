@@ -70,19 +70,20 @@ class BootstrapViewModel(application: Application) : AndroidViewModel(applicatio
             }
 
             // Verify executable permissions on required binaries
-            val xournalBin = File(env.binDir, "xournalpp")
-            val matchboxBin = File(env.binDir, "matchbox-window-manager")
+            val xournalBin = env.resolveExecutable("xournalpp")
+            val openboxBin = env.resolveExecutable("openbox")
 
             val xournalExists = xournalBin.exists()
             val xournalExec = xournalBin.canExecute()
-            val matchboxExists = matchboxBin.exists()
-            val matchboxExec = matchboxBin.canExecute()
+            val openboxExists = openboxBin.exists()
+            val openboxExec = openboxBin.canExecute()
 
             Log.i(TAG, "Verification check:")
             Log.i(TAG, " - usrDir: ${env.usrDir.absolutePath} (exists=${env.usrDir.exists()})")
             Log.i(TAG, " - binDir: ${env.binDir.absolutePath} (exists=${env.binDir.exists()})")
+            Log.i(TAG, " - nativeLibDir: ${env.nativeLibDir.absolutePath} (exists=${env.nativeLibDir.exists()})")
             Log.i(TAG, " - xournalpp: ${xournalBin.absolutePath} (exists=$xournalExists, canExecute=$xournalExec, size=${if (xournalExists) xournalBin.length() else 0})")
-            Log.i(TAG, " - matchbox: ${matchboxBin.absolutePath} (exists=$matchboxExists, canExecute=$matchboxExec)")
+            Log.i(TAG, " - openbox: ${openboxBin.absolutePath} (exists=$openboxExists, canExecute=$openboxExec)")
 
             if (xournalExists && xournalExec) {
                 Log.i(TAG, "Bootstrap verified successfully. Transitioning to Ready.")

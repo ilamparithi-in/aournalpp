@@ -27,7 +27,7 @@ class PdfExportManager(
                     outputPdfFile.delete()
                 }
 
-                val xoppBinary = File(env.binDir, "xournalpp")
+                val xoppBinary = env.resolveExecutable("xournalpp")
                 if (!xoppBinary.exists() || !xoppBinary.canExecute()) {
                     error("Xournal++ binary not found or not executable at: ${xoppBinary.absolutePath}")
                 }
