@@ -6,30 +6,78 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val localPropsFile = rootDir.resolve("local.properties")
 val localProperties = Properties().apply {
-    val localPropsFile = rootDir.resolve("local.properties")
     if (localPropsFile.exists()) {
         localPropsFile.inputStream().use { load(it) }
     }
 }
 
-val resolvedKeystoreFilePath = System.getenv("KEYSTORE_FILE")
+// -----------------------------------------------------------------------------
+// Dynamic Versioning System (git describe --tags --always --dirty)
+// -----------------------------------------------------------------------------
+val fallbackVersionName = "${libs.versions.appVersionMajor.get()}.${libs.versions.appVersionMinor.get()}.${libs.versions.appVersionPatch.get()}"
+
+val gitVersionName: String = try {
+    providers.exec {
+        commandLine("git", "describe", "--tags", "--always", "--dirty")
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim().removePrefix("v").ifEmpty { fallbackVersionName }
+} catch (e: Exception) {
+    fallbackVersionName
+}
+
+val baseVersionCode: Int = try {
+    providers.exec {
+        commandLine("git", "rev-list", "--count", "HEAD")
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim().toIntOrNull() ?: 1
+} catch (e: Exception) {
+    1
+}
+
+// -----------------------------------------------------------------------------
+// Multi-Keystore Signing Resolution (Release & Beta)
+// -----------------------------------------------------------------------------
+val releaseKeystoreFilePath = System.getenv("RELEASE_KEYSTORE_FILE")
+    ?: System.getenv("KEYSTORE_FILE")
+    ?: (project.findProperty("RELEASE_KEYSTORE_FILE") as? String)
     ?: (project.findProperty("KEYSTORE_FILE") as? String)
     ?: localProperties.getProperty("release.keystore.path")
-val resolvedKeystoreFile = resolvedKeystoreFilePath?.let { file(it) }
-
-val resolvedStorePassword = System.getenv("KEYSTORE_PASSWORD")
+val releaseKeystoreFile = releaseKeystoreFilePath?.let { file(it) }
+val releaseStorePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+    ?: System.getenv("KEYSTORE_PASSWORD")
+    ?: (project.findProperty("RELEASE_KEYSTORE_PASSWORD") as? String)
     ?: (project.findProperty("KEYSTORE_PASSWORD") as? String)
     ?: localProperties.getProperty("release.keystore.password")
-val resolvedKeyAlias = System.getenv("KEY_ALIAS")
+val releaseKeyAlias = System.getenv("RELEASE_KEY_ALIAS")
+    ?: System.getenv("KEY_ALIAS")
+    ?: (project.findProperty("RELEASE_KEY_ALIAS") as? String)
     ?: (project.findProperty("KEY_ALIAS") as? String)
     ?: localProperties.getProperty("release.key.alias")
-val resolvedKeyPassword = System.getenv("KEY_PASSWORD")
+val releaseKeyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+    ?: System.getenv("KEY_PASSWORD")
+    ?: (project.findProperty("RELEASE_KEY_PASSWORD") as? String)
     ?: (project.findProperty("KEY_PASSWORD") as? String)
     ?: localProperties.getProperty("release.key.password")
-    ?: resolvedStorePassword
+    ?: releaseStorePassword
+val isReleaseSigningConfigured = releaseKeystoreFile != null && releaseKeystoreFile.exists() && !releaseStorePassword.isNullOrBlank() && !releaseKeyAlias.isNullOrBlank()
 
-val isSigningConfigured = resolvedKeystoreFile != null && resolvedKeystoreFile.exists() && !resolvedStorePassword.isNullOrBlank() && !resolvedKeyAlias.isNullOrBlank()
+val betaKeystoreFilePath = System.getenv("BETA_KEYSTORE_FILE")
+    ?: (project.findProperty("BETA_KEYSTORE_FILE") as? String)
+    ?: localProperties.getProperty("beta.keystore.path")
+val betaKeystoreFile = betaKeystoreFilePath?.let { file(it) }
+val betaStorePassword = System.getenv("BETA_KEYSTORE_PASSWORD")
+    ?: (project.findProperty("BETA_KEYSTORE_PASSWORD") as? String)
+    ?: localProperties.getProperty("beta.keystore.password")
+val betaKeyAlias = System.getenv("BETA_KEY_ALIAS")
+    ?: (project.findProperty("BETA_KEY_ALIAS") as? String)
+    ?: localProperties.getProperty("beta.key.alias")
+val betaKeyPassword = System.getenv("BETA_KEY_PASSWORD")
+    ?: (project.findProperty("BETA_KEY_PASSWORD") as? String)
+    ?: localProperties.getProperty("beta.key.password")
+    ?: betaStorePassword
+val isBetaSigningConfigured = betaKeystoreFile != null && betaKeystoreFile.exists() && !betaStorePassword.isNullOrBlank() && !betaKeyAlias.isNullOrBlank()
 
 android {
     namespace = "dev.ilamparithi.aournalpp"
@@ -39,8 +87,8 @@ android {
         applicationId = "dev.ilamparithi.aournalpp"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = baseVersionCode
+        versionName = gitVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -50,11 +98,23 @@ android {
 
     signingConfigs {
         create("release") {
-            if (resolvedKeystoreFile != null && resolvedKeystoreFile.exists()) {
-                storeFile = resolvedKeystoreFile
-                storePassword = resolvedStorePassword ?: ""
-                keyAlias = resolvedKeyAlias ?: ""
-                keyPassword = resolvedKeyPassword ?: ""
+            if (isReleaseSigningConfigured) {
+                storeFile = releaseKeystoreFile
+                storePassword = releaseStorePassword ?: ""
+                keyAlias = releaseKeyAlias ?: ""
+                keyPassword = releaseKeyPassword ?: ""
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            }
+        }
+        create("beta") {
+            if (isBetaSigningConfigured) {
+                storeFile = betaKeystoreFile
+                storePassword = betaStorePassword ?: ""
+                keyAlias = betaKeyAlias ?: ""
+                keyPassword = betaKeyPassword ?: ""
                 enableV1Signing = true
                 enableV2Signing = true
                 enableV3Signing = true
@@ -67,6 +127,7 @@ android {
     productFlavors {
         create("arm64") {
             dimension = "abi"
+            versionCode = baseVersionCode * 10 + 2
             ndk {
                 abiFilters.clear()
                 abiFilters.add("arm64-v8a")
@@ -74,6 +135,7 @@ android {
         }
         create("x86_64") {
             dimension = "abi"
+            versionCode = baseVersionCode * 10 + 4
             ndk {
                 abiFilters.clear()
                 abiFilters.add("x86_64")
@@ -82,6 +144,19 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
+        create("beta") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
+            applicationIdSuffix = ".beta"
+            versionNameSuffix = "-beta"
+            if (isBetaSigningConfigured) {
+                signingConfig = signingConfigs.getByName("beta")
+            }
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -89,7 +164,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            if (isSigningConfigured) {
+            if (isReleaseSigningConfigured) {
                 signingConfig = signingConfigs.getByName("release")
             }
         }

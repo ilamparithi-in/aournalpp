@@ -1,6 +1,9 @@
 [versions]
 agp = "9.3.1"
 kotlin = "2.2.10"
+appVersionMajor = "1"
+appVersionMinor = "0"
+appVersionPatch = "0"
 compileSdk = "36"
 minSdk = "26"
 targetSdk = "36"

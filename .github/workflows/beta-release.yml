@@ -1,0 +1,113 @@
+name: Beta Pre-Release Build
+
+on:
+  push:
+    tags:
+      - 'v*-beta*'
+      - 'v*-alpha*'
+      - 'v*-rc*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Pre-release tag override (e.g. v1.0.0-beta.1)'
+        required: false
+        type: string
+
+jobs:
+  build-beta:
+    name: Build & Sign Beta APKs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android NDK (r27d)
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27d
+          link-to-sdk: true
+
+      - name: Set up Gradle Build Cache
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Cache Debian Packages
+        uses: actions/cache@v6
+        with:
+          path: scripts/build/deb_cache
+          key: deb-cache-${{ runner.os }}-${{ hashFiles('scripts/build_bootstrap.py') }}
+          restore-keys: |
+            deb-cache-${{ runner.os }}-
+
+      - name: Decode Beta Keystore
+        if: env.BETA_KEYSTORE_BASE64 != ''
+        env:
+          BETA_KEYSTORE_BASE64: ${{ secrets.BETA_KEYSTORE_BASE64 }}
+        run: |
+          echo "$BETA_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/beta.keystore"
+          echo "BETA_KEYSTORE_FILE=$RUNNER_TEMP/beta.keystore" >> "$GITHUB_ENV"
+
+      - name: Assemble Signed Beta APKs (Arm64 & X86_64)
+        env:
+          BETA_KEYSTORE_PASSWORD: ${{ secrets.BETA_KEYSTORE_PASSWORD }}
+          BETA_KEY_ALIAS: ${{ secrets.BETA_KEY_ALIAS }}
+          BETA_KEY_PASSWORD: ${{ secrets.BETA_KEY_PASSWORD }}
+        run: |
+          ./gradlew assembleArm64Beta assembleX86_64Beta --stacktrace
+
+      - name: Stage Beta Release Artifacts
+        run: |
+          mkdir -p release-dist
+          cp app/build/outputs/apk/arm64/beta/*.apk release-dist/ || true
+          cp app/build/outputs/apk/x86_64/beta/*.apk release-dist/ || true
+          cd release-dist
+          sha256sum *.apk > checksums.txt
+          ls -la
+
+      - name: Upload Arm64 Beta APK (Direct File Artifact)
+        uses: actions/upload-artifact@v7
+        with:
+          name: aournalpp-arm64-beta.apk
+          path: app/build/outputs/apk/arm64/beta/*.apk
+          if-no-files-found: error
+          archive: false
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload X86_64 Beta APK (Direct File Artifact)
+        uses: actions/upload-artifact@v7
+        with:
+          name: aournalpp-x86_64-beta.apk
+          path: app/build/outputs/apk/x86_64/beta/*.apk
+          if-no-files-found: error
+          archive: false
+          compression-level: 0
+          retention-days: 14
+
+      - name: Create Draft GitHub Beta Pre-Release (Individual Assets)
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ inputs.tag_name || github.ref_name }}
+          name: "Aournal++ Beta ${{ inputs.tag_name || github.ref_name }}"
+          draft: true
+          prerelease: true
+          generate_release_notes: true
+          files: |
+            release-dist/*.apk
+            release-dist/checksums.txt
+
+      - name: Cleanup Keystores
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/beta.keystore"
