@@ -1,0 +1,25 @@
+From d2f3bf28b8cc08e5ceec5e0f1475717dd3fd4d93 Mon Sep 17 00:00:00 2001
+From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
+Date: Tue, 25 Aug 2026 01:23:42 +0530
+Subject: [PATCH 4/4] fix(input): restore cursor visibility in
+ handleStylusEvent
+
+---
+ lorie/src/main/cpp/lorie/cmdentrypoint.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
+index d111f41..14c3b6a 100644
+--- a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
++++ b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
+@@ -252,6 +252,7 @@ static Bool handleStylusEvent(__unused ClientPtr pClient, void *closure) {
+         free(e);
+         return TRUE;
+     }
++    lorieSetCursorVisible(TRUE);
+     ValuatorMask mask;
+     valuator_mask_zero(&mask);
+     static int buttons_prev = 0;
+-- 
+2.55.0
+

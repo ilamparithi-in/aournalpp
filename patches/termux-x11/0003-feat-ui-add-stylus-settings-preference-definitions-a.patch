@@ -1,8 +1,8 @@
 From a7e5e3b9fbd439288ebc9bf9d66f3d40ae7ff9e0 Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Sun, 23 Aug 2026 08:07:54 +0530
-Subject: [PATCH] feat(ui): add stylus settings, preference definitions, and
- null-safety guards
+Subject: [PATCH 3/4] feat(ui): add stylus settings, preference definitions,
+ and null-safety guards
 
 ---
  .../java/com/termux/x11/CmdEntryPoint.java    | 52 ++++++++++-------
