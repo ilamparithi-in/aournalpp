@@ -62,6 +62,7 @@ import dev.ilamparithi.aournalpp.utils.NoteOpenManager
 import dev.ilamparithi.aournalpp.ui.NoteOpenActionDialog
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
 import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
+import dev.ilamparithi.aournalpp.ui.preview.DragActionTarget
 import dev.ilamparithi.aournalpp.ui.preview.FloatingPreviewHost
 import dev.ilamparithi.aournalpp.ui.theme.AournalTheme
 import dev.ilamparithi.aournalpp.ui.theme.ExpressiveSprings
@@ -111,17 +112,39 @@ class MainActivity : ComponentActivity() {
                                 LinuxEnvironment(this@MainActivity).ensureDirectoryTree()
                             }
                         }
-                        FloatingPreviewHost {
+                        val env = remember { LinuxEnvironment(this@MainActivity) }
+                        val supervisor = remember { ProcessSupervisor(env) }
+                        val pdfExportManager = remember { PdfExportManager(env, supervisor) }
+                        val repo = remember { DocumentRepository(this@MainActivity) }
+
+                        FloatingPreviewHost(
+                            onTriggerAction = { note, action ->
+                                when (action) {
+                                    DragActionTarget.VIEW_PDF -> {
+                                        NoteOpenManager.openAsPdf(
+                                            context = this@MainActivity,
+                                            file = note.file,
+                                            pdfExportManager = pdfExportManager,
+                                            scope = lifecycleScope,
+                                            repository = repo
+                                        )
+                                    }
+                                    DragActionTarget.EDIT_CANVAS -> {
+                                        NoteOpenManager.openInCanvas(
+                                            context = this@MainActivity,
+                                            file = note.file,
+                                            repository = repo
+                                        )
+                                    }
+                                    DragActionTarget.NONE -> {}
+                                }
+                            }
+                        ) {
                             MainResponsiveAppShell()
                         }
 
                         val promptFile = externalFileToOpen.value
                         if (promptFile != null) {
-                            val env = remember { LinuxEnvironment(this@MainActivity) }
-                            val supervisor = remember { ProcessSupervisor(env) }
-                            val pdfExportManager = remember { PdfExportManager(env, supervisor) }
-                            val repo = remember { DocumentRepository(this@MainActivity) }
-
                             NoteOpenActionDialog(
                                 file = promptFile,
                                 onDismiss = { externalFileToOpen.value = null },

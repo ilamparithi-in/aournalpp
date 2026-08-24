@@ -9,10 +9,15 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -25,15 +30,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
@@ -44,7 +54,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
-import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -65,14 +74,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.ilamparithi.aournalpp.model.NoteDocument
 import dev.ilamparithi.aournalpp.model.NoteFileType
 import org.intellij.lang.annotations.Language
 import java.io.File
@@ -139,9 +151,14 @@ private val M3MotionEasing = CubicBezierEasing(0.2f, 0.0f, 0.0f, 1.0f)
  */
 @Composable
 fun FloatingPreviewHost(
+    onTriggerAction: ((NoteDocument, DragActionTarget) -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
     val controller = remember { FloatingPreviewController() }
+
+    LaunchedEffect(onTriggerAction) {
+        controller.registerActionCallback(onTriggerAction)
+    }
 
     CompositionLocalProvider(LocalFloatingPreviewController provides controller) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -151,7 +168,7 @@ fun FloatingPreviewHost(
             if (previewData != null) {
                 FloatingPreviewOverlay(
                     data = previewData,
-                    isFingerDown = controller.isFingerDown.value,
+                    controller = controller,
                     onDismissFinished = { controller.dismissImmediately() }
                 )
             }
@@ -164,12 +181,14 @@ fun FloatingPreviewHost(
  * 1. Native Android 12+ (API 31+) Sparkle / Turbulence Ripple via [Modifier.indication] and [ripple].
  * 2. Radial sweep expanding from the long-press coordinate across the entire backdrop.
  * 3. Morphing image preview with full 1200p+ HD rendering and crisp FilterQuality.High.
- * 4. Seamless fade-out on finger release without blocking subsequent touches on MainActivity.
+ * 4. Material 3 Drag Actions: Drag left/up to highlight "View as PDF", drag right/down for "Edit in Xournal++".
+ * 5. Material 3 Motion physics "flying" card animation and dynamic space-pushing when clearance is constrained.
+ * 6. Seamless fade-out on finger release without blocking subsequent touches on MainActivity.
  */
 @Composable
 private fun FloatingPreviewOverlay(
     data: FloatingPreviewData,
-    isFingerDown: Boolean,
+    controller: FloatingPreviewController,
     onDismissFinished: () -> Unit
 ) {
     val density = LocalDensity.current
@@ -177,6 +196,10 @@ private fun FloatingPreviewOverlay(
     val fadeAlpha = remember { Animatable(1f) }
     val rippleInteractionSource = remember { MutableInteractionSource() }
     var activePress by remember { mutableStateOf<PressInteraction.Press?>(null) }
+
+    val isFingerDown = controller.isFingerDown.value
+    val activeAction = controller.activeAction.value
+    val dragDelta = controller.dragDelta.value
 
     // Trigger morph-in animation and emit native Sparkle Ripple press at touch origin
     LaunchedEffect(data) {
@@ -245,6 +268,7 @@ private fun FloatingPreviewOverlay(
     ) {
         val screenWidthPx = constraints.maxWidth.toFloat()
         val screenHeightPx = constraints.maxHeight.toFloat()
+        val isLandscape = screenWidthPx >= screenHeightPx
 
         // 1. Initial Bounds Geometry
         val initBounds = if (data.initialBounds != Rect.Zero && data.initialBounds.width > 0 && data.initialBounds.height > 0) {
@@ -285,7 +309,7 @@ private fun FloatingPreviewOverlay(
                 )
         )
 
-        // 3. Persistent AGSL Noise Turbulence (keeps the shimmer active after ripple sweep)
+        // 3. Persistent AGSL Noise Turbulence
         PersistentTurbulenceOverlay(
             origin = origin,
             progress = morphProgress.value,
@@ -302,15 +326,24 @@ private fun FloatingPreviewOverlay(
             modifier = Modifier.fillMaxSize()
         )
 
-        // 3. Compute Morphing Geometry from initial bounds to centered target bounds
+        // 5. Morphing Geometry Computation
         val aspectRatio = when {
             bitmap != null && bitmap.height > 0 -> bitmap.width.toFloat() / bitmap.height.toFloat()
             initBounds.height > 0 -> initBounds.width / initBounds.height
             else -> 0.75f
         }
 
-        val maxTargetWidthPx = screenWidthPx - with(density) { 56.dp.toPx() }
-        val maxTargetHeightPx = screenHeightPx - with(density) { 120.dp.toPx() }
+        val maxTargetWidthPx = if (isLandscape) {
+            screenWidthPx - with(density) { 80.dp.toPx() }
+        } else {
+            screenWidthPx - with(density) { 48.dp.toPx() }
+        }
+
+        val maxTargetHeightPx = if (isLandscape) {
+            screenHeightPx - with(density) { 72.dp.toPx() }
+        } else {
+            screenHeightPx - with(density) { 140.dp.toPx() }
+        }
 
         var targetWidthPx = maxTargetWidthPx
         var targetHeightPx = targetWidthPx / aspectRatio
@@ -323,9 +356,70 @@ private fun FloatingPreviewOverlay(
         val targetLeftPx = (screenWidthPx - targetWidthPx) / 2f
         val targetTopPx = (screenHeightPx - targetHeightPx) / 2f
 
+        // Space & Pushing Calculation
+        val actionBoxWidthPx = with(density) { 180.dp.toPx() }
+        val actionBoxHeightPx = with(density) { 110.dp.toPx() }
+
+        val availableSideSpacePx = targetLeftPx
+        val requiredSideSpacePx = actionBoxWidthPx + with(density) { 20.dp.toPx() }
+        val isLandscapeSpaceConstrained = availableSideSpacePx < requiredSideSpacePx
+        val maxPushX = if (isLandscapeSpaceConstrained) (requiredSideSpacePx - availableSideSpacePx) else 0f
+
+        val availableVerticalSpacePx = targetTopPx
+        val requiredVerticalSpacePx = actionBoxHeightPx + with(density) { 20.dp.toPx() }
+        val isPortraitSpaceConstrained = availableVerticalSpacePx < requiredVerticalSpacePx
+        val maxPushY = if (isPortraitSpaceConstrained) (requiredVerticalSpacePx - availableVerticalSpacePx) else 0f
+
+        val targetPushX = when {
+            !isLandscape -> 0f
+            activeAction == DragActionTarget.VIEW_PDF -> maxPushX // Drag left -> push card right
+            activeAction == DragActionTarget.EDIT_CANVAS -> -maxPushX // Drag right -> push card left
+            else -> 0f
+        }
+
+        val targetPushY = when {
+            isLandscape -> 0f
+            activeAction == DragActionTarget.VIEW_PDF -> maxPushY // Drag up -> push card down
+            activeAction == DragActionTarget.EDIT_CANVAS -> -maxPushY // Drag down -> push card up
+            else -> 0f
+        }
+
+        val animatedPushX by animateFloatAsState(
+            targetValue = targetPushX,
+            animationSpec = spring(dampingRatio = 0.78f, stiffness = 320f),
+            label = "pushX"
+        )
+        val animatedPushY by animateFloatAsState(
+            targetValue = targetPushY,
+            animationSpec = spring(dampingRatio = 0.78f, stiffness = 320f),
+            label = "pushY"
+        )
+
+        // Flying dynamic tilt & lag
+        val flyingLagX = (dragDelta.x * 0.10f).coerceIn(-28f, 28f)
+        val flyingLagY = (dragDelta.y * 0.10f).coerceIn(-28f, 28f)
+
+        val targetTilt = when (activeAction) {
+            DragActionTarget.VIEW_PDF -> if (isLandscape) -2.8f else -1.2f
+            DragActionTarget.EDIT_CANVAS -> if (isLandscape) 2.8f else 1.2f
+            DragActionTarget.NONE -> (dragDelta.x / screenWidthPx * 6f).coerceIn(-1.5f, 1.5f)
+        }
+        val animatedTilt by animateFloatAsState(
+            targetValue = targetTilt,
+            animationSpec = spring(dampingRatio = 0.80f, stiffness = 340f),
+            label = "tilt"
+        )
+
+        val targetScale = if (activeAction != DragActionTarget.NONE) 0.98f else 1.0f
+        val animatedScale by animateFloatAsState(
+            targetValue = targetScale,
+            animationSpec = spring(dampingRatio = 0.75f, stiffness = 350f),
+            label = "scale"
+        )
+
         val p = morphProgress.value
-        val curLeftPx = initBounds.left + (targetLeftPx - initBounds.left) * p
-        val curTopPx = initBounds.top + (targetTopPx - initBounds.top) * p
+        val curLeftPx = initBounds.left + (targetLeftPx - initBounds.left) * p + animatedPushX * p + flyingLagX * p
+        val curTopPx = initBounds.top + (targetTopPx - initBounds.top) * p + animatedPushY * p + flyingLagY * p
         val curWidthPx = initBounds.width + (targetWidthPx - initBounds.width) * p
         val curHeightPx = initBounds.height + (targetHeightPx - initBounds.height) * p
 
@@ -335,11 +429,129 @@ private fun FloatingPreviewOverlay(
         val curWidthDp = with(density) { curWidthPx.toDp() }
         val curHeightDp = with(density) { curHeightPx.toDp() }
 
-        // 4. Morphing Floating Card
+        // 6. Action Region Highlights ("View as PDF" & "Edit in Xournal++")
+        if (isLandscape) {
+            // LANDSCAPE: Left = View as PDF, Right = Edit in Xournal++
+            val isViewPdfActive = activeAction == DragActionTarget.VIEW_PDF
+            val viewPdfAlpha by animateFloatAsState(if (isViewPdfActive) 1f else 0f, spring(0.8f, 350f), label = "viewPdfAlpha")
+            val viewPdfScale by animateFloatAsState(if (isViewPdfActive) 1f else 0.86f, spring(0.75f, 320f), label = "viewPdfScale")
+            val viewPdfSlideX by animateDpAsState(if (isViewPdfActive) 0.dp else (-24).dp, spring(0.8f, 350f), label = "viewPdfSlideX")
+
+            if (viewPdfAlpha > 0.005f) {
+                ActionRegionCard(
+                    icon = Icons.Default.PictureAsPdf,
+                    title = "VIEW AS PDF",
+                    subtitle = "Release finger to view",
+                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.94f * viewPdfAlpha),
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.85f * viewPdfAlpha),
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 16.dp, top = 32.dp, bottom = 32.dp)
+                        .width(with(density) { actionBoxWidthPx.toDp() })
+                        .height(curHeightDp.coerceAtLeast(160.dp))
+                        .offset(x = viewPdfSlideX)
+                        .graphicsLayer {
+                            alpha = viewPdfAlpha * p
+                            scaleX = viewPdfScale
+                            scaleY = viewPdfScale
+                        }
+                )
+            }
+
+            val isEditCanvasActive = activeAction == DragActionTarget.EDIT_CANVAS
+            val editCanvasAlpha by animateFloatAsState(if (isEditCanvasActive) 1f else 0f, spring(0.8f, 350f), label = "editCanvasAlpha")
+            val editCanvasScale by animateFloatAsState(if (isEditCanvasActive) 1f else 0.86f, spring(0.75f, 320f), label = "editCanvasScale")
+            val editCanvasSlideX by animateDpAsState(if (isEditCanvasActive) 0.dp else 24.dp, spring(0.8f, 350f), label = "editCanvasSlideX")
+
+            if (editCanvasAlpha > 0.005f) {
+                ActionRegionCard(
+                    icon = Icons.Default.Edit,
+                    title = "EDIT IN XOURNAL++",
+                    subtitle = "Release finger to edit",
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.94f * editCanvasAlpha),
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f * editCanvasAlpha),
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 16.dp, top = 32.dp, bottom = 32.dp)
+                        .width(with(density) { actionBoxWidthPx.toDp() })
+                        .height(curHeightDp.coerceAtLeast(160.dp))
+                        .offset(x = editCanvasSlideX)
+                        .graphicsLayer {
+                            alpha = editCanvasAlpha * p
+                            scaleX = editCanvasScale
+                            scaleY = editCanvasScale
+                        }
+                )
+            }
+        } else {
+            // PORTRAIT: Top = View as PDF, Bottom = Edit in Xournal++
+            val isViewPdfActive = activeAction == DragActionTarget.VIEW_PDF
+            val viewPdfAlpha by animateFloatAsState(if (isViewPdfActive) 1f else 0f, spring(0.8f, 350f), label = "viewPdfAlphaPort")
+            val viewPdfScale by animateFloatAsState(if (isViewPdfActive) 1f else 0.86f, spring(0.75f, 320f), label = "viewPdfScalePort")
+            val viewPdfSlideY by animateDpAsState(if (isViewPdfActive) 0.dp else (-20).dp, spring(0.8f, 350f), label = "viewPdfSlideY")
+
+            if (viewPdfAlpha > 0.005f) {
+                ActionRegionCardHorizontal(
+                    icon = Icons.Default.PictureAsPdf,
+                    title = "VIEW AS PDF",
+                    subtitle = "Release finger to view",
+                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.94f * viewPdfAlpha),
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.85f * viewPdfAlpha),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
+                        .fillMaxWidth()
+                        .height(with(density) { actionBoxHeightPx.toDp() })
+                        .offset(y = viewPdfSlideY)
+                        .graphicsLayer {
+                            alpha = viewPdfAlpha * p
+                            scaleX = viewPdfScale
+                            scaleY = viewPdfScale
+                        }
+                )
+            }
+
+            val isEditCanvasActive = activeAction == DragActionTarget.EDIT_CANVAS
+            val editCanvasAlpha by animateFloatAsState(if (isEditCanvasActive) 1f else 0f, spring(0.8f, 350f), label = "editCanvasAlphaPort")
+            val editCanvasScale by animateFloatAsState(if (isEditCanvasActive) 1f else 0.86f, spring(0.75f, 320f), label = "editCanvasScalePort")
+            val editCanvasSlideY by animateDpAsState(if (isEditCanvasActive) 0.dp else 20.dp, spring(0.8f, 350f), label = "editCanvasSlideY")
+
+            if (editCanvasAlpha > 0.005f) {
+                ActionRegionCardHorizontal(
+                    icon = Icons.Default.Edit,
+                    title = "EDIT IN XOURNAL++",
+                    subtitle = "Release finger to edit",
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.94f * editCanvasAlpha),
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f * editCanvasAlpha),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
+                        .fillMaxWidth()
+                        .height(with(density) { actionBoxHeightPx.toDp() })
+                        .offset(y = editCanvasSlideY)
+                        .graphicsLayer {
+                            alpha = editCanvasAlpha * p
+                            scaleX = editCanvasScale
+                            scaleY = editCanvasScale
+                        }
+                )
+            }
+        }
+
+        // 7. Morphing & Flying Card
         Box(
             modifier = Modifier
                 .offset { IntOffset(curLeftPx.toInt(), curTopPx.toInt()) }
                 .size(curWidthDp, curHeightDp)
+                .graphicsLayer {
+                    rotationZ = animatedTilt * p
+                    scaleX = animatedScale
+                    scaleY = animatedScale
+                }
                 .shadow(
                     elevation = curElevationDp.dp,
                     shape = RoundedCornerShape(curCornerRadiusDp.dp)
@@ -426,7 +638,7 @@ private fun FloatingPreviewOverlay(
                 }
             }
 
-            // Bottom: Floating Full Details Pill (Shows complete title, folder, date, time & size without ellipsis)
+            // Bottom: Floating Full Details Pill
             val pillBgColor = data.folderColor.copy(alpha = 0.22f)
                 .compositeOver(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
 
@@ -439,13 +651,12 @@ private fun FloatingPreviewOverlay(
                 shape = RoundedCornerShape(14.dp),
                 color = pillBgColor,
                 shadowElevation = 6.dp,
-                border = androidx.compose.foundation.BorderStroke(1.dp, data.folderColor.copy(alpha = 0.45f))
+                border = BorderStroke(1.dp, data.folderColor.copy(alpha = 0.45f))
             ) {
                 Column(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
-                    // Title (Full text, wraps naturally without ellipses)
                     Text(
                         text = data.note.title,
                         style = MaterialTheme.typography.titleSmall,
@@ -454,7 +665,6 @@ private fun FloatingPreviewOverlay(
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    // Bottom Row: Folder, Full Date, Time & Size
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -538,6 +748,121 @@ private fun FloatingPreviewOverlay(
     }
 }
 
+@Composable
+private fun ActionRegionCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    containerColor: Color,
+    contentColor: Color,
+    borderColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(24.dp),
+        color = containerColor,
+        border = BorderStroke(2.dp, borderColor),
+        shadowElevation = 14.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = contentColor.copy(alpha = 0.16f),
+                modifier = Modifier.size(56.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = contentColor,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Black,
+                color = contentColor,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = contentColor.copy(alpha = 0.8f),
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@Composable
+private fun ActionRegionCardHorizontal(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    containerColor: Color,
+    contentColor: Color,
+    borderColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(24.dp),
+        color = containerColor,
+        border = BorderStroke(2.dp, borderColor),
+        shadowElevation = 14.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = contentColor.copy(alpha = 0.16f),
+                modifier = Modifier.size(48.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = contentColor,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Black,
+                    color = contentColor
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = contentColor.copy(alpha = 0.8f)
+                )
+            }
+        }
+    }
+}
+
 /**
  * Data class representing an individual stardust speck for the Google Pixel style blur sprinkle.
  */
@@ -552,9 +877,6 @@ private data class PixelParticle(
 
 /**
  * High-performance Canvas rendering of radial sweep with sparkling stardust micro-particles.
- * - Sweeps radially outwards from the long-press [origin] to cover the entire background.
- * - Ignites particles with an energetic sparkle flash as the expanding wavefront reaches each point.
- * - Settles into an ambient twinkling starfield constellation over a dark luminous backdrop.
  */
 @Composable
 private fun PixelParticleField(
@@ -574,9 +896,9 @@ private fun PixelParticleField(
         List(particleCount) {
             val r = random.nextFloat()
             val radius = when {
-                r < 0.70f -> (0.80f + random.nextFloat() * 0.45f) * dpiScale // Ultra-fine crisp micro-speck (0.80 - 1.25px)
-                r < 0.90f -> (1.25f + random.nextFloat() * 0.45f) * dpiScale // Sparkling star speck (1.25 - 1.70px)
-                else -> (1.70f + random.nextFloat() * 0.40f) * dpiScale      // Bright pinpoint grain (1.70 - 2.10px)
+                r < 0.70f -> (0.80f + random.nextFloat() * 0.45f) * dpiScale
+                r < 0.90f -> (1.25f + random.nextFloat() * 0.45f) * dpiScale
+                else -> (1.70f + random.nextFloat() * 0.40f) * dpiScale
             }
             PixelParticle(
                 xNorm = random.nextFloat(),
@@ -607,7 +929,6 @@ private fun PixelParticleField(
 
         if (totalAlphaMultiplier <= 0.01f || progress <= 0.001f) return@Canvas
 
-        // Calculate maximum sweep distance from long press origin to the farthest screen corner
         val maxDist = hypot(
             max(origin.x, canvasWidth - origin.x),
             max(origin.y, canvasHeight - origin.y)
@@ -616,7 +937,7 @@ private fun PixelParticleField(
         val currentSweepRadius = maxDist * progress
         val waveBandWidth = 120f * density
 
-        // 1. Draw Sweeping Radial Scrim & Radiant Wavefront Glow
+        // Draw Sweeping Radial Scrim & Radiant Wavefront Glow
         if (currentSweepRadius > 1f) {
             val gradientRadius = (currentSweepRadius + 35f * density).coerceAtLeast(10f)
             val waveEdgeFraction = (currentSweepRadius / gradientRadius).coerceIn(0.1f, 0.95f)
@@ -637,7 +958,7 @@ private fun PixelParticleField(
             )
         }
 
-        // 2. Draw Sweeping Particle Sparkle Ignition
+        // Draw Sweeping Particle Sparkle Ignition
         for (i in 0 until particleCount) {
             val p = particles[i]
             val x = p.xNorm * canvasWidth
@@ -647,13 +968,11 @@ private fun PixelParticleField(
             val dy = y - origin.y
             val dist = sqrt(dx * dx + dy * dy)
 
-            // If the radial wave hasn't reached this particle yet, skip rendering
             if (dist > currentSweepRadius) continue
 
             val distFromWavefront = currentSweepRadius - dist
             val isNearWavefront = distFromWavefront < waveBandWidth
 
-            // Flash energy boost as the wavefront sweeps across the particle
             val flash = if (isNearWavefront) {
                 (1f - (distFromWavefront / waveBandWidth)).coerceIn(0f, 1f)
             } else {
@@ -675,8 +994,6 @@ private fun PixelParticleField(
 
 /**
  * Persistent AGSL runtime noise turbulence layer.
- * Replicates the platform's sparkle/turbulence ripple shader and keeps the animated noise active
- * indefinitely over the preview backdrop on Android 13+ (API 33+).
  */
 @Composable
 private fun PersistentTurbulenceOverlay(
@@ -737,4 +1054,3 @@ private fun PersistentTurbulenceOverlay(
         )
     }
 }
-
