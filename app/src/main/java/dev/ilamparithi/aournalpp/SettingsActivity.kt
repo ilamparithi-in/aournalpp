@@ -106,6 +106,8 @@ import dev.ilamparithi.aournalpp.runtime.WallpaperHelper
 import dev.ilamparithi.aournalpp.runtime.XournalConfigManager
 import dev.ilamparithi.aournalpp.ui.ConfigViewerDialog
 import dev.ilamparithi.aournalpp.ui.theme.AournalTheme
+import dev.ilamparithi.aournalpp.utils.NoteOpenAction
+import dev.ilamparithi.aournalpp.utils.NoteOpenManager
 import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.math.roundToInt
@@ -537,7 +539,68 @@ fun MainSettingsScreen(
                 }
             }
 
-            // 2. Appearance & Canvas Backdrop (Compact Material 3 Switchers)
+            // 2. Default Note Action (View / Edit / Ask every time)
+            var defaultActionPref by remember {
+                mutableStateOf(
+                    prefs.getString(NoteOpenManager.PREF_KEY_DEFAULT_OPEN_ACTION, NoteOpenAction.ASK.value)
+                        ?: NoteOpenAction.ASK.value
+                )
+            }
+
+            Text(
+                text = "Default Note Action",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "Action when opening any note or file:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    val defaultActionOptions = listOf(
+                        NoteOpenAction.ASK to "Ask every time",
+                        NoteOpenAction.EDIT to "Edit (Canvas)",
+                        NoteOpenAction.VIEW to "View (PDF)"
+                    )
+
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        defaultActionOptions.forEachIndexed { index, (action, label) ->
+                            SegmentedButton(
+                                selected = defaultActionPref == action.value,
+                                onClick = {
+                                    defaultActionPref = action.value
+                                    prefs.edit().putString(NoteOpenManager.PREF_KEY_DEFAULT_OPEN_ACTION, action.value).apply()
+                                },
+                                shape = SegmentedButtonDefaults.itemShape(index, defaultActionOptions.size),
+                                label = { Text(label, style = MaterialTheme.typography.bodySmall, maxLines = 1) }
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = when (defaultActionPref) {
+                            NoteOpenAction.EDIT.value -> "Notes will immediately open in the Xournal++ canvas editor for fast note-taking."
+                            NoteOpenAction.VIEW.value -> "Notes will be converted and opened in your external/system PDF viewer."
+                            else -> "A prompt will ask whether to View as PDF or Edit in Xournal++ every time you open a note."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // 3. Appearance & Canvas Backdrop (Compact Material 3 Switchers)
             var appThemePref by remember {
                 mutableStateOf(prefs.getString(LinuxEnvironment.PREF_KEY_APP_THEME, "system") ?: "system")
             }

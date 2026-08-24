@@ -195,6 +195,9 @@ import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
 import dev.ilamparithi.aournalpp.utils.ExternalFileHandler
 import dev.ilamparithi.aournalpp.ui.preview.floatingPreviewLongPress
 import dev.ilamparithi.aournalpp.utils.ThumbnailManager
+import dev.ilamparithi.aournalpp.utils.NoteOpenAction
+import dev.ilamparithi.aournalpp.utils.NoteOpenManager
+import dev.ilamparithi.aournalpp.ui.NoteOpenActionDialog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
@@ -379,27 +382,6 @@ fun DocumentHubScreen(
         }
     }
 
-    // SAF Import PDF Launcher
-    val importPdfLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) {
-            scope.launch {
-                val result = ExternalFileHandler.stageExternalUri(context, uri, env)
-                if (result.isSuccess) {
-                    val staged = result.getOrThrow()
-                    repository.recordNoteOpened(staged.absolutePath)
-                    val intent = Intent(context, CanvasActivity::class.java).apply {
-                        putExtra(CanvasActivity.EXTRA_NOTE_PATH, staged.absolutePath)
-                    }
-                    context.startActivity(intent)
-                } else {
-                    snackbarHostState.showSnackbar("Failed to import PDF: ${result.exceptionOrNull()?.message}")
-                }
-            }
-        }
-    }
-
     suspend fun loadContentNow() {
         if (!hasPermission) return
         if (isViewingTrash) {
@@ -427,20 +409,50 @@ fun DocumentHubScreen(
         scope.launch { loadContentNow() }
     }
 
+    var noteForActionDialog by remember { mutableStateOf<File?>(null) }
     val localView = LocalView.current
+
+    fun handleNoteOpen(noteFile: File) {
+        NoteOpenManager.handleFileOpen(
+            context = context,
+            file = noteFile,
+            pdfExportManager = pdfExportManager,
+            scope = scope,
+            repository = repository,
+            localView = localView,
+            onShowPrompt = { noteForActionDialog = it },
+            onConvertingState = { isConverting ->
+                isPdfConverting = isConverting
+                if (isConverting) {
+                    convertingMessage = "Rendering PDF for \"${noteFile.nameWithoutExtension}\"..."
+                }
+            },
+            onError = { err ->
+                scope.launch { snackbarHostState.showSnackbar(err) }
+            }
+        )
+    }
+
     fun openNoteInCanvas(noteFile: File) {
-        repository.recordNoteOpened(noteFile.absolutePath)
-        val intent = Intent(context, CanvasActivity::class.java).apply {
-            putExtra(CanvasActivity.EXTRA_NOTE_PATH, noteFile.absolutePath)
+        handleNoteOpen(noteFile)
+    }
+
+    // SAF Import Document / Note Launcher
+    val importPdfLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val result = ExternalFileHandler.stageExternalUri(context, uri, env)
+                if (result.isSuccess) {
+                    val staged = result.getOrThrow()
+                    loadContent()
+                    handleNoteOpen(staged)
+                } else {
+                    snackbarHostState.showSnackbar("Failed to import file: ${result.exceptionOrNull()?.message}")
+                }
+            }
         }
-        val options = ActivityOptionsCompat.makeClipRevealAnimation(
-            localView,
-            localView.width / 2,
-            localView.height / 2,
-            localView.width / 4,
-            localView.height / 4
-        ).toBundle()
-        context.startActivity(intent, options)
     }
 
     // Handle Back Press in Subfolders or Selection Mode
@@ -1338,6 +1350,42 @@ fun DocumentHubScreen(
                     }
                 )
             }
+        }
+
+        // 10. Note Open Action Prompt Dialog (View as PDF / Edit in Xournal++)
+        noteForActionDialog?.let { file ->
+            NoteOpenActionDialog(
+                file = file,
+                onDismiss = { noteForActionDialog = null },
+                onViewAsPdf = {
+                    noteForActionDialog = null
+                    NoteOpenManager.openAsPdf(
+                        context = context,
+                        file = file,
+                        pdfExportManager = pdfExportManager,
+                        scope = scope,
+                        repository = repository,
+                        onConvertingState = { isConverting ->
+                            isPdfConverting = isConverting
+                            if (isConverting) {
+                                convertingMessage = "Rendering PDF for \"${file.nameWithoutExtension}\"..."
+                            }
+                        },
+                        onError = { err ->
+                            scope.launch { snackbarHostState.showSnackbar(err) }
+                        }
+                    )
+                },
+                onEditInCanvas = {
+                    noteForActionDialog = null
+                    NoteOpenManager.openInCanvas(
+                        context = context,
+                        file = file,
+                        repository = repository,
+                        localView = localView
+                    )
+                }
+            )
         }
 
         PullToRefreshBox(

@@ -114,6 +114,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.PushPin
 import dev.ilamparithi.aournalpp.CanvasActivity
@@ -123,6 +124,9 @@ import dev.ilamparithi.aournalpp.model.NoteDocument
 import dev.ilamparithi.aournalpp.model.NoteFileType
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
 import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
+import dev.ilamparithi.aournalpp.utils.NoteOpenAction
+import dev.ilamparithi.aournalpp.utils.NoteOpenManager
+import dev.ilamparithi.aournalpp.ui.NoteOpenActionDialog
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -237,8 +241,42 @@ fun HomeScreen(
         loadHomeData()
     }
 
-    // PDF Import Launcher
-    val importPdfLauncher = rememberLauncherForActivityResult(
+    // Note action & dialog states
+    var noteToRename by remember { mutableStateOf<NoteDocument?>(null) }
+    var renameInputText by remember { mutableStateOf("") }
+    var noteToDelete by remember { mutableStateOf<NoteDocument?>(null) }
+    var isPdfConverting by remember { mutableStateOf(false) }
+    var convertingMessage by remember { mutableStateOf("") }
+    var noteForActionDialog by remember { mutableStateOf<File?>(null) }
+    val localView = LocalView.current
+
+    fun handleNoteOpen(file: File) {
+        NoteOpenManager.handleFileOpen(
+            context = context,
+            file = file,
+            pdfExportManager = pdfExportManager,
+            scope = scope,
+            repository = repository,
+            localView = localView,
+            onShowPrompt = { noteForActionDialog = it },
+            onConvertingState = { isConverting ->
+                isPdfConverting = isConverting
+                if (isConverting) {
+                    convertingMessage = "Rendering PDF for \"${file.nameWithoutExtension}\"..."
+                }
+            },
+            onError = { err ->
+                scope.launch { snackbarHostState.showSnackbar(err) }
+            }
+        )
+    }
+
+    fun openNote(file: File) {
+        handleNoteOpen(file)
+    }
+
+    // File Import Launcher (Supports PDF, XOPP, XOJ)
+    val importFileLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri != null) {
@@ -246,41 +284,14 @@ fun HomeScreen(
                 val staged = ExternalFileHandler.stageExternalUri(context, uri, repository.getLinuxEnvironment())
                 if (staged.isSuccess) {
                     val file = staged.getOrThrow()
-                    repository.recordNoteOpened(file.absolutePath)
                     loadHomeData()
-                    val intent = Intent(context, CanvasActivity::class.java).apply {
-                        putExtra(CanvasActivity.EXTRA_NOTE_PATH, file.absolutePath)
-                    }
-                    context.startActivity(intent)
+                    handleNoteOpen(file)
                 } else {
-                    snackbarHostState.showSnackbar("Failed to import PDF")
+                    snackbarHostState.showSnackbar("Failed to import file: ${staged.exceptionOrNull()?.message}")
                 }
             }
         }
     }
-
-    val localView = LocalView.current
-    fun openNote(file: File) {
-        repository.recordNoteOpened(file.absolutePath)
-        val intent = Intent(context, CanvasActivity::class.java).apply {
-            putExtra(CanvasActivity.EXTRA_NOTE_PATH, file.absolutePath)
-        }
-        val options = ActivityOptionsCompat.makeClipRevealAnimation(
-            localView,
-            localView.width / 2,
-            localView.height / 2,
-            localView.width / 4,
-            localView.height / 4
-        ).toBundle()
-        context.startActivity(intent, options)
-    }
-
-    // Note action & dialog states
-    var noteToRename by remember { mutableStateOf<NoteDocument?>(null) }
-    var renameInputText by remember { mutableStateOf("") }
-    var noteToDelete by remember { mutableStateOf<NoteDocument?>(null) }
-    var isPdfConverting by remember { mutableStateOf(false) }
-    var convertingMessage by remember { mutableStateOf("") }
 
     val onTogglePin: (NoteDocument) -> Unit = { note ->
         scope.launch {
@@ -775,13 +786,13 @@ fun HomeScreen(
 
                 SpeedDialActionItem(
                     progress = pdfItemSpring,
-                    icon = Icons.Default.PictureAsPdf,
-                    label = "Import PDF",
+                    icon = Icons.Default.FileOpen,
+                    label = "Import File",
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                     onClick = {
                         isFabExpanded = false
-                        importPdfLauncher.launch(arrayOf("application/pdf"))
+                        importFileLauncher.launch(arrayOf("*/*", "application/pdf", "application/x-xopp", "application/x-xoj", "application/octet-stream"))
                     }
                 )
 
@@ -1076,6 +1087,42 @@ fun HomeScreen(
                 }
             )
         }
+    }
+
+    // Note Open Action Prompt Dialog (View as PDF / Edit in Xournal++)
+    noteForActionDialog?.let { file ->
+        NoteOpenActionDialog(
+            file = file,
+            onDismiss = { noteForActionDialog = null },
+            onViewAsPdf = {
+                noteForActionDialog = null
+                NoteOpenManager.openAsPdf(
+                    context = context,
+                    file = file,
+                    pdfExportManager = pdfExportManager,
+                    scope = scope,
+                    repository = repository,
+                    onConvertingState = { isConverting ->
+                        isPdfConverting = isConverting
+                        if (isConverting) {
+                            convertingMessage = "Rendering PDF for \"${file.nameWithoutExtension}\"..."
+                        }
+                    },
+                    onError = { err ->
+                        scope.launch { snackbarHostState.showSnackbar(err) }
+                    }
+                )
+            },
+            onEditInCanvas = {
+                noteForActionDialog = null
+                NoteOpenManager.openInCanvas(
+                    context = context,
+                    file = file,
+                    repository = repository,
+                    localView = localView
+                )
+            }
+        )
     }
 
     // PDF Converting Progress Dialog

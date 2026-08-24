@@ -57,9 +57,15 @@ import dev.ilamparithi.aournalpp.ui.LicensesScreen
 import dev.ilamparithi.aournalpp.SettingsScreen
 import dev.ilamparithi.aournalpp.data.DocumentRepository
 import dev.ilamparithi.aournalpp.utils.ExternalFileHandler
+import dev.ilamparithi.aournalpp.utils.NoteOpenAction
+import dev.ilamparithi.aournalpp.utils.NoteOpenManager
+import dev.ilamparithi.aournalpp.ui.NoteOpenActionDialog
+import dev.ilamparithi.aournalpp.runtime.PdfExportManager
+import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
 import dev.ilamparithi.aournalpp.ui.preview.FloatingPreviewHost
 import dev.ilamparithi.aournalpp.ui.theme.AournalTheme
 import dev.ilamparithi.aournalpp.ui.theme.ExpressiveSprings
+import java.io.File
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -78,6 +84,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private var pendingIntentToProcess: Intent? = null
+    private val externalFileToOpen = androidx.compose.runtime.mutableStateOf<File?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -106,6 +113,37 @@ class MainActivity : ComponentActivity() {
                         }
                         FloatingPreviewHost {
                             MainResponsiveAppShell()
+                        }
+
+                        val promptFile = externalFileToOpen.value
+                        if (promptFile != null) {
+                            val env = remember { LinuxEnvironment(this@MainActivity) }
+                            val supervisor = remember { ProcessSupervisor(env) }
+                            val pdfExportManager = remember { PdfExportManager(env, supervisor) }
+                            val repo = remember { DocumentRepository(this@MainActivity) }
+
+                            NoteOpenActionDialog(
+                                file = promptFile,
+                                onDismiss = { externalFileToOpen.value = null },
+                                onViewAsPdf = {
+                                    externalFileToOpen.value = null
+                                    NoteOpenManager.openAsPdf(
+                                        context = this@MainActivity,
+                                        file = promptFile,
+                                        pdfExportManager = pdfExportManager,
+                                        scope = lifecycleScope,
+                                        repository = repo
+                                    )
+                                },
+                                onEditInCanvas = {
+                                    externalFileToOpen.value = null
+                                    NoteOpenManager.openInCanvas(
+                                        context = this@MainActivity,
+                                        file = promptFile,
+                                        repository = repo
+                                    )
+                                }
+                            )
                         }
                     }
                     else -> {
@@ -137,11 +175,18 @@ class MainActivity : ComponentActivity() {
                 val result = ExternalFileHandler.stageExternalUri(this@MainActivity, uri, env)
                 if (result.isSuccess) {
                     val file = result.getOrThrow()
-                    DocumentRepository(this@MainActivity).recordNoteOpened(file.absolutePath)
-                    val canvasIntent = Intent(this@MainActivity, CanvasActivity::class.java).apply {
-                        putExtra(CanvasActivity.EXTRA_NOTE_PATH, file.absolutePath)
-                    }
-                    startActivity(canvasIntent)
+                    val supervisor = ProcessSupervisor(env)
+                    val pdfExportManager = PdfExportManager(env, supervisor)
+                    val repo = DocumentRepository(this@MainActivity)
+
+                    NoteOpenManager.handleFileOpen(
+                        context = this@MainActivity,
+                        file = file,
+                        pdfExportManager = pdfExportManager,
+                        scope = lifecycleScope,
+                        repository = repo,
+                        onShowPrompt = { externalFileToOpen.value = it }
+                    )
                 } else {
                     Log.e(TAG, "Failed to stage external file URI: $uri", result.exceptionOrNull())
                 }
