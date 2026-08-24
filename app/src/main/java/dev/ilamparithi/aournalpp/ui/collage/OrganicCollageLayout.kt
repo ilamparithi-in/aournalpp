@@ -40,6 +40,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PictureAsPdf
@@ -653,8 +654,13 @@ fun FloatingDetailsPill(
                         )
                     } else {
                         val isRoot = note.folder == "Notes Home"
+                        val isEmergency = note.folderIconType == "emergency" || note.folder.equals("Emergency Saves", ignoreCase = true)
                         Icon(
-                            imageVector = if (isRoot) Icons.Default.Home else Icons.Default.Folder,
+                            imageVector = when {
+                                isRoot -> Icons.Default.Home
+                                isEmergency -> Icons.Default.Emergency
+                                else -> Icons.Default.Folder
+                            },
                             contentDescription = null,
                             tint = folderColor,
                             modifier = Modifier.size(12.dp)

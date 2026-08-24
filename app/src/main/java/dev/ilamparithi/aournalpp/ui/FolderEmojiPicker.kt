@@ -33,53 +33,80 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+import androidx.compose.material.icons.filled.Emergency
+
 val DEFAULT_PRESET_FOLDER_EMOJIS = listOf(
-    "📁", "🐼", "📝", "📚", "🎨", "💡", "🔬", "📐", "💼", "🏠", "⭐", "🚀", "🧪", "📓", "🏷️", "🎯", "🌿", "💻", "☕"
+    "📝", "📚", "🎨", "💡", "🔬", "📐", "💼", "🏠", "⭐", "🚀", "🧪", "📓", "🏷️", "🎯", "🌿", "💻", "☕"
 )
 
 /**
- * An expressive emoji selector for folders with:
- * 1. Default Folder Icon as the first option
- * 2. Curated emoji presets in the middle
- * 3. Custom selected emoji (if active)
- * 4. Plus (+) icon at the end to allow picking/typing any custom emoji
+ * An expressive folder icon & emoji selector with:
+ * 1. Default Folder Icon (Icons.Default.Folder) as the first choice
+ * 2. Exclusive Emergency Icon (Icons.Default.Emergency)
+ * 3. Curated emoji presets
+ * 4. Custom selected emoji (if active)
+ * 5. Plus (+) button for custom emoji input
  */
 @Composable
-fun FolderEmojiPickerRow(
+fun FolderIconPickerRow(
     selectedEmoji: String?,
-    onEmojiSelected: (String?) -> Unit,
+    selectedIconType: String?, // "folder", "emergency", or null
+    onIconSelected: (emoji: String?, iconType: String?) -> Unit,
     presetEmojis: List<String> = DEFAULT_PRESET_FOLDER_EMOJIS,
     modifier: Modifier = Modifier
 ) {
     var showCustomEmojiDialog by remember { mutableStateOf(false) }
 
+    val isDefaultFolderSelected = selectedEmoji.isNullOrBlank() && (selectedIconType == "folder" || selectedIconType == null)
+    val isEmergencySelected = selectedEmoji.isNullOrBlank() && selectedIconType == "emergency"
+
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier.fillMaxWidth()
     ) {
-        // 1. Default Folder Icon Option
+        // 1. Default Folder Icon Option (First Choice)
         item {
-            val isDefaultSelected = selectedEmoji.isNullOrBlank()
             Surface(
                 shape = RoundedCornerShape(10.dp),
-                color = if (isDefaultSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                border = if (isDefaultSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+                color = if (isDefaultFolderSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                border = if (isDefaultFolderSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
                 modifier = Modifier
                     .size(40.dp)
-                    .clickable { onEmojiSelected(null) }
+                    .clickable { onIconSelected(null, "folder") }
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Default.Folder,
                         contentDescription = "Default Folder Icon",
-                        tint = if (isDefaultSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = if (isDefaultFolderSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )
                 }
             }
         }
 
-        // 2. Preset Emojis
+        // 2. Exclusive Emergency Icon Option (Material 3)
+        item {
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = if (isEmergencySelected) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                border = if (isEmergencySelected) BorderStroke(2.dp, MaterialTheme.colorScheme.error) else null,
+                modifier = Modifier
+                    .size(40.dp)
+                    .clickable { onIconSelected(null, "emergency") }
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Emergency,
+                        contentDescription = "Emergency Icon",
+                        tint = if (isEmergencySelected) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+
+        // 3. Preset Emojis
         items(presetEmojis) { emoji ->
             val isSelected = emoji == selectedEmoji
             Surface(
@@ -88,7 +115,7 @@ fun FolderEmojiPickerRow(
                 border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
                 modifier = Modifier
                     .size(40.dp)
-                    .clickable { onEmojiSelected(emoji) }
+                    .clickable { onIconSelected(emoji, null) }
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(text = emoji, fontSize = 20.sp)
@@ -96,7 +123,7 @@ fun FolderEmojiPickerRow(
             }
         }
 
-        // 3. Custom Selected Emoji (if selected and not in preset list)
+        // 4. Custom Selected Emoji (if selected and not in preset list)
         if (!selectedEmoji.isNullOrBlank() && !presetEmojis.contains(selectedEmoji)) {
             item {
                 Surface(
@@ -114,7 +141,7 @@ fun FolderEmojiPickerRow(
             }
         }
 
-        // 4. "+" Option to input/type any custom emoji
+        // 5. "+" Option to input/type any custom emoji
         item {
             Surface(
                 shape = RoundedCornerShape(10.dp),
@@ -139,9 +166,32 @@ fun FolderEmojiPickerRow(
         CustomEmojiInputDialog(
             currentEmoji = selectedEmoji,
             onDismiss = { showCustomEmojiDialog = false },
-            onEmojiSelected = onEmojiSelected
+            onEmojiSelected = { chosenEmoji ->
+                if (chosenEmoji != null) {
+                    onIconSelected(chosenEmoji, null)
+                }
+            }
         )
     }
+}
+
+/**
+ * Backward-compatible FolderEmojiPickerRow delegating to FolderIconPickerRow.
+ */
+@Composable
+fun FolderEmojiPickerRow(
+    selectedEmoji: String?,
+    onEmojiSelected: (String?) -> Unit,
+    presetEmojis: List<String> = DEFAULT_PRESET_FOLDER_EMOJIS,
+    modifier: Modifier = Modifier
+) {
+    FolderIconPickerRow(
+        selectedEmoji = selectedEmoji,
+        selectedIconType = if (selectedEmoji.isNullOrBlank()) "folder" else null,
+        onIconSelected = { emoji, _ -> onEmojiSelected(emoji) },
+        presetEmojis = presetEmojis,
+        modifier = modifier
+    )
 }
 
 private fun getSingleEmojiOrChar(text: String): String {

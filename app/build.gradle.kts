@@ -253,6 +253,7 @@ bootstrapTasksMap.forEach { (flavorName, archName) ->
         description = "Downloads and builds bootstrap.tar.xz and jniLibs for $flavorName ($archName)"
         group = "build"
         workingDir = rootDir.resolve("scripts")
+        inputs.dir(rootDir.resolve("scripts"))
         outputs.file(flavorOutputFile)
         outputs.dir(flavorJniDir)
         doFirst {

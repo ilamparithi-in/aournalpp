@@ -24,7 +24,15 @@ class DocumentRepository(private val context: Context) {
         private const val FOLDER_META_FILE = ".folder.json"
         private const val TRASH_DIR_NAME = ".Trash"
         private const val TRASH_MANIFEST_FILE = ".trash_manifest.json"
+        const val EMERGENCY_SAVES_DEFAULT_COLOR = "#F44336"
+        const val EMERGENCY_SAVES_DEFAULT_ICON = "emergency"
     }
+
+    data class FolderMetaData(
+        val colorHex: String? = null,
+        val iconEmoji: String? = null,
+        val iconType: String? = null
+    )
 
     private val env = LinuxEnvironment(context)
     private val prefs = context.getSharedPreferences("aournal_doc_hub_prefs", Context.MODE_PRIVATE)
@@ -107,9 +115,9 @@ class DocumentRepository(private val context: Context) {
         }
 
         private val rootCanonical: String by lazy { canonicalOf(getRootNotesDirectory()) }
-        private val folderMetas = HashMap<String, Pair<String?, String?>>()
+        private val folderMetas = HashMap<String, FolderMetaData>()
 
-        fun folderMeta(dir: File): Pair<String?, String?> =
+        fun folderMeta(dir: File): FolderMetaData =
             folderMetas.getOrPut(dir.absolutePath) { readFolderMeta(dir) }
 
         fun isRoot(dir: File): Boolean = canonicalOf(dir) == rootCanonical
@@ -138,7 +146,8 @@ class DocumentRepository(private val context: Context) {
                 continue
             }
 
-            val (metaColor, metaEmoji) = cache.folderMeta(dir)
+            val meta = cache.folderMeta(dir)
+            val isEmergency = isEmergencySavesFolder(dir)
             val itemCount = dir.listFiles()?.count { file ->
                 file.isFile && isOpenableFile(file) && !file.name.startsWith(".")
             } ?: 0
@@ -147,8 +156,10 @@ class DocumentRepository(private val context: Context) {
                 FolderItem(
                     file = dir,
                     name = dir.name,
-                    colorHex = metaColor,
-                    iconEmoji = metaEmoji,
+                    colorHex = meta.colorHex,
+                    iconEmoji = meta.iconEmoji,
+                    iconType = meta.iconType,
+                    isEmergencyFolder = isEmergency,
                     itemCount = itemCount,
                     lastModifiedMs = dir.lastModified(),
                     isHidden = isHidden
@@ -171,7 +182,7 @@ class DocumentRepository(private val context: Context) {
         }
 
         val isRoot = cache.isRoot(targetDir)
-        val (targetFolderColor, targetFolderEmoji) = if (!isRoot) cache.folderMeta(targetDir) else Pair(null, null)
+        val targetFolderMeta = if (!isRoot) cache.folderMeta(targetDir) else FolderMetaData()
 
         for (file in mainFiles) {
             if (!seenMainPaths.add(file.absolutePath)) continue
@@ -207,8 +218,9 @@ class DocumentRepository(private val context: Context) {
                     isHidden = false,
                     isPinned = cache.pinnedPaths.contains(file.absolutePath),
                     folder = if (isRoot) "Notes Home" else targetDir.name,
-                    folderColorHex = targetFolderColor,
-                    folderIconEmoji = targetFolderEmoji
+                    folderColorHex = targetFolderMeta.colorHex,
+                    folderIconEmoji = targetFolderMeta.iconEmoji,
+                    folderIconType = targetFolderMeta.iconType
                 )
             )
         }
@@ -241,7 +253,10 @@ class DocumentRepository(private val context: Context) {
                         sizeFormatted = "${sizeKb} KB",
                         autosaveInfo = null,
                         isHidden = true,
-                        folder = targetDir.name
+                        folder = targetDir.name,
+                        folderColorHex = targetFolderMeta.colorHex,
+                        folderIconEmoji = targetFolderMeta.iconEmoji,
+                        folderIconType = targetFolderMeta.iconType
                     )
                 )
             }
@@ -274,8 +289,19 @@ class DocumentRepository(private val context: Context) {
         return candidates.firstOrNull { it.exists() && it.isFile && it.length() > 0 }
     }
 
+    fun isEmergencySavesFolder(folderDir: File): Boolean {
+        return folderDir.name.equals("Emergency Saves", ignoreCase = true) ||
+               try { folderDir.canonicalPath == env.getEmergencySavesDirectory().canonicalPath } catch (e: Exception) { false }
+    }
+
     // Folder Management
-    fun createFolder(parentDir: File, name: String, colorHex: String? = null, iconEmoji: String? = null): Result<File> {
+    fun createFolder(
+        parentDir: File,
+        name: String,
+        colorHex: String? = null,
+        iconEmoji: String? = null,
+        iconType: String? = null
+    ): Result<File> {
         val cleanName = name.trim().replace(Regex("[/\\\\:*?\"<>|]"), "_")
         if (cleanName.isBlank()) return Result.failure(IllegalArgumentException("Folder name cannot be blank"))
 
@@ -286,24 +312,29 @@ class DocumentRepository(private val context: Context) {
             return Result.failure(IllegalStateException("Failed to create folder '$cleanName'"))
         }
 
-        if (colorHex != null || iconEmoji != null) {
-            writeFolderMeta(newDir, colorHex, iconEmoji)
+        if (colorHex != null || iconEmoji != null || iconType != null) {
+            writeFolderMeta(newDir, colorHex, iconEmoji, iconType)
         }
         return Result.success(newDir)
     }
 
     fun setFolderColor(folderDir: File, colorHex: String): Result<Unit> {
-        val (_, currentEmoji) = readFolderMeta(folderDir)
-        return writeFolderMeta(folderDir, colorHex, currentEmoji)
+        val meta = readFolderMeta(folderDir)
+        return writeFolderMeta(folderDir, colorHex, meta.iconEmoji, meta.iconType)
     }
 
     fun setFolderEmoji(folderDir: File, emoji: String?): Result<Unit> {
-        val (currentColor, _) = readFolderMeta(folderDir)
-        return writeFolderMeta(folderDir, currentColor, emoji)
+        val meta = readFolderMeta(folderDir)
+        return writeFolderMeta(folderDir, meta.colorHex, emoji, if (emoji == null) "folder" else null)
     }
 
-    fun updateFolderMeta(folderDir: File, colorHex: String?, iconEmoji: String?): Result<Unit> {
-        return writeFolderMeta(folderDir, colorHex, iconEmoji)
+    fun setFolderIcon(folderDir: File, iconType: String?): Result<Unit> {
+        val meta = readFolderMeta(folderDir)
+        return writeFolderMeta(folderDir, meta.colorHex, null, iconType)
+    }
+
+    fun updateFolderMeta(folderDir: File, colorHex: String?, iconEmoji: String?, iconType: String? = null): Result<Unit> {
+        return writeFolderMeta(folderDir, colorHex, iconEmoji, iconType)
     }
 
     suspend fun renameFolder(folderDir: File, newFolderName: String): Result<File> = withContext(Dispatchers.IO) {
@@ -334,24 +365,60 @@ class DocumentRepository(private val context: Context) {
         }
     }
 
-    fun getFolderMeta(folderDir: File): Pair<String?, String?> {
+    fun getFolderMeta(folderDir: File): FolderMetaData {
         return readFolderMeta(folderDir)
     }
 
-    private fun readFolderMeta(folderDir: File): Pair<String?, String?> {
+    private fun readFolderMeta(folderDir: File): FolderMetaData {
+        val isEmergency = isEmergencySavesFolder(folderDir)
         val metaFile = File(folderDir, FOLDER_META_FILE)
-        if (!metaFile.exists()) return Pair(null, null)
+        if (!metaFile.exists()) {
+            return if (isEmergency) {
+                FolderMetaData(
+                    colorHex = EMERGENCY_SAVES_DEFAULT_COLOR,
+                    iconEmoji = null,
+                    iconType = EMERGENCY_SAVES_DEFAULT_ICON
+                )
+            } else {
+                FolderMetaData()
+            }
+        }
         return try {
             val json = JSONObject(metaFile.readText())
-            val color = json.optString("color").takeIf { it.isNotBlank() }
-            val emoji = json.optString("emoji").takeIf { it.isNotBlank() }
-            Pair(color, emoji)
+            val color = if (json.has("color")) {
+                json.optString("color").takeIf { it.isNotBlank() }
+            } else if (isEmergency) {
+                EMERGENCY_SAVES_DEFAULT_COLOR
+            } else {
+                null
+            }
+            val emoji = if (json.has("emoji")) {
+                json.optString("emoji").takeIf { it.isNotBlank() }
+            } else {
+                null
+            }
+            val icon = if (json.has("icon")) {
+                json.optString("icon").takeIf { it.isNotBlank() }
+            } else if (isEmergency && emoji == null) {
+                EMERGENCY_SAVES_DEFAULT_ICON
+            } else {
+                null
+            }
+            FolderMetaData(color, emoji, icon)
         } catch (e: Exception) {
-            Pair(null, null)
+            if (isEmergency) {
+                FolderMetaData(
+                    colorHex = EMERGENCY_SAVES_DEFAULT_COLOR,
+                    iconEmoji = null,
+                    iconType = EMERGENCY_SAVES_DEFAULT_ICON
+                )
+            } else {
+                FolderMetaData()
+            }
         }
     }
 
-    private fun writeFolderMeta(folderDir: File, colorHex: String?, iconEmoji: String?): Result<Unit> = runCatching {
+    private fun writeFolderMeta(folderDir: File, colorHex: String?, iconEmoji: String?, iconType: String? = null): Result<Unit> = runCatching {
         val metaFile = File(folderDir, FOLDER_META_FILE)
         val json = if (metaFile.exists()) {
             try { JSONObject(metaFile.readText()) } catch (e: Exception) { JSONObject() }
@@ -365,8 +432,14 @@ class DocumentRepository(private val context: Context) {
         }
         if (iconEmoji != null && iconEmoji.isNotBlank()) {
             json.put("emoji", iconEmoji.trim())
+            json.remove("icon")
         } else {
             json.remove("emoji")
+            if (iconType != null && iconType.isNotBlank()) {
+                json.put("icon", iconType.trim())
+            } else {
+                json.remove("icon")
+            }
         }
         metaFile.writeText(json.toString(2))
     }
@@ -377,14 +450,17 @@ class DocumentRepository(private val context: Context) {
         fun recurse(dir: File) {
             val subdirs = dir.listFiles { f -> f.isDirectory && f.name != TRASH_DIR_NAME && !f.name.startsWith(".") } ?: return
             for (sub in subdirs) {
-                val (metaColor, metaEmoji) = cache.folderMeta(sub)
+                val meta = cache.folderMeta(sub)
+                val isEmergency = isEmergencySavesFolder(sub)
                 val count = sub.listFiles { f -> f.isFile && isOpenableFile(f) && !f.name.startsWith(".") }?.size ?: 0
                 list.add(
                     FolderItem(
                         file = sub,
                         name = sub.name,
-                        colorHex = metaColor,
-                        iconEmoji = metaEmoji,
+                        colorHex = meta.colorHex,
+                        iconEmoji = meta.iconEmoji,
+                        iconType = meta.iconType,
+                        isEmergencyFolder = isEmergency,
                         itemCount = count,
                         lastModifiedMs = sub.lastModified()
                     )
@@ -751,6 +827,32 @@ class DocumentRepository(private val context: Context) {
         return note.file
     }
 
+    fun saveAutosaveAsNote(
+        autoInfo: dev.ilamparithi.aournalpp.model.AutosaveInfo,
+        userSpecifiedName: String,
+        targetFolder: File = getRootNotesDirectory()
+    ): File {
+        if (!targetFolder.exists()) targetFolder.mkdirs()
+
+        val rawBase = if (userSpecifiedName.endsWith(".xopp", ignoreCase = true)) {
+            userSpecifiedName.substring(0, userSpecifiedName.length - 5)
+        } else {
+            userSpecifiedName
+        }
+        val cleanBase = rawBase.trim().replace(Regex("[/\\\\:*?\"<>|]"), "_")
+        val effectiveName = if (cleanBase.isBlank()) {
+            val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+            "Autosave_${sdf.format(Date(autoInfo.autosaveLastModifiedMs))}.xopp"
+        } else {
+            "$cleanBase.xopp"
+        }
+
+        val target = File(targetFolder, effectiveName)
+        autoInfo.autosaveFile.copyTo(target, overwrite = true)
+        autoInfo.autosaveFile.delete()
+        return target
+    }
+
     fun discardAutosave(note: NoteDocument): File {
         val autoInfo = note.autosaveInfo ?: return note.file
         try {
@@ -763,15 +865,21 @@ class DocumentRepository(private val context: Context) {
         return note.file
     }
 
-    fun openEmergencyRecoverySession(recoveryFile: File): File {
+    fun openEmergencyRecoverySession(
+        recoveryFile: File,
+        targetFolder: File = env.getEmergencySavesDirectory()
+    ): File {
         val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
         val defaultName = "Recovered_Session_${sdf.format(Date(recoveryFile.lastModified()))}.xopp"
-        return saveEmergencyRecoveryToNotes(recoveryFile, defaultName)
+        return saveEmergencyRecoveryToNotes(recoveryFile, defaultName, targetFolder)
     }
 
-    fun saveEmergencyRecoveryToNotes(recoveryFile: File, userSpecifiedName: String): File {
-        val emergencySavesDir = env.getEmergencySavesDirectory()
-        if (!emergencySavesDir.exists()) emergencySavesDir.mkdirs()
+    fun saveEmergencyRecoveryToNotes(
+        recoveryFile: File,
+        userSpecifiedName: String,
+        targetFolder: File = getRootNotesDirectory()
+    ): File {
+        if (!targetFolder.exists()) targetFolder.mkdirs()
 
         val rawBase = if (userSpecifiedName.endsWith(".xopp", ignoreCase = true)) {
             userSpecifiedName.substring(0, userSpecifiedName.length - 5)
@@ -786,7 +894,7 @@ class DocumentRepository(private val context: Context) {
             "$cleanBase.xopp"
         }
 
-        val target = File(emergencySavesDir, effectiveName)
+        val target = File(targetFolder, effectiveName)
         recoveryFile.copyTo(target, overwrite = true)
         recoveryFile.delete()
         env.clearQuarantinedEmergencySave()
@@ -831,7 +939,7 @@ class DocumentRepository(private val context: Context) {
         }
 
         val isRoot = cache.isRoot(parentDir)
-        val (folderColor, folderEmoji) = if (!isRoot) cache.folderMeta(parentDir) else Pair(null, null)
+        val parentMeta = if (!isRoot) cache.folderMeta(parentDir) else FolderMetaData()
 
         return NoteDocument(
             file = file,
@@ -845,8 +953,9 @@ class DocumentRepository(private val context: Context) {
             isHidden = file.name.startsWith("."),
             isPinned = cache.pinnedPaths.contains(file.absolutePath),
             folder = if (isRoot) "Notes Home" else parentDir.name,
-            folderColorHex = folderColor,
-            folderIconEmoji = folderEmoji
+            folderColorHex = parentMeta.colorHex,
+            folderIconEmoji = parentMeta.iconEmoji,
+            folderIconType = parentMeta.iconType
         )
     }
 

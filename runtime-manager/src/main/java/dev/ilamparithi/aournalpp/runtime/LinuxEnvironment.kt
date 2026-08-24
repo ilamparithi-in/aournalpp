@@ -68,6 +68,21 @@ class LinuxEnvironment(private val context: Context) {
         if (!dir.exists()) {
             dir.mkdirs()
         }
+        val metaFile = File(dir, ".folder.json")
+        if (!metaFile.exists()) {
+            try {
+                metaFile.writeText(
+                    """
+                    {
+                      "color": "#F44336",
+                      "icon": "emergency"
+                    }
+                    """.trimIndent()
+                )
+            } catch (e: Exception) {
+                // ignore
+            }
+        }
         return dir
     }
 

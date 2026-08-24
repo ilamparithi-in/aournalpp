@@ -47,6 +47,8 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.filled.Emergency
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
@@ -58,6 +60,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -108,6 +112,7 @@ import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.PushPin
 import dev.ilamparithi.aournalpp.CanvasActivity
 import dev.ilamparithi.aournalpp.data.DocumentRepository
+import dev.ilamparithi.aournalpp.model.FolderItem
 import dev.ilamparithi.aournalpp.model.NoteDocument
 import dev.ilamparithi.aournalpp.model.NoteFileType
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
@@ -170,15 +175,18 @@ fun HomeScreen(
     var showEmergencyDialog by remember { mutableStateOf(false) }
     var showEmergencySaveNameDialog by remember { mutableStateOf(false) }
     var emergencySaveNameInput by remember { mutableStateOf("") }
+    var emergencySaveTargetFolder by remember { mutableStateOf(repository.getRootNotesDirectory()) }
 
     // Autosave on-open resolution state
     var pendingAutosaveNote by remember { mutableStateOf<NoteDocument?>(null) }
+    var pendingSaveAutosaveNote by remember { mutableStateOf<NoteDocument?>(null) }
 
     // Dialog states
     var showCreateFolderDialog by remember { mutableStateOf(false) }
     var newFolderName by remember { mutableStateOf("") }
     var selectedFolderColor by remember { mutableStateOf("#4CAF50") }
-    var selectedFolderEmoji by remember { mutableStateOf<String?>("📁") }
+    var selectedFolderEmoji by remember { mutableStateOf<String?>(null) }
+    var selectedFolderIconType by remember { mutableStateOf<String?>("folder") }
 
     // Speed Dial FAB state
     var isFabExpanded by remember { mutableStateOf(false) }
@@ -196,8 +204,10 @@ fun HomeScreen(
 
         val emergencyFile = withContext(Dispatchers.IO) { env.checkAndQuarantineEmergencySave() }
         if (emergencyFile != null && emergencyFile.exists() && emergencyFile.length() > 0) {
-            quarantinedEmergencySave = emergencyFile
-            showEmergencyDialog = true
+            if (quarantinedEmergencySave == null && !showEmergencySaveNameDialog) {
+                quarantinedEmergencySave = emergencyFile
+                showEmergencyDialog = true
+            }
         }
     }
 
@@ -765,9 +775,13 @@ fun HomeScreen(
 
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Folder Icon / Emoji", style = MaterialTheme.typography.labelMedium)
-                        FolderEmojiPickerRow(
+                        FolderIconPickerRow(
                             selectedEmoji = selectedFolderEmoji,
-                            onEmojiSelected = { selectedFolderEmoji = it }
+                            selectedIconType = selectedFolderIconType,
+                            onIconSelected = { emoji, iconType ->
+                                selectedFolderEmoji = emoji
+                                selectedFolderIconType = iconType
+                            }
                         )
                     }
 
@@ -797,7 +811,8 @@ fun HomeScreen(
                                             parentDir = repository.getRootNotesDirectory(),
                                             name = newFolderName.trim(),
                                             colorHex = selectedFolderColor,
-                                            iconEmoji = selectedFolderEmoji
+                                            iconEmoji = selectedFolderEmoji,
+                                            iconType = selectedFolderIconType
                                         )
                                         if (res.isSuccess) {
                                             snackbarHostState.showSnackbar("Created folder \"${newFolderName.trim()}\"")
@@ -845,8 +860,9 @@ fun HomeScreen(
                         showEmergencyDialog = false
                         val defaultName = "Recovered_Note_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date(file.lastModified()))
                         emergencySaveNameInput = defaultName
+                        emergencySaveTargetFolder = repository.getRootNotesDirectory()
                         showEmergencySaveNameDialog = true
-                    }) { Text("Save to Notes") }
+                    }) { Text("Save as Note") }
                     TextButton(onClick = {
                         showEmergencyDialog = false
                         repository.discardEmergencyRecovery()
@@ -861,46 +877,44 @@ fun HomeScreen(
     // Save Emergency Recovery Name Dialog
     if (showEmergencySaveNameDialog && quarantinedEmergencySave != null) {
         val file = quarantinedEmergencySave!!
-        AlertDialog(
-            onDismissRequest = { showEmergencySaveNameDialog = false },
-            icon = { Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp)) },
-            title = { Text("Save Recovered Note", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "Enter a name for the recovered note. It will be saved into your Notes folder.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    OutlinedTextField(
-                        value = emergencySaveNameInput,
-                        onValueChange = { emergencySaveNameInput = it },
-                        label = { Text("Note Name") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+        val allAvailableFolders by produceState<List<FolderItem>>(emptyList(), showEmergencySaveNameDialog) {
+            value = repository.getAllFolders()
+        }
+
+        SaveAsNoteDialog(
+            title = "Save Recovered Note",
+            subtitle = "Choose a name and destination folder for the recovered note.",
+            icon = Icons.Default.Emergency,
+            initialName = emergencySaveNameInput,
+            initialFolder = emergencySaveTargetFolder,
+            availableFolders = allAvailableFolders,
+            rootFolder = repository.getRootNotesDirectory(),
+            onDismiss = { showEmergencySaveNameDialog = false },
+            onSave = { name, targetFolder ->
+                showEmergencySaveNameDialog = false
+                val savedFile = repository.saveEmergencyRecoveryToNotes(
+                    file,
+                    name,
+                    targetFolder
+                )
+                quarantinedEmergencySave = null
+                loadHomeData()
+                scope.launch {
+                    snackbarHostState.showSnackbar("Saved recovered note as \"${savedFile.name}\"")
                 }
             },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (emergencySaveNameInput.isNotBlank()) {
-                            showEmergencySaveNameDialog = false
-                            val savedFile = repository.saveEmergencyRecoveryToNotes(file, emergencySaveNameInput)
-                            quarantinedEmergencySave = null
-                            loadHomeData()
-                            scope.launch {
-                                snackbarHostState.showSnackbar("Saved recovered note as \"${savedFile.name}\"")
-                            }
-                        }
-                    }
-                ) {
-                    Text("Save")
+            onCreateFolder = { name, colorHex, iconEmoji, iconType ->
+                val result = repository.createFolder(
+                    parentDir = repository.getRootNotesDirectory(),
+                    name = name,
+                    colorHex = colorHex,
+                    iconEmoji = iconEmoji,
+                    iconType = iconType
+                )
+                if (result.isSuccess) {
+                    loadHomeData()
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { showEmergencySaveNameDialog = false }) {
-                    Text("Cancel")
-                }
+                result
             }
         )
     }
@@ -920,16 +934,57 @@ fun HomeScreen(
                     openNote(target)
                 },
                 onKeepBoth = {
-                    val target = repository.keepBoth(note)
                     pendingAutosaveNote = null
-                    loadHomeData()
-                    openNote(target)
+                    pendingSaveAutosaveNote = note
                 },
                 onKeepExisting = {
                     val target = repository.discardAutosave(note)
                     pendingAutosaveNote = null
                     loadHomeData()
                     openNote(target)
+                }
+            )
+        }
+    }
+
+    // Save Autosave as Note Dialog
+    pendingSaveAutosaveNote?.let { note ->
+        val autoInfo = note.autosaveInfo
+        if (autoInfo != null) {
+            val allAvailableFolders by produceState<List<FolderItem>>(emptyList(), pendingSaveAutosaveNote) {
+                value = repository.getAllFolders()
+            }
+
+            SaveAsNoteDialog(
+                title = "Save Autosave as Note",
+                subtitle = "Save a separate copy of the autosaved version with your chosen name and folder.",
+                icon = Icons.Default.Description,
+                initialName = "${note.title} (Autosave)",
+                initialFolder = note.file.parentFile ?: repository.getRootNotesDirectory(),
+                availableFolders = allAvailableFolders,
+                rootFolder = repository.getRootNotesDirectory(),
+                onDismiss = { pendingSaveAutosaveNote = null },
+                onSave = { name, targetFolder ->
+                    val savedFile = repository.saveAutosaveAsNote(autoInfo, name, targetFolder)
+                    pendingSaveAutosaveNote = null
+                    loadHomeData()
+                    openNote(note.file)
+                    scope.launch {
+                        snackbarHostState.showSnackbar("Saved autosave copy as \"${savedFile.name}\"")
+                    }
+                },
+                onCreateFolder = { name, colorHex, iconEmoji, iconType ->
+                    val result = repository.createFolder(
+                        parentDir = repository.getRootNotesDirectory(),
+                        name = name,
+                        colorHex = colorHex,
+                        iconEmoji = iconEmoji,
+                        iconType = iconType
+                    )
+                    if (result.isSuccess) {
+                        loadHomeData()
+                    }
+                    result
                 }
             )
         }
@@ -1143,6 +1198,13 @@ private fun EnlargedContinueHeroSection(
                             Text(
                                 text = note.folderIconEmoji,
                                 fontSize = 14.sp
+                            )
+                        } else if (note.folderIconType == "emergency" || note.folder.equals("Emergency Saves", ignoreCase = true)) {
+                            Icon(
+                                imageVector = Icons.Default.Emergency,
+                                contentDescription = null,
+                                tint = heroFolderAccent,
+                                modifier = Modifier.size(16.dp)
                             )
                         } else {
                             Icon(

@@ -88,6 +88,8 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Emergency
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
@@ -329,10 +331,12 @@ fun DocumentHubScreen(
     var showNewFolderDialog by remember { mutableStateOf(false) }
     var newFolderNameInput by remember { mutableStateOf("") }
     var selectedFolderColor by remember { mutableStateOf(PRESET_FOLDER_COLORS.first()) }
-    var selectedFolderEmoji by remember { mutableStateOf<String?>("📁") }
+    var selectedFolderEmoji by remember { mutableStateOf<String?>(null) }
+    var selectedFolderIconType by remember { mutableStateOf<String?>("folder") }
     var folderToEdit by remember { mutableStateOf<FolderItem?>(null) }
     var editFolderSelectedColor by remember { mutableStateOf(PRESET_FOLDER_COLORS.first()) }
-    var editFolderSelectedEmoji by remember { mutableStateOf<String?>("📁") }
+    var editFolderSelectedEmoji by remember { mutableStateOf<String?>(null) }
+    var editFolderSelectedIconType by remember { mutableStateOf<String?>("folder") }
     var folderToRename by remember { mutableStateOf<FolderItem?>(null) }
     var renameFolderNameInput by remember { mutableStateOf("") }
     var showMoveToFolderDialog by remember { mutableStateOf(false) }
@@ -342,9 +346,11 @@ fun DocumentHubScreen(
     var showEmergencyDialog by remember { mutableStateOf(false) }
     var showEmergencySaveNameDialog by remember { mutableStateOf(false) }
     var emergencySaveNameInput by remember { mutableStateOf("") }
+    var emergencySaveTargetFolder by remember { mutableStateOf(repository.getRootNotesDirectory()) }
 
     // Autosave on-open resolution state
     var pendingAutosaveNote by remember { mutableStateOf<NoteDocument?>(null) }
+    var pendingSaveAutosaveNote by remember { mutableStateOf<NoteDocument?>(null) }
 
     val legacyPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -408,8 +414,10 @@ fun DocumentHubScreen(
 
             val emergencyFile = withContext(Dispatchers.IO) { env.checkAndQuarantineEmergencySave() }
             if (emergencyFile != null && emergencyFile.exists() && emergencyFile.length() > 0) {
-                quarantinedEmergencySave = emergencyFile
-                showEmergencyDialog = true
+                if (quarantinedEmergencySave == null && !showEmergencySaveNameDialog) {
+                    quarantinedEmergencySave = emergencyFile
+                    showEmergencyDialog = true
+                }
             }
         }
     }
@@ -816,9 +824,13 @@ fun DocumentHubScreen(
 
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text("Folder Icon / Emoji:", style = MaterialTheme.typography.labelMedium)
-                            FolderEmojiPickerRow(
+                            FolderIconPickerRow(
                                 selectedEmoji = selectedFolderEmoji,
-                                onEmojiSelected = { selectedFolderEmoji = it }
+                                selectedIconType = selectedFolderIconType,
+                                onIconSelected = { emoji, iconType ->
+                                    selectedFolderEmoji = emoji
+                                    selectedFolderIconType = iconType
+                                }
                             )
                         }
 
@@ -835,7 +847,7 @@ fun DocumentHubScreen(
                     Button(onClick = {
                         if (newFolderNameInput.isNotBlank()) {
                             showNewFolderDialog = false
-                            val result = repository.createFolder(currentDirectory, newFolderNameInput, selectedFolderColor, selectedFolderEmoji)
+                            val result = repository.createFolder(currentDirectory, newFolderNameInput, selectedFolderColor, selectedFolderEmoji, selectedFolderIconType)
                             scope.launch {
                                 if (result.isSuccess) {
                                     snackbarHostState.showSnackbar("Created folder \"${newFolderNameInput.trim()}\"")
@@ -865,9 +877,13 @@ fun DocumentHubScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text("Folder Icon / Emoji:", style = MaterialTheme.typography.labelMedium)
-                            FolderEmojiPickerRow(
+                            FolderIconPickerRow(
                                 selectedEmoji = editFolderSelectedEmoji,
-                                onEmojiSelected = { editFolderSelectedEmoji = it }
+                                selectedIconType = editFolderSelectedIconType,
+                                onIconSelected = { emoji, iconType ->
+                                    editFolderSelectedEmoji = emoji
+                                    editFolderSelectedIconType = iconType
+                                }
                             )
                         }
 
@@ -885,7 +901,7 @@ fun DocumentHubScreen(
                         val target = folderToEdit
                         folderToEdit = null
                         target?.let {
-                            repository.updateFolderMeta(it.file, editFolderSelectedColor, editFolderSelectedEmoji)
+                            repository.updateFolderMeta(it.file, editFolderSelectedColor, editFolderSelectedEmoji, editFolderSelectedIconType)
                             loadContent()
                         }
                     }) {
@@ -1193,8 +1209,9 @@ fun DocumentHubScreen(
                             showEmergencyDialog = false
                             val defaultName = "Recovered_Note_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date(file.lastModified()))
                             emergencySaveNameInput = defaultName
+                            emergencySaveTargetFolder = currentDirectory
                             showEmergencySaveNameDialog = true
-                        }) { Text("Save to Notes") }
+                        }) { Text("Save as Note") }
                         TextButton(onClick = {
                             showEmergencyDialog = false
                             repository.discardEmergencyRecovery()
@@ -1209,46 +1226,44 @@ fun DocumentHubScreen(
         // 8b. Save Emergency Recovery Name Dialog
         if (showEmergencySaveNameDialog && quarantinedEmergencySave != null) {
             val file = quarantinedEmergencySave!!
-            AlertDialog(
-                onDismissRequest = { showEmergencySaveNameDialog = false },
-                icon = { Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp)) },
-                title = { Text("Save Recovered Note", fontWeight = FontWeight.Bold) },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            "Enter a name for the recovered note. It will be saved into your Notes folder.",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        OutlinedTextField(
-                            value = emergencySaveNameInput,
-                            onValueChange = { emergencySaveNameInput = it },
-                            label = { Text("Note Name") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+            val allAvailableFolders by produceState<List<FolderItem>>(emptyList(), showEmergencySaveNameDialog) {
+                value = repository.getAllFolders()
+            }
+
+            SaveAsNoteDialog(
+                title = "Save Recovered Note",
+                subtitle = "Choose a name and destination folder for the recovered note.",
+                icon = Icons.Default.Emergency,
+                initialName = emergencySaveNameInput,
+                initialFolder = emergencySaveTargetFolder,
+                availableFolders = allAvailableFolders,
+                rootFolder = repository.getRootNotesDirectory(),
+                onDismiss = { showEmergencySaveNameDialog = false },
+                onSave = { name, targetFolder ->
+                    showEmergencySaveNameDialog = false
+                    val savedFile = repository.saveEmergencyRecoveryToNotes(
+                        file,
+                        name,
+                        targetFolder
+                    )
+                    quarantinedEmergencySave = null
+                    loadContent()
+                    scope.launch {
+                        snackbarHostState.showSnackbar("Saved recovered note as \"${savedFile.name}\"")
                     }
                 },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            if (emergencySaveNameInput.isNotBlank()) {
-                                showEmergencySaveNameDialog = false
-                                val savedFile = repository.saveEmergencyRecoveryToNotes(file, emergencySaveNameInput)
-                                quarantinedEmergencySave = null
-                                loadContent()
-                                scope.launch {
-                                    snackbarHostState.showSnackbar("Saved recovered note as \"${savedFile.name}\"")
-                                }
-                            }
-                        }
-                    ) {
-                        Text("Save")
+                onCreateFolder = { name, colorHex, iconEmoji, iconType ->
+                    val result = repository.createFolder(
+                        parentDir = repository.getRootNotesDirectory(),
+                        name = name,
+                        colorHex = colorHex,
+                        iconEmoji = iconEmoji,
+                        iconType = iconType
+                    )
+                    if (result.isSuccess) {
+                        loadContent()
                     }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showEmergencySaveNameDialog = false }) {
-                        Text("Cancel")
-                    }
+                    result
                 }
             )
         }
@@ -1268,16 +1283,57 @@ fun DocumentHubScreen(
                         openNoteInCanvas(target)
                     },
                     onKeepBoth = {
-                        val target = repository.keepBoth(note)
                         pendingAutosaveNote = null
-                        loadContent()
-                        openNoteInCanvas(target)
+                        pendingSaveAutosaveNote = note
                     },
                     onKeepExisting = {
                         val target = repository.discardAutosave(note)
                         pendingAutosaveNote = null
                         loadContent()
                         openNoteInCanvas(target)
+                    }
+                )
+            }
+        }
+
+        // 9b. Save Autosave as Note Dialog
+        pendingSaveAutosaveNote?.let { note ->
+            val autoInfo = note.autosaveInfo
+            if (autoInfo != null) {
+                val allAvailableFolders by produceState<List<FolderItem>>(emptyList(), pendingSaveAutosaveNote) {
+                    value = repository.getAllFolders()
+                }
+
+                SaveAsNoteDialog(
+                    title = "Save Autosave as Note",
+                    subtitle = "Save a separate copy of the autosaved version with your chosen name and folder.",
+                    icon = Icons.Default.Description,
+                    initialName = "${note.title} (Autosave)",
+                    initialFolder = note.file.parentFile ?: repository.getRootNotesDirectory(),
+                    availableFolders = allAvailableFolders,
+                    rootFolder = repository.getRootNotesDirectory(),
+                    onDismiss = { pendingSaveAutosaveNote = null },
+                    onSave = { name, targetFolder ->
+                        val savedFile = repository.saveAutosaveAsNote(autoInfo, name, targetFolder)
+                        pendingSaveAutosaveNote = null
+                        loadContent()
+                        openNoteInCanvas(note.file)
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Saved autosave copy as \"${savedFile.name}\"")
+                        }
+                    },
+                    onCreateFolder = { name, colorHex, iconEmoji, iconType ->
+                        val result = repository.createFolder(
+                            parentDir = repository.getRootNotesDirectory(),
+                            name = name,
+                            colorHex = colorHex,
+                            iconEmoji = iconEmoji,
+                            iconType = iconType
+                        )
+                        if (result.isSuccess) {
+                            loadContent()
+                        }
+                        result
                     }
                 )
             }
@@ -1345,10 +1401,18 @@ fun DocumentHubScreen(
                         val currentFolderMeta = remember(currentDirectory) {
                             if (!isRoot) repository.getFolderMeta(currentDirectory) else null
                         }
-                        if (currentFolderMeta?.second?.isNotBlank() == true) {
+                        if (!currentFolderMeta?.iconEmoji.isNullOrBlank()) {
                             Text(
-                                text = currentFolderMeta.second!!,
+                                text = currentFolderMeta!!.iconEmoji!!,
                                 fontSize = 13.sp
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                        } else if (currentFolderMeta?.iconType == "emergency" || repository.isEmergencySavesFolder(currentDirectory)) {
+                            Icon(
+                                imageVector = Icons.Default.Emergency,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = currentFolderMeta?.colorHex?.let { try { Color(android.graphics.Color.parseColor(it)) } catch (e: Exception) { null } } ?: MaterialTheme.colorScheme.error
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                         }
@@ -1519,6 +1583,13 @@ fun DocumentHubScreen(
                                             text = folder.iconEmoji,
                                             fontSize = 28.sp
                                         )
+                                    } else if (folder.iconType == "emergency" || folder.isEmergencyFolder) {
+                                        Icon(
+                                            imageVector = Icons.Default.Emergency,
+                                            contentDescription = "Emergency Saves",
+                                            tint = accentColor,
+                                            modifier = Modifier.size(32.dp)
+                                        )
                                     } else {
                                         Icon(
                                             imageVector = Icons.Default.Folder,
@@ -1564,8 +1635,9 @@ fun DocumentHubScreen(
                                                 leadingIcon = { Icon(Icons.Default.ColorLens, contentDescription = null) },
                                                 onClick = {
                                                     showFolderMenu = false
-                                                    editFolderSelectedColor = folder.colorHex ?: PRESET_FOLDER_COLORS.first()
-                                                    editFolderSelectedEmoji = folder.iconEmoji ?: "📁"
+                                                    editFolderSelectedColor = folder.colorHex ?: (if (folder.isEmergencyFolder) DocumentRepository.EMERGENCY_SAVES_DEFAULT_COLOR else PRESET_FOLDER_COLORS.first())
+                                                    editFolderSelectedEmoji = folder.iconEmoji
+                                                    editFolderSelectedIconType = folder.iconType ?: (if (folder.isEmergencyFolder) "emergency" else "folder")
                                                     folderToEdit = folder
                                                 }
                                             )
@@ -2749,6 +2821,14 @@ private fun RecentsMultiBrowseCard(
                                     Text(
                                         text = note.folderIconEmoji,
                                         fontSize = 11.sp
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                } else if (note.folderIconType == "emergency" || note.folder.equals("Emergency Saves", ignoreCase = true)) {
+                                    Icon(
+                                        imageVector = Icons.Default.Emergency,
+                                        contentDescription = null,
+                                        tint = multiFolderAccent,
+                                        modifier = Modifier.size(12.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                 } else if (note.folder.isNotBlank() && note.folder != "Notes Home") {

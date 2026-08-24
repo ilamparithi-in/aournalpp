@@ -162,50 +162,71 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
         }
     }
 
-    private val ignoredWindowTitles = setOf(
-        "Openbox",
-        "com.github.xournalpp.xournalpp",
-        "Xournal++",
-        "X11",
-        "Desktop",
-        "Save File",
-        "Save As",
-        "Save",
-        "Open File",
-        "Open Document",
-        "Open",
-        "Export as PDF",
-        "Export",
-        "Print",
-        "Page Setup",
-        "Preferences",
-        "About Xournal++",
-        "Select Font",
-        "Select Color",
-        "Select Folder",
-        "Choose Folder"
-    )
+    fun resetDocumentTitle(title: String? = null) {
+        _documentTitle.value = title
+    }
 
     fun triggerXournalExit() {
         onXournalExitListener?.invoke()
     }
 
-    private fun sanitizeWindowTitle(raw: String): String {
-        val cleaned = raw.replace(Regex("\\s*-\\s*Xournal\\+\\+.*$"), "")
-            .replace(Regex("\\s*\\[autosaved\\]"), "")
-            .trim()
-            .removePrefix("*")
-            .removeSuffix("*")
-            .trim()
+    companion object {
+        val ignoredWindowTitles = setOf(
+            "Openbox",
+            "com.github.xournalpp.xournalpp",
+            "Xournal++",
+            "X11",
+            "Desktop",
+            "Save File",
+            "Save As",
+            "Save",
+            "Open File",
+            "Open Document",
+            "Open",
+            "Export as PDF",
+            "Export",
+            "Print",
+            "Page Setup",
+            "Preferences",
+            "About Xournal++",
+            "Select Font",
+            "Select Color",
+            "Select Folder",
+            "Choose Folder",
+            "Question",
+            "Warning",
+            "Error",
+            "Information"
+        )
 
-        if (ignoredWindowTitles.contains(cleaned) || ignoredWindowTitles.contains(raw)) {
-            return ""
-        }
+        fun sanitizeWindowTitle(raw: String): String {
+            val withoutAppSuffix = raw.replace(Regex("\\s*-\\s*Xournal\\+\\+.*$"), "")
+                .replace(Regex("\\s*\\[autosaved\\]", RegexOption.IGNORE_CASE), "")
+                .trim()
 
-        return if (cleaned.equals("Unsaved Document", ignoreCase = true) || cleaned.equals("Untitled", ignoreCase = true)) {
-            "New Note"
-        } else {
-            cleaned
+            val isDirty = raw.trim().startsWith("*") ||
+                    withoutAppSuffix.startsWith("*") ||
+                    withoutAppSuffix.endsWith("*")
+
+            val cleaned = withoutAppSuffix
+                .removePrefix("*")
+                .removeSuffix("*")
+                .trim()
+
+            if (cleaned.isBlank() || ignoredWindowTitles.any { it.equals(cleaned, ignoreCase = true) || it.equals(raw, ignoreCase = true) }) {
+                return ""
+            }
+
+            val baseName = if (cleaned.equals("Unsaved Document", ignoreCase = true) ||
+                cleaned.equals("Untitled", ignoreCase = true) ||
+                cleaned.equals("Untitled Document", ignoreCase = true)
+            ) {
+                "New Note"
+            } else {
+                cleaned
+            }
+
+            return if (isDirty) "*$baseName" else baseName
         }
     }
 
@@ -304,6 +325,7 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
             }
         }
         activeProcesses.clear()
+        _documentTitle.value = null
     }
 }
 

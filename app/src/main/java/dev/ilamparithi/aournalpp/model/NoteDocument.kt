@@ -17,6 +17,8 @@ data class FolderItem(
     val name: String,
     val colorHex: String? = null,
     val iconEmoji: String? = null,
+    val iconType: String? = null,
+    val isEmergencyFolder: Boolean = false,
     val itemCount: Int = 0,
     val lastModifiedMs: Long = 0L,
     val isHidden: Boolean = false
@@ -103,6 +105,7 @@ data class NoteDocument(
     val folder: String = "",
     val folderColorHex: String? = null,
     val folderIconEmoji: String? = null,
+    val folderIconType: String? = null,
     val tags: List<String> = emptyList()
 ) {
     val fileType: NoteFileType

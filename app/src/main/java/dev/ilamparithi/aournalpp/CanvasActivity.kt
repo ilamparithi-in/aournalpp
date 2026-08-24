@@ -160,7 +160,7 @@ class CanvasActivity : ComponentActivity() {
                 var isHeaderExpanded by remember { mutableStateOf(true) }
                 val liveTitle by sessionManager.documentTitle.collectAsState()
                 val displayTitle = when {
-                    openPreferences && (liveTitle == null || liveTitle == "New Note" || liveTitle == "Unsaved Document") -> "Preferences"
+                    openPreferences && (liveTitle == null || liveTitle?.removePrefix("*")?.trim() == "New Note" || liveTitle?.removePrefix("*")?.trim() == "Unsaved Document") -> "Preferences"
                     else -> liveTitle ?: initialTitle
                 }
 

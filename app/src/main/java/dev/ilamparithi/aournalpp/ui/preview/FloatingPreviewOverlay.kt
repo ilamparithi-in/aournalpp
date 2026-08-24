@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PictureAsPdf
@@ -297,6 +298,7 @@ private fun FloatingPreviewOverlay(
                                 )
                             } else {
                                 val isRoot = folderName == "Notes Home"
+                                val isEmergency = data.note.folderIconType == "emergency" || folderName.equals("Emergency Saves", ignoreCase = true)
                                 Surface(
                                     shape = CircleShape,
                                     color = data.folderColor.copy(alpha = 0.2f),
@@ -304,7 +306,11 @@ private fun FloatingPreviewOverlay(
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Icon(
-                                            imageVector = if (isRoot) Icons.Default.Home else Icons.Default.Folder,
+                                            imageVector = when {
+                                                isRoot -> Icons.Default.Home
+                                                isEmergency -> Icons.Default.Emergency
+                                                else -> Icons.Default.Folder
+                                            },
                                             contentDescription = null,
                                             tint = data.folderColor,
                                             modifier = Modifier.size(12.dp)

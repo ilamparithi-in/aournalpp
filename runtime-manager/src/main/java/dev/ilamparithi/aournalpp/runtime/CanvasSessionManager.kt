@@ -119,6 +119,15 @@ class CanvasSessionManager(
                 }
 
                 // 4. Launch Xournal++ (passes targetFilePath if opening an existing file; launches blank if null)
+                val initialDocTitle = if (targetFilePath != null) {
+                    File(targetFilePath).name
+                } else if (openPreferencesOnLaunch) {
+                    "Preferences"
+                } else {
+                    "New Note"
+                }
+                supervisor.resetDocumentTitle(initialDocTitle)
+
                 if (targetFilePath.isNullOrBlank()) {
                     Log.i(TAG, "Launching Xournal++ without arguments (blank canvas)...")
                     supervisor.startXournal()
