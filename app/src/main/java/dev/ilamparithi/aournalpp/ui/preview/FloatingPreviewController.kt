@@ -10,6 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -28,7 +29,8 @@ data class FloatingPreviewData(
     val initialBounds: Rect,
     val initialCornerRadiusDp: Float = 16f,
     val thumbnailFile: File? = null,
-    val folderColor: Color = Color(0xFF6750A4)
+    val folderColor: Color = Color(0xFF6750A4),
+    val touchPositionInWindow: Offset = Offset.Unspecified
 )
 
 /**
@@ -94,11 +96,16 @@ fun Modifier.floatingPreviewLongPress(
                         controller.onFingerReleased()
                     }
                 },
-                onLongPress = {
+                onLongPress = { localOffset ->
                     try {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     } catch (e: Exception) {
                         // ignore if haptics unavailable
+                    }
+                    val globalTouch = if (boundsInWindow != Rect.Zero) {
+                        Offset(boundsInWindow.left + localOffset.x, boundsInWindow.top + localOffset.y)
+                    } else {
+                        Offset.Unspecified
                     }
                     controller.showPreview(
                         FloatingPreviewData(
@@ -106,7 +113,8 @@ fun Modifier.floatingPreviewLongPress(
                             initialBounds = boundsInWindow,
                             initialCornerRadiusDp = initialCornerRadiusDp,
                             thumbnailFile = thumbnailFile,
-                            folderColor = folderColor
+                            folderColor = folderColor,
+                            touchPositionInWindow = globalTouch
                         )
                     )
                     onLongPressFallback?.invoke()

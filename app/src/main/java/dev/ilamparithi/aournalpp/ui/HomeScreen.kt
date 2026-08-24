@@ -47,6 +47,8 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
@@ -58,6 +60,10 @@ import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.text.style.TextAlign
+import androidx.core.content.FileProvider
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -123,7 +129,6 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.mutableLongStateOf
 import dev.ilamparithi.aournalpp.ui.collage.CollageCardView
 import dev.ilamparithi.aournalpp.ui.collage.CreativeEmptyCollageState
-import dev.ilamparithi.aournalpp.ui.collage.FloatingDetailsPill
 import dev.ilamparithi.aournalpp.ui.collage.OrganicCollageView
 import kotlinx.coroutines.delay
 import dev.ilamparithi.aournalpp.ui.theme.ArchShape
@@ -200,7 +205,7 @@ fun HomeScreen(
         totalNotesCount = repository.countAllNotes()
         totalFoldersCount = repository.scanDirectory(repository.getRootNotesDirectory()).first.size
 
-        continueNote = repository.getAllRecentNotes(1).firstOrNull()
+        continueNote = repository.getLastOpenedOrModifiedNote()
 
         val emergencyFile = withContext(Dispatchers.IO) { env.checkAndQuarantineEmergencySave() }
         if (emergencyFile != null && emergencyFile.exists() && emergencyFile.length() > 0) {
@@ -241,6 +246,7 @@ fun HomeScreen(
                 val staged = ExternalFileHandler.stageExternalUri(context, uri, repository.getLinuxEnvironment())
                 if (staged.isSuccess) {
                     val file = staged.getOrThrow()
+                    repository.recordNoteOpened(file.absolutePath)
                     loadHomeData()
                     val intent = Intent(context, CanvasActivity::class.java).apply {
                         putExtra(CanvasActivity.EXTRA_NOTE_PATH, file.absolutePath)
@@ -255,7 +261,7 @@ fun HomeScreen(
 
     val localView = LocalView.current
     fun openNote(file: File) {
-        prefs.edit().putString("pref_last_opened_note_path", file.absolutePath).apply()
+        repository.recordNoteOpened(file.absolutePath)
         val intent = Intent(context, CanvasActivity::class.java).apply {
             putExtra(CanvasActivity.EXTRA_NOTE_PATH, file.absolutePath)
         }
@@ -267,6 +273,74 @@ fun HomeScreen(
             localView.height / 4
         ).toBundle()
         context.startActivity(intent, options)
+    }
+
+    // Note action & dialog states
+    var noteToRename by remember { mutableStateOf<NoteDocument?>(null) }
+    var renameInputText by remember { mutableStateOf("") }
+    var noteToDelete by remember { mutableStateOf<NoteDocument?>(null) }
+    var isPdfConverting by remember { mutableStateOf(false) }
+    var convertingMessage by remember { mutableStateOf("") }
+
+    val onTogglePin: (NoteDocument) -> Unit = { note ->
+        scope.launch {
+            repository.togglePinNote(note.path)
+            loadHomeData()
+        }
+    }
+
+    val onDuplicate: (NoteDocument) -> Unit = { note ->
+        scope.launch {
+            val result = repository.duplicateNote(note)
+            if (result.isSuccess) {
+                snackbarHostState.showSnackbar("Duplicated \"${note.title}\"")
+                loadHomeData()
+            } else {
+                snackbarHostState.showSnackbar("Failed to duplicate: ${result.exceptionOrNull()?.message}")
+            }
+        }
+    }
+
+    val onShareXopp: (NoteDocument) -> Unit = { note ->
+        repository.shareNoteAsXopp(context, note)
+    }
+
+    val onSharePdf: (NoteDocument) -> Unit = { note ->
+        scope.launch {
+            isPdfConverting = true
+            convertingMessage = "Rendering PDF for \"${note.title}\"..."
+            val result = repository.shareNoteAsPdf(context, note, pdfExportManager)
+            isPdfConverting = false
+            if (result.isFailure) {
+                snackbarHostState.showSnackbar("PDF Export failed: ${result.exceptionOrNull()?.message}")
+            }
+        }
+    }
+
+    val onExportPdf: (NoteDocument) -> Unit = { note ->
+        scope.launch {
+            isPdfConverting = true
+            convertingMessage = "Exporting \"${note.title}\" to PDF..."
+            val exportDir = File(repository.getRootNotesDirectory(), "Exports").apply { mkdirs() }
+            val destPdf = File(exportDir, "${note.title}.pdf")
+            val result = pdfExportManager.convertXoppToPdf(note.file, destPdf)
+            isPdfConverting = false
+            if (result.isSuccess) {
+                val pdfFile = result.getOrThrow()
+                snackbarHostState.showSnackbar("Exported to Exports/${pdfFile.name}")
+            } else {
+                snackbarHostState.showSnackbar("PDF Export failed: ${result.exceptionOrNull()?.message}")
+            }
+        }
+    }
+
+    val onRename: (NoteDocument) -> Unit = { note ->
+        noteToRename = note
+        renameInputText = note.file.nameWithoutExtension
+    }
+
+    val onDelete: (NoteDocument) -> Unit = { note ->
+        noteToDelete = note
     }
 
     fun startNewNote() {
@@ -606,7 +680,14 @@ fun HomeScreen(
                                     }
                                 },
                                 onNewNoteClick = { startNewNote() },
-                                refreshSeed = refreshSeed
+                                refreshSeed = refreshSeed,
+                                onTogglePin = onTogglePin,
+                                onExportPdf = onExportPdf,
+                                onSharePdf = onSharePdf,
+                                onShareXopp = onShareXopp,
+                                onRename = onRename,
+                                onDuplicate = onDuplicate,
+                                onDelete = onDelete
                             )
                         } else {
                             NormalHomeGalleryView(
@@ -618,7 +699,14 @@ fun HomeScreen(
                                     } else {
                                         openNote(note.file)
                                     }
-                                }
+                                },
+                                onTogglePin = onTogglePin,
+                                onExportPdf = onExportPdf,
+                                onSharePdf = onSharePdf,
+                                onShareXopp = onShareXopp,
+                                onRename = onRename,
+                                onDuplicate = onDuplicate,
+                                onDelete = onDelete
                             )
                         }
                     }
@@ -989,6 +1077,118 @@ fun HomeScreen(
             )
         }
     }
+
+    // PDF Converting Progress Dialog
+    if (isPdfConverting) {
+        AlertDialog(
+            onDismissRequest = {},
+            icon = { CircularProgressIndicator(modifier = Modifier.size(36.dp), strokeWidth = 3.dp) },
+            title = { Text("Processing Document", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(convertingMessage, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+            },
+            confirmButton = {}
+        )
+    }
+
+    // Rename Note Dialog
+    noteToRename?.let { note ->
+        AlertDialog(
+            onDismissRequest = { noteToRename = null },
+            icon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp)) },
+            title = { Text("Rename Note", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = renameInputText,
+                        onValueChange = { renameInputText = it },
+                        label = { Text("Note Name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val target = noteToRename
+                    noteToRename = null
+                    if (target != null && renameInputText.isNotBlank()) {
+                        scope.launch {
+                            val result = repository.renameNote(target, renameInputText)
+                            if (result.isSuccess) {
+                                snackbarHostState.showSnackbar("Renamed to \"${renameInputText.trim()}\"")
+                                loadHomeData()
+                            } else {
+                                snackbarHostState.showSnackbar("Failed to rename: ${result.exceptionOrNull()?.message}")
+                            }
+                        }
+                    }
+                }) {
+                    Text("Rename")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { noteToRename = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Delete Note Confirmation Dialog
+    noteToDelete?.let { note ->
+        AlertDialog(
+            onDismissRequest = { noteToDelete = null },
+            icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(32.dp)) },
+            title = { Text("Move to Trash?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("Are you sure you want to move \"${note.title}\" to Trash? You can restore it later from Files Hub.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val target = noteToDelete
+                        noteToDelete = null
+                        if (target != null) {
+                            scope.launch {
+                                val result = repository.moveToTrash(listOf(target))
+                                if (result.isSuccess) {
+                                    loadHomeData()
+                                    val action = snackbarHostState.showSnackbar(
+                                        message = "Moved \"${target.title}\" to Trash",
+                                        actionLabel = "Undo",
+                                        duration = androidx.compose.material3.SnackbarDuration.Short
+                                    )
+                                    if (action == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                                        val trashed = repository.scanTrash().find { it.title == target.title }
+                                        if (trashed != null) {
+                                            repository.restoreFromTrash(trashed)
+                                            loadHomeData()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Move to Trash")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { noteToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 /**
@@ -1104,11 +1304,9 @@ private fun EnlargedContinueHeroSection(
         modifier = Modifier
             .fillMaxWidth()
             .scale(cardScale)
-            .floatingPreviewLongPress(
-                note = note,
-                thumbnailFile = thumbnailFile,
-                folderColor = heroFolderAccent,
-                initialCornerRadiusDp = 24f,
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
                 onClick = onResume
             ),
         shape = RoundedCornerShape(24.dp),
@@ -1132,6 +1330,13 @@ private fun EnlargedContinueHeroSection(
                     .shadow(elevation = 4.dp, shape = RoundedCornerShape(20.dp))
                     .clip(RoundedCornerShape(20.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .floatingPreviewLongPress(
+                        note = note,
+                        thumbnailFile = thumbnailFile,
+                        folderColor = heroFolderAccent,
+                        initialCornerRadiusDp = 20f,
+                        onClick = onResume
+                    )
             ) {
                 if (thumbnailImage != null) {
                     Image(
@@ -1179,6 +1384,15 @@ private fun EnlargedContinueHeroSection(
                     overflow = TextOverflow.Ellipsis
                 )
 
+                val folderDisplayName = if (note.folder.isBlank() || note.folder == "Notes Home") "Notes Home" else "In ${note.folder}"
+                val openedText = note.fuzzyLastOpened?.let { "Opened $it" }
+                val modifiedText = "Modified ${note.fuzzyLastModified}"
+                val metadataSubtitle = if (openedText != null) {
+                    "$folderDisplayName • $openedText • $modifiedText"
+                } else {
+                    "$folderDisplayName • $modifiedText"
+                }
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (note.folder.isBlank() || note.folder == "Notes Home") {
                         Icon(
@@ -1186,12 +1400,6 @@ private fun EnlargedContinueHeroSection(
                             contentDescription = null,
                             tint = heroFolderAccent,
                             modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Notes Home • Modified $relativeTime",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
                         if (!note.folderIconEmoji.isNullOrBlank()) {
@@ -1214,13 +1422,13 @@ private fun EnlargedContinueHeroSection(
                                 modifier = Modifier.size(16.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "In ${note.folder} • Modified $relativeTime",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = metadataSubtitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(6.dp))
@@ -1258,7 +1466,14 @@ private fun EnlargedContinueHeroSection(
 private fun NormalHomeGalleryView(
     notes: List<NoteDocument>,
     pdfExportManager: PdfExportManager,
-    onNoteClick: (NoteDocument) -> Unit
+    onNoteClick: (NoteDocument) -> Unit,
+    onTogglePin: ((NoteDocument) -> Unit)? = null,
+    onExportPdf: ((NoteDocument) -> Unit)? = null,
+    onSharePdf: ((NoteDocument) -> Unit)? = null,
+    onShareXopp: ((NoteDocument) -> Unit)? = null,
+    onRename: ((NoteDocument) -> Unit)? = null,
+    onDuplicate: ((NoteDocument) -> Unit)? = null,
+    onDelete: ((NoteDocument) -> Unit)? = null
 ) {
     val pinnedNotes = notes.filter { it.isPinned }
     val regularNotes = notes.filter { !it.isPinned }
@@ -1304,7 +1519,14 @@ private fun NormalHomeGalleryView(
                                     note = note,
                                     shape = RoundedCornerShape(18.dp),
                                     pdfExportManager = pdfExportManager,
-                                    onClick = { onNoteClick(note) }
+                                    onClick = { onNoteClick(note) },
+                                    onTogglePin = onTogglePin?.let { { it(note) } },
+                                    onExportPdf = onExportPdf?.let { { it(note) } },
+                                    onSharePdf = onSharePdf?.let { { it(note) } },
+                                    onShareXopp = onShareXopp?.let { { it(note) } },
+                                    onRename = onRename?.let { { it(note) } },
+                                    onDuplicate = onDuplicate?.let { { it(note) } },
+                                    onDelete = onDelete?.let { { it(note) } }
                                 )
                             }
                         }
@@ -1344,7 +1566,14 @@ private fun NormalHomeGalleryView(
                                     note = note,
                                     shape = RoundedCornerShape(16.dp),
                                     pdfExportManager = pdfExportManager,
-                                    onClick = { onNoteClick(note) }
+                                    onClick = { onNoteClick(note) },
+                                    onTogglePin = onTogglePin?.let { { it(note) } },
+                                    onExportPdf = onExportPdf?.let { { it(note) } },
+                                    onSharePdf = onSharePdf?.let { { it(note) } },
+                                    onShareXopp = onShareXopp?.let { { it(note) } },
+                                    onRename = onRename?.let { { it(note) } },
+                                    onDuplicate = onDuplicate?.let { { it(note) } },
+                                    onDelete = onDelete?.let { { it(note) } }
                                 )
                             }
                         }

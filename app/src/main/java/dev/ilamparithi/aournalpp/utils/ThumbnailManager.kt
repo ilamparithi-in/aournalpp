@@ -31,18 +31,16 @@ object ThumbnailManager {
     /** Includes the folder so same-named notes in different folders do not collide. */
     private fun cacheKeyFor(noteFile: File): String {
         val folderHash = Integer.toHexString(noteFile.parent.orEmpty().hashCode())
-        return "${noteFile.nameWithoutExtension}_${folderHash}_${noteFile.lastModified()}_thumb.png"
+        return "${noteFile.nameWithoutExtension}_${folderHash}_${noteFile.lastModified()}_hd_thumb.png"
     }
 
     fun getCachedThumbnailFile(noteFile: File): File? = resolved[cacheKeyFor(noteFile)]
 
     /**
-     * Decoded thumbnails, bounded to an eighth of the heap. Decoding a 400px PNG
-     * takes long enough to drop frames, so list items read from here rather than
-     * decoding during composition.
+     * Decoded thumbnails, bounded to an eighth of the heap.
      */
     private val decoded = object : LruCache<String, ImageBitmap>(
-        ((Runtime.getRuntime().maxMemory() / 1024) / 8).toInt().coerceAtLeast(4 * 1024)
+        ((Runtime.getRuntime().maxMemory() / 1024) / 8).toInt().coerceAtLeast(8 * 1024)
     ) {
         override fun sizeOf(key: String, value: ImageBitmap): Int =
             (value.width * value.height * 4) / 1024
@@ -154,8 +152,8 @@ object ThumbnailManager {
             renderer = PdfRenderer(pfd)
             if (renderer.pageCount > 0) {
                 page = renderer.openPage(0)
-                val targetWidth = 400
-                val targetHeight = ((400f * page.height) / page.width).toInt().coerceIn(200, 600)
+                val targetWidth = 1200
+                val targetHeight = ((1200f * page.height) / page.width).toInt().coerceIn(600, 2400)
 
                 val bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
                 bitmap.eraseColor(android.graphics.Color.WHITE)
@@ -163,7 +161,7 @@ object ThumbnailManager {
                 page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
 
                 FileOutputStream(destFile).use { out ->
-                    bitmap.compress(Bitmap.CompressFormat.PNG, 85, out)
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
                 }
                 bitmap.recycle()
             }

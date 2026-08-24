@@ -85,10 +85,13 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.termux.x11.LorieView
 import com.termux.x11.input.LenovoPenButtonMapper
 import com.termux.x11.input.TouchInputHandler
+import dev.ilamparithi.aournalpp.data.DocumentRepository
 import dev.ilamparithi.aournalpp.runtime.CanvasSessionManager
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
@@ -208,6 +211,7 @@ class CanvasActivity : ComponentActivity() {
         val prefs = getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
         if (targetPath != null) {
             prefs.edit().putString("pref_last_opened_note_path", targetPath).apply()
+            DocumentRepository(this).recordNoteOpened(targetPath)
         } else {
             prefs.edit().remove("pref_last_opened_note_path").apply()
         }
@@ -218,13 +222,28 @@ class CanvasActivity : ComponentActivity() {
             else -> "New Note"
         }
 
-
-
         setContent {
             AournalTheme {
                 val showEmergencyForceCloseDialog by remember { showEmergencyForceCloseDialogState }
                 var isHeaderExpanded by remember { mutableStateOf(true) }
                 val liveTitle by sessionManager.documentTitle.collectAsState()
+
+                androidx.compose.runtime.LaunchedEffect(liveTitle) {
+                    val title = liveTitle?.removePrefix("*")?.removeSuffix("*")?.trim()
+                    if (!title.isNullOrBlank() && title != "New Note" && title != "Unsaved Document" && title != "Preferences") {
+                        withContext(Dispatchers.IO) {
+                            val repo = DocumentRepository(this@CanvasActivity)
+                            val root = repo.getRootNotesDirectory()
+                            val file = root.walkTopDown().filter {
+                                it.isFile && (it.name.equals(title, ignoreCase = true) || it.nameWithoutExtension.equals(title, ignoreCase = true))
+                            }.firstOrNull()
+                            if (file != null) {
+                                repo.recordNoteOpened(file.absolutePath)
+                            }
+                        }
+                    }
+                }
+
                 val displayTitle = when {
                     openPreferences && (liveTitle == null || liveTitle?.removePrefix("*")?.trim() == "New Note" || liveTitle?.removePrefix("*")?.trim() == "Unsaved Document") -> "Preferences"
                     else -> liveTitle ?: initialTitle

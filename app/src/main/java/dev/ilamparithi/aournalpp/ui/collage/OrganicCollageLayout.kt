@@ -409,7 +409,14 @@ fun OrganicCollageView(
     onNoteClick: (NoteDocument) -> Unit,
     onNewNoteClick: () -> Unit,
     refreshSeed: Long = 0L,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onTogglePin: ((NoteDocument) -> Unit)? = null,
+    onExportPdf: ((NoteDocument) -> Unit)? = null,
+    onSharePdf: ((NoteDocument) -> Unit)? = null,
+    onShareXopp: ((NoteDocument) -> Unit)? = null,
+    onRename: ((NoteDocument) -> Unit)? = null,
+    onDuplicate: ((NoteDocument) -> Unit)? = null,
+    onDelete: ((NoteDocument) -> Unit)? = null
 ) {
     if (notes.isEmpty()) {
         CreativeEmptyCollageState(onNewNoteClick = onNewNoteClick)
@@ -478,7 +485,14 @@ fun OrganicCollageView(
                                 note = card.note,
                                 shape = card.shape,
                                 pdfExportManager = pdfExportManager,
-                                onClick = { onNoteClick(card.note) }
+                                onClick = { onNoteClick(card.note) },
+                                onTogglePin = onTogglePin?.let { { it(card.note) } },
+                                onExportPdf = onExportPdf?.let { { it(card.note) } },
+                                onSharePdf = onSharePdf?.let { { it(card.note) } },
+                                onShareXopp = onShareXopp?.let { { it(card.note) } },
+                                onRename = onRename?.let { { it(card.note) } },
+                                onDuplicate = onDuplicate?.let { { it(card.note) } },
+                                onDelete = onDelete?.let { { it(card.note) } }
                             )
                         }
                     }
@@ -490,206 +504,36 @@ fun OrganicCollageView(
 
 /**
  * Individual Card in the Collage with Floating Color-Coded Details Pill.
+ * Delegates to the unified [StandardNoteCard] for consistent styling across all views.
  */
 @Composable
 fun CollageCardView(
     note: NoteDocument,
     shape: Shape,
     pdfExportManager: PdfExportManager,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onTogglePin: (() -> Unit)? = null,
+    onExportPdf: (() -> Unit)? = null,
+    onSharePdf: (() -> Unit)? = null,
+    onShareXopp: (() -> Unit)? = null,
+    onRename: (() -> Unit)? = null,
+    onDuplicate: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null
 ) {
-    val context = LocalContext.current
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.96f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-        label = "cardScale"
+    dev.ilamparithi.aournalpp.ui.StandardNoteCard(
+        note = note,
+        modifier = Modifier.fillMaxSize(),
+        shape = shape,
+        pdfExportManager = pdfExportManager,
+        onClick = onClick,
+        onTogglePin = onTogglePin,
+        onExportPdf = onExportPdf,
+        onSharePdf = onSharePdf,
+        onShareXopp = onShareXopp,
+        onRename = onRename,
+        onDuplicate = onDuplicate,
+        onDelete = onDelete
     )
-
-    val thumbnailImage by produceState<ImageBitmap?>(
-        initialValue = ThumbnailManager.getCachedThumbnail(note.file),
-        key1 = note.lastModifiedMs
-    ) {
-        value = ThumbnailManager.getOrCreateThumbnailBitmap(context, note.file, pdfExportManager)
-    }
-    val thumbnailFile = remember(thumbnailImage) { ThumbnailManager.getCachedThumbnailFile(note.file) }
-
-    // Folder Palette Color Variant
-    val folderAccentColor = note.folderColorHex?.let {
-        try { Color(android.graphics.Color.parseColor(it)) } catch (e: Exception) { null }
-    } ?: MaterialTheme.colorScheme.primary
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .scale(scale)
-            .shadow(elevation = 4.dp, shape = shape)
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .border(1.dp, folderAccentColor.copy(alpha = 0.25f), shape)
-            .floatingPreviewLongPress(
-                note = note,
-                thumbnailFile = thumbnailFile,
-                folderColor = folderAccentColor,
-                initialCornerRadiusDp = 14f,
-                onClick = onClick
-            )
-    ) {
-        // Thumbnail Image
-        if (thumbnailImage != null) {
-            Image(
-                bitmap = thumbnailImage!!,
-                contentDescription = note.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(folderAccentColor.copy(alpha = 0.08f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = when (note.fileType) {
-                        NoteFileType.PDF -> Icons.Default.PictureAsPdf
-                        else -> Icons.Default.Description
-                    },
-                    contentDescription = null,
-                    tint = folderAccentColor.copy(alpha = 0.6f),
-                    modifier = Modifier.size(48.dp)
-                )
-            }
-        }
-
-        // Top-Left: Standardized File Type Pill in thumbnail
-        FileTypePill(
-            fileType = note.fileType,
-            fontSize = 9f,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(8.dp)
-        )
-
-        // Top-Right: Pinned Pushpin Badge (if pinned)
-        if (note.isPinned) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shadowElevation = 4.dp,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp)
-                    .size(28.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.PushPin,
-                        contentDescription = "Pinned Note",
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
-        }
-
-        // Bottom: Floating Folder-Palette Details Pill
-        FloatingDetailsPill(
-            note = note,
-            folderColor = folderAccentColor,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(horizontal = 8.dp, vertical = 8.dp)
-        )
-    }
-}
-
-/**
- * Floating Details Pill using a palette variant of the folder color with color-coded details.
- */
-@Composable
-fun FloatingDetailsPill(
-    note: NoteDocument,
-    folderColor: Color,
-    modifier: Modifier = Modifier
-) {
-    val tintedBgColor = folderColor.copy(alpha = 0.22f)
-        .compositeOver(MaterialTheme.colorScheme.surface.copy(alpha = 0.90f))
-
-    Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = tintedBgColor,
-        shadowElevation = 6.dp,
-        border = androidx.compose.foundation.BorderStroke(1.dp, folderColor.copy(alpha = 0.45f)),
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            // Title
-            Text(
-                text = note.title,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Black,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            // Bottom Row: Folder & Timestamp
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                if (note.folder.isNotBlank()) {
-                    if (!note.folderIconEmoji.isNullOrBlank()) {
-                        Text(
-                            text = note.folderIconEmoji,
-                            fontSize = 11.sp
-                        )
-                    } else {
-                        val isRoot = note.folder == "Notes Home"
-                        val isEmergency = note.folderIconType == "emergency" || note.folder.equals("Emergency Saves", ignoreCase = true)
-                        Icon(
-                            imageVector = when {
-                                isRoot -> Icons.Default.Home
-                                isEmergency -> Icons.Default.Emergency
-                                else -> Icons.Default.Folder
-                            },
-                            contentDescription = null,
-                            tint = folderColor,
-                            modifier = Modifier.size(12.dp)
-                        )
-                    }
-                    Text(
-                        text = note.folder,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = folderColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "•",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline
-                    )
-                }
-                Text(
-                    text = note.lastModifiedFormatted,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-    }
 }
 
 /**

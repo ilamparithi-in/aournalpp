@@ -106,12 +106,69 @@ data class NoteDocument(
     val folderColorHex: String? = null,
     val folderIconEmoji: String? = null,
     val folderIconType: String? = null,
-    val tags: List<String> = emptyList()
+    val tags: List<String> = emptyList(),
+    val lastOpenedMs: Long? = null
 ) {
     val fileType: NoteFileType
         get() = when (file.extension.lowercase()) {
             "xoj" -> NoteFileType.XOJ
             "pdf" -> NoteFileType.PDF
             else -> NoteFileType.XOPP
+        }
+
+    val fuzzyLastModified: String
+        get() = try {
+            val now = System.currentTimeMillis()
+            val diff = now - lastModifiedMs
+            if (diff in 0L..59_999L) {
+                "Just now"
+            } else {
+                android.text.format.DateUtils.getRelativeTimeSpanString(
+                    lastModifiedMs,
+                    now,
+                    android.text.format.DateUtils.MINUTE_IN_MILLIS,
+                    android.text.format.DateUtils.FORMAT_ABBREV_RELATIVE
+                ).toString()
+            }
+        } catch (e: Exception) {
+            lastModifiedFormatted
+        }
+
+    val fuzzyLastOpened: String?
+        get() {
+            val opened = lastOpenedMs ?: return null
+            return try {
+                val now = System.currentTimeMillis()
+                val diff = now - opened
+                if (diff in 0L..59_999L) {
+                    "Just now"
+                } else {
+                    android.text.format.DateUtils.getRelativeTimeSpanString(
+                        opened,
+                        now,
+                        android.text.format.DateUtils.MINUTE_IN_MILLIS,
+                        android.text.format.DateUtils.FORMAT_ABBREV_RELATIVE
+                    ).toString()
+                }
+            } catch (e: Exception) {
+                null
+            }
+        }
+
+    val fullFormattedDateTime: String
+        get() = try {
+            java.text.SimpleDateFormat("MMM d, yyyy • h:mm a", java.util.Locale.getDefault()).format(java.util.Date(lastModifiedMs))
+        } catch (e: Exception) {
+            lastModifiedFormatted
+        }
+
+    val fullFormattedOpenedDateTime: String?
+        get() {
+            val opened = lastOpenedMs ?: return null
+            return try {
+                java.text.SimpleDateFormat("MMM d, yyyy • h:mm a", java.util.Locale.getDefault()).format(java.util.Date(opened))
+            } catch (e: Exception) {
+                null
+            }
         }
 }

@@ -55,7 +55,7 @@ import dev.ilamparithi.aournalpp.ui.DocumentHubScreen
 import dev.ilamparithi.aournalpp.ui.HomeScreen
 import dev.ilamparithi.aournalpp.ui.LicensesScreen
 import dev.ilamparithi.aournalpp.SettingsScreen
-import dev.ilamparithi.aournalpp.CanvasActivity
+import dev.ilamparithi.aournalpp.data.DocumentRepository
 import dev.ilamparithi.aournalpp.utils.ExternalFileHandler
 import dev.ilamparithi.aournalpp.ui.preview.FloatingPreviewHost
 import dev.ilamparithi.aournalpp.ui.theme.AournalTheme
@@ -137,6 +137,7 @@ class MainActivity : ComponentActivity() {
                 val result = ExternalFileHandler.stageExternalUri(this@MainActivity, uri, env)
                 if (result.isSuccess) {
                     val file = result.getOrThrow()
+                    DocumentRepository(this@MainActivity).recordNoteOpened(file.absolutePath)
                     val canvasIntent = Intent(this@MainActivity, CanvasActivity::class.java).apply {
                         putExtra(CanvasActivity.EXTRA_NOTE_PATH, file.absolutePath)
                     }
