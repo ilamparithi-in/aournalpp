@@ -11,42 +11,62 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Mouse
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -54,6 +74,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -92,6 +113,7 @@ class CanvasActivity : ComponentActivity() {
     private var activeLorieView: LorieView? = null
 
     private val showEmergencyForceCloseDialogState = mutableStateOf(false)
+    private val isKeyboardOpenState = mutableStateOf(false)
     private val backPressTimestamps = mutableListOf<Long>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -104,15 +126,59 @@ class CanvasActivity : ComponentActivity() {
             }
         })
 
-        // Configure full-screen sticky immersive mode
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
-        insetsController.systemBarsBehavior =
-            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        insetsController.hide(WindowInsetsCompat.Type.systemBars())
+        // Initialize X11 preferences with defaults (e.g. Direct Touch)
+        dev.ilamparithi.aournalpp.data.X11Preferences.initDefaults(this)
+        val x11Prefs = dev.ilamparithi.aournalpp.data.X11Preferences.getPrefs(this)
 
-        // Keep screen on during note-taking
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        val isFullscreen = x11Prefs.getBoolean(dev.ilamparithi.aournalpp.data.X11Preferences.KEY_FULLSCREEN, false)
+        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+        if (isFullscreen) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            insetsController.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            insetsController.hide(WindowInsetsCompat.Type.systemBars())
+        } else {
+            WindowCompat.setDecorFitsSystemWindows(window, true)
+            insetsController.show(WindowInsetsCompat.Type.systemBars())
+        }
+
+        // Ensure window manager does not pan or push the activity when keyboard appears
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+
+        // Screen idle timeout configuration
+        val idleTimeoutMode = x11Prefs.getString(dev.ilamparithi.aournalpp.data.X11Preferences.KEY_SCREEN_IDLE_TIMEOUT, "system") ?: "system"
+        when (idleTimeoutMode) {
+            "never" -> window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            "system" -> window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            else -> window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+
+        // High-performance debounce-aware soft keyboard Reseed and state listener
+        val reseedEnabled = x11Prefs.getBoolean(dev.ilamparithi.aournalpp.data.X11Preferences.KEY_RESEED, false)
+        var lastImeHeight = -1
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { _, insets ->
+            val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
+            val imeHeight = imeInsets.bottom
+            val isImeOpen = imeHeight > 0 || insets.isVisible(WindowInsetsCompat.Type.ime())
+            isKeyboardOpenState.value = isImeOpen
+
+            if (imeHeight != lastImeHeight) {
+                lastImeHeight = imeHeight
+                activeLorieView?.let { view ->
+                    if (reseedEnabled) {
+                        view.setContentInsets(0, 0, 0, imeHeight)
+                        view.setObscuredBottom(0)
+                    } else {
+                        view.setContentInsets(0, 0, 0, 0)
+                        view.setObscuredBottom(imeHeight)
+                    }
+                    if (!isImeOpen) {
+                        view.setKeyboardVisible(false)
+                    }
+                }
+            }
+            insets
+        }
 
         com.termux.x11.MainActivity.setPrefs(com.termux.x11.Prefs(this))
 
@@ -168,12 +234,23 @@ class CanvasActivity : ComponentActivity() {
                     handleSmartBackPress()
                 }
 
-                Surface(modifier = Modifier.fillMaxSize()) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.surface
+                ) {
                     val wallpaperBitmap = remember {
                         WallpaperHelper.resolveWallpaperBitmap(this@CanvasActivity)
                     }
 
-                    Box(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = if (isFullscreen) {
+                            Modifier.fillMaxSize()
+                        } else {
+                            Modifier
+                                .fillMaxSize()
+                                .systemBarsPadding()
+                        }
+                    ) {
                         // Wallpaper Backdrop Layer
                         Image(
                             bitmap = wallpaperBitmap.asImageBitmap(),
@@ -196,128 +273,300 @@ class CanvasActivity : ComponentActivity() {
                             }
                         )
 
-                        // Floating Top Header Bar
+                        // Floating Top Header Bar with Material 3 Morphing
+                        val M3MorphEasing = remember { CubicBezierEasing(0.2f, 0.0f, 0.0f, 1.0f) }
+
                         Box(
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .statusBarsPadding()
-                                .padding(top = 8.dp)
+                            modifier = if (isFullscreen) {
+                                Modifier
+                                    .align(Alignment.TopCenter)
+                                    .statusBarsPadding()
+                                    .padding(top = 8.dp)
+                            } else {
+                                Modifier
+                                    .align(Alignment.TopCenter)
+                                    .padding(top = 8.dp)
+                            }
                         ) {
-                            AnimatedVisibility(
-                                visible = isHeaderExpanded,
-                                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-                                exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
+                            Surface(
+                                modifier = Modifier
+                                    .shadow(elevation = 8.dp, shape = RoundedCornerShape(24.dp))
+                                    .clip(RoundedCornerShape(24.dp)),
+                                shape = RoundedCornerShape(24.dp),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                                tonalElevation = 6.dp
                             ) {
-                                Surface(
-                                    modifier = Modifier
-                                        .shadow(elevation = 8.dp, shape = RoundedCornerShape(24.dp)),
-                                    shape = RoundedCornerShape(24.dp),
-                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                                    tonalElevation = 6.dp
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        IconButton(
-                                            onClick = { handleSmartBackPress() },
-                                            modifier = Modifier.size(36.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                                contentDescription = "Exit Note",
-                                                modifier = Modifier.size(20.dp),
-                                                tint = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-
-                                        Icon(
-                                            imageVector = Icons.Default.Description,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp),
-                                            tint = MaterialTheme.colorScheme.primary
+                                AnimatedContent(
+                                    targetState = isHeaderExpanded,
+                                    transitionSpec = {
+                                        fadeIn(animationSpec = tween(durationMillis = 200, delayMillis = 60, easing = M3MorphEasing)) togetherWith
+                                        fadeOut(animationSpec = tween(durationMillis = 100, easing = M3MorphEasing)) using
+                                        SizeTransform(
+                                            clip = true,
+                                            sizeAnimationSpec = { _, _ -> tween(durationMillis = 350, easing = M3MorphEasing) }
                                         )
-
-                                        Spacer(modifier = Modifier.width(2.dp))
-
-                                        Text(
-                                            text = displayTitle,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.padding(end = 4.dp)
-                                        )
-
-                                        // Keyboard Toggle Action
-                                        IconButton(
-                                            onClick = {
-                                                activeLorieView?.let { view ->
-                                                    view.requestFocus()
-                                                    view.toggleKeyboardVisible()
-                                                } ?: run {
-                                                    val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-                                                    imm?.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0)
-                                                }
-                                            },
-                                            modifier = Modifier.size(36.dp)
+                                    },
+                                    contentAlignment = Alignment.Center,
+                                    label = "HeaderMorphTransition"
+                                ) { expanded ->
+                                    if (expanded) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
+                                            IconButton(
+                                                onClick = { handleSmartBackPress() },
+                                                modifier = Modifier.size(36.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                                    contentDescription = "Exit Note",
+                                                    modifier = Modifier.size(20.dp),
+                                                    tint = MaterialTheme.colorScheme.onSurface
+                                                )
+                                            }
+
                                             Icon(
-                                                imageVector = Icons.Default.Keyboard,
-                                                contentDescription = "Toggle Keyboard",
-                                                modifier = Modifier.size(20.dp),
+                                                imageVector = Icons.Default.Description,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp),
                                                 tint = MaterialTheme.colorScheme.primary
                                             )
-                                        }
 
-                                        // Collapse Pill Action
-                                        IconButton(
-                                            onClick = { isHeaderExpanded = false },
-                                            modifier = Modifier.size(36.dp)
+                                            Spacer(modifier = Modifier.width(2.dp))
+
+                                            Text(
+                                                text = displayTitle,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.padding(end = 4.dp)
+                                            )
+
+                                            // Stylus Click Override Mode Switcher (Animated Material 3 Mini Capsule)
+                                            val showStylusClickOverride = remember {
+                                                x11Prefs.getBoolean(dev.ilamparithi.aournalpp.data.X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE, false)
+                                            }
+                                            var stylusClickMode by remember {
+                                                mutableIntStateOf(com.termux.x11.input.TouchInputHandler.STYLUS_INPUT_HELPER_MODE)
+                                            }
+
+                                            if (showStylusClickOverride) {
+                                                val modes = listOf(
+                                                    1 to "L",
+                                                    2 to "M",
+                                                    4 to "R"
+                                                )
+                                                val selectedIndex = when (stylusClickMode) {
+                                                    2 -> 1
+                                                    4 -> 2
+                                                    else -> 0
+                                                }
+
+                                                val itemWidth = 26.dp
+                                                val itemHeight = 24.dp
+                                                val spacing = 2.dp
+                                                val padding = 2.dp
+
+                                                val indicatorOffset by animateDpAsState(
+                                                    targetValue = (itemWidth + spacing) * selectedIndex,
+                                                    animationSpec = tween(durationMillis = 320, easing = M3MorphEasing),
+                                                    label = "StylusIndicatorOffset"
+                                                )
+
+                                                Surface(
+                                                    shape = RoundedCornerShape(10.dp),
+                                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                                    modifier = Modifier.padding(horizontal = 4.dp)
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier.padding(padding)
+                                                    ) {
+                                                        // Animated Active Indicator Pill
+                                                        Surface(
+                                                            modifier = Modifier
+                                                                .offset(x = indicatorOffset)
+                                                                .size(itemWidth, itemHeight),
+                                                            shape = RoundedCornerShape(8.dp),
+                                                            color = MaterialTheme.colorScheme.primary,
+                                                            shadowElevation = 1.dp
+                                                        ) {}
+
+                                                        // Interactive Mode Buttons
+                                                        Row(
+                                                            horizontalArrangement = Arrangement.spacedBy(spacing),
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            modes.forEach { (modeValue, label) ->
+                                                                val isSelected = stylusClickMode == modeValue
+                                                                val textColor by animateColorAsState(
+                                                                    targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                                    animationSpec = tween(durationMillis = 200, easing = M3MorphEasing),
+                                                                    label = "StylusTextColor"
+                                                                )
+
+                                                                Box(
+                                                                    modifier = Modifier
+                                                                        .size(itemWidth, itemHeight)
+                                                                        .clip(RoundedCornerShape(8.dp))
+                                                                        .clickable(
+                                                                            interactionSource = remember { MutableInteractionSource() },
+                                                                            indication = null
+                                                                        ) {
+                                                                            com.termux.x11.input.TouchInputHandler.STYLUS_INPUT_HELPER_MODE = modeValue
+                                                                            stylusClickMode = modeValue
+                                                                        },
+                                                                    contentAlignment = Alignment.Center
+                                                                ) {
+                                                                    Text(
+                                                                        text = label,
+                                                                        style = MaterialTheme.typography.labelSmall,
+                                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                                        color = textColor
+                                                                    )
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            // Stateful Keyboard Toggle Action
+                                            val isKeyboardOpen by remember { isKeyboardOpenState }
+                                            IconButton(
+                                                onClick = {
+                                                    activeLorieView?.let { view ->
+                                                        val insetsCtrl = WindowCompat.getInsetsController(window, window.decorView)
+                                                        if (isKeyboardOpen) {
+                                                            view.setKeyboardVisible(false)
+                                                            insetsCtrl.hide(WindowInsetsCompat.Type.ime())
+                                                        } else {
+                                                            view.requestFocus()
+                                                            view.setKeyboardVisible(true)
+                                                            insetsCtrl.show(WindowInsetsCompat.Type.ime())
+                                                        }
+                                                    } ?: run {
+                                                        val insetsCtrl = WindowCompat.getInsetsController(window, window.decorView)
+                                                        if (isKeyboardOpen) {
+                                                            insetsCtrl.hide(WindowInsetsCompat.Type.ime())
+                                                        } else {
+                                                            insetsCtrl.show(WindowInsetsCompat.Type.ime())
+                                                        }
+                                                    }
+                                                },
+                                                modifier = Modifier.size(36.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Keyboard,
+                                                    contentDescription = "Toggle Keyboard",
+                                                    modifier = Modifier.size(20.dp),
+                                                    tint = if (isKeyboardOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+
+                                            // Collapse Pill Action
+                                            IconButton(
+                                                onClick = { isHeaderExpanded = false },
+                                                modifier = Modifier.size(36.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.ExpandLess,
+                                                    contentDescription = "Collapse Header",
+                                                    modifier = Modifier.size(20.dp),
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        Row(
+                                            modifier = Modifier
+                                                .clickable { isHeaderExpanded = true }
+                                                .padding(horizontal = 14.dp, vertical = 7.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
+                                            Text(
+                                                text = displayTitle,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Medium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
                                             Icon(
-                                                imageVector = Icons.Default.ExpandLess,
-                                                contentDescription = "Collapse Header",
-                                                modifier = Modifier.size(20.dp),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                imageVector = Icons.Default.ExpandMore,
+                                                contentDescription = "Expand Header",
+                                                modifier = Modifier.size(18.dp),
+                                                tint = MaterialTheme.colorScheme.primary
                                             )
                                         }
                                     }
                                 }
                             }
+                        }
 
-                            // Minimalist Floating Collapse Indicator
-                            if (!isHeaderExpanded) {
-                                Surface(
-                                    modifier = Modifier
-                                        .shadow(elevation = 6.dp, shape = CircleShape)
-                                        .clip(CircleShape)
-                                        .clickable { isHeaderExpanded = true },
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.88f),
-                                    tonalElevation = 4.dp
+                        // Onscreen Mouse Helper Overlay for Trackpad mode
+                        val showMouseHelper = remember {
+                            x11Prefs.getBoolean(dev.ilamparithi.aournalpp.data.X11Preferences.KEY_SHOW_MOUSE_HELPER, false)
+                                && x11Prefs.getString(dev.ilamparithi.aournalpp.data.X11Preferences.KEY_TOUCH_MODE, "3") == "1"
+                        }
+                        if (showMouseHelper) {
+                            Surface(
+                                modifier = if (isFullscreen) {
+                                    Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .navigationBarsPadding()
+                                        .padding(end = 16.dp, bottom = 24.dp)
+                                } else {
+                                    Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .padding(end = 16.dp, bottom = 16.dp)
+                                }
+                                .shadow(elevation = 8.dp, shape = RoundedCornerShape(16.dp)),
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+                                tonalElevation = 6.dp
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(6.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    Button(
+                                        onClick = {
+                                            activeLorieView?.let { v ->
+                                                v.sendMouseEvent(0f, 0f, 1, true, true)
+                                                v.sendMouseEvent(0f, 0f, 1, false, true)
+                                            }
+                                        },
+                                        shape = RoundedCornerShape(10.dp)
                                     ) {
-                                        Text(
-                                            text = displayTitle,
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.Medium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Icon(
-                                            imageVector = Icons.Default.ExpandMore,
-                                            contentDescription = "Expand Header",
-                                            modifier = Modifier.size(18.dp),
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
+                                        Text("Left")
+                                    }
+                                    FilledTonalButton(
+                                        onClick = {
+                                            activeLorieView?.let { v ->
+                                                v.sendMouseEvent(0f, 0f, 2, true, true)
+                                                v.sendMouseEvent(0f, 0f, 2, false, true)
+                                            }
+                                        },
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Text("Middle")
+                                    }
+                                    Button(
+                                        onClick = {
+                                            activeLorieView?.let { v ->
+                                                v.sendMouseEvent(0f, 0f, 3, true, true)
+                                                v.sendMouseEvent(0f, 0f, 3, false, true)
+                                            }
+                                        },
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Text("Right")
                                     }
                                 }
                             }

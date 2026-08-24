@@ -602,14 +602,10 @@ class LinuxEnvironment(private val context: Context) {
     fun getEnvMap(): Map<String, String> {
         val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
         val selectedScale = prefs.getString("pref_ui_scale", "1.0") ?: "1.0"
-        val (gdkScale, gdkDpiScale) = when (selectedScale) {
-            "1.25" -> Pair("1", "1.25")
-            "1.5" -> Pair("1", "1.5")
-            "1.75" -> Pair("1", "1.75")
-            "2.0" -> Pair("2", "1.0")
-            "2.5" -> Pair("2", "1.25")
-            else -> Pair("1", "1.0")
-        }
+        val scaleFloat = (selectedScale.toFloatOrNull() ?: 1.0f).coerceIn(0.5f, 4.0f)
+        val gdkScaleInt = if (scaleFloat >= 2.0f) scaleFloat.toInt().coerceAtLeast(1) else 1
+        val gdkDpiScale = String.format(java.util.Locale.US, "%.2f", scaleFloat / gdkScaleInt)
+        val gdkScale = gdkScaleInt.toString()
 
         val isDark = isGtkDarkMode()
         val gtkThemeEnv = if (isDark) "Adwaita:dark" else "Adwaita"

@@ -128,7 +128,8 @@ val generatePrefs = tasks.register("generatePrefs") {
         for (i in 0 until nodeList.length) {
             val node = nodeList.item(i)
             val key = node.attributes?.getNamedItem("app:key")?.nodeValue ?: continue
-            val defaultVal = node.attributes?.getNamedItem("app:defaultValue")?.nodeValue ?: ""
+            val rawDefault = node.attributes?.getNamedItem("app:defaultValue")?.nodeValue ?: ""
+            val defaultVal = if (key == "touchMode") "3" else rawDefault
             when (node.nodeName) {
                 "EditTextPreference" -> {
                     if (key != "extra_keys_config") {
