@@ -127,12 +127,18 @@ val LocalFloatingPreviewController = compositionLocalOf<FloatingPreviewControlle
     error("No FloatingPreviewController provided. Wrap UI in FloatingPreviewHost.")
 }
 
+private enum class GesturePhase {
+    TAP,
+    CANCEL,
+    LONG_PRESS
+}
+
 /**
  * Modifier to attach long-press floating preview behavior and drag-to-action gesture tracking.
  * - Tap: invokes [onClick].
  * - Long press: captures current window bounds, triggers haptic feedback,
  *   and holds the floating preview open.
- * - Drag while held: tracks directional displacement to highlight action regions ("View as PDF" / "Edit in Xournal++").
+ * - Drag while held in preview: tracks directional displacement to highlight action regions ("View as PDF" / "Edit in Xournal++").
  * - Release: executes chosen action if threshold is reached, or dismisses preview if neutral.
  */
 fun Modifier.floatingPreviewLongPress(
@@ -172,78 +178,91 @@ fun Modifier.floatingPreviewLongPress(
                 val touchSlop = viewConfiguration.touchSlop
                 var previousAction = DragActionTarget.NONE
 
-                // Detect long press timeout or cancellation from early movement
-                val longPressResult = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                // Detect long press timeout or cancellation from early movement / child consumption
+                val gesturePhase = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Main)
                         val change = event.changes.firstOrNull { it.id == down.id }
                         if (change == null || !change.pressed) {
-                            return@withTimeoutOrNull false // Released early -> Tap
+                            if (change != null && change.isConsumed) {
+                                // Child composable (e.g. 3-dot options IconButton, pin, or checkbox) consumed the click
+                                return@withTimeoutOrNull GesturePhase.CANCEL
+                            }
+                            return@withTimeoutOrNull GesturePhase.TAP
+                        }
+                        if (change.isConsumed) {
+                            return@withTimeoutOrNull GesturePhase.CANCEL
                         }
                         val dist = (change.position - downPos).getDistance()
                         if (dist > touchSlop) {
-                            return@withTimeoutOrNull null // Moved beyond touch slop -> Drag/Scroll
+                            return@withTimeoutOrNull GesturePhase.CANCEL
                         }
                     }
-                }
+                } ?: GesturePhase.LONG_PRESS
 
-                if (longPressResult == null) {
-                    // Long press activated!
-                    try {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    } catch (_: Exception) {}
-
-                    val globalTouch = if (boundsInWindow != Rect.Zero) {
-                        Offset(boundsInWindow.left + downPos.x, boundsInWindow.top + downPos.y)
-                    } else {
-                        downPos
+                when (gesturePhase) {
+                    GesturePhase.TAP -> {
+                        onClick()
                     }
+                    GesturePhase.CANCEL -> {
+                        // User swiped or moved beyond touch slop before long press - exit gesture
+                        // without activating preview or drag actions.
+                    }
+                    GesturePhase.LONG_PRESS -> {
+                        // Long press activated!
+                        try {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        } catch (_: Exception) {}
 
-                    controller.showPreview(
-                        FloatingPreviewData(
-                            note = note,
-                            initialBounds = boundsInWindow,
-                            initialCornerRadiusDp = initialCornerRadiusDp,
-                            thumbnailFile = thumbnailFile,
-                            folderColor = folderColor,
-                            touchPositionInWindow = globalTouch
+                        val globalTouch = if (boundsInWindow != Rect.Zero) {
+                            Offset(boundsInWindow.left + downPos.x, boundsInWindow.top + downPos.y)
+                        } else {
+                            downPos
+                        }
+
+                        controller.showPreview(
+                            FloatingPreviewData(
+                                note = note,
+                                initialBounds = boundsInWindow,
+                                initialCornerRadiusDp = initialCornerRadiusDp,
+                                thumbnailFile = thumbnailFile,
+                                folderColor = folderColor,
+                                touchPositionInWindow = globalTouch
+                            )
                         )
-                    )
-                    onLongPressFallback?.invoke()
+                        onLongPressFallback?.invoke()
 
-                    // Continuously track drag movement until finger is released
-                    while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Main)
-                        val change = event.changes.firstOrNull { it.id == down.id }
-                        if (change == null || !change.pressed) {
-                            // Finger released
-                            val finalAction = controller.onFingerReleased()
-                            if (finalAction != DragActionTarget.NONE) {
-                                try {
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                } catch (_: Exception) {}
+                        // Continuously track drag movement until finger is released
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Main)
+                            val change = event.changes.firstOrNull { it.id == down.id }
+                            if (change == null || !change.pressed) {
+                                // Finger released
+                                val finalAction = controller.onFingerReleased()
+                                if (finalAction != DragActionTarget.NONE) {
+                                    try {
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    } catch (_: Exception) {}
+                                }
+                                break
                             }
-                            break
-                        }
 
-                        val delta = change.position - downPos
-                        controller.updateDrag(delta, isLandscape, screenWidthPx, screenHeightPx)
+                            val delta = change.position - downPos
+                            controller.updateDrag(delta, isLandscape, screenWidthPx, screenHeightPx)
 
-                        val currentAction = controller.activeAction.value
-                        if (currentAction != previousAction) {
-                            if (currentAction != DragActionTarget.NONE) {
-                                try {
-                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                } catch (_: Exception) {}
+                            val currentAction = controller.activeAction.value
+                            if (currentAction != previousAction) {
+                                if (currentAction != DragActionTarget.NONE) {
+                                    try {
+                                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    } catch (_: Exception) {}
+                                }
+                                previousAction = currentAction
                             }
-                            previousAction = currentAction
-                        }
 
-                        change.consume()
+                            change.consume()
+                        }
                     }
-                } else if (longPressResult == false) {
-                    // Quick tap without holding -> normal click
-                    onClick()
                 }
             }
         }

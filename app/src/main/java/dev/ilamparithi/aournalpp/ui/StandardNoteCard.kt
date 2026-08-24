@@ -21,6 +21,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Emergency
@@ -34,6 +36,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -432,7 +435,7 @@ fun StandardNoteActionDropdown(
                 text = { Text(if (isPinned) "Unpin from Home" else "Pin to Home") },
                 leadingIcon = {
                     Icon(
-                        imageVector = Icons.Default.PushPin,
+                        imageVector = if (isPinned) Icons.Outlined.PushPin else Icons.Default.PushPin,
                         contentDescription = null,
                         tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -473,7 +476,7 @@ fun StandardNoteActionDropdown(
         if (onDuplicate != null) {
             DropdownMenuItem(
                 text = { Text("Duplicate") },
-                leadingIcon = { Icon(Icons.Default.History, contentDescription = null) },
+                leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
                 onClick = { onDismiss(); onDuplicate() }
             )
         }
@@ -481,7 +484,7 @@ fun StandardNoteActionDropdown(
             HorizontalDivider()
             DropdownMenuItem(
                 text = { Text("Move to Trash", color = MaterialTheme.colorScheme.error) },
-                leadingIcon = { Icon(Icons.Default.Restore, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                 onClick = { onDismiss(); onDelete() }
             )
         }

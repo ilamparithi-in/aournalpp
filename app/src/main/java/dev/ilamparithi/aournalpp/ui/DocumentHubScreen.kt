@@ -1581,6 +1581,21 @@ fun DocumentHubScreen(
                                         }
                                     },
                                     onShareXopp = { note -> repository.shareNoteAsXopp(context, note) },
+                                    onExportPdf = { note ->
+                                        pendingExportNote = note
+                                        exportPdfLauncher.launch("${note.title}.pdf")
+                                    },
+                                    onDuplicate = { note ->
+                                        scope.launch {
+                                            val result = repository.duplicateNote(note)
+                                            if (result.isSuccess) {
+                                                loadContent()
+                                                snackbarHostState.showSnackbar("Duplicated note \"${note.title}\"")
+                                            } else {
+                                                snackbarHostState.showSnackbar("Failed to duplicate note: ${result.exceptionOrNull()?.message}")
+                                            }
+                                        }
+                                    },
                                     onDeleteNote = { note -> noteToDelete = note },
                                     onRenameNote = { note ->
                                         noteToRename = note
@@ -2274,7 +2289,7 @@ fun NoteActionDropdown(
             text = { Text(if (isPinned) "Unpin from Home" else "Pin to Home") },
             leadingIcon = {
                 Icon(
-                    imageVector = Icons.Default.PushPin,
+                    imageVector = if (isPinned) Icons.Outlined.PushPin else Icons.Default.PushPin,
                     contentDescription = null,
                     tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -2600,8 +2615,10 @@ fun DynamicRecentsCarousel(
     pdfExportManager: PdfExportManager,
     onOpenNote: (NoteDocument) -> Unit,
     onTogglePin: (NoteDocument) -> Unit,
+    onExportPdf: (NoteDocument) -> Unit,
     onSharePdf: (NoteDocument) -> Unit,
     onShareXopp: (NoteDocument) -> Unit,
+    onDuplicate: ((NoteDocument) -> Unit)? = null,
     onDeleteNote: (NoteDocument) -> Unit,
     onRenameNote: (NoteDocument) -> Unit
 ) {
@@ -2660,9 +2677,11 @@ fun DynamicRecentsCarousel(
                 pdfExportManager = pdfExportManager,
                 onClick = { onOpenNote(note) },
                 onTogglePin = { onTogglePin(note) },
+                onExportPdf = { onExportPdf(note) },
                 onSharePdf = { onSharePdf(note) },
                 onShareXopp = { onShareXopp(note) },
                 onRename = { onRenameNote(note) },
+                onDuplicate = onDuplicate?.let { { it(note) } },
                 onDelete = { onDeleteNote(note) }
             )
         }
