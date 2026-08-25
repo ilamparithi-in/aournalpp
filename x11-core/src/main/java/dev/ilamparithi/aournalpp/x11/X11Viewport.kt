@@ -62,6 +62,8 @@ fun X11Viewport(
             lorieView.requestFocus()
 
             if (activity != null) {
+                lorieView.reloadPreferences(prefs)
+                lorieView.checkForClipboardChange()
                 lorieView.requestStylusEnabled(true)
                 val inputSender = InputEventSender(lorieView)
                 val inputHandler = TouchInputHandler(activity, inputSender)

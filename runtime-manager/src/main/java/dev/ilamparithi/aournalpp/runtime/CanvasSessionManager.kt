@@ -362,16 +362,16 @@ class CanvasSessionManager(
         }
     }
 
-    fun requestCloseSession() {
+    fun injectShortcut(shortcut: String) {
         if (!isSessionRunning) return
         scope.launch(Dispatchers.IO) {
             val xdotoolBin = env.resolveExecutable("xdotool")
             if (!xdotoolBin.exists() || !xdotoolBin.canExecute()) {
-                Log.w(TAG, "xdotool not available at ${xdotoolBin.absolutePath}, cannot send graceful close shortcut")
+                Log.w(TAG, "xdotool not available at ${xdotoolBin.absolutePath}, cannot send shortcut $shortcut")
                 return@launch
             }
 
-            Log.i(TAG, "Initiating graceful close for active Xournal++ session...")
+            Log.i(TAG, "Injecting shortcut '$shortcut' via xdotool...")
 
             val searchQueries = listOf(
                 listOf("search", "--onlyvisible", "--class", "xournalpp"),
@@ -396,18 +396,22 @@ class CanvasSessionManager(
 
             if (windowIds.isNotEmpty()) {
                 val mainWid = windowIds.first()
-                Log.i(TAG, "Sending Ctrl+Q to main window $mainWid...")
+                Log.i(TAG, "Sending $shortcut to main window $mainWid...")
                 supervisor.runBinary(listOf(xdotoolBin.absolutePath, "windowactivate", "--sync", mainWid))
                 supervisor.runBinary(
-                    listOf(xdotoolBin.absolutePath, "key", "--window", mainWid, "--clearmodifiers", "ctrl+q")
+                    listOf(xdotoolBin.absolutePath, "key", "--window", mainWid, "--clearmodifiers", shortcut)
                 )
             } else {
-                Log.w(TAG, "No visible X11 window found via search, falling back to global keystrokes...")
+                Log.w(TAG, "No visible X11 window found via search, falling back to global keystrokes for $shortcut...")
                 supervisor.runBinary(
-                    listOf(xdotoolBin.absolutePath, "key", "--clearmodifiers", "ctrl+q")
+                    listOf(xdotoolBin.absolutePath, "key", "--clearmodifiers", shortcut)
                 )
             }
         }
+    }
+
+    fun requestCloseSession() {
+        injectShortcut("ctrl+q")
     }
 
     fun stopSession() {

@@ -42,6 +42,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ContentCut
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
@@ -50,6 +53,8 @@ import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Mouse
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -453,6 +458,67 @@ class CanvasActivity : ComponentActivity() {
                                                 }
                                             }
 
+                                            // Shared Clipboard Actions Capsule (Cut Ctrl+X, Copy Ctrl+C, Paste Ctrl+V)
+                                            val haptics = LocalHapticFeedback.current
+                                            Surface(
+                                                shape = RoundedCornerShape(10.dp),
+                                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                                modifier = Modifier.padding(horizontal = 2.dp)
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(0.dp)
+                                                ) {
+                                                    // Cut (Ctrl+X)
+                                                    IconButton(
+                                                        onClick = {
+                                                            try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
+                                                            injectKeyboardShortcut(KeyEvent.KEYCODE_X, "ctrl+x")
+                                                        },
+                                                        modifier = Modifier.size(32.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.ContentCut,
+                                                            contentDescription = "Cut (Ctrl+X)",
+                                                            modifier = Modifier.size(16.dp),
+                                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+
+                                                    // Copy (Ctrl+C)
+                                                    IconButton(
+                                                        onClick = {
+                                                            try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
+                                                            injectKeyboardShortcut(KeyEvent.KEYCODE_C, "ctrl+c")
+                                                        },
+                                                        modifier = Modifier.size(32.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.ContentCopy,
+                                                            contentDescription = "Copy (Ctrl+C)",
+                                                            modifier = Modifier.size(16.dp),
+                                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+
+                                                    // Paste (Ctrl+V)
+                                                    IconButton(
+                                                        onClick = {
+                                                            try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
+                                                            injectKeyboardShortcut(KeyEvent.KEYCODE_V, "ctrl+v", isPaste = true)
+                                                        },
+                                                        modifier = Modifier.size(32.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.ContentPaste,
+                                                            contentDescription = "Paste (Ctrl+V)",
+                                                            modifier = Modifier.size(16.dp),
+                                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                }
+                                            }
+
                                             // Stateful Keyboard Toggle Action
                                             val isKeyboardOpen by remember { isKeyboardOpenState }
                                             IconButton(
@@ -700,12 +766,16 @@ class CanvasActivity : ComponentActivity() {
 
 
 
-    private fun injectCtrlQDirect() {
+    private fun injectKeyboardShortcut(keyCode: Int, shortcutStr: String, isPaste: Boolean = false) {
         activeLorieView?.let { view ->
+            view.requestFocus()
+            if (isPaste) {
+                view.forceAnnounceClipboard()
+            }
             view.post {
                 view.sendKeyEvent(0, KeyEvent.KEYCODE_CTRL_LEFT, true)
-                view.sendKeyEvent(0, KeyEvent.KEYCODE_Q, true)
-                view.sendKeyEvent(0, KeyEvent.KEYCODE_Q, false)
+                view.sendKeyEvent(0, keyCode, true)
+                view.sendKeyEvent(0, keyCode, false)
                 view.sendKeyEvent(0, KeyEvent.KEYCODE_CTRL_LEFT, false)
             }
         }
@@ -713,15 +783,22 @@ class CanvasActivity : ComponentActivity() {
         inputHandler?.let { handler ->
             val now = android.os.SystemClock.uptimeMillis()
             val ctrlDown = KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_CTRL_LEFT, 0)
-            val qDown = KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_Q, 0, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
-            val qUp = KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_Q, 0, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
+            val keyDown = KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
+            val keyUp = KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
             val ctrlUp = KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_CTRL_LEFT, 0)
 
             handler.sendKeyEvent(ctrlDown)
-            handler.sendKeyEvent(qDown)
-            handler.sendKeyEvent(qUp)
+            handler.sendKeyEvent(keyDown)
+            handler.sendKeyEvent(keyUp)
             handler.sendKeyEvent(ctrlUp)
         }
+
+        // xdotool window-activated shortcut injection (matching edit settings & back button quit)
+        sessionManager.injectShortcut(shortcutStr)
+    }
+
+    private fun injectCtrlQDirect() {
+        injectKeyboardShortcut(KeyEvent.KEYCODE_Q, "ctrl+q")
     }
 
 
