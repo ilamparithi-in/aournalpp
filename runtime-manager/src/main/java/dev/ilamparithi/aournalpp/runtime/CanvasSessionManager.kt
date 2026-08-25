@@ -226,6 +226,7 @@ class CanvasSessionManager(
                     delay(350)
                     if (!isPreferencesWindowOpen()) {
                         Log.i(TAG, "Preferences dialog dismissed by user.")
+                        env.checkAndOverrideAutoloadPreference()
                         val currentTitle = supervisor.documentTitle.value
                         val cleanTitle = currentTitle?.removePrefix("*")?.removeSuffix("*")?.trim()
                         val isDefaultUntitled = cleanTitle == null ||
@@ -443,6 +444,7 @@ class CanvasSessionManager(
                 emergencyFile.delete()
             }
         }
+        env.checkAndOverrideAutoloadPreference()
         isSessionRunning = false
         NotesHomeConfigManager.sync(context, env)
     }

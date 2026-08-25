@@ -175,8 +175,9 @@ object NotesHomeConfigManager {
         }
 
         if (settingsXmlImported) {
-            Log.i(TAG, "Sanitizing Android storage paths for imported settings.xml...")
+            Log.i(TAG, "Sanitizing Android storage paths and autoload preference for imported settings.xml...")
             env.ensureXournalppSettings()
+            env.checkAndOverrideAutoloadPreference()
             env.ensureMenuBarShortcuts()
             val intSettings = File(internalXoppDir, "settings.xml")
             val extSettings = File(extXoppDir, "settings.xml")

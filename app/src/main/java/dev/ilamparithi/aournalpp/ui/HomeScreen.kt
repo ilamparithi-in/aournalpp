@@ -57,6 +57,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -190,6 +191,9 @@ fun HomeScreen(
     var pendingAutosaveNote by remember { mutableStateOf<NoteDocument?>(null) }
     var pendingSaveAutosaveNote by remember { mutableStateOf<NoteDocument?>(null) }
 
+    // Autoload override conflict notification state
+    var showAutoloadOverrideDialog by remember { mutableStateOf(false) }
+
     // Dialog states
     var showCreateFolderDialog by remember { mutableStateOf(false) }
     var newFolderName by remember { mutableStateOf("") }
@@ -217,6 +221,11 @@ fun HomeScreen(
                 quarantinedEmergencySave = emergencyFile
                 showEmergencyDialog = true
             }
+        }
+
+        val autoloadOverridden = withContext(Dispatchers.IO) { env.checkAndOverrideAutoloadPreference() }
+        if (autoloadOverridden || env.hasPendingAutoloadOverrideNotification()) {
+            showAutoloadOverrideDialog = true
         }
     }
 
@@ -968,6 +977,43 @@ fun HomeScreen(
                         quarantinedEmergencySave = null
                         loadHomeData()
                     }) { Text("Discard", color = MaterialTheme.colorScheme.error) }
+                }
+            }
+        )
+    }
+
+    // Autoload Preference Conflict Overridden Dialog
+    if (showAutoloadOverrideDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showAutoloadOverrideDialog = false
+                env.clearPendingAutoloadOverrideNotification()
+            },
+            icon = {
+                Icon(
+                    Icons.Default.Tune,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(32.dp)
+                )
+            },
+            title = {
+                Text("Startup Preference Overridden", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    "In Xournal++ Preferences > Load/Save, \"Enable autoloading of most recent file on application startup\" was detected and has been cleared to \"false\".\n\n" +
+                    "This setting conflicts with Aournal++'s \"Continue where you left off\" workspace control. You can continue launching recent notes directly from your Home Screen."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showAutoloadOverrideDialog = false
+                        env.clearPendingAutoloadOverrideNotification()
+                    }
+                ) {
+                    Text("Understood")
                 }
             }
         )

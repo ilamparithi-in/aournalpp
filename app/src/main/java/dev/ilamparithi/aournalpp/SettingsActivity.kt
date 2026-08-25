@@ -205,6 +205,24 @@ fun MainSettingsScreen(
     val env = remember { LinuxEnvironment(context) }
     val configManager = remember { XournalConfigManager(env) }
 
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                if (env.checkAndOverrideAutoloadPreference() || env.hasPendingAutoloadOverrideNotification()) {
+                    env.clearPendingAutoloadOverrideNotification()
+                    scope.launch {
+                        snackbarHostState.showSnackbar("Xournal++ startup autoload was cleared to preserve 'Continue where you left off'.")
+                    }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -931,6 +949,24 @@ fun MainSettingsScreen(
                         Icon(imageVector = Icons.Default.Code, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Inspect settings.xml File", fontWeight = FontWeight.SemiBold)
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Xournal++'s native \"Autoload most recent file on startup\" in Load/Save is automatically overridden to preserve Android \"Continue where you left off\" workspace control.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
 
                     HorizontalDivider()

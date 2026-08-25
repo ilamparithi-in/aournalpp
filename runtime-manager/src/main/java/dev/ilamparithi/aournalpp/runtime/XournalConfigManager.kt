@@ -171,6 +171,11 @@ class XournalConfigManager(private val env: LinuxEnvironment) {
         target.writeText(rawContent, Charsets.UTF_8)
         Log.i(TAG, "Successfully imported ${detectedType.fileName} (${rawContent.length} chars)")
 
+        if (detectedType == ConfigFileType.SETTINGS_XML) {
+            env.ensureXournalppSettings()
+            env.checkAndOverrideAutoloadPreference()
+        }
+
         detectedType
     }
 
@@ -206,6 +211,9 @@ class XournalConfigManager(private val env: LinuxEnvironment) {
         if (extractedFiles == 0) {
             error("No valid Xournal++ configuration files (.xml, .ini, .gpl) found in ZIP archive")
         }
+
+        env.ensureXournalppSettings()
+        env.checkAndOverrideAutoloadPreference()
 
         extractedFiles
     }

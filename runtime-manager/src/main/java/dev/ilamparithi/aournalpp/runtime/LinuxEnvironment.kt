@@ -14,6 +14,7 @@ class LinuxEnvironment(private val context: Context) {
         const val PREF_KEY_APP_THEME = "pref_app_theme"
         const val PREF_KEY_GTK_THEME = "pref_gtk_theme"
         const val PREF_KEY_WALLPAPER_MODE = "pref_canvas_wallpaper_mode"
+        const val PREF_KEY_PENDING_AUTOLOAD_NOTIFICATION = "pref_pending_autoload_conflict_notification"
     }
 
     val rootDir: File = context.filesDir
@@ -503,6 +504,80 @@ class LinuxEnvironment(private val context: Context) {
         }
     }
 
+    fun hasPendingAutoloadOverrideNotification(): Boolean {
+        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        return prefs.getBoolean(PREF_KEY_PENDING_AUTOLOAD_NOTIFICATION, false)
+    }
+
+    fun clearPendingAutoloadOverrideNotification() {
+        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        prefs.edit().remove(PREF_KEY_PENDING_AUTOLOAD_NOTIFICATION).apply()
+    }
+
+    fun setPendingAutoloadOverrideNotification(pending: Boolean) {
+        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(PREF_KEY_PENDING_AUTOLOAD_NOTIFICATION, pending).apply()
+    }
+
+    /**
+     * Checks if Xournal++ 'autoloadMostRecent' (or legacy 'autoloadLastFile') preference in settings.xml is enabled.
+     * If enabled (or != "false"), overrides it to "false" and sets the
+     * pending notification flag so the user is informed about the conflict with "Continue where you left off".
+     *
+     * @return true if an active autoload preference was detected and overridden.
+     */
+    fun checkAndOverrideAutoloadPreference(): Boolean {
+        try {
+            val settingsFile = File(xournalConfigDir, "settings.xml")
+            if (!settingsFile.exists()) {
+                return false
+            }
+
+            var content = settingsFile.readText()
+            var modified = false
+            var overridden = false
+
+            val propertyNames = listOf("autoloadMostRecent", "autoloadLastFile")
+            for (prop in propertyNames) {
+                val propRegex = Regex("""<property\b(?=[^>]*\bname\s*=\s*["']$prop["'])(?=[^>]*\bvalue\s*=\s*["']([^"']*)["'])[^>]*/>""")
+                val match = propRegex.find(content)
+
+                if (match != null) {
+                    val currentValue = match.groupValues[1].trim()
+                    val isEnabled = currentValue.equals("true", ignoreCase = true) ||
+                            currentValue == "1" ||
+                            currentValue.equals("yes", ignoreCase = true) ||
+                            currentValue.equals("on", ignoreCase = true)
+
+                    if (isEnabled) {
+                        content = content.replace(match.value, "<property name=\"$prop\" value=\"false\"/>")
+                        modified = true
+                        overridden = true
+                        Log.i(TAG, "Overrode Xournal++ $prop preference from '$currentValue' to 'false'. Marked pending notification.")
+                    }
+                }
+            }
+
+            if (!content.contains("autoloadMostRecent") && content.contains("</settings>")) {
+                content = content.replace("</settings>", "  <property name=\"autoloadMostRecent\" value=\"false\"/>\n</settings>")
+                modified = true
+                Log.i(TAG, "Injected missing autoloadMostRecent='false' into settings.xml.")
+            }
+
+            if (modified) {
+                settingsFile.writeText(content)
+            }
+
+            if (overridden) {
+                setPendingAutoloadOverrideNotification(true)
+                return true
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to check and override autoload preference", e)
+        }
+        return false
+    }
+
     fun ensureXournalppSettings() {
         try {
             val settingsFile = File(xournalConfigDir, "settings.xml")
@@ -515,11 +590,11 @@ class LinuxEnvironment(private val context: Context) {
                     <settings>
                       <property name="defaultSaveDir" value="$defaultNotesPath"/>
                       <property name="defaultOpenDir" value="$defaultNotesPath"/>
-                      <property name="autoloadLastFile" value="false"/>
+                      <property name="autoloadMostRecent" value="false"/>
                     </settings>
                 """.trimIndent()
                 settingsFile.writeText(initialXml)
-                Log.i(TAG, "Provisioned initial settings.xml with defaultSaveDir=$defaultNotesPath")
+                Log.i(TAG, "Provisioned initial settings.xml with defaultSaveDir=$defaultNotesPath and autoloadMostRecent=false")
             } else {
                 var content = settingsFile.readText()
                 var modified = false
@@ -567,9 +642,38 @@ class LinuxEnvironment(private val context: Context) {
                     modified = true
                 }
 
+                var overridden = false
+                val propertyNames = listOf("autoloadMostRecent", "autoloadLastFile")
+                for (prop in propertyNames) {
+                    val propRegex = Regex("""<property\b(?=[^>]*\bname\s*=\s*["']$prop["'])(?=[^>]*\bvalue\s*=\s*["']([^"']*)["'])[^>]*/>""")
+                    val autoloadMatch = propRegex.find(content)
+                    if (autoloadMatch != null) {
+                        val currentValue = autoloadMatch.groupValues[1].trim()
+                        val isEnabled = currentValue.equals("true", ignoreCase = true) ||
+                                currentValue == "1" ||
+                                currentValue.equals("yes", ignoreCase = true) ||
+                                currentValue.equals("on", ignoreCase = true)
+                        if (isEnabled) {
+                            content = content.replace(autoloadMatch.value, "<property name=\"$prop\" value=\"false\"/>")
+                            modified = true
+                            overridden = true
+                            Log.i(TAG, "Overrode Xournal++ $prop preference from '$currentValue' to 'false' during ensureXournalppSettings.")
+                        }
+                    }
+                }
+
+                if (!content.contains("autoloadMostRecent") && content.contains("</settings>")) {
+                    content = content.replace("</settings>", "  <property name=\"autoloadMostRecent\" value=\"false\"/>\n</settings>")
+                    modified = true
+                }
+
+                if (overridden) {
+                    setPendingAutoloadOverrideNotification(true)
+                }
+
                 if (modified) {
                     settingsFile.writeText(content)
-                    Log.i(TAG, "Updated existing settings.xml with defaultSaveDir=$defaultNotesPath and autosaveTimeout=1")
+                    Log.i(TAG, "Updated existing settings.xml with defaultSaveDir=$defaultNotesPath, autosaveTimeout=1, and autoloadMostRecent=false")
                 }
             }
         } catch (e: Exception) {
