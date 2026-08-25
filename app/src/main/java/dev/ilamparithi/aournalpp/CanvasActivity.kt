@@ -505,7 +505,7 @@ class CanvasActivity : ComponentActivity() {
                                                     IconButton(
                                                         onClick = {
                                                             try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
-                                                            injectKeyboardShortcut(KeyEvent.KEYCODE_V, "ctrl+v", isPaste = true)
+                                                            injectKeyboardShortcut(KeyEvent.KEYCODE_V, "ctrl+v")
                                                         },
                                                         modifier = Modifier.size(32.dp)
                                                     ) {
@@ -766,12 +766,9 @@ class CanvasActivity : ComponentActivity() {
 
 
 
-    private fun injectKeyboardShortcut(keyCode: Int, shortcutStr: String, isPaste: Boolean = false) {
+    private fun injectKeyboardShortcut(keyCode: Int, shortcutStr: String) {
         activeLorieView?.let { view ->
             view.requestFocus()
-            if (isPaste) {
-                view.forceAnnounceClipboard()
-            }
             view.post {
                 view.sendKeyEvent(0, KeyEvent.KEYCODE_CTRL_LEFT, true)
                 view.sendKeyEvent(0, keyCode, true)
