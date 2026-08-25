@@ -1,0 +1,927 @@
+From 2e3a34a23287c4eda002b27e6b0b63308b6ae657 Mon Sep 17 00:00:00 2001
+From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
+Date: Tue, 25 Aug 2026 15:42:17 +0530
+Subject: [PATCH 5/6] feat(clipboard): implement multi-MIME shared clipboard
+ bridge
+
+- Add support for text, HTML, and binary images (PNG, JPEG, BMP) across Android and X11
+- Implement structured per-target clipboard caching and SelectionNotify delivery for TARGETS
+- Add reliable stream reading and writing loops across socket connection to prevent partial read desynchronization
+- Fix startup clipboard timestamp check and prevent recursive announcement loops
+---
+ lorie/src/main/cpp/lorie/activity.cpp         |  98 +++++--
+ lorie/src/main/cpp/lorie/clipboard.c          | 250 ++++++++++++------
+ lorie/src/main/cpp/lorie/cmdentrypoint.cpp    |  68 ++++-
+ lorie/src/main/cpp/lorie/lorie.h              |  15 +-
+ .../main/java/com/termux/x11/LorieView.java   | 184 +++++++++++--
+ 5 files changed, 465 insertions(+), 150 deletions(-)
+
+diff --git a/lorie/src/main/cpp/lorie/activity.cpp b/lorie/src/main/cpp/lorie/activity.cpp
+index b94936c..8a58193 100644
+--- a/lorie/src/main/cpp/lorie/activity.cpp
++++ b/lorie/src/main/cpp/lorie/activity.cpp
+@@ -20,9 +20,37 @@
+ #pragma clang diagnostic ignored "-Wunknown-pragmas"
+ #pragma ide diagnostic ignored "cppcoreguidelines-narrowing-conversions"
+ #pragma ide diagnostic ignored "ConstantFunctionResult"
++static inline ssize_t lorie_read_all(int fd, void* buf, size_t count) {
++    size_t total = 0;
++    while (total < count) {
++        ssize_t n = read(fd, ((char*) buf) + total, count - total);
++        if (n <= 0) {
++            if (n < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK))
++                continue;
++            return total > 0 ? (ssize_t) total : n;
++        }
++        total += n;
++    }
++    return (ssize_t) total;
++}
++
++static inline ssize_t lorie_write_all(int fd, const void* buf, size_t count) {
++    size_t total = 0;
++    while (total < count) {
++        ssize_t n = write(fd, ((const char*) buf) + total, count - total);
++        if (n <= 0) {
++            if (n < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK))
++                continue;
++            return total > 0 ? (ssize_t) total : n;
++        }
++        total += n;
++    }
++    return (ssize_t) total;
++}
++
+ #define log(prio, ...) __android_log_print(ANDROID_LOG_ ## prio, "LorieNative", __VA_ARGS__)
+ // `r` must be a LorieViewResources* — the connection fd is per-instance state, not a process global.
+-#define sendEvent(r, ...) do { if ((r) && (r)->connFd != -1) { lorieEvent e = { __VA_ARGS__ }; write((r)->connFd, &e, sizeof(e)); } } while (0)
++#define sendEvent(r, ...) do { if ((r) && (r)->connFd != -1) { lorieEvent e = { __VA_ARGS__ }; lorie_write_all((r)->connFd, &e, sizeof(e)); } } while (0)
+ 
+ bool lorieDebugEnabled = false;
+ 
+@@ -203,23 +231,49 @@ int LorieViewResources::xcallback(int fd, int events) {
+                 case EVENT_CLIPBOARD_SEND: {
+                     if (!e.clipboardSend.count)
+                         break;
+-                    char clipboard[e.clipboardSend.count + 1];
+-                    memset(clipboard, 0, e.clipboardSend.count + 1);
+-                    read(connFd, clipboard, sizeof(clipboard));
++                    char* clipboard = (char*) malloc(e.clipboardSend.count + 1);
++                    if (!clipboard) break;
++                    if (e.clipboardSend.count > 0) {
++                        lorie_read_all(connFd, clipboard, e.clipboardSend.count);
++                    }
+                     clipboard[e.clipboardSend.count] = 0;
+-                    log(DEBUG, "Clipboard content (%zu symbols) is %s", strlen(clipboard), clipboard);
+-                    jmethodID id = env->GetMethodID(env->GetObjectClass(thiz), "setClipboardText","(Ljava/lang/String;)V");
+-                    jobject bb = env->NewDirectByteBuffer(clipboard, strlen(clipboard));
+-                    jobject charset = env->CallStaticObjectMethod(Charset.self, Charset.forName, env->NewStringUTF("UTF-8"));
+-                    jobject cb = env->CallObjectMethod(charset, Charset.decode, bb);
+-                    env->DeleteLocalRef(bb);
+-
+-                    auto str = (jstring) env->CallObjectMethod(cb, CharBuffer.toString);
+-                    env->CallVoidMethod(thiz, id, str);
++                    if (e.clipboardSend.mimeType == LORIE_CLIPBOARD_IMAGE_PNG) {
++                        jbyteArray byteArr = env->NewByteArray(e.clipboardSend.count);
++                        env->SetByteArrayRegion(byteArr, 0, e.clipboardSend.count, (const jbyte*) clipboard);
++                        jstring mime = env->NewStringUTF("image/png");
++                        jmethodID id = env->GetMethodID(env->GetObjectClass(thiz), "setClipboardImage", "([BLjava/lang/String;)V");
++                        if (id) {
++                            env->CallVoidMethod(thiz, id, byteArr, mime);
++                        }
++                        env->DeleteLocalRef(mime);
++                        env->DeleteLocalRef(byteArr);
++                    } else if (e.clipboardSend.mimeType == LORIE_CLIPBOARD_HTML) {
++                        jbyteArray byteArr = env->NewByteArray(e.clipboardSend.count);
++                        env->SetByteArrayRegion(byteArr, 0, e.clipboardSend.count, (const jbyte*) clipboard);
++                        jmethodID id = env->GetMethodID(env->GetObjectClass(thiz), "setClipboardHtml", "([B)V");
++                        if (id) {
++                            env->CallVoidMethod(thiz, id, byteArr);
++                        }
++                        env->DeleteLocalRef(byteArr);
++                    } else {
++                        log(DEBUG, "Clipboard text content (%u symbols)", e.clipboardSend.count);
++                        jmethodID id = env->GetMethodID(env->GetObjectClass(thiz), "setClipboardText", "(Ljava/lang/String;)V");
++                        jobject bb = env->NewDirectByteBuffer(clipboard, e.clipboardSend.count);
++                        jobject charset = env->CallStaticObjectMethod(Charset.self, Charset.forName, env->NewStringUTF("UTF-8"));
++                        jobject cb = env->CallObjectMethod(charset, Charset.decode, bb);
++                        env->DeleteLocalRef(bb);
++
++                        auto str = (jstring) env->CallObjectMethod(cb, CharBuffer.toString);
++                        env->CallVoidMethod(thiz, id, str);
++                    }
++                    free(clipboard);
+                     break;
+                 }
+                 case EVENT_CLIPBOARD_REQUEST: {
+-                    env->CallVoidMethod(thiz, env->GetMethodID(env->GetObjectClass(thiz), "requestClipboard", "()V"));
++                    jmethodID id = env->GetMethodID(env->GetObjectClass(thiz), "requestClipboard", "(I)V");
++                    if (id) {
++                        env->CallVoidMethod(thiz, id, (jint) e.clipboardRequest.targetType);
++                    }
+                     break;
+                 }
+                 case EVENT_SHARED_SERVER_STATE: {
+@@ -420,14 +474,16 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, __unused void *reserved) {
+                 auto* r = (LorieViewResources*) ptr;
+                 sendEvent(r, .type = EVENT_CLIPBOARD_ANNOUNCE);
+             }},
+-            {"sendClipboardEvent", "(J[B)V", (void *) +[](JNIEnv *env, __unused jobject thiz, jlong ptr, jbyteArray text) {
++            {"sendClipboardEvent", "(J[BI)V", (void *) +[](JNIEnv *env, __unused jobject thiz, jlong ptr, jbyteArray text, jint targetType) {
+                 auto* r = (LorieViewResources*) ptr;
+-                if (r && r->connFd != -1 && text) {
+-                    jsize length = env->GetArrayLength(text);
+-                    jbyte* str = env->GetByteArrayElements(text, nullptr);
+-                    sendEvent(r, .clipboardSend = { .t = EVENT_CLIPBOARD_SEND, .count = (uint32_t) length });
+-                    write(r->connFd, str, length);
+-                    env->ReleaseByteArrayElements(text, str, JNI_ABORT);
++                if (r && r->connFd != -1) {
++                    jsize length = text ? env->GetArrayLength(text) : 0;
++                    sendEvent(r, .clipboardSend = { .t = EVENT_CLIPBOARD_SEND, .mimeType = (uint8_t) targetType, .count = (uint32_t) length });
++                    if (length > 0 && text) {
++                        jbyte* str = env->GetByteArrayElements(text, nullptr);
++                        lorie_write_all(r->connFd, str, length);
++                        env->ReleaseByteArrayElements(text, str, JNI_ABORT);
++                    }
+                 }
+             }},
+             {"sendWindowChange", "(JIIILjava/lang/String;)V", (void *) +[](__unused JNIEnv* env, __unused jobject cls, jlong ptr, jint width, jint height, jint framerate, jstring jname) {
+diff --git a/lorie/src/main/cpp/lorie/clipboard.c b/lorie/src/main/cpp/lorie/clipboard.c
+index 3770e88..573d790 100644
+--- a/lorie/src/main/cpp/lorie/clipboard.c
++++ b/lorie/src/main/cpp/lorie/clipboard.c
+@@ -187,8 +187,18 @@ extern ScreenPtr pScreenPtr;
+ static int (*origProcSendEvent)(ClientPtr) = NULL;
+ static int (*origProcConvertSelection)(ClientPtr) = NULL;
+ static Atom xaTIMESTAMP = 0, xaTEXT = 0, xaCLIPBOARD = 0, xaTARGETS = 0, xaSTRING = 0, xaUTF8_STRING = 0;
++static Atom xaPNG = 0, xaPNG_UPPER = 0, xaJPEG = 0, xaIMAGE_JPG = 0, xaJPEG_UPPER = 0, xaBMP = 0, xaHTML = 0, xaHTML_UTF8 = 0;
+ static Bool clipboardEnabled = FALSE;
+-static const char* cachedData = NULL;
++
++static struct {
++    char* text;
++    size_t textSize;
++    char* image;
++    size_t imageSize;
++    char* html;
++    size_t htmlSize;
++    uint8_t fetchedMask; // bit 0 = text, bit 1 = image, bit 2 = html
++} clipCache = {NULL, 0, NULL, 0, NULL, 0, 0};
+ 
+ struct LorieDataTarget {
+     ClientPtr client;
+@@ -232,7 +242,9 @@ static Bool lorieHasAtom(Atom atom, const Atom list[], size_t size) {
+ 
+ static void lorieHandleSelection(Atom target) {
+     PropertyPtr prop;
+-    if (target != xaTARGETS && target != xaSTRING && target != xaUTF8_STRING)
++    if (target != xaTARGETS && target != xaSTRING && target != xaUTF8_STRING &&
++        target != xaPNG && target != xaPNG_UPPER && target != xaJPEG && target != xaIMAGE_JPG &&
++        target != xaJPEG_UPPER && target != xaBMP && target != xaHTML && target != xaHTML_UTF8)
+         return;
+ 
+     if (dixLookupProperty(&prop, pScreenPtr->root, target, serverClient, DixReadAccess) != Success)
+@@ -241,14 +253,32 @@ static void lorieHandleSelection(Atom target) {
+     log(DEBUG, "Selection notification for CLIPBOARD (target %s, type %s)\n", NameForAtom(target), NameForAtom(prop->type));
+ 
+     if (target == xaTARGETS && prop->type == XA_ATOM && prop->format == 32) {
+-        if (lorieHasAtom(xaUTF8_STRING, (const Atom*)prop->data, prop->size))
++        if (lorieHasAtom(xaPNG, (const Atom*)prop->data, prop->size))
++            lorieSelectionRequest(xaCLIPBOARD, xaPNG);
++        else if (lorieHasAtom(xaPNG_UPPER, (const Atom*)prop->data, prop->size))
++            lorieSelectionRequest(xaCLIPBOARD, xaPNG_UPPER);
++        else if (lorieHasAtom(xaJPEG, (const Atom*)prop->data, prop->size))
++            lorieSelectionRequest(xaCLIPBOARD, xaJPEG);
++        else if (lorieHasAtom(xaIMAGE_JPG, (const Atom*)prop->data, prop->size))
++            lorieSelectionRequest(xaCLIPBOARD, xaIMAGE_JPG);
++        else if (lorieHasAtom(xaJPEG_UPPER, (const Atom*)prop->data, prop->size))
++            lorieSelectionRequest(xaCLIPBOARD, xaJPEG_UPPER);
++        else if (lorieHasAtom(xaBMP, (const Atom*)prop->data, prop->size))
++            lorieSelectionRequest(xaCLIPBOARD, xaBMP);
++        else if (lorieHasAtom(xaUTF8_STRING, (const Atom*)prop->data, prop->size))
+             lorieSelectionRequest(xaCLIPBOARD, xaUTF8_STRING);
+         else if (lorieHasAtom(xaSTRING, (const Atom*)prop->data, prop->size))
+             lorieSelectionRequest(xaCLIPBOARD, xaSTRING);
++        else if (lorieHasAtom(xaHTML, (const Atom*)prop->data, prop->size))
++            lorieSelectionRequest(xaCLIPBOARD, xaHTML);
++    } else if (target == xaPNG || target == xaPNG_UPPER || target == xaJPEG ||
++               target == xaIMAGE_JPG || target == xaJPEG_UPPER || target == xaBMP) {
++        log(DEBUG, "Sending clipboard image to Android (%zu bytes)\n", (size_t) prop->size);
++        lorieSendClipboardData((const char*) prop->data, prop->size, LORIE_CLIPBOARD_IMAGE_PNG);
++    } else if (target == xaHTML || target == xaHTML_UTF8) {
++        log(DEBUG, "Sending clipboard HTML to Android (%zu bytes)\n", (size_t) prop->size);
++        lorieSendClipboardData((const char*) prop->data, prop->size, LORIE_CLIPBOARD_HTML);
+     } else if (target == xaSTRING && prop->type == xaSTRING && prop->format == 8) {
+-        if (prop->format != 8 || prop->type != xaSTRING)
+-            return;
+-
+         char filtered[prop->size + 1], utf8[(prop->size + 1) * 2];
+         memset(filtered, 0, sizeof(filtered));
+         memset(utf8, 0, sizeof(utf8));
+@@ -256,7 +286,7 @@ static void lorieHandleSelection(Atom target) {
+         lorieConvertLF(prop->data,  filtered, prop->size);
+         lorieLatin1ToUTF8((unsigned char*) utf8, (unsigned char*) filtered);
+         log(DEBUG, "Sending clipboard to clients (%zu bytes)\n", strlen(utf8));
+-        lorieSendClipboardData(utf8);
++        lorieSendClipboardData(utf8, strlen(utf8), LORIE_CLIPBOARD_TEXT);
+     } else if (target == xaUTF8_STRING && prop->type == xaUTF8_STRING && prop->format == 8) {
+         char filtered[prop->size + 1];
+ 
+@@ -269,7 +299,7 @@ static void lorieHandleSelection(Atom target) {
+         lorieConvertLF(prop->data, filtered, prop->size);
+ 
+         log(DEBUG, "Sending clipboard to clients (%zu bytes)\n", strlen(filtered));
+-        lorieSendClipboardData(filtered);
++        lorieSendClipboardData(filtered, strlen(filtered), LORIE_CLIPBOARD_TEXT);
+     }
+ }
+ 
+@@ -296,7 +326,7 @@ static void lorieSelectionCallback(__unused CallbackListPtr *callbacks, __unused
+ 
+ /* functions related to clipboard announcing and sending */
+ 
+-static int lorieConvertSelection(ClientPtr client, Atom selection, Atom target, Atom property, Window requestor, CARD32 time, const char* data) {
++static int lorieConvertSelection(ClientPtr client, Atom selection, Atom target, Atom property, Window requestor, CARD32 time) {
+     Selection *pSel;
+     WindowPtr pWin;
+     int rc;
+@@ -305,35 +335,21 @@ static int lorieConvertSelection(ClientPtr client, Atom selection, Atom target,
+ 
+     xEvent event;
+ 
+-    if (data == NULL) {
+-        log(DEBUG, "Selection request for %s (type %s)",
+-            NameForAtom(selection), NameForAtom(target));
+-    } else {
+-        log(DEBUG, "Sending data for selection request for %s (type %s)",
+-            NameForAtom(selection), NameForAtom(target));
+-    }
+-
+     rc = dixLookupSelection(&pSel, selection, client, DixGetAttrAccess);
+     if (rc != Success)
+         return rc;
+ 
+-    /* We do not validate the time argument because neither does
+-     * dix/selection.c and some clients (e.g. Qt) relies on this */
+-
+     rc = dixLookupWindow(&pWin, requestor, client, DixSetAttrAccess);
+     if (rc != Success)
+         return rc;
+ 
+-    if (property != None)
+-        realProperty = property;
+-    else
+-        realProperty = target;
+-
+-    /* FIXME: MULTIPLE target */
++    realProperty = (property != None) ? property : target;
+ 
+     if (target == xaTARGETS) {
+         Atom targets[] = { xaTARGETS, xaTIMESTAMP,
+-                           xaSTRING, xaTEXT, xaUTF8_STRING };
++                           xaUTF8_STRING, xaSTRING, xaTEXT,
++                           xaHTML, xaHTML_UTF8,
++                           xaPNG, xaPNG_UPPER, xaJPEG, xaIMAGE_JPG, xaJPEG_UPPER, xaBMP };
+ 
+         rc = dixChangeWindowProperty(serverClient, pWin, realProperty,
+                                      XA_ATOM, 32, PropModeReplace,
+@@ -349,14 +365,17 @@ static int lorieConvertSelection(ClientPtr client, Atom selection, Atom target,
+         if (rc != Success)
+             return rc;
+     } else {
+-        if (data == NULL) {
+-            struct LorieDataTarget* ldt;
+-
+-            if ((target != xaSTRING) && (target != xaTEXT) &&
+-                (target != xaUTF8_STRING))
+-                return BadMatch;
+-
+-            ldt = calloc(1, sizeof(struct LorieDataTarget));
++        uint8_t reqType = LORIE_CLIPBOARD_TEXT;
++        if (target == xaPNG || target == xaPNG_UPPER || target == xaJPEG ||
++            target == xaIMAGE_JPG || target == xaJPEG_UPPER || target == xaBMP)
++            reqType = LORIE_CLIPBOARD_IMAGE_PNG;
++        else if (target == xaHTML || target == xaHTML_UTF8)
++            reqType = LORIE_CLIPBOARD_HTML;
++        else if (target != xaUTF8_STRING && target != xaSTRING && target != xaTEXT)
++            return BadMatch;
++
++        if (!(clipCache.fetchedMask & (1 << reqType))) {
++            struct LorieDataTarget* ldt = calloc(1, sizeof(struct LorieDataTarget));
+             if (ldt == NULL)
+                 return BadAlloc;
+ 
+@@ -370,33 +389,55 @@ static int lorieConvertSelection(ClientPtr client, Atom selection, Atom target,
+             ldt->next = lorieDataTargetHead;
+             lorieDataTargetHead = ldt;
+ 
+-            log(DEBUG, "Requesting clipboard data from client");
+-            lorieRequestClipboard();
++            log(DEBUG, "Requesting clipboard data from Android (targetType=%d)", (int) reqType);
++            lorieRequestClipboard(reqType);
+ 
+             return Success;
+-        } else {
+-            if ((target == xaSTRING) || (target == xaTEXT)) {
+-                const char* latin1 = lorieUtf8ToLatin1(data);
+-                if (latin1 == NULL)
+-                    return BadAlloc;
++        }
+ 
++        if (reqType == LORIE_CLIPBOARD_IMAGE_PNG) {
++            if (clipCache.image && clipCache.imageSize > 0) {
+                 rc = dixChangeWindowProperty(serverClient, pWin, realProperty,
+-                                             XA_STRING, 8, PropModeReplace,
+-                                             strlen(latin1), latin1, TRUE);
+-
+-                free((void*) latin1);
+-
++                                             target, 8, PropModeReplace,
++                                             clipCache.imageSize, clipCache.image, TRUE);
+                 if (rc != Success)
+                     return rc;
+-            } else if (target == xaUTF8_STRING) {
++            } else {
++                return BadMatch;
++            }
++        } else if (reqType == LORIE_CLIPBOARD_HTML) {
++            if (clipCache.html && clipCache.htmlSize > 0) {
+                 rc = dixChangeWindowProperty(serverClient, pWin, realProperty,
+-                                             xaUTF8_STRING, 8, PropModeReplace,
+-                                             strlen(data), data, TRUE);
++                                             target, 8, PropModeReplace,
++                                             clipCache.htmlSize, clipCache.html, TRUE);
+                 if (rc != Success)
+                     return rc;
+             } else {
+                 return BadMatch;
+             }
++        } else { // TEXT
++            if (clipCache.text && clipCache.textSize > 0) {
++                if (target == xaUTF8_STRING) {
++                    rc = dixChangeWindowProperty(serverClient, pWin, realProperty,
++                                                 xaUTF8_STRING, 8, PropModeReplace,
++                                                 clipCache.textSize, clipCache.text, TRUE);
++                    if (rc != Success)
++                        return rc;
++                } else {
++                    const char* latin1 = lorieUtf8ToLatin1(clipCache.text);
++                    if (latin1 == NULL)
++                        return BadAlloc;
++
++                    rc = dixChangeWindowProperty(serverClient, pWin, realProperty,
++                                                 XA_STRING, 8, PropModeReplace,
++                                                 strlen(latin1), latin1, TRUE);
++                    free((void*) latin1);
++                    if (rc != Success)
++                        return rc;
++                }
++            } else {
++                return BadMatch;
++            }
+         }
+     }
+ 
+@@ -405,7 +446,7 @@ static int lorieConvertSelection(ClientPtr client, Atom selection, Atom target,
+     event.u.selectionNotify.requestor = requestor;
+     event.u.selectionNotify.selection = selection;
+     event.u.selectionNotify.target = target;
+-    event.u.selectionNotify.property = property;
++    event.u.selectionNotify.property = realProperty;
+     WriteEventsToClient(client, 1, &event);
+     return Success;
+ }
+@@ -433,12 +474,9 @@ static int lorieProcConvertSelection(ClientPtr client) {
+     /* Do we own this selection? */
+     rc = dixLookupSelection(&pSel, stuff->selection, client, DixReadAccess);
+     if (rc == Success && pSel->client == serverClient && pSel->window == pScreenPtr->root->drawable.id) {
+-        /* cachedData will be NULL for the first request, but can then be
+-         * reused once we've gotten the data once from the client */
+         rc = lorieConvertSelection(client, stuff->selection,
+                                    stuff->target, stuff->property,
+-                                   stuff->requestor, stuff->time,
+-                                   cachedData);
++                                   stuff->requestor, stuff->time);
+         if (rc != Success) {
+             xEvent event;
+ 
+@@ -510,9 +548,10 @@ static int lorieOwnSelection(Atom selection) {
+ }
+ 
+ void lorieHandleClipboardAnnounce(void) {
+-    // The data has changed in some way, so whatever is in our cache is now stale
+-    free((void*) cachedData);
+-    cachedData = NULL;
++    free(clipCache.text);
++    free(clipCache.image);
++    free(clipCache.html);
++    memset(&clipCache, 0, sizeof(clipCache));
+ 
+     int rc;
+ 
+@@ -523,38 +562,69 @@ void lorieHandleClipboardAnnounce(void) {
+         log(ERROR, "Could not set CLIPBOARD selection");
+ }
+ 
+-void lorieHandleClipboardData(const char* data) {
+-    struct LorieDataTarget* next;
++void lorieHandleClipboardData(uint8_t mimeType, const char* data, size_t len) {
++    log(DEBUG, "Got remote clipboard data (%zu bytes, mimeType=%u), sending to X11 clients", len, (unsigned int) mimeType);
+ 
+-    log(DEBUG, "Got remote clipboard data, sending to X11 clients");
++    clipCache.fetchedMask |= (1 << mimeType);
+ 
+-    free((void*) cachedData);
+-    cachedData = data;
+-
+-    while (lorieDataTargetHead != NULL) {
+-        int rc;
+-        xEvent event;
+-
+-        rc = lorieConvertSelection(lorieDataTargetHead->client,
+-                                   lorieDataTargetHead->selection,
+-                                   lorieDataTargetHead->target,
+-                                   lorieDataTargetHead->property,
+-                                   lorieDataTargetHead->requestor,
+-                                   lorieDataTargetHead->time,
+-                                 cachedData);
+-        if (rc != Success) {
+-            event.u.u.type = SelectionNotify;
+-            event.u.selectionNotify.time = lorieDataTargetHead->time;
+-            event.u.selectionNotify.requestor = lorieDataTargetHead->requestor;
+-            event.u.selectionNotify.selection = lorieDataTargetHead->selection;
+-            event.u.selectionNotify.target = lorieDataTargetHead->target;
+-            event.u.selectionNotify.property = None;
+-            WriteEventsToClient(lorieDataTargetHead->client, 1, &event);
++    if (mimeType == LORIE_CLIPBOARD_IMAGE_PNG) {
++        free(clipCache.image);
++        clipCache.image = NULL;
++        clipCache.imageSize = len;
++        if (data && len > 0) {
++            clipCache.image = (char*) malloc(len);
++            if (clipCache.image) memcpy(clipCache.image, data, len);
++        }
++    } else if (mimeType == LORIE_CLIPBOARD_HTML) {
++        free(clipCache.html);
++        clipCache.html = NULL;
++        clipCache.htmlSize = len;
++        if (data && len > 0) {
++            clipCache.html = (char*) malloc(len + 1);
++            if (clipCache.html) {
++                memcpy(clipCache.html, data, len);
++                clipCache.html[len] = 0;
++            }
++        }
++    } else { // TEXT
++        free(clipCache.text);
++        clipCache.text = NULL;
++        clipCache.textSize = len;
++        if (data && len > 0) {
++            clipCache.text = (char*) malloc(len + 1);
++            if (clipCache.text) {
++                memcpy(clipCache.text, data, len);
++                clipCache.text[len] = 0;
++            }
+         }
++    }
+ 
+-        next = lorieDataTargetHead->next;
+-        free(lorieDataTargetHead);
+-        lorieDataTargetHead = next;
++    struct LorieDataTarget** curr = &lorieDataTargetHead;
++    while (*curr != NULL) {
++        struct LorieDataTarget* ldt = *curr;
++        uint8_t reqType = LORIE_CLIPBOARD_TEXT;
++        if (ldt->target == xaPNG || ldt->target == xaJPEG)
++            reqType = LORIE_CLIPBOARD_IMAGE_PNG;
++        else if (ldt->target == xaHTML || ldt->target == xaHTML_UTF8)
++            reqType = LORIE_CLIPBOARD_HTML;
++
++        if (reqType == mimeType) {
++            *curr = ldt->next;
++            int rc = lorieConvertSelection(ldt->client, ldt->selection, ldt->target, ldt->property, ldt->requestor, ldt->time);
++            if (rc != Success) {
++                xEvent event = {0};
++                event.u.u.type = SelectionNotify;
++                event.u.selectionNotify.time = ldt->time;
++                event.u.selectionNotify.requestor = ldt->requestor;
++                event.u.selectionNotify.selection = ldt->selection;
++                event.u.selectionNotify.target = ldt->target;
++                event.u.selectionNotify.property = None;
++                WriteEventsToClient(ldt->client, 1, &event);
++            }
++            free(ldt);
++        } else {
++            curr = &(*curr)->next;
++        }
+     }
+ }
+ 
+@@ -563,6 +633,14 @@ void lorieHandleClipboardData(const char* data) {
+ void lorieInitClipboard(void) {
+ #define ATOM(name) xa##name = MakeAtom(#name, strlen(#name), TRUE)
+     ATOM(TIMESTAMP); ATOM(TEXT); ATOM(CLIPBOARD); ATOM(TARGETS); ATOM(STRING); ATOM(UTF8_STRING);
++    xaPNG = MakeAtom("image/png", 9, TRUE);
++    xaPNG_UPPER = MakeAtom("PNG", 3, TRUE);
++    xaJPEG = MakeAtom("image/jpeg", 10, TRUE);
++    xaIMAGE_JPG = MakeAtom("image/jpg", 9, TRUE);
++    xaJPEG_UPPER = MakeAtom("JPEG", 4, TRUE);
++    xaBMP = MakeAtom("image/bmp", 9, TRUE);
++    xaHTML = MakeAtom("text/html", 9, TRUE);
++    xaHTML_UTF8 = MakeAtom("text/html;charset=utf-8", 23, TRUE);
+ 
+     if (!origProcConvertSelection) {
+         origProcConvertSelection = ProcVector[X_ConvertSelection];
+diff --git a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
+index 14c3b6a..5cbdf2e 100644
+--- a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
++++ b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
+@@ -31,6 +31,34 @@ extern "C" {
+ #include <poll.h>
+ #include "lorie.h"
+ 
++static inline ssize_t lorie_read_all(int fd, void* buf, size_t count) {
++    size_t total = 0;
++    while (total < count) {
++        ssize_t n = read(fd, ((char*) buf) + total, count - total);
++        if (n <= 0) {
++            if (n < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK))
++                continue;
++            return total > 0 ? (ssize_t) total : n;
++        }
++        total += n;
++    }
++    return (ssize_t) total;
++}
++
++static inline ssize_t lorie_write_all(int fd, const void* buf, size_t count) {
++    size_t total = 0;
++    while (total < count) {
++        ssize_t n = write(fd, ((const char*) buf) + total, count - total);
++        if (n <= 0) {
++            if (n < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK))
++                continue;
++            return total > 0 ? (ssize_t) total : n;
++        }
++        total += n;
++    }
++    return (ssize_t) total;
++}
++
+ #define log(prio, ...) __android_log_print(ANDROID_LOG_ ## prio, "LorieNative", __VA_ARGS__)
+ 
+ static int argc = 0;
+@@ -409,14 +437,25 @@ void handleLorieEvents(int fd, __unused int ready, __unused void *ignored) {
+                 lorieWakeServer();
+                 break;
+             case EVENT_CLIPBOARD_SEND: {
+-                char *data = (char*) calloc(1, e.clipboardSend.count + 1);
+-                read(conn_fd, data, e.clipboardSend.count);
+-                data[e.clipboardSend.count] = 0;
++                struct ClipboardPayload {
++                    uint8_t mimeType;
++                    size_t count;
++                    char data[];
++                };
++                auto *p = (ClipboardPayload*) calloc(1, sizeof(ClipboardPayload) + e.clipboardSend.count + 1);
++                p->mimeType = e.clipboardSend.mimeType;
++                p->count = e.clipboardSend.count;
++                if (e.clipboardSend.count > 0) {
++                    lorie_read_all(conn_fd, p->data, e.clipboardSend.count);
++                }
++                p->data[e.clipboardSend.count] = 0;
+                 QueueWorkProc(+[](__unused ClientPtr pClient, void *closure) -> Bool {
+                     // This must be done only on X server thread.
+-                    lorieHandleClipboardData((const char*) closure);
++                    auto *p = (ClipboardPayload*) closure;
++                    lorieHandleClipboardData(p->mimeType, p->data, p->count);
++                    free(p);
+                     return TRUE;
+-                }, nullptr, data);
++                }, nullptr, p);
+                 lorieWakeServer();
+                 break;
+             }
+@@ -455,19 +494,20 @@ void handleLorieEvents(int fd, __unused int ready, __unused void *ignored) {
+     }
+ }
+ 
+-void lorieSendClipboardData(const char* data) {
+-    if (data && conn_fd != -1) {
+-        size_t len = strlen(data);
+-        lorieEvent e = { .clipboardSend = { .t = EVENT_CLIPBOARD_SEND, .count = (uint32_t) len } };
+-        write(conn_fd, &e, sizeof(e));
+-        write(conn_fd, data, len);
++void lorieSendClipboardData(const char* data, size_t len, uint8_t mimeType) {
++    if (conn_fd != -1) {
++        lorieEvent e = { .clipboardSend = { .t = EVENT_CLIPBOARD_SEND, .mimeType = mimeType, .count = (uint32_t) len } };
++        lorie_write_all(conn_fd, &e, sizeof(e));
++        if (data && len > 0) {
++            lorie_write_all(conn_fd, data, len);
++        }
+     }
+ }
+ 
+-void lorieRequestClipboard(void) {
++void lorieRequestClipboard(uint8_t targetType) {
+     if (conn_fd != -1) {
+-        lorieEvent e = { .type = EVENT_CLIPBOARD_REQUEST };
+-        write(conn_fd, &e, sizeof(e));
++        lorieEvent e = { .clipboardRequest = { .t = EVENT_CLIPBOARD_REQUEST, .targetType = targetType } };
++        lorie_write_all(conn_fd, &e, sizeof(e));
+     }
+ }
+ 
+diff --git a/lorie/src/main/cpp/lorie/lorie.h b/lorie/src/main/cpp/lorie/lorie.h
+index 0f18d48..4a634d3 100644
+--- a/lorie/src/main/cpp/lorie/lorie.h
++++ b/lorie/src/main/cpp/lorie/lorie.h
+@@ -24,13 +24,17 @@ extern "C" {
+ 
+ struct lorie_shared_server_state;
+ 
++#define LORIE_CLIPBOARD_TEXT 0
++#define LORIE_CLIPBOARD_IMAGE_PNG 1
++#define LORIE_CLIPBOARD_HTML 2
++
+ void lorieConfigureNotify(int width, int height, int framerate, size_t name_size, char* name);
+ void lorieEnableClipboardSync(Bool enable);
+-void lorieSendClipboardData(const char* data);
++void lorieSendClipboardData(const char* data, size_t len, uint8_t mimeType);
+ void lorieInitClipboard(void);
+-void lorieRequestClipboard(void);
++void lorieRequestClipboard(uint8_t targetType);
+ void lorieHandleClipboardAnnounce(void);
+-void lorieHandleClipboardData(const char* data);
++void lorieHandleClipboardData(uint8_t mimeType, const char* data, size_t len);
+ void lorieSetStylusEnabled(Bool enabled);
+ void lorieSyncLockKeysState(uint8_t state);
+ void lorieWakeServer(void);
+@@ -158,6 +162,11 @@ typedef union {
+     } clipboardEnable;
+     struct {
+         uint8_t t;
++        uint8_t targetType;
++    } clipboardRequest;
++    struct {
++        uint8_t t;
++        uint8_t mimeType;
+         uint32_t count;
+     } clipboardSend;
+     struct {
+diff --git a/lorie/src/main/java/com/termux/x11/LorieView.java b/lorie/src/main/java/com/termux/x11/LorieView.java
+index 85287f4..9cf2a8c 100644
+--- a/lorie/src/main/java/com/termux/x11/LorieView.java
++++ b/lorie/src/main/java/com/termux/x11/LorieView.java
+@@ -5,11 +5,14 @@ import android.content.ClipData;
+ import android.content.ClipDescription;
+ import android.content.ClipboardManager;
+ import android.content.Context;
++import android.graphics.Bitmap;
++import android.graphics.BitmapFactory;
+ import android.graphics.Color;
+ import android.graphics.Matrix;
+ import android.graphics.Point;
+ import android.graphics.Rect;
+ import android.graphics.drawable.ColorDrawable;
++import android.net.Uri;
+ import android.opengl.GLES20;
+ import android.os.Build;
+ import android.os.Handler;
+@@ -34,12 +37,17 @@ import android.view.inputmethod.SurroundingText;
+ 
+ import androidx.annotation.Keep;
+ import androidx.annotation.NonNull;
++import androidx.core.content.FileProvider;
+ import androidx.core.math.MathUtils;
+ 
+ import com.termux.x11.input.InputStub;
+ import com.termux.x11.input.TouchInputHandler;
+ import com.termux.x11.utils.SamsungDexUtils;
+ 
++import java.io.ByteArrayOutputStream;
++import java.io.File;
++import java.io.FileOutputStream;
++import java.io.InputStream;
+ import java.util.Set;
+ import java.util.regex.PatternSyntaxException;
+ 
+@@ -59,7 +67,8 @@ public class LorieView extends SurfaceView implements InputStub {
+     }
+ 
+     private ClipboardManager clipboard;
+-    private long lastClipboardTimestamp = System.currentTimeMillis();
++    private long lastClipboardTimestamp = 0;
++    private boolean isUpdatingFromX11 = false;
+     private boolean keyboardVisible = false;
+     private long mNativeContext;
+     private static boolean clipboardSyncEnabled = false;
+@@ -601,31 +610,133 @@ public class LorieView extends SurfaceView implements InputStub {
+         hardwareKbdScancodesWorkaround = p.hardwareKbdScancodesWorkaround.get();
+         clipboardSyncEnabled = p.clipboardEnable.get();
+         setClipboardSyncEnabled(mNativeContext, clipboardSyncEnabled, clipboardSyncEnabled);
++        if (clipboardSyncEnabled) {
++            checkForClipboardChange();
++        }
+         TouchInputHandler.refreshInputDevices();
+     }
+ 
+     // It is used in native code
+     void setClipboardText(String text) {
+-        clipboard.setPrimaryClip(ClipData.newPlainText("X11 clipboard", text));
++        if (clipboard == null || text == null) return;
++        try {
++            isUpdatingFromX11 = true;
++            clipboard.setPrimaryClip(ClipData.newPlainText("X11 clipboard", text));
++            ClipDescription desc = clipboard.getPrimaryClipDescription();
++            lastClipboardTimestamp = desc != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? desc.getTimestamp() : System.currentTimeMillis() + 150;
++        } catch (Exception e) {
++            Log.w("CLIP", "Failed to set clipboard text", e);
++        } finally {
++            isUpdatingFromX11 = false;
++        }
++    }
++
++    // It is used in native code
++    void setClipboardImage(byte[] imageBytes, String mimeType) {
++        if (clipboard == null || imageBytes == null || imageBytes.length == 0) return;
++        try {
++            File clipDir = new File(getContext().getCacheDir(), "clipboard");
++            if (!clipDir.exists()) clipDir.mkdirs();
++            String ext = "image/jpeg".equals(mimeType) ? ".jpg" : ".png";
++            File imageFile = new File(clipDir, "clipboard_image" + ext);
++            try (FileOutputStream fos = new FileOutputStream(imageFile)) {
++                fos.write(imageBytes);
++            }
++            Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", imageFile);
++            ClipData clip = ClipData.newUri(getContext().getContentResolver(), "X11 Image", uri);
++            isUpdatingFromX11 = true;
++            clipboard.setPrimaryClip(clip);
++            ClipDescription desc = clipboard.getPrimaryClipDescription();
++            lastClipboardTimestamp = desc != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? desc.getTimestamp() : System.currentTimeMillis() + 150;
++            Log.d("CLIP", "Successfully synced X11 image (" + imageBytes.length + " bytes) to Android clipboard");
++        } catch (Exception e) {
++            Log.w("CLIP", "Failed to set clipboard image", e);
++        } finally {
++            isUpdatingFromX11 = false;
++        }
++    }
+ 
+-        // Android does not send PrimaryClipChanged event to the window which posted event
+-        // But in the case we are owning focus and clipboard is unchanged it will be replaced by the same value on X server side.
+-        // Not cool in the case if user installed some clipboard manager, clipboard content will be doubled.
+-        lastClipboardTimestamp = System.currentTimeMillis() + 150;
++    // It is used in native code
++    void setClipboardHtml(byte[] htmlBytes) {
++        if (clipboard == null || htmlBytes == null || htmlBytes.length == 0) return;
++        try {
++            String html = new String(htmlBytes, UTF_8);
++            ClipData clip = ClipData.newHtmlText("X11 HTML", html, html);
++            isUpdatingFromX11 = true;
++            clipboard.setPrimaryClip(clip);
++            ClipDescription desc = clipboard.getPrimaryClipDescription();
++            lastClipboardTimestamp = desc != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? desc.getTimestamp() : System.currentTimeMillis() + 150;
++            Log.d("CLIP", "Successfully synced X11 HTML to Android clipboard");
++        } catch (Exception e) {
++            Log.w("CLIP", "Failed to set clipboard HTML", e);
++        } finally {
++            isUpdatingFromX11 = false;
++        }
+     }
+ 
+     /** @noinspection unused*/ // It is used in native code
+-    void requestClipboard() {
+-        ClipDescription desc = clipboardSyncEnabled ? clipboard.getPrimaryClipDescription() : null;
+-        boolean isText = desc != null && (desc.hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN) || desc.hasMimeType(ClipDescription.MIMETYPE_TEXT_HTML));
+-        CharSequence clip = isText ? clipboard.getText() : null;
+-        String text = clip != null ? clip.toString() : "";
++    void requestClipboard(int targetType) {
++        byte[] payload = new byte[0];
++        if (clipboardSyncEnabled && clipboard != null) {
++            try {
++                ClipData clipData = clipboard.getPrimaryClip();
++                if (clipData != null && clipData.getItemCount() > 0) {
++                    ClipData.Item item = clipData.getItemAt(0);
++                    if (targetType == 1) { // LORIE_CLIPBOARD_IMAGE_PNG
++                        Uri uri = item.getUri();
++                        if (uri != null) {
++                            try (InputStream is = getContext().getContentResolver().openInputStream(uri)) {
++                                if (is != null) {
++                                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
++                                    byte[] buf = new byte[16384];
++                                    int n;
++                                    while ((n = is.read(buf)) != -1) {
++                                        baos.write(buf, 0, n);
++                                    }
++                                    byte[] raw = baos.toByteArray();
++                                    // If raw data starts with PNG header (\x89PNG), use directly
++                                    if (raw.length >= 8 && raw[0] == (byte) 0x89 && raw[1] == (byte) 0x50 && raw[2] == (byte) 0x4E && raw[3] == (byte) 0x47) {
++                                        payload = raw;
++                                    } else {
++                                        Bitmap bitmap = BitmapFactory.decodeByteArray(raw, 0, raw.length);
++                                        if (bitmap != null) {
++                                            ByteArrayOutputStream pngOut = new ByteArrayOutputStream();
++                                            bitmap.compress(Bitmap.CompressFormat.PNG, 100, pngOut);
++                                            payload = pngOut.toByteArray();
++                                            bitmap.recycle();
++                                        }
++                                    }
++                                }
++                            }
++                        }
++                    } else if (targetType == 2) { // LORIE_CLIPBOARD_HTML
++                        String html = item.getHtmlText();
++                        if (html != null) {
++                            payload = html.getBytes(UTF_8);
++                        } else {
++                            CharSequence text = item.getText();
++                            if (text != null) payload = text.toString().getBytes(UTF_8);
++                        }
++                    } else { // LORIE_CLIPBOARD_TEXT
++                        CharSequence itemText = item.getText();
++                        if (itemText == null && item.getHtmlText() != null) {
++                            itemText = item.getHtmlText();
++                        }
++                        if (itemText != null) {
++                            payload = itemText.toString().getBytes(UTF_8);
++                        }
++                    }
++                }
++            } catch (Exception e) {
++                Log.w("CLIP", "Failed to retrieve primary clip (targetType=" + targetType + ")", e);
++            }
++        }
+ 
+         // A requesting X11 client blocks on a SelectionNotify, so this must always answer, even
+-        // with an empty string, or the request is left unresolved.
+-        sendClipboardEvent(mNativeContext, text.getBytes(UTF_8));
+-        if (!text.isEmpty())
+-            Log.d("CLIP", "sending clipboard contents: " + text);
++        // with an empty payload, or the request is left unresolved.
++        sendClipboardEvent(mNativeContext, payload, targetType);
++        if (payload.length > 0)
++            Log.d("CLIP", "sending clipboard contents: " + payload.length + " bytes (targetType=" + targetType + ")");
+     }
+ 
+     public void handleClipboardChange() {
+@@ -633,17 +744,38 @@ public class LorieView extends SurfaceView implements InputStub {
+     }
+ 
+     public void checkForClipboardChange() {
+-        ClipDescription desc = clipboard.getPrimaryClipDescription();
+-        // Below API 26 the clipboard carries no timestamp, so every change looks like a new one.
+-        long timestamp = desc == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.O ? lastClipboardTimestamp + 1 : desc.getTimestamp();
+-        if (clipboardSyncEnabled && desc != null &&
+-                lastClipboardTimestamp < timestamp &&
+-                desc.getMimeTypeCount() == 1 &&
+-                (desc.hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN) ||
+-                        desc.hasMimeType(ClipDescription.MIMETYPE_TEXT_HTML))) {
+-            lastClipboardTimestamp = timestamp;
++        if (!clipboardSyncEnabled || clipboard == null || isUpdatingFromX11) return;
++        try {
++            ClipDescription desc = clipboard.getPrimaryClipDescription();
++            if (desc == null) return;
++            long timestamp = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ? lastClipboardTimestamp + 1 : desc.getTimestamp();
++            if (lastClipboardTimestamp < timestamp &&
++                    (desc.hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN) ||
++                     desc.hasMimeType(ClipDescription.MIMETYPE_TEXT_HTML) ||
++                     desc.hasMimeType("text/*") ||
++                     desc.hasMimeType("image/png") ||
++                     desc.hasMimeType("image/jpeg") ||
++                     desc.hasMimeType("image/*"))) {
++                lastClipboardTimestamp = timestamp;
++                sendClipboardAnnounce(mNativeContext);
++                Log.d("CLIP", "sending clipboard announce");
++            }
++        } catch (Exception e) {
++            Log.w("CLIP", "Error in checkForClipboardChange", e);
++        }
++    }
++
++    public void forceAnnounceClipboard() {
++        if (!clipboardSyncEnabled || clipboard == null) return;
++        try {
++            ClipDescription desc = clipboard.getPrimaryClipDescription();
++            if (desc != null) {
++                lastClipboardTimestamp = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? desc.getTimestamp() : System.currentTimeMillis();
++            }
+             sendClipboardAnnounce(mNativeContext);
+-            Log.d("CLIP", "sending clipboard announce");
++            Log.d("CLIP", "Force announced clipboard to X11");
++        } catch (Exception e) {
++            Log.w("CLIP", "Error in forceAnnounceClipboard", e);
+         }
+     }
+ 
+@@ -701,7 +833,7 @@ public class LorieView extends SurfaceView implements InputStub {
+     @FastNative private native void setFiltering(long ptr, int filtering);
+     @FastNative private native void setClipboardSyncEnabled(long ptr, boolean enabled, boolean ignored);
+     @FastNative private native void sendClipboardAnnounce(long ptr);
+-    @FastNative private native void sendClipboardEvent(long ptr, byte[] text);
++    @FastNative private native void sendClipboardEvent(long ptr, byte[] data, int targetType);
+     @FastNative private native void sendWindowChange(long ptr, int width, int height, int framerate, String name);
+     @FastNative private native void setViewport(long ptr, int x, int y, int width, int height, int expectedWidth, int expectedHeight, int hiddenBottom);
+     @FastNative private native void setRendererZoom(long ptr, int percent);
+-- 
+2.55.0
+

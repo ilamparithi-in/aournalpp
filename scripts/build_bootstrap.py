@@ -277,7 +277,7 @@ def main():
         os.makedirs(gtk_mod_dir, exist_ok=True)
         if os.path.exists(ime_c):
             print("[*] Compiling GTK IME bridge module (libgtk-android-ime.so, 16KB aligned)...")
-            os.system(f"{ndk_clang} -shared -fPIC {page_size_flags} -Wl,-soname,libgtk-android-ime.so -o '{out_ime}' '{ime_c}' -ldl")
+            os.system(f"{ndk_clang} -shared -fPIC {page_size_flags} -I'{staging_usr}/include' -I'{staging_usr}/include/gtk-3.0' -I'{staging_usr}/include/glib-2.0' -I'{staging_usr}/lib/glib-2.0/include' -L'{staging_usr}/lib' -lgtk-3 -lgobject-2.0 -lglib-2.0 -Wl,-soname,libgtk-android-ime.so -o '{out_ime}' '{ime_c}' -ldl")
             os.system(f"cp '{out_ime}' '{os.path.join(gtk_mod_dir, 'libgtk-android-ime.so')}'")
 
         # 3. xopp-title-watcher Binary

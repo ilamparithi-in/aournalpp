@@ -642,7 +642,7 @@ class LinuxEnvironment(private val context: Context) {
             // CRITICAL: Disable desktop portal lookup to prevent D-Bus freeze
             "GTK_USE_PORTAL" to "0",
             "GIO_USE_VFS" to "local",
-            "GTK_PATH" to "${libDir.absolutePath}/gtk-3.0"
+            "GTK_PATH" to "${nativeLibDir.absolutePath}:${libDir.absolutePath}/gtk-3.0"
         )
 
         if (shimModule.exists()) {
@@ -650,6 +650,7 @@ class LinuxEnvironment(private val context: Context) {
         }
         if (imeModule.exists()) {
             envMap["GTK_MODULES"] = imeModule.absolutePath
+            envMap["GTK3_MODULES"] = imeModule.absolutePath
         }
 
         return envMap

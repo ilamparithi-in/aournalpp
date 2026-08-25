@@ -24,13 +24,19 @@ struct _GList {
 typedef void (*GCallback)(void);
 typedef int (*GSourceFunc)(gpointer);
 
-extern GType g_type_from_name(const gchar *name);
+extern GType gtk_entry_get_type(void);
+extern GType gtk_text_view_get_type(void);
+extern GType gtk_editable_get_type(void);
 extern int g_type_check_instance_is_a(gpointer instance, GType type);
 extern unsigned long g_signal_connect_data(gpointer instance, const gchar *detailed_signal,
                                            GCallback c_handler, gpointer data,
                                            gpointer destroy_data, int connect_flags);
 extern GList* gtk_window_list_toplevels(void);
+extern void g_list_free(GList *list);
 extern guint g_timeout_add(guint interval, GSourceFunc function, gpointer data);
+extern GtkWidget* gtk_window_get_focus(GtkWindow *window);
+extern int gtk_window_is_active(GtkWindow *window);
+extern int gtk_widget_is_visible(GtkWidget *widget);
 
 static int sock_fd = -1;
 
@@ -50,14 +56,17 @@ static void ensure_socket(void) {
 
     socklen_t len = sizeof(sa_family_t) + 1 + strlen(abstract_name);
 
-    int flags = fcntl(sock_fd, F_GETFL, 0);
-    fcntl(sock_fd, F_SETFL, flags | O_NONBLOCK);
-
+    // Blocking connect to local abstract socket (completes in microseconds if server is up)
     if (connect(sock_fd, (struct sockaddr *)&addr, len) < 0) {
-        if (errno != EINPROGRESS && errno != EALREADY) {
-            close(sock_fd);
-            sock_fd = -1;
-        }
+        close(sock_fd);
+        sock_fd = -1;
+        return;
+    }
+
+    // Set non-blocking after connection is established so future operations don't stall the UI
+    int flags = fcntl(sock_fd, F_GETFL, 0);
+    if (flags >= 0) {
+        fcntl(sock_fd, F_SETFL, flags | O_NONBLOCK);
     }
 }
 
@@ -65,7 +74,8 @@ static void send_ime_event(const char *event) {
     ensure_socket();
     if (sock_fd >= 0) {
         size_t len = strlen(event);
-        if (write(sock_fd, event, len) < 0) {
+        ssize_t written = send(sock_fd, event, len, MSG_NOSIGNAL | MSG_DONTWAIT);
+        if (written < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
             close(sock_fd);
             sock_fd = -1;
         }
@@ -75,22 +85,24 @@ static void send_ime_event(const char *event) {
 static int is_editable_text_widget(GtkWidget *widget) {
     if (!widget) return 0;
 
-    static GType entry_type = 0;
-    static GType text_view_type = 0;
-    static GType editable_type = 0;
-
-    if (!entry_type) entry_type = g_type_from_name("GtkEntry");
-    if (!text_view_type) text_view_type = g_type_from_name("GtkTextView");
-    if (!editable_type) editable_type = g_type_from_name("GtkEditable");
-
-    if (entry_type && g_type_check_instance_is_a(widget, entry_type)) return 1;
-    if (text_view_type && g_type_check_instance_is_a(widget, text_view_type)) return 1;
-    if (editable_type && g_type_check_instance_is_a(widget, editable_type)) return 1;
+    // Check if widget implements GtkEditable (GtkEntry, GtkSearchEntry, GtkSpinButton, etc.)
+    // or is a GtkTextView (multi-line text views, canvas text editors)
+    if (g_type_check_instance_is_a((gpointer)widget, gtk_editable_get_type())) {
+        return 1;
+    }
+    if (g_type_check_instance_is_a((gpointer)widget, gtk_text_view_get_type())) {
+        return 1;
+    }
 
     return 0;
 }
 
-static void on_window_set_focus(GtkWindow *window, GtkWidget *widget, gpointer user_data) {
+static GtkWidget *last_active_widget = NULL;
+
+static void update_focus_state(GtkWidget *widget) {
+    if (widget == last_active_widget) return;
+    last_active_widget = widget;
+
     if (widget && is_editable_text_widget(widget)) {
         send_ime_event("FOCUS_IN\n");
     } else {
@@ -98,7 +110,30 @@ static void on_window_set_focus(GtkWindow *window, GtkWidget *widget, gpointer u
     }
 }
 
-#define MAX_HOOKED 64
+static void on_window_set_focus(GtkWindow *window, GtkWidget *widget, gpointer user_data) {
+    update_focus_state(widget);
+}
+
+static int on_window_map(GtkWidget *window_widget, gpointer event, gpointer user_data) {
+    GtkWidget *focused = gtk_window_get_focus((GtkWindow *)window_widget);
+    if (focused) {
+        update_focus_state(focused);
+    }
+    return 0;
+}
+
+static int on_window_focus_in(GtkWidget *window_widget, gpointer event, gpointer user_data) {
+    GtkWidget *focused = gtk_window_get_focus((GtkWindow *)window_widget);
+    update_focus_state(focused);
+    return 0;
+}
+
+static int on_window_focus_out(GtkWidget *window_widget, gpointer event, gpointer user_data) {
+    update_focus_state(NULL);
+    return 0;
+}
+
+#define MAX_HOOKED 128
 static GtkWindow* hooked_windows[MAX_HOOKED];
 static int num_hooked = 0;
 
@@ -112,18 +147,41 @@ static void hook_window(GtkWindow *window) {
     if (num_hooked < MAX_HOOKED) {
         hooked_windows[num_hooked++] = window;
         g_signal_connect_data((gpointer)window, "set-focus", (GCallback)on_window_set_focus, NULL, NULL, 0);
+        g_signal_connect_data((gpointer)window, "map-event", (GCallback)on_window_map, NULL, NULL, 0);
+        g_signal_connect_data((gpointer)window, "focus-in-event", (GCallback)on_window_focus_in, NULL, NULL, 0);
+        g_signal_connect_data((gpointer)window, "focus-out-event", (GCallback)on_window_focus_out, NULL, NULL, 0);
+
+        if (gtk_window_is_active(window)) {
+            GtkWidget *focused = gtk_window_get_focus(window);
+            if (focused) {
+                update_focus_state(focused);
+            }
+        }
     }
 }
 
 static int poll_toplevels(gpointer data) {
     GList *list = gtk_window_list_toplevels();
     for (GList *l = list; l != NULL; l = l->next) {
-        hook_window((GtkWindow *)l->data);
+        GtkWindow *win = (GtkWindow *)l->data;
+        hook_window(win);
+        if (gtk_window_is_active(win)) {
+            GtkWidget *focused = gtk_window_get_focus(win);
+            update_focus_state(focused);
+        }
+    }
+    if (list) {
+        g_list_free(list);
     }
     return 1; // Keep repeating
 }
 
 __attribute__((visibility("default")))
 void gtk_module_init(gint *argc, gchar ***argv) {
-    g_timeout_add(300, (GSourceFunc)poll_toplevels, NULL);
+    g_timeout_add(150, (GSourceFunc)poll_toplevels, NULL);
+}
+
+__attribute__((visibility("default")))
+void gtk_module_display_init(gpointer display) {
+    poll_toplevels(NULL);
 }

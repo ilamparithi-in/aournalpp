@@ -1,0 +1,52 @@
+From a7635fa787d2eab71378f7e61d26882c99870586 Mon Sep 17 00:00:00 2001
+From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
+Date: Tue, 25 Aug 2026 18:39:47 +0530
+Subject: [PATCH 6/6] fix(input): implement onCheckIsTextEditor and improve
+ soft keyboard dispatch
+
+---
+ .../src/main/java/com/termux/x11/LorieView.java  | 16 ++++++++++++----
+ 1 file changed, 12 insertions(+), 4 deletions(-)
+
+diff --git a/lorie/src/main/java/com/termux/x11/LorieView.java b/lorie/src/main/java/com/termux/x11/LorieView.java
+index 9cf2a8c..192dbde 100644
+--- a/lorie/src/main/java/com/termux/x11/LorieView.java
++++ b/lorie/src/main/java/com/termux/x11/LorieView.java
+@@ -348,15 +348,18 @@ public class LorieView extends SurfaceView implements InputStub {
+ 
+     /** Shows or hides the soft keyboard for this view, the same way focusing an editable field would. */
+     public void setKeyboardVisible(boolean visible) {
+-        if (visible == keyboardVisible)
+-            return;
+-
+         keyboardVisible = visible;
+         if (visible) {
+             requestFocus();
+             mIMM.showSoftInput(this, 0);
+-        } else
++            post(() -> {
++                if (keyboardVisible) {
++                    mIMM.showSoftInput(this, 0);
++                }
++            });
++        } else {
+             mIMM.hideSoftInputFromWindow(getWindowToken(), 0);
++        }
+     }
+ 
+     public void toggleKeyboardVisible() {
+@@ -794,6 +797,11 @@ public class LorieView extends SurfaceView implements InputStub {
+         TouchInputHandler.refreshInputDevices();
+     }
+ 
++    @Override
++    public boolean onCheckIsTextEditor() {
++        return true;
++    }
++
+     @Override
+     public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
+         if (getPrefs().enforceCharBasedInput.get())
+-- 
+2.55.0
+

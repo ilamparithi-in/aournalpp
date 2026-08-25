@@ -118,7 +118,10 @@ class CanvasSessionManager(
                     Log.w(TAG, "Failed to apply X11 root wallpaper", e)
                 }
 
-                // 4. Launch Xournal++ (passes targetFilePath if opening an existing file; launches blank if null)
+                // 4. Start GTK IME Focus Bridge server early so socket is ready on Xournal++ init
+                startImeBridgeServer(lorieView)
+
+                // 5. Launch Xournal++ (passes targetFilePath if opening an existing file; launches blank if null)
                 val initialDocTitle = if (targetFilePath != null) {
                     File(targetFilePath).name
                 } else if (openPreferencesOnLaunch) {
@@ -136,11 +139,8 @@ class CanvasSessionManager(
                     supervisor.startXournal(targetFilePath)
                 }
 
-                // 5. Start X11 Title Watcher to monitor document renames & saves
+                // 6. Start X11 Title Watcher to monitor document renames & saves
                 supervisor.startTitleWatcher()
-
-                // 6. Start GTK IME Focus Bridge server
-                startImeBridgeServer(lorieView)
 
                 // 6. Direct Preferences Launcher injection if requested
                 if (openPreferencesOnLaunch) {
@@ -272,6 +272,7 @@ class CanvasSessionManager(
                                     var line: String? = reader.readLine()
                                     while (line != null && isSessionRunning) {
                                         val cmd = line.trim()
+                                        Log.i(TAG, "IME focus bridge received: '$cmd'")
                                         val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
                                         val autoShowEnabled = prefs.getBoolean("pref_auto_show_ime_on_focus", true)
 
@@ -280,10 +281,18 @@ class CanvasSessionManager(
                                                 withContext(Dispatchers.Main) {
                                                     lorieView.requestFocus()
                                                     lorieView.setKeyboardVisible(true)
+                                                    (context as? android.app.Activity)?.let { act ->
+                                                        androidx.core.view.WindowCompat.getInsetsController(act.window, act.window.decorView)
+                                                            .show(androidx.core.view.WindowInsetsCompat.Type.ime())
+                                                    }
                                                 }
                                             } else if (cmd == "FOCUS_OUT") {
                                                 withContext(Dispatchers.Main) {
                                                     lorieView.setKeyboardVisible(false)
+                                                    (context as? android.app.Activity)?.let { act ->
+                                                        androidx.core.view.WindowCompat.getInsetsController(act.window, act.window.decorView)
+                                                            .hide(androidx.core.view.WindowInsetsCompat.Type.ime())
+                                                    }
                                                 }
                                             }
                                         }
