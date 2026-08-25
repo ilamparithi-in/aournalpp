@@ -179,32 +179,103 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
             "Desktop",
             "Save File",
             "Save As",
+            "Save Document",
             "Save",
             "Open File",
             "Open Document",
             "Open",
             "Export as PDF",
+            "Export PDF",
+            "Export As...",
+            "Export As",
             "Export",
             "Print",
             "Page Setup",
             "Preferences",
+            "Xournal++ Preferences",
             "About Xournal++",
+            "About",
+            "Plugin Manager",
+            "Manage Plugins",
+            "Page Background",
+            "Set Page Background",
+            "Paper Format",
             "Select Font",
+            "Font Selection",
+            "Choose Font",
+            "Font",
             "Select Color",
+            "Color Selection",
+            "Choose Color",
+            "Color",
+            "Custom Color",
             "Select Folder",
             "Choose Folder",
+            "Select Destination Folder",
             "Question",
             "Warning",
             "Error",
-            "Information"
+            "Information",
+            "Confirm",
+            "LaTeX",
+            "Insert Text",
+            "Edit Text"
         )
 
+        fun isIgnoredTitle(title: String): Boolean {
+            val trimmed = title.trim()
+            if (trimmed.isEmpty()) return true
+
+            // Exact match ignoring case
+            if (ignoredWindowTitles.any { it.equals(trimmed, ignoreCase = true) }) {
+                return true
+            }
+
+            val lower = trimmed.lowercase()
+
+            // Substring checks for dialogs (unless it's an actual note with that name ending in .xopp)
+            if (lower.contains("preferences") && !lower.contains(".xopp")) return true
+            if (lower.contains("about xournal++")) return true
+            if (lower.contains("plugin manager")) return true
+            if (lower.contains("font selection")) return true
+            if (lower.contains("color selection")) return true
+            if (lower.contains("page background")) return true
+            if (lower.contains("save changes")) return true
+            if (lower.contains("error saving")) return true
+            if (lower.contains("error loading")) return true
+
+            // Prefix checks for common dialog types
+            if (lower.startsWith("select font") ||
+                lower.startsWith("select color") ||
+                lower.startsWith("export as") ||
+                lower.startsWith("save file") ||
+                lower.startsWith("open file") ||
+                lower.startsWith("choose folder") ||
+                lower.startsWith("select folder")
+            ) {
+                return true
+            }
+
+            // Dialog titles starting with "Xournal++ " (e.g. "Xournal++ Preferences", "Xournal++ Warning")
+            // Note: Document windows in Xournal++ format title as "<filename> - Xournal++" (ends with "- Xournal++")
+            if (lower.startsWith("xournal++ ") && !lower.contains("- xournal++")) {
+                return true
+            }
+
+            return false
+        }
+
         fun sanitizeWindowTitle(raw: String): String {
-            val withoutAppSuffix = raw.replace(Regex("\\s*-\\s*Xournal\\+\\+.*$"), "")
-                .replace(Regex("\\s*\\[autosaved\\]", RegexOption.IGNORE_CASE), "")
+            if (raw.isBlank() || isIgnoredTitle(raw)) {
+                return ""
+            }
+
+            val withoutAppSuffix = raw.replace(Regex("\\s*-\\s*Xournal\\+\\+.*$", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("\\[autosaved\\]", RegexOption.IGNORE_CASE), "")
                 .trim()
 
             val isDirty = raw.trim().startsWith("*") ||
+                    raw.trim().endsWith("*") ||
                     withoutAppSuffix.startsWith("*") ||
                     withoutAppSuffix.endsWith("*")
 
@@ -213,7 +284,7 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
                 .removeSuffix("*")
                 .trim()
 
-            if (cleaned.isBlank() || ignoredWindowTitles.any { it.equals(cleaned, ignoreCase = true) || it.equals(raw, ignoreCase = true) }) {
+            if (cleaned.isBlank() || isIgnoredTitle(cleaned)) {
                 return ""
             }
 
