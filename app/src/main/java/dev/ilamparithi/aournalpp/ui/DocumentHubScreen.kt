@@ -36,6 +36,7 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.round
 import androidx.compose.ui.unit.toIntRect
@@ -2535,6 +2536,15 @@ fun Modifier.notesGridDragSelect(
 
             val longPressTimeout = viewConfiguration.longPressTimeoutMillis
             val touchSlop = viewConfiguration.touchSlop
+            val pointerType = down.type
+            // For drag-select, a stylus needs MORE tolerance during the long-press wait window:
+            // the tip can wobble slightly while holding still, and we don't want that to cancel
+            // the long-press before selection mode is entered.
+            val effectiveSlop = if (pointerType == PointerType.Stylus || pointerType == PointerType.Eraser) {
+                touchSlop * 2.5f
+            } else {
+                touchSlop
+            }
 
             val dragCancelled = withTimeoutOrNull(longPressTimeout) {
                 while (true) {
@@ -2544,7 +2554,7 @@ fun Modifier.notesGridDragSelect(
                         return@withTimeoutOrNull true
                     }
                     val dist = (change.position - downPos).getDistance()
-                    if (dist > touchSlop) {
+                    if (dist > effectiveSlop) {
                         return@withTimeoutOrNull true
                     }
                 }

@@ -16,6 +16,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -176,25 +177,54 @@ fun Modifier.floatingPreviewLongPress(
                 val down = awaitFirstDown(requireUnconsumed = false)
                 val downPos = down.position
                 val touchSlop = viewConfiguration.touchSlop
+                val pointerType = down.type
+                // Stylus/eraser is a precise tool: even a small measured displacement at the
+                // tip is real intentional movement (not finger wobble). Use a tighter slop so
+                // that horizontal scrolling with a stylus is never mistaken for a tap.
+                val effectiveSlop = if (pointerType == PointerType.Stylus || pointerType == PointerType.Eraser) {
+                    touchSlop * 0.5f
+                } else {
+                    touchSlop
+                }
+                var maxDist = 0f
                 var previousAction = DragActionTarget.NONE
 
-                // Detect long press timeout or cancellation from early movement / child consumption
+                // Detect long press timeout or cancellation from early movement / child consumption.
+                //
+                // IMPORTANT: Use PointerEventPass.Final (not Main) for MOVE events.
+                //
+                // Compose dispatches pointer events in three passes:
+                //   Initial: parent → child
+                //   Main:    child → parent   ← our card runs BEFORE the carousel scroll detector
+                //   Final:   parent → child   ← our card runs AFTER the carousel scroll detector
+                //
+                // If we read at Main, change.isConsumed is always false on MOVE events because
+                // the parent carousel hasn't had its turn yet. Switching to Final means we see
+                // isConsumed=true on any MOVE that the carousel scroll gesture consumed,
+                // so we CANCEL reliably for both finger and stylus swipes.
                 val gesturePhase = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
                     while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Main)
+                        val event = awaitPointerEvent(PointerEventPass.Final)
                         val change = event.changes.firstOrNull { it.id == down.id }
                         if (change == null || !change.pressed) {
-                            if (change != null && change.isConsumed) {
-                                // Child composable (e.g. 3-dot options IconButton, pin, or checkbox) consumed the click
+                            // UP event: if the parent scroll detector consumed it, or if this is a
+                            // stylus that accumulated meaningful displacement, treat as a scroll cancel.
+                            val isStylusScroll = (pointerType == PointerType.Stylus ||
+                                    pointerType == PointerType.Eraser) && maxDist > effectiveSlop
+                            if (change != null && (change.isConsumed || isStylusScroll)) {
                                 return@withTimeoutOrNull GesturePhase.CANCEL
                             }
                             return@withTimeoutOrNull GesturePhase.TAP
                         }
+                        // A parent (e.g. carousel) consumed this MOVE → it is scrolling, not tapping.
                         if (change.isConsumed) {
                             return@withTimeoutOrNull GesturePhase.CANCEL
                         }
+                        // Fallback slop guard (defense-in-depth when parent hasn't consumed yet on
+                        // the very first MOVE, which can happen at the start of a fast swipe).
                         val dist = (change.position - downPos).getDistance()
-                        if (dist > touchSlop) {
+                        maxDist = maxOf(maxDist, dist)
+                        if (dist > effectiveSlop) {
                             return@withTimeoutOrNull GesturePhase.CANCEL
                         }
                     }
