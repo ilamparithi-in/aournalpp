@@ -94,6 +94,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.termux.x11.LorieView
+import com.termux.x11.input.InputEventSender
 import com.termux.x11.input.LenovoPenButtonMapper
 import com.termux.x11.input.TouchInputHandler
 import dev.ilamparithi.aournalpp.data.DocumentRepository
@@ -117,6 +118,7 @@ class CanvasActivity : ComponentActivity() {
     private lateinit var supervisor: ProcessSupervisor
     private lateinit var sessionManager: CanvasSessionManager
     private var inputHandler: TouchInputHandler? = null
+    private var inputSender: InputEventSender? = null
     private var penMapper: LenovoPenButtonMapper? = null
     private var activeLorieView: LorieView? = null
 
@@ -291,6 +293,9 @@ class CanvasActivity : ComponentActivity() {
                             },
                             onInputHandlerReady = { handler ->
                                 inputHandler = handler
+                            },
+                            onInputSenderReady = { sender ->
+                                inputSender = sender
                             },
                             onPenMapperReady = { mapper ->
                                 penMapper = mapper
@@ -808,8 +813,8 @@ class CanvasActivity : ComponentActivity() {
         if (mapper != null && mapper.onKeyEvent(event)) {
             return true
         }
-        val handler = inputHandler
-        if (handler != null && handler.sendKeyEvent(event)) {
+        val sender = inputSender
+        if (sender != null && sender.sendKeyEvent(event)) {
             return true
         }
         return super.dispatchKeyEvent(event)

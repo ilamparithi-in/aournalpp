@@ -31,6 +31,7 @@ fun X11Viewport(
     modifier: Modifier = Modifier,
     onLorieViewReady: (LorieView) -> Unit,
     onInputHandlerReady: ((TouchInputHandler) -> Unit)? = null,
+    onInputSenderReady: ((InputEventSender) -> Unit)? = null,
     onPenMapperReady: ((LenovoPenButtonMapper) -> Unit)? = null
 ) {
     AndroidView(
@@ -99,7 +100,7 @@ fun X11Viewport(
                     if (penMapper.onKeyEvent(event)) {
                         return@setOnKeyListener true
                     }
-                    inputHandler.sendKeyEvent(event)
+                    inputSender.sendKeyEvent(event)
                 }
                 frameLayout.setOnKeyListener { _, keyCode, event ->
                     if (keyCode == android.view.KeyEvent.KEYCODE_BACK) {
@@ -108,13 +109,14 @@ fun X11Viewport(
                     if (penMapper.onKeyEvent(event)) {
                         return@setOnKeyListener true
                     }
-                    inputHandler.sendKeyEvent(event)
+                    inputSender.sendKeyEvent(event)
                 }
                 lorieView.setCallback { screenWidth, screenHeight, inputTransform ->
                     inputHandler.handleInputTransformChanged(screenWidth, screenHeight, inputTransform)
                 }
 
                 onInputHandlerReady?.invoke(inputHandler)
+                onInputSenderReady?.invoke(inputSender)
                 onPenMapperReady?.invoke(penMapper)
             }
 
