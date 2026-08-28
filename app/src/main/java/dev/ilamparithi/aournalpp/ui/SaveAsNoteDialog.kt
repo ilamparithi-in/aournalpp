@@ -74,6 +74,8 @@ fun SaveAsNoteDialog(
     rootFolder: File,
     onDismiss: () -> Unit,
     onSave: (name: String, targetFolder: File) -> Unit,
+    confirmButtonLabel: String = "Save",
+    onSkip: (() -> Unit)? = null,
     onCreateFolder: (suspend (name: String, colorHex: String, iconEmoji: String?, iconType: String?) -> Result<File>)? = null
 ) {
     val cleanInitialName = remember(initialName) {
@@ -341,12 +343,19 @@ fun SaveAsNoteDialog(
                 },
                 enabled = noteNameInput.isNotBlank()
             ) {
-                Text("Save")
+                Text(confirmButtonLabel)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel")
+                }
+                if (onSkip != null) {
+                    TextButton(onClick = onSkip) {
+                        Text("Skip")
+                    }
+                }
             }
         }
     )

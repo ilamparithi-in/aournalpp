@@ -360,6 +360,11 @@ fun DocumentHubScreen(
     // Autoload override conflict notification state
     var showAutoloadOverrideDialog by remember { mutableStateOf(false) }
 
+    // New Note dialog state
+    var showNewNoteDialog by remember { mutableStateOf(false) }
+    var newNoteDefaultName by remember { mutableStateOf("") }
+    var allFoldersForNewNote by remember { mutableStateOf<List<FolderItem>>(emptyList()) }
+
     val legacyPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) {
@@ -757,8 +762,13 @@ fun DocumentHubScreen(
                         if (!hasPermission) {
                             showPermissionDialog = true
                         } else {
-                            val intent = Intent(context, CanvasActivity::class.java)
-                            context.startActivity(intent)
+                            newNoteDefaultName = SimpleDateFormat("yyyy-MM-dd-'Note'-HH-mm", Locale.getDefault()).format(Date())
+                            scope.launch {
+                                allFoldersForNewNote = withContext(Dispatchers.IO) {
+                                    repository.getAllFolders()
+                                }
+                            }
+                            showNewNoteDialog = true
                         }
                     },
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -771,8 +781,71 @@ fun DocumentHubScreen(
         }
     ) { innerPadding ->
 
+        // 0. New Note Dialog
+        if (showNewNoteDialog) {
+            SaveAsNoteDialog(
+                title = "New Note",
+                subtitle = "Choose a name and destination folder for your new note.",
+                icon = Icons.Default.Add,
+                initialName = newNoteDefaultName,
+                initialFolder = currentDirectory,
+                availableFolders = allFoldersForNewNote,
+                rootFolder = repository.getRootNotesDirectory(),
+                confirmButtonLabel = "Create & Open",
+                onDismiss = { showNewNoteDialog = false },
+                onSkip = {
+                    showNewNoteDialog = false
+                    val intent = Intent(context, CanvasActivity::class.java)
+                    context.startActivity(intent)
+                },
+                onSave = { name, targetFolder ->
+                    showNewNoteDialog = false
+                    scope.launch {
+                        val result = repository.createBlankNote(name, targetFolder)
+                        if (result.isSuccess) {
+                            val file = result.getOrThrow()
+                            loadContent()
+                            NoteOpenManager.openInCanvas(
+                                context = context,
+                                file = file,
+                                repository = repository,
+                                localView = localView
+                            )
+                        } else {
+                            snackbarHostState.showSnackbar(
+                                "Failed to create note: ${result.exceptionOrNull()?.message}"
+                            )
+                        }
+                    }
+                },
+                onCreateFolder = { name, colorHex, iconEmoji, iconType ->
+                    val result = repository.createFolder(
+                        parentDir = repository.getRootNotesDirectory(),
+                        name = name,
+                        colorHex = colorHex,
+                        iconEmoji = iconEmoji,
+                        iconType = iconType
+                    )
+                    if (result.isSuccess) {
+                        val newFolder = result.getOrThrow()
+                        allFoldersForNewNote = allFoldersForNewNote + FolderItem(
+                            file = newFolder,
+                            name = newFolder.name,
+                            colorHex = colorHex,
+                            iconEmoji = iconEmoji,
+                            iconType = iconType,
+                            isEmergencyFolder = false
+                        )
+                        loadContent()
+                    }
+                    result
+                }
+            )
+        }
+
         // 1. Storage Permission Prompt Dialog
         if (showPermissionDialog && !hasPermission) {
+
             AlertDialog(
                 onDismissRequest = { showPermissionDialog = false },
                 icon = {

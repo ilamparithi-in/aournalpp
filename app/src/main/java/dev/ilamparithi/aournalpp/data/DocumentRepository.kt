@@ -13,9 +13,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.zip.GZIPOutputStream
 
 class DocumentRepository(private val context: Context) {
 
@@ -821,7 +823,68 @@ class DocumentRepository(private val context: Context) {
         }
     }
 
+
+    /**
+     * Creates a new blank Xournal++ note file at [targetFolder]/[name].xopp.
+     *
+     * The written content is a gzip-compressed XML document using fileversion="4" — the format
+     * that has been stable since 2019 and is what xournalpp itself produces for a new blank note.
+     * Because this app bundles a pinned xournalpp binary, format compatibility is always
+     * guaranteed; xournalpp also migrates older fileversions forward, so this cannot regress.
+     *
+     * Filename conflicts are resolved by appending a counter suffix (_2, _3, …).
+     *
+     * @param name       The desired note name (with or without ".xopp" extension).
+     * @param targetFolder  Directory in which to create the file. Created if absent.
+     * @return [Result.success] wrapping the created [File], or [Result.failure] on I/O error.
+     */
+    suspend fun createBlankNote(
+        name: String,
+        targetFolder: File = getRootNotesDirectory()
+    ): Result<File> = withContext(Dispatchers.IO) {
+        try {
+            if (!targetFolder.exists()) targetFolder.mkdirs()
+
+            // Sanitise the base name
+            val rawBase = if (name.endsWith(".xopp", ignoreCase = true)) {
+                name.substring(0, name.length - 5)
+            } else {
+                name
+            }
+            val cleanBase = rawBase.trim().replace(Regex("[/\\\\:*?\"<>|]"), "_").ifBlank { "New Note" }
+
+            // Resolve a non-conflicting filename (_2, _3, …)
+            var candidate = File(targetFolder, "$cleanBase.xopp")
+            var counter = 2
+            while (candidate.exists()) {
+                candidate = File(targetFolder, "${cleanBase}_$counter.xopp")
+                counter++
+            }
+
+            // Write minimal valid Xournal++ v4 document (gzip-compressed XML)
+            val xml = """
+                <?xml version="1.0" standalone="no"?>
+                <xournal creator="Xournal++ 1.2.x" fileversion="4">
+                  <title>Xournal++ document - see https://github.com/xournalpp/xournalpp</title>
+                  <page width="595.27559100" height="841.88976400">
+                    <background type="solid" color="#ffffff" style="plain"/>
+                    <layer/>
+                  </page>
+                </xournal>
+            """.trimIndent()
+
+            GZIPOutputStream(FileOutputStream(candidate)).use { gzip ->
+                gzip.write(xml.toByteArray(Charsets.UTF_8))
+            }
+
+            Result.success(candidate)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     fun replaceWithAutosave(note: NoteDocument): File {
+
         val autoInfo = note.autosaveInfo ?: return note.file
         try {
             autoInfo.autosaveFile.copyTo(note.file, overwrite = true)

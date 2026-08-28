@@ -203,6 +203,9 @@ fun HomeScreen(
 
     // Speed Dial FAB state
     var isFabExpanded by remember { mutableStateOf(false) }
+    var showNewNoteDialog by remember { mutableStateOf(false) }
+    var newNoteDefaultName by remember { mutableStateOf("") }
+    var allFoldersForNewNote by remember { mutableStateOf<List<FolderItem>>(emptyList()) }
 
     val scrollState = rememberScrollState()
     val isScrolled by remember { derivedStateOf { scrollState.value > 100 } }
@@ -813,7 +816,13 @@ fun HomeScreen(
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     onClick = {
                         isFabExpanded = false
-                        startNewNote()
+                        newNoteDefaultName = SimpleDateFormat("yyyy-MM-dd-'Note'-HH-mm", Locale.getDefault()).format(Date())
+                        scope.launch {
+                            allFoldersForNewNote = withContext(Dispatchers.IO) {
+                                repository.getAllFolders()
+                            }
+                        }
+                        showNewNoteDialog = true
                     }
                 )
 
@@ -982,8 +991,71 @@ fun HomeScreen(
         )
     }
 
+
+    // New Note Dialog
+    if (showNewNoteDialog) {
+        SaveAsNoteDialog(
+            title = "New Note",
+            subtitle = "Choose a name and destination folder for your new note.",
+            icon = Icons.Default.Edit,
+            initialName = newNoteDefaultName,
+            initialFolder = repository.getRootNotesDirectory(),
+            availableFolders = allFoldersForNewNote,
+            rootFolder = repository.getRootNotesDirectory(),
+            confirmButtonLabel = "Create & Open",
+            onDismiss = { showNewNoteDialog = false },
+            onSkip = {
+                showNewNoteDialog = false
+                startNewNote()
+            },
+            onSave = { name, targetFolder ->
+                showNewNoteDialog = false
+                scope.launch {
+                    val result = repository.createBlankNote(name, targetFolder)
+                    if (result.isSuccess) {
+                        val file = result.getOrThrow()
+                        loadHomeData()
+                        NoteOpenManager.openInCanvas(
+                            context = context,
+                            file = file,
+                            repository = repository,
+                            localView = localView
+                        )
+                    } else {
+                        snackbarHostState.showSnackbar(
+                            "Failed to create note: ${result.exceptionOrNull()?.message}"
+                        )
+                    }
+                }
+            },
+            onCreateFolder = { name, colorHex, iconEmoji, iconType ->
+                val result = repository.createFolder(
+                    parentDir = repository.getRootNotesDirectory(),
+                    name = name,
+                    colorHex = colorHex,
+                    iconEmoji = iconEmoji,
+                    iconType = iconType
+                )
+                if (result.isSuccess) {
+                    val newFolder = result.getOrThrow()
+                    allFoldersForNewNote = allFoldersForNewNote + dev.ilamparithi.aournalpp.model.FolderItem(
+                        file = newFolder,
+                        name = newFolder.name,
+                        colorHex = colorHex,
+                        iconEmoji = iconEmoji,
+                        iconType = iconType,
+                        isEmergencyFolder = false
+                    )
+                    loadHomeData()
+                }
+                result
+            }
+        )
+    }
+
     // Autoload Preference Conflict Overridden Dialog
     if (showAutoloadOverrideDialog) {
+
         AlertDialog(
             onDismissRequest = {
                 showAutoloadOverrideDialog = false
