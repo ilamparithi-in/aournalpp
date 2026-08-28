@@ -739,32 +739,20 @@ class CanvasActivity : ComponentActivity() {
         }
 
         lifecycleScope.launch {
-            val dialogOpen = sessionManager.isModalOrDialogOpen()
-            if (dialogOpen) {
-                // If a dialog or prompt (e.g. Save confirmation, Preferences, Export) is open, notify user and keep it open
+            // 1. Direct hardware-level X11 key injection
+            injectCtrlQDirect()
+
+            // 2. Multi-strategy background X11 Ctrl+Q close
+            sessionManager.requestCloseSession()
+
+            // 3. If Xournal++ remains open (e.g. Save prompt or modal dialog waiting for user interaction)
+            kotlinx.coroutines.delay(1000)
+            if (!isFinishing && supervisor.isXournalRunning() && !showEmergencyForceCloseDialogState.value) {
                 Toast.makeText(
                     this@CanvasActivity,
                     "Please close any open dialogs or prompts in Xournal++ to exit",
                     Toast.LENGTH_SHORT
                 ).show()
-            } else {
-                // 1. Direct hardware-level X11 key injection through TouchInputHandler
-                injectCtrlQDirect()
-
-                // 2. Multi-strategy background X11 Ctrl+Q close
-                sessionManager.requestCloseSession()
-
-                // 3. If a save dialog/prompt opened in response to close request, notify the user
-                kotlinx.coroutines.delay(1000)
-                if (!isFinishing && supervisor.isXournalRunning() && !showEmergencyForceCloseDialogState.value) {
-                    if (sessionManager.isModalOrDialogOpen()) {
-                        Toast.makeText(
-                            this@CanvasActivity,
-                            "Please close any open dialogs or prompts in Xournal++ to exit",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                }
             }
         }
     }
@@ -782,17 +770,17 @@ class CanvasActivity : ComponentActivity() {
             }
         }
 
-        inputHandler?.let { handler ->
+        inputSender?.let { sender ->
             val now = android.os.SystemClock.uptimeMillis()
             val ctrlDown = KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_CTRL_LEFT, 0)
             val keyDown = KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
             val keyUp = KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
             val ctrlUp = KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_CTRL_LEFT, 0)
 
-            handler.sendKeyEvent(ctrlDown)
-            handler.sendKeyEvent(keyDown)
-            handler.sendKeyEvent(keyUp)
-            handler.sendKeyEvent(ctrlUp)
+            sender.sendKeyEvent(ctrlDown)
+            sender.sendKeyEvent(keyDown)
+            sender.sendKeyEvent(keyUp)
+            sender.sendKeyEvent(ctrlUp)
         }
 
         // xdotool window-activated shortcut injection (matching edit settings & back button quit)
