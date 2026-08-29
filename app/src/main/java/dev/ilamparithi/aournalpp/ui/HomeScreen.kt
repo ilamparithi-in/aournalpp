@@ -172,10 +172,10 @@ fun HomeScreen(
     val prefs = remember { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
     var viewMode by remember { mutableStateOf(prefs.getString("pref_home_view_mode", "EXPRESSIVE") ?: "EXPRESSIVE") }
 
-    var recentNotes by remember { mutableStateOf<List<NoteDocument>>(emptyList()) }
-    var continueNote by remember { mutableStateOf<NoteDocument?>(null) }
-    var totalNotesCount by remember { mutableStateOf(0) }
-    var totalFoldersCount by remember { mutableStateOf(0) }
+    var recentNotes by remember { mutableStateOf<List<NoteDocument>>(repository.getCachedHomeNotes(16) ?: emptyList()) }
+    var continueNote by remember { mutableStateOf<NoteDocument?>(repository.getCachedContinueNote()) }
+    var totalNotesCount by remember { mutableStateOf(repository.getCachedTotalNotesCount() ?: 0) }
+    var totalFoldersCount by remember { mutableStateOf(repository.getCachedTotalFoldersCount() ?: 0) }
     var isRefreshing by remember { mutableStateOf(false) }
     var refreshSeed by remember { mutableLongStateOf(0L) }
     val pullRefreshState = rememberPullToRefreshState()
@@ -218,6 +218,9 @@ fun HomeScreen(
 
         continueNote = repository.getLastOpenedOrModifiedNote()
 
+        // Prefetch thumbnails off the main thread
+        ThumbnailManager.prefetchThumbnails(context, homeNotes, pdfExportManager, scope)
+
         val emergencyFile = withContext(Dispatchers.IO) { env.checkAndQuarantineEmergencySave() }
         if (emergencyFile != null && emergencyFile.exists() && emergencyFile.length() > 0) {
             if (quarantinedEmergencySave == null && !showEmergencySaveNameDialog) {
@@ -247,10 +250,6 @@ fun HomeScreen(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
-    }
-
-    LaunchedEffect(Unit) {
-        loadHomeData()
     }
 
     // Note action & dialog states

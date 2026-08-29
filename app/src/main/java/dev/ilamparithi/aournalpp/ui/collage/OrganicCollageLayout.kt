@@ -86,6 +86,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Random
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 import kotlin.math.sqrt
 
@@ -399,8 +400,27 @@ object OrganicCollageEngine {
 }
 
 /**
+ * Global application-level memory cache for the organic collage layout.
+ * Ensures the geometric placement calculation only executes when the window size or orientation changes,
+ * or on cold startup. It is never recalculated during tab navigation.
+ */
+object CollageLayoutMemoryCache {
+    private val layoutCache = ConcurrentHashMap<Int, CollageLayoutResult>()
+
+    fun getLayout(widthKey: Int): CollageLayoutResult? = layoutCache[widthKey]
+
+    fun putLayout(widthKey: Int, layout: CollageLayoutResult) {
+        layoutCache[widthKey] = layout
+    }
+
+    fun clear() {
+        layoutCache.clear()
+    }
+}
+
+/**
  * Organic Expressive Collage Composable with Non-Blocking Asynchronous Computation
- * and Material 3 Expressive Loading Screen during Resizing/Rotation.
+ * and strict window-dimension based layout caching.
  */
 @Composable
 fun OrganicCollageView(
@@ -432,21 +452,30 @@ fun OrganicCollageView(
         contentAlignment = Alignment.TopCenter
     ) {
         val availableWidthDp = maxWidth.value
+        val widthKey = (availableWidthDp / 4).toInt() * 4
 
-        // Asynchronous computation on Dispatchers.Default prevents any render thread blocking / microstutters
+        val initialLayout = remember(widthKey) {
+            CollageLayoutMemoryCache.getLayout(widthKey)
+        }
+
+        // Layout algorithm only runs when window size / orientation changes or on cold launch
         val layoutState by produceState<CollageLayoutResult?>(
-            initialValue = null,
-            key1 = notes,
-            key2 = availableWidthDp,
-            key3 = refreshSeed
+            initialValue = initialLayout,
+            key1 = widthKey
         ) {
-            value = null // Trigger M3E loading state smoothly
-            value = withContext(Dispatchers.Default) {
-                OrganicCollageEngine.computeLayout(
-                    notes = notes,
-                    maxWidthDp = availableWidthDp,
-                    seed = refreshSeed
-                )
+            val cached = CollageLayoutMemoryCache.getLayout(widthKey)
+            if (cached != null) {
+                value = cached
+            } else {
+                val computed = withContext(Dispatchers.Default) {
+                    OrganicCollageEngine.computeLayout(
+                        notes = notes,
+                        maxWidthDp = availableWidthDp,
+                        seed = 0L
+                    )
+                }
+                CollageLayoutMemoryCache.putLayout(widthKey, computed)
+                value = computed
             }
         }
 
@@ -476,23 +505,24 @@ fun OrganicCollageView(
                         .height(layout.totalHeight.dp)
                 ) {
                     layout.cards.forEach { card ->
+                        val liveNote = notes.find { it.path == card.note.path } ?: card.note
                         Box(
                             modifier = Modifier
                                 .offset(x = card.x.dp, y = card.y.dp)
                                 .size(card.width.dp, card.height.dp)
                         ) {
                             CollageCardView(
-                                note = card.note,
+                                note = liveNote,
                                 shape = card.shape,
                                 pdfExportManager = pdfExportManager,
-                                onClick = { onNoteClick(card.note) },
-                                onTogglePin = onTogglePin?.let { { it(card.note) } },
-                                onExportPdf = onExportPdf?.let { { it(card.note) } },
-                                onSharePdf = onSharePdf?.let { { it(card.note) } },
-                                onShareXopp = onShareXopp?.let { { it(card.note) } },
-                                onRename = onRename?.let { { it(card.note) } },
-                                onDuplicate = onDuplicate?.let { { it(card.note) } },
-                                onDelete = onDelete?.let { { it(card.note) } }
+                                onClick = { onNoteClick(liveNote) },
+                                onTogglePin = onTogglePin?.let { { it(liveNote) } },
+                                onExportPdf = onExportPdf?.let { { it(liveNote) } },
+                                onSharePdf = onSharePdf?.let { { it(liveNote) } },
+                                onShareXopp = onShareXopp?.let { { it(liveNote) } },
+                                onRename = onRename?.let { { it(liveNote) } },
+                                onDuplicate = onDuplicate?.let { { it(liveNote) } },
+                                onDelete = onDelete?.let { { it(liveNote) } }
                             )
                         }
                     }

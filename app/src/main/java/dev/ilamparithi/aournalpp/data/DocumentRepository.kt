@@ -17,6 +17,7 @@ import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.GZIPOutputStream
 
 class DocumentRepository(private val context: Context) {
@@ -28,7 +29,43 @@ class DocumentRepository(private val context: Context) {
         private const val TRASH_MANIFEST_FILE = ".trash_manifest.json"
         const val EMERGENCY_SAVES_DEFAULT_COLOR = "#F44336"
         const val EMERGENCY_SAVES_DEFAULT_ICON = "emergency"
+        val DEFAULT_VIRTUALLY_PINNED_ROLES = setOf("emergency", "import", "imported")
+
+        private val directoryCache = ConcurrentHashMap<String, Pair<List<FolderItem>, List<NoteDocument>>>()
+        private val homeNotesCache = ConcurrentHashMap<Int, List<NoteDocument>>()
+        private val recentNotesCache = ConcurrentHashMap<Int, List<NoteDocument>>()
+        @Volatile private var cachedContinueNote: NoteDocument? = null
+        @Volatile private var cachedTotalNotesCount: Int? = null
+        @Volatile private var cachedTotalFoldersCount: Int? = null
+
+        fun invalidateAllCaches() {
+            directoryCache.clear()
+            homeNotesCache.clear()
+            recentNotesCache.clear()
+            cachedContinueNote = null
+            cachedTotalNotesCount = null
+            cachedTotalFoldersCount = null
+        }
     }
+
+    fun getCachedDirectory(
+        targetDir: File,
+        query: String = "",
+        showHidden: Boolean = false
+    ): Pair<List<FolderItem>, List<NoteDocument>>? {
+        val key = "${targetDir.absolutePath}_${query.trim()}_$showHidden"
+        return directoryCache[key]
+    }
+
+    fun getCachedHomeNotes(limit: Int = 16): List<NoteDocument>? = homeNotesCache[limit]
+
+    fun getCachedRecentNotes(limit: Int = 10): List<NoteDocument>? = recentNotesCache[limit]
+
+    fun getCachedContinueNote(): NoteDocument? = cachedContinueNote
+
+    fun getCachedTotalNotesCount(): Int? = cachedTotalNotesCount
+
+    fun getCachedTotalFoldersCount(): Int? = cachedTotalFoldersCount
 
     data class FolderMetaData(
         val colorHex: String? = null,
@@ -105,6 +142,7 @@ class DocumentRepository(private val context: Context) {
         val array = org.json.JSONArray()
         paths.forEach { array.put(it) }
         prefs.edit().putString("pref_pinned_notes_order_json", array.toString()).apply()
+        invalidateAllCaches()
     }
 
     // Pinned Folders Persistence
@@ -142,6 +180,7 @@ class DocumentRepository(private val context: Context) {
         val array = org.json.JSONArray()
         roles.forEach { array.put(it.lowercase()) }
         prefs.edit().putString("pref_unpinned_special_roles_json", array.toString()).apply()
+        invalidateAllCaches()
     }
 
     fun isFolderPinned(path: String): Boolean {
@@ -199,6 +238,7 @@ class DocumentRepository(private val context: Context) {
         val array = org.json.JSONArray()
         paths.forEach { array.put(it) }
         prefs.edit().putString("pref_pinned_folders_order_json", array.toString()).apply()
+        invalidateAllCaches()
     }
 
     private fun canonicalOf(file: File): String =
@@ -268,7 +308,7 @@ class DocumentRepository(private val context: Context) {
             val isEmergency = meta.role == "emergency" || isEmergencySavesFolder(dir)
             val role = meta.role
             val isUserPinned = cache.pinnedFolderPaths.contains(dir.absolutePath)
-            val isVirtuallyPinned = role != null && !cache.unpinnedSpecialRoles.contains(role.lowercase()) && !isUserPinned
+            val isVirtuallyPinned = role != null && DEFAULT_VIRTUALLY_PINNED_ROLES.contains(role.lowercase()) && !cache.unpinnedSpecialRoles.contains(role.lowercase()) && !isUserPinned
             val itemCount = dir.listFiles()?.count { file ->
                 file.isFile && isOpenableFile(file) && !file.name.startsWith(".")
             } ?: 0
@@ -409,10 +449,16 @@ class DocumentRepository(private val context: Context) {
             }
         }
 
-        Pair(
+        val result = Pair(
             sortedFolders,
             resultNotes.sortedByDescending { it.lastModifiedMs }
         )
+        val cacheKey = "${targetDir.absolutePath}_${trimmedQuery}_$showHidden"
+        directoryCache[cacheKey] = result
+        if (isRoot && trimmedQuery.isEmpty()) {
+            cachedTotalFoldersCount = sortedFolders.size
+        }
+        result
     }
 
     private fun isOpenableCandidate(file: File): Boolean {
@@ -464,6 +510,7 @@ class DocumentRepository(private val context: Context) {
         if (colorHex != null || iconEmoji != null || iconType != null || role != null || excludeFromRecents) {
             writeFolderMeta(newDir, colorHex, iconEmoji, iconType, role, excludeFromRecents)
         }
+        invalidateAllCaches()
         return Result.success(newDir)
     }
 
@@ -543,6 +590,7 @@ class DocumentRepository(private val context: Context) {
                 }
             }
 
+            invalidateAllCaches()
             targetDir
         }
     }
@@ -676,6 +724,7 @@ class DocumentRepository(private val context: Context) {
         }
 
         metaFile.writeText(json.toString(2))
+        invalidateAllCaches()
     }
 
     suspend fun getAllFolders(root: File = getRootNotesDirectory()): List<FolderItem> = withContext(Dispatchers.IO) {
@@ -688,7 +737,7 @@ class DocumentRepository(private val context: Context) {
                 val isEmergency = meta.role == "emergency" || isEmergencySavesFolder(sub)
                 val role = meta.role
                 val isUserPinned = cache.pinnedFolderPaths.contains(sub.absolutePath)
-                val isVirtuallyPinned = role != null && !cache.unpinnedSpecialRoles.contains(role.lowercase()) && !isUserPinned
+                val isVirtuallyPinned = role != null && DEFAULT_VIRTUALLY_PINNED_ROLES.contains(role.lowercase()) && !cache.unpinnedSpecialRoles.contains(role.lowercase()) && !isUserPinned
                 val count = sub.listFiles { f -> f.isFile && isOpenableFile(f) && !f.name.startsWith(".") }?.size ?: 0
                 list.add(
                     FolderItem(
@@ -791,7 +840,7 @@ class DocumentRepository(private val context: Context) {
                     }
                 }
             }
-            movedCount
+            movedCount.also { invalidateAllCaches() }
         }
     }
 
@@ -834,7 +883,7 @@ class DocumentRepository(private val context: Context) {
             }
 
             manifestFile.writeText(manifest.toString(2))
-            movedCount
+            movedCount.also { invalidateAllCaches() }
         }
     }
 
@@ -855,6 +904,7 @@ class DocumentRepository(private val context: Context) {
             if (folder.renameTo(targetTrashFolder)) {
                 manifest.put(trashFolderName, folder.absolutePath)
                 manifestFile.writeText(manifest.toString(2))
+                invalidateAllCaches()
             } else {
                 error("Failed to move folder to trash")
             }
@@ -960,7 +1010,7 @@ class DocumentRepository(private val context: Context) {
             }
 
             manifestFile.writeText(manifest.toString(2))
-            count
+            count.also { invalidateAllCaches() }
         }
     }
 
@@ -968,6 +1018,7 @@ class DocumentRepository(private val context: Context) {
         runCatching {
             val trashDir = getTrashDirectory()
             trashDir.listFiles()?.forEach { it.deleteRecursively() }
+            invalidateAllCaches()
             Unit
         }
     }
@@ -1006,6 +1057,7 @@ class DocumentRepository(private val context: Context) {
                 }
             }
 
+            invalidateAllCaches()
             targetFile
         }
     }
@@ -1024,6 +1076,7 @@ class DocumentRepository(private val context: Context) {
             }
 
             doc.file.copyTo(candidate, overwrite = false)
+            invalidateAllCaches()
             candidate
         }
     }
@@ -1491,14 +1544,19 @@ class DocumentRepository(private val context: Context) {
             val file = File(path)
             if (file.exists() && file.isFile && isOpenableFile(file) && !isExcludedFromRecents(file, cache)) {
                 val doc = buildNoteDocument(file, cache)
-                if (doc != null) return@withContext doc
+                if (doc != null) {
+                    cachedContinueNote = doc
+                    return@withContext doc
+                }
             }
         }
         // 2. Fallback to latest modified file
-        collectOpenableFiles(getRootNotesDirectory(), cache, skipRecentsExcluded = true)
+        val doc = collectOpenableFiles(getRootNotesDirectory(), cache, skipRecentsExcluded = true)
             .sortedByDescending { it.lastModified() }
             .firstOrNull()
             ?.let { buildNoteDocument(it, cache) }
+        cachedContinueNote = doc
+        doc
     }
 
     suspend fun getNoteDocumentForFile(file: File): NoteDocument? = withContext(Dispatchers.IO) {
@@ -1506,7 +1564,9 @@ class DocumentRepository(private val context: Context) {
     }
 
     suspend fun countAllNotes(): Int = withContext(Dispatchers.IO) {
-        collectOpenableFiles(getRootNotesDirectory()).size
+        val count = collectOpenableFiles(getRootNotesDirectory()).size
+        cachedTotalNotesCount = count
+        count
     }
 
     suspend fun getAllRecentNotes(limit: Int = 10): List<NoteDocument> = withContext(Dispatchers.IO) {
@@ -1547,7 +1607,9 @@ class DocumentRepository(private val context: Context) {
             }
         }
 
-        result.take(limit)
+        val res = result.take(limit)
+        recentNotesCache[limit] = res
+        res
     }
 
     suspend fun getHomeNotes(limit: Int = 16): List<NoteDocument> = withContext(Dispatchers.IO) {
@@ -1603,7 +1665,9 @@ class DocumentRepository(private val context: Context) {
             }
         }
 
-        (pinnedDocs + dynamicDocs).take(limit)
+        val res = (pinnedDocs + dynamicDocs).take(limit)
+        homeNotesCache[limit] = res
+        res
     }
 }
 

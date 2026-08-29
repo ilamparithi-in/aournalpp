@@ -262,26 +262,25 @@ fun MainResponsiveAppShell() {
         selectedTab = 0
     }
 
-    val renderTab = remember {
-        movableContentOf { tab: Int ->
-            when (tab) {
-                0 -> HomeScreen(
-                    onNavigateToFiles = { selectedTab = 1 },
-                    onNavigateToSettings = { selectedTab = 2 },
-                    onNavigateToAbout = { selectedTab = 3 }
-                )
-                1 -> DocumentHubScreen(
-                    onNavigateToSettings = { selectedTab = 2 },
-                    onNavigateToLicenses = { selectedTab = 3 }
-                )
-                2 -> SettingsScreen(onBack = { selectedTab = 0 })
-                3 -> LicensesScreen(onBack = { selectedTab = 0 })
-                else -> HomeScreen(
-                    onNavigateToFiles = { selectedTab = 1 },
-                    onNavigateToSettings = { selectedTab = 2 },
-                    onNavigateToAbout = { selectedTab = 3 }
-                )
-            }
+    @Composable
+    fun RenderTabContent(tab: Int) {
+        when (tab) {
+            0 -> HomeScreen(
+                onNavigateToFiles = { selectedTab = 1 },
+                onNavigateToSettings = { selectedTab = 2 },
+                onNavigateToAbout = { selectedTab = 3 }
+            )
+            1 -> DocumentHubScreen(
+                onNavigateToSettings = { selectedTab = 2 },
+                onNavigateToLicenses = { selectedTab = 3 }
+            )
+            2 -> SettingsScreen(onBack = { selectedTab = 0 })
+            3 -> LicensesScreen(onBack = { selectedTab = 0 })
+            else -> HomeScreen(
+                onNavigateToFiles = { selectedTab = 1 },
+                onNavigateToSettings = { selectedTab = 2 },
+                onNavigateToAbout = { selectedTab = 3 }
+            )
         }
     }
 
@@ -383,7 +382,7 @@ fun MainResponsiveAppShell() {
                         },
                         label = "railTabTransition"
                     ) { tab ->
-                        renderTab(tab)
+                        RenderTabContent(tab)
                     }
                 }
             }
@@ -474,7 +473,7 @@ fun MainResponsiveAppShell() {
                         },
                         label = "bottomTabTransition"
                     ) { tab ->
-                        renderTab(tab)
+                        RenderTabContent(tab)
                     }
                 }
             }

@@ -154,6 +154,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import kotlinx.coroutines.delay
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -299,17 +300,18 @@ fun DocumentHubScreen(
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
 
-    // Directory navigation
+    val initialCached = remember {
+        repository.getCachedDirectory(repository.getRootNotesDirectory(), "", false)
+    }
     var currentDirectory by remember { mutableStateOf(repository.getRootNotesDirectory()) }
-    var folders by remember { mutableStateOf<List<FolderItem>>(emptyList()) }
-    var notes by remember { mutableStateOf<List<NoteDocument>>(emptyList()) }
+    var folders by remember { mutableStateOf<List<FolderItem>>(initialCached?.first ?: emptyList()) }
+    var notes by remember { mutableStateOf<List<NoteDocument>>(initialCached?.second ?: emptyList()) }
     var trashedNotes by remember { mutableStateOf<List<NoteDocument>>(emptyList()) }
     var isViewingTrash by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
     val pullRefreshState = rememberPullToRefreshState()
-
-    val recentNotes by produceState<List<NoteDocument>>(emptyList(), notes, folders, isViewingTrash) {
-        value = if (!isViewingTrash) repository.getAllRecentNotes(10) else emptyList()
+    var recentNotes by remember {
+        mutableStateOf<List<NoteDocument>>(repository.getCachedRecentNotes(10) ?: emptyList())
     }
 
     // Multi-Selection State & Drag Selection Tracker
@@ -423,6 +425,12 @@ fun DocumentHubScreen(
             folders = fList
             notes = nList
 
+            if (currentDirectory.canonicalPath == repository.getRootNotesDirectory().canonicalPath) {
+                recentNotes = repository.getAllRecentNotes(10)
+            }
+
+            ThumbnailManager.prefetchThumbnails(context, nList, pdfExportManager, scope)
+
             val emergencyFile = withContext(Dispatchers.IO) { env.checkAndQuarantineEmergencySave() }
             if (emergencyFile != null && emergencyFile.exists() && emergencyFile.length() > 0) {
                 if (quarantinedEmergencySave == null && !showEmergencySaveNameDialog) {
@@ -499,10 +507,8 @@ fun DocumentHubScreen(
             selectedNotePaths = emptySet()
         } else if (isViewingTrash) {
             isViewingTrash = false
-            loadContent()
         } else if (currentDirectory.canonicalPath != repository.getRootNotesDirectory().canonicalPath) {
             currentDirectory = currentDirectory.parentFile ?: repository.getRootNotesDirectory()
-            loadContent()
         }
     }
 
@@ -1702,7 +1708,6 @@ fun DocumentHubScreen(
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.clickable {
                                 currentDirectory = repository.getRootNotesDirectory()
-                                loadContent()
                             }
                         )
                         Icon(
@@ -1772,9 +1777,34 @@ fun DocumentHubScreen(
                 },
                 label = "folderNavigationTransition",
                 modifier = Modifier.weight(1f)
-            ) { _ ->
+            ) { (targetPath, targetIsTrash) ->
+                val displayFolders = remember(targetPath, targetIsTrash, folders) {
+                    if (targetIsTrash) {
+                        emptyList()
+                    } else if (targetPath == currentDirectory.canonicalPath) {
+                        folders
+                    } else {
+                        repository.getCachedDirectory(File(targetPath), searchQuery, showHiddenFiles)?.first ?: emptyList()
+                    }
+                }
+                val displayNotes = remember(targetPath, targetIsTrash, notes, trashedNotes) {
+                    if (targetIsTrash) {
+                        trashedNotes
+                    } else if (targetPath == currentDirectory.canonicalPath) {
+                        notes
+                    } else {
+                        repository.getCachedDirectory(File(targetPath), searchQuery, showHiddenFiles)?.second ?: emptyList()
+                    }
+                }
+
+                val pageGridState = rememberSaveable(targetPath, saver = LazyGridState.Saver) {
+                    LazyGridState()
+                }
+
+                val isPageRoot = targetPath == repository.getRootNotesDirectory().canonicalPath
+
                 LazyVerticalGrid(
-                    state = gridState,
+                    state = pageGridState,
                     columns = if (isGridView) GridCells.Adaptive(minSize = 200.dp) else GridCells.Fixed(1),
                     contentPadding = PaddingValues(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -1782,8 +1812,8 @@ fun DocumentHubScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .notesGridDragSelect(
-                            lazyGridState = gridState,
-                            notes = { if (isViewingTrash) trashedNotes else notes },
+                            lazyGridState = pageGridState,
+                            notes = { displayNotes },
                             selectedPaths = { selectedNotePaths },
                             setSelectedPaths = { selectedNotePaths = it },
                             lastSelectedPath = { lastSelectedNotePath },
@@ -1798,93 +1828,67 @@ fun DocumentHubScreen(
                         )
                 ) {
                     // Dynamic Multi-Browse Recents Carousel
-                    if (isRoot && !isViewingTrash && searchQuery.isBlank() && recentNotes.isNotEmpty()) {
+                    if (isPageRoot && !targetIsTrash && searchQuery.isBlank() && recentNotes.isNotEmpty() && !isSelectionMode) {
                         item(span = { GridItemSpan(maxLineSpan) }, key = "recents_carousel_section") {
-                            AnimatedVisibility(
-                                visible = !isSelectionMode || isInitialEntryDrag,
-                                enter = expandVertically(
-                                    animationSpec = spring(
-                                        dampingRatio = 0.82f,
-                                        stiffness = 380f
-                                    )
-                                ) + fadeIn(
-                                    animationSpec = spring(
-                                        dampingRatio = 0.9f,
-                                        stiffness = 400f
-                                    )
-                                ),
-                                exit = shrinkVertically(
-                                    animationSpec = spring(
-                                        dampingRatio = 0.82f,
-                                        stiffness = 380f
-                                    )
-                                ) + fadeOut(
-                                    animationSpec = spring(
-                                        dampingRatio = 0.9f,
-                                        stiffness = 400f
-                                    )
-                                )
-                            ) {
-                                DynamicRecentsCarousel(
-                                    recentNotes = recentNotes,
-                                    pdfExportManager = pdfExportManager,
-                                    onOpenNote = { note ->
-                                        if (note.autosaveInfo != null) {
-                                            pendingAutosaveNote = note
-                                        } else {
-                                            openNoteInCanvas(note.file)
-                                        }
-                                    },
-                                    onTogglePin = { note ->
-                                        repository.togglePinNote(note.file.absolutePath)
-                                        loadContent()
-                                    },
-                                    onSharePdf = { note ->
-                                        scope.launch {
-                                            val result = repository.shareNoteAsPdf(context, note, pdfExportManager)
-                                            if (result.isFailure) {
-                                                snackbarHostState.showSnackbar("Failed to share PDF: ${result.exceptionOrNull()?.message}")
-                                            }
-                                        }
-                                    },
-                                    onShareXopp = { note -> repository.shareNoteAsXopp(context, note) },
-                                    onExportPdf = { note ->
-                                        pendingExportNote = note
-                                        exportPdfLauncher.launch("${note.title}.pdf")
-                                    },
-                                    onDuplicate = { note ->
-                                        scope.launch {
-                                            val result = repository.duplicateNote(note)
-                                            if (result.isSuccess) {
-                                                loadContent()
-                                                snackbarHostState.showSnackbar("Duplicated note \"${note.title}\"")
-                                            } else {
-                                                snackbarHostState.showSnackbar("Failed to duplicate note: ${result.exceptionOrNull()?.message}")
-                                            }
-                                        }
-                                    },
-                                    onDeleteNote = { note -> noteToDelete = note },
-                                    onRenameNote = { note ->
-                                        noteToRename = note
-                                        renameInputText = note.title
+                            DynamicRecentsCarousel(
+                                recentNotes = recentNotes,
+                                pdfExportManager = pdfExportManager,
+                                onOpenNote = { note ->
+                                    if (note.autosaveInfo != null) {
+                                        pendingAutosaveNote = note
+                                    } else {
+                                        openNoteInCanvas(note.file)
                                     }
-                                )
-                            }
+                                },
+                                onTogglePin = { note ->
+                                    repository.togglePinNote(note.file.absolutePath)
+                                    loadContent()
+                                },
+                                onSharePdf = { note ->
+                                    scope.launch {
+                                        val result = repository.shareNoteAsPdf(context, note, pdfExportManager)
+                                        if (result.isFailure) {
+                                            snackbarHostState.showSnackbar("Failed to share PDF: ${result.exceptionOrNull()?.message}")
+                                        }
+                                    }
+                                },
+                                onShareXopp = { note -> repository.shareNoteAsXopp(context, note) },
+                                onExportPdf = { note ->
+                                    pendingExportNote = note
+                                    exportPdfLauncher.launch("${note.title}.pdf")
+                                },
+                                onDuplicate = { note ->
+                                    scope.launch {
+                                        val result = repository.duplicateNote(note)
+                                        if (result.isSuccess) {
+                                            loadContent()
+                                            snackbarHostState.showSnackbar("Duplicated note \"${note.title}\"")
+                                        } else {
+                                            snackbarHostState.showSnackbar("Failed to duplicate note: ${result.exceptionOrNull()?.message}")
+                                        }
+                                    }
+                                },
+                                onDeleteNote = { note -> noteToDelete = note },
+                                onRenameNote = { note ->
+                                    noteToRename = note
+                                    renameInputText = note.title
+                                }
+                            )
                         }
                     }
 
                     // Subfolders Section (if any exist)
-                    if (folders.isNotEmpty() && !isViewingTrash) {
+                    if (displayFolders.isNotEmpty() && !targetIsTrash) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             Text(
-                                text = "Folders (${folders.size})",
+                                text = "Folders (${displayFolders.size})",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
 
-                        items(folders, key = { it.file.absolutePath }) { folder ->
+                        items(displayFolders, key = { it.file.absolutePath }) { folder ->
                             var showFolderMenu by remember { mutableStateOf(false) }
                             val accentColor = folder.colorHex?.let {
                                 try { Color(android.graphics.Color.parseColor(it)) } catch (e: Exception) { null }
@@ -1895,7 +1899,6 @@ fun DocumentHubScreen(
                                     .fillMaxWidth()
                                     .clickable {
                                         currentDirectory = folder.file
-                                        loadContent()
                                     },
                                 shape = RoundedCornerShape(16.dp),
                                 colors = CardDefaults.cardColors(
@@ -2070,13 +2073,11 @@ fun DocumentHubScreen(
                     }
 
                     // Notes Grid Section
-                    val currentNotes = if (isViewingTrash) trashedNotes else notes
-
-                    if (currentNotes.isNotEmpty()) {
-                        if (folders.isNotEmpty() && !isViewingTrash) {
+                    if (displayNotes.isNotEmpty()) {
+                        if (displayFolders.isNotEmpty() && !targetIsTrash) {
                             item(span = { GridItemSpan(maxLineSpan) }) {
                                 Text(
-                                    text = if (isViewingTrash) "Trashed Notes (${currentNotes.size})" else "Notes (${currentNotes.size})",
+                                    text = if (targetIsTrash) "Trashed Notes (${displayNotes.size})" else "Notes (${displayNotes.size})",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary
@@ -2084,7 +2085,7 @@ fun DocumentHubScreen(
                             }
                         }
 
-                        items(currentNotes, key = { it.path }) { note ->
+                        items(displayNotes, key = { it.path }) { note ->
                             val isSelected = selectedNotePaths.contains(note.path)
 
                             ExpressiveNoteCard(
@@ -2111,13 +2112,13 @@ fun DocumentHubScreen(
                                 onLongClick = {
                                     if (isSelectionMode && !isSelected && selectedNotePaths.isNotEmpty()) {
                                         val lastPath = lastSelectedNotePath ?: selectedNotePaths.lastOrNull()
-                                        val currentList = currentNotes.map { it.path }
+                                        val currentList = displayNotes.map { it.path }
                                         val lastIdx = currentList.indexOf(lastPath)
                                         val currentIdx = currentList.indexOf(note.path)
                                         if (lastIdx >= 0 && currentIdx >= 0) {
                                             val start = minOf(lastIdx, currentIdx)
                                             val end = maxOf(lastIdx, currentIdx)
-                                            val range = currentNotes.subList(start, end + 1).map { it.path }.toSet()
+                                            val range = displayNotes.subList(start, end + 1).map { it.path }.toSet()
                                             selectedNotePaths = selectedNotePaths + range
                                         } else {
                                             selectedNotePaths = selectedNotePaths + note.path
@@ -2174,7 +2175,7 @@ fun DocumentHubScreen(
                                 }
                             )
                         }
-                    } else if (folders.isEmpty()) {
+                    } else if (displayFolders.isEmpty()) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             Box(
                                 modifier = Modifier
