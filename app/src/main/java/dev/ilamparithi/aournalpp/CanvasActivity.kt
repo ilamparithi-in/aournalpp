@@ -19,9 +19,11 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -782,9 +784,7 @@ private fun FloatingToolbarOverlay(
 
     var dragNormX by remember { mutableFloatStateOf(defaultNormX) }
     var dragNormY by remember { mutableFloatStateOf(defaultNormY) }
-    val animNormX = remember { Animatable(defaultNormX) }
-    val animNormY = remember { Animatable(defaultNormY) }
-    var isDragging by remember { mutableStateOf(false) }
+    val animPixelOffset = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
     var isMovedFromDefault by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
@@ -819,11 +819,11 @@ private fun FloatingToolbarOverlay(
                     maxY = maxOf(minY, totalHeightPx - tHeightPx - 8.dp.toPx())
                 }
 
-                val currentXRatio = if (isDragging) dragNormX else animNormX.value
-                val currentYRatio = if (isDragging) dragNormY else animNormY.value
+                val basePosX = minX + (maxX - minX) * dragNormX
+                val basePosY = minY + (maxY - minY) * dragNormY
                 // Allow spring overshoot past bounds during reset animation without clamping
-                val posX = (minX + (maxX - minX) * currentXRatio).roundToInt()
-                val posY = (minY + (maxY - minY) * currentYRatio).roundToInt()
+                val posX = (basePosX + animPixelOffset.value.x).roundToInt()
+                val posY = (basePosY + animPixelOffset.value.y).roundToInt()
                 IntOffset(posX, posY)
             }
             .onSizeChanged { size ->
@@ -1096,13 +1096,55 @@ private fun FloatingToolbarOverlay(
                                 onClick = {
                                     interactionSignal.tryEmit(Unit)
                                     try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
+                                    val (startDeltaX, startDeltaY) = with(density) {
+                                        val totalW = canvasWidthPx
+                                        val totalH = canvasHeightPx
+                                        val tW = if (toolbarSizePx.width > 0) toolbarSizePx.width.toFloat() else 320.dp.toPx()
+                                        val tH = if (toolbarSizePx.height > 0) toolbarSizePx.height.toFloat() else 48.dp.toPx()
+
+                                        val minX: Float
+                                        val maxX: Float
+                                        val minY: Float
+                                        val maxY: Float
+
+                                        if (centerTopBarWithinBounds) {
+                                            minX = effectiveInsets.left.dp.toPx() + systemBarPadding.calculateStartPadding(LayoutDirection.Ltr).toPx() + 8.dp.toPx()
+                                            maxX = maxOf(minX, totalW - tW - effectiveInsets.right.dp.toPx() - systemBarPadding.calculateEndPadding(LayoutDirection.Ltr).toPx() - 8.dp.toPx())
+                                            minY = effectiveInsets.top.dp.toPx() + systemBarPadding.calculateTopPadding().toPx() + 8.dp.toPx()
+                                            maxY = maxOf(minY, totalH - tH - effectiveInsets.bottom.dp.toPx() - systemBarPadding.calculateBottomPadding().toPx() - 8.dp.toPx())
+                                        } else {
+                                            minX = 8.dp.toPx()
+                                            maxX = maxOf(minX, totalW - tW - 8.dp.toPx())
+                                            minY = if (isFullscreen) {
+                                                if (cutoutPlacement.hasCenterCutout) cutoutTopOffsetDp.toPx() + 8.dp.toPx() else 8.dp.toPx()
+                                            } else {
+                                                systemBarPadding.calculateTopPadding().toPx() + 8.dp.toPx()
+                                            }
+                                            maxY = maxOf(minY, totalH - tH - 8.dp.toPx())
+                                        }
+
+                                        val currentBaseX = minX + (maxX - minX) * dragNormX
+                                        val currentBaseY = minY + (maxY - minY) * dragNormY
+                                        val targetBaseX = minX + (maxX - minX) * defaultNormX
+                                        val targetBaseY = minY + (maxY - minY) * defaultNormY
+
+                                        (currentBaseX - targetBaseX) to (currentBaseY - targetBaseY)
+                                    }
+
                                     dragNormX = defaultNormX
                                     dragNormY = defaultNormY
-                                    coroutineScope.launch {
-                                        launch { animNormX.animateTo(defaultNormX, ExpressiveSprings.Bouncy) }
-                                        launch { animNormY.animateTo(defaultNormY, ExpressiveSprings.Bouncy) }
-                                    }
                                     isMovedFromDefault = false
+
+                                    coroutineScope.launch {
+                                        animPixelOffset.snapTo(Offset(startDeltaX, startDeltaY))
+                                        animPixelOffset.animateTo(
+                                            targetValue = Offset.Zero,
+                                            animationSpec = spring(
+                                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                stiffness = Spring.StiffnessMediumLow
+                                            )
+                                        )
+                                    }
                                 },
                                 modifier = Modifier.size(36.dp)
                             ) {
@@ -1158,9 +1200,7 @@ private fun FloatingToolbarOverlay(
                                     .pointerInput(Unit) {
                                         detectDragGesturesAfterLongPress(
                                             onDragStart = {
-                                                isDragging = true
-                                                dragNormX = animNormX.value.coerceIn(0f, 1f)
-                                                dragNormY = animNormY.value.coerceIn(0f, 1f)
+                                                coroutineScope.launch { animPixelOffset.snapTo(Offset.Zero) }
                                                 interactionSignal.tryEmit(Unit)
                                                 try { haptics.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
                                             },
@@ -1175,20 +1215,14 @@ private fun FloatingToolbarOverlay(
                                                 val spanY = maxOf(1f, totalH - tH)
                                                 dragNormX = (dragNormX + dragAmount.x / spanX).coerceIn(0f, 1f)
                                                 dragNormY = (dragNormY + dragAmount.y / spanY).coerceIn(0f, 1f)
-                                            },
-                                            onDragEnd = {
-                                                isDragging = false
-                                                interactionSignal.tryEmit(Unit)
-                                                try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
-                                                coroutineScope.launch {
-                                                    animNormX.snapTo(dragNormX)
-                                                    animNormY.snapTo(dragNormY)
-                                                }
                                                 isMovedFromDefault = abs(dragNormX - defaultNormX) > 0.03f || abs(dragNormY - defaultNormY) > 0.03f
                                             },
-                                            onDragCancel = {
-                                                isDragging = false
-                                            }
+                                            onDragEnd = {
+                                                interactionSignal.tryEmit(Unit)
+                                                try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
+                                                isMovedFromDefault = abs(dragNormX - defaultNormX) > 0.03f || abs(dragNormY - defaultNormY) > 0.03f
+                                            },
+                                            onDragCancel = {}
                                         )
                                     },
                                 contentAlignment = Alignment.Center
@@ -1209,9 +1243,7 @@ private fun FloatingToolbarOverlay(
                             .pointerInput(Unit) {
                                 detectDragGesturesAfterLongPress(
                                     onDragStart = {
-                                        isDragging = true
-                                        dragNormX = animNormX.value.coerceIn(0f, 1f)
-                                        dragNormY = animNormY.value.coerceIn(0f, 1f)
+                                        coroutineScope.launch { animPixelOffset.snapTo(Offset.Zero) }
                                         interactionSignal.tryEmit(Unit)
                                         try { haptics.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
                                     },
@@ -1226,20 +1258,14 @@ private fun FloatingToolbarOverlay(
                                         val spanY = maxOf(1f, totalH - tH)
                                         dragNormX = (dragNormX + dragAmount.x / spanX).coerceIn(0f, 1f)
                                         dragNormY = (dragNormY + dragAmount.y / spanY).coerceIn(0f, 1f)
-                                    },
-                                    onDragEnd = {
-                                        isDragging = false
-                                        interactionSignal.tryEmit(Unit)
-                                        try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
-                                        coroutineScope.launch {
-                                            animNormX.snapTo(dragNormX)
-                                            animNormY.snapTo(dragNormY)
-                                        }
                                         isMovedFromDefault = abs(dragNormX - defaultNormX) > 0.03f || abs(dragNormY - defaultNormY) > 0.03f
                                     },
-                                    onDragCancel = {
-                                        isDragging = false
-                                    }
+                                    onDragEnd = {
+                                        interactionSignal.tryEmit(Unit)
+                                        try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
+                                        isMovedFromDefault = abs(dragNormX - defaultNormX) > 0.03f || abs(dragNormY - defaultNormY) > 0.03f
+                                    },
+                                    onDragCancel = {}
                                 )
                             }
                             .clickable(
