@@ -16,6 +16,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.text.KeyboardOptions
@@ -38,7 +40,12 @@ import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ContentCut
+import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DisplaySettings
+import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
@@ -118,8 +125,13 @@ import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.math.roundToInt
 
+import dev.ilamparithi.aournalpp.ui.ToolbarPositionEditorScreen
+import dev.ilamparithi.aournalpp.ui.STANDARD_TOOLBAR_PRESETS
+
 enum class SettingsSubpage {
     MAIN,
+    TOOLBAR,
+    TOOLBAR_POSITION_EDITOR,
     KEYBOARD,
     INPUT,
     LENOVO_PEN,
@@ -155,10 +167,12 @@ fun SettingsSwitchListItem(
     supporting: String? = null,
     checked: Boolean,
     enabled: Boolean = true,
+    leadingContent: (@Composable () -> Unit)? = null,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     ListItem(
+        leadingContent = leadingContent,
         headlineContent = {
             Text(headline, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
         },
@@ -195,6 +209,8 @@ fun SettingsNavigationHost(onFinish: () -> Unit) {
     BackHandler(enabled = true) {
         when (currentSubpage) {
             SettingsSubpage.MAIN -> onFinish()
+            SettingsSubpage.TOOLBAR -> currentSubpage = SettingsSubpage.MAIN
+            SettingsSubpage.TOOLBAR_POSITION_EDITOR -> currentSubpage = SettingsSubpage.TOOLBAR
             SettingsSubpage.LENOVO_PEN -> currentSubpage = SettingsSubpage.INPUT
             SettingsSubpage.SAFE_AREA_EDITOR -> currentSubpage = SettingsSubpage.DISPLAY
             else -> currentSubpage = SettingsSubpage.MAIN
@@ -217,11 +233,29 @@ fun SettingsNavigationHost(onFinish: () -> Unit) {
                 onNavigate = { currentSubpage = it },
                 onBack = onFinish
             )
+            SettingsSubpage.TOOLBAR -> ToolbarSettingsScreen(
+                onNavigateToPositionEditor = { currentSubpage = SettingsSubpage.TOOLBAR_POSITION_EDITOR },
+                onBack = { currentSubpage = SettingsSubpage.MAIN }
+            )
+            SettingsSubpage.TOOLBAR_POSITION_EDITOR -> {
+                Dialog(
+                    onDismissRequest = { currentSubpage = SettingsSubpage.TOOLBAR },
+                    properties = DialogProperties(
+                        usePlatformDefaultWidth = false,
+                        decorFitsSystemWindows = false
+                    )
+                ) {
+                    ToolbarPositionEditorScreen(
+                        onNavigateBack = { currentSubpage = SettingsSubpage.TOOLBAR }
+                    )
+                }
+            }
             SettingsSubpage.KEYBOARD -> KeyboardSettingsScreen(
                 onBack = { currentSubpage = SettingsSubpage.MAIN }
             )
             SettingsSubpage.INPUT -> InputSettingsScreen(
                 onNavigateToLenovoPen = { currentSubpage = SettingsSubpage.LENOVO_PEN },
+                onNavigateToToolbar = { currentSubpage = SettingsSubpage.TOOLBAR },
                 onBack = { currentSubpage = SettingsSubpage.MAIN }
             )
             SettingsSubpage.LENOVO_PEN -> LenovoPenSettingsScreen(
@@ -1067,6 +1101,20 @@ fun MainSettingsScreen(
             ) {
                 Column {
                     ListItem(
+                        headlineContent = { Text("Floating Toolbar", fontWeight = FontWeight.SemiBold) },
+                        supportingContent = { Text("Position placement, pin/unpin auto-collapse, button visibility") },
+                        leadingContent = {
+                            Icon(imageVector = Icons.Default.Tune, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        },
+                        trailingContent = {
+                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
+                        },
+                        modifier = Modifier.clickable { onNavigate(SettingsSubpage.TOOLBAR) }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    ListItem(
                         headlineContent = { Text("Keyboard & Navigation", fontWeight = FontWeight.SemiBold) },
                         supportingContent = { Text("Auto-keyboard toggle, character-based input, emergency gestures") },
                         leadingContent = {
@@ -1172,6 +1220,583 @@ fun MainSettingsScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+fun ToolbarSettingsScreen(
+    onNavigateToPositionEditor: () -> Unit,
+    onBack: () -> Unit
+) {
+    val context = LocalContext.current
+    val x11Prefs = remember { X11Preferences.getPrefs(context) }
+
+    var presetId by remember {
+        mutableStateOf(x11Prefs.getString(X11Preferences.KEY_TOOLBAR_POSITION_PRESET, "top_center") ?: "top_center")
+    }
+    var normX by remember {
+        mutableFloatStateOf(x11Prefs.getFloat(X11Preferences.KEY_TOOLBAR_POS_X_RATIO, 0.5f))
+    }
+    var normY by remember {
+        mutableFloatStateOf(x11Prefs.getFloat(X11Preferences.KEY_TOOLBAR_POS_Y_RATIO, 0.0f))
+    }
+    var centerWithinSafeArea by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOP_BAR_CENTER_WITHIN_BOUNDS, false))
+    }
+    var startCollapsed by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_START_COLLAPSED, false))
+    }
+    var alwaysShowFileName by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_ALWAYS_SHOW_FILE_NAME, false))
+    }
+    var pinButtonMode by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_PIN_BUTTON_MODE, false))
+    }
+    var autoCollapseTimeoutMs by remember {
+        mutableIntStateOf(x11Prefs.getInt(X11Preferences.KEY_TOOLBAR_AUTO_COLLAPSE_TIMEOUT_MS, 5000))
+    }
+    var autoCollapseMsText by remember {
+        mutableStateOf(autoCollapseTimeoutMs.toString())
+    }
+    var stylusHoverExpands by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_STYLUS_HOVER_EXPANDS, true))
+    }
+
+    var showStylusMode by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE, false))
+    }
+    var showTitle by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_TITLE, true))
+    }
+    var showBack by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_BACK, true))
+    }
+    var showKeyboard by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD, true))
+    }
+    var showDragHandle by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_DRAG_HANDLE, true))
+    }
+    var showCut by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CUT, true))
+    }
+    var showCopy by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_COPY, true))
+    }
+    var showPaste by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_PASTE, true))
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Floating Toolbar", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // 1. Toolbar Placement & Positioning
+            Text("Placement & Calibration", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    val presetLabel = if (presetId == "custom") {
+                        "Custom (X:${(normX * 100).roundToInt()}%, Y:${(normY * 100).roundToInt()}%)"
+                    } else {
+                        STANDARD_TOOLBAR_PRESETS.firstOrNull { it.id == presetId }?.label ?: "Top Center"
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Default Toolbar Position", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "Position anchor: $presetLabel",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        FilledTonalButton(
+                            onClick = onNavigateToPositionEditor,
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.AspectRatio, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Configure")
+                        }
+                    }
+
+                    HorizontalDivider()
+
+                    SettingsSwitchListItem(
+                        headline = "Confine to Screen Safe Area",
+                        supporting = "Align and keep the floating toolbar within calibrated display corner margins.",
+                        checked = centerWithinSafeArea,
+                        onCheckedChange = {
+                            centerWithinSafeArea = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_TOP_BAR_CENTER_WITHIN_BOUNDS, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_TOP_BAR_CENTER_WITHIN_BOUNDS)
+                        }
+                    )
+                }
+            }
+
+            // 2. Startup & Collapse Behavior
+            Text("Startup & Collapse Behavior", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    SettingsSwitchListItem(
+                        headline = "Start Collapsed",
+                        supporting = "Automatically launch the canvas with the toolbar minimized into a compact pill.",
+                        checked = startCollapsed,
+                        onCheckedChange = {
+                            startCollapsed = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_START_COLLAPSED, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_START_COLLAPSED)
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsSwitchListItem(
+                        headline = "Always Show File Name",
+                        supporting = "Keep the active note file name in the toolbar at all times instead of switching to dialog names.",
+                        checked = alwaysShowFileName,
+                        onCheckedChange = {
+                            alwaysShowFileName = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_ALWAYS_SHOW_FILE_NAME, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_ALWAYS_SHOW_FILE_NAME)
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsSwitchListItem(
+                        headline = "Replace Collapse with Pin / Unpin",
+                        supporting = "Tap collapsed toolbar to expand. Unpinned toolbar auto-collapses after inactivity; pin button holds it open.",
+                        checked = pinButtonMode,
+                        onCheckedChange = {
+                            pinButtonMode = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_PIN_BUTTON_MODE, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_PIN_BUTTON_MODE)
+                        }
+                    )
+
+                    if (pinButtonMode) {
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Auto-Collapse Inactivity Timeout", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                    Text("Duration before unpinned toolbar collapses.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer
+                                ) {
+                                    Text(
+                                        text = "${autoCollapseTimeoutMs / 1000f} s",
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            }
+
+                            // Slider: 1 to 30 seconds in 1-second steps
+                            var sliderSeconds by remember(autoCollapseTimeoutMs) {
+                                mutableFloatStateOf((autoCollapseTimeoutMs / 1000f).coerceIn(1f, 30f))
+                            }
+                            Slider(
+                                value = sliderSeconds,
+                                onValueChange = { newVal ->
+                                    val roundedSec = newVal.roundToInt()
+                                    sliderSeconds = roundedSec.toFloat()
+                                    val newMs = roundedSec * 1000
+                                    autoCollapseTimeoutMs = newMs
+                                    autoCollapseMsText = newMs.toString()
+                                    x11Prefs.edit().putInt(X11Preferences.KEY_TOOLBAR_AUTO_COLLAPSE_TIMEOUT_MS, newMs).apply()
+                                    X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_AUTO_COLLAPSE_TIMEOUT_MS)
+                                },
+                                valueRange = 1f..30f,
+                                steps = 28 // 1s increments from 1s to 30s
+                            )
+
+                            // Exact timing in milliseconds text field
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Exact Timeout (ms)", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        "1s = 1000ms (e.g. 3500ms)",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                OutlinedTextField(
+                                    value = autoCollapseMsText,
+                                    onValueChange = { input ->
+                                        autoCollapseMsText = input
+                                        val parsed = input.toIntOrNull()
+                                        if (parsed != null && parsed in 500..60000) {
+                                            autoCollapseTimeoutMs = parsed
+                                            x11Prefs.edit().putInt(X11Preferences.KEY_TOOLBAR_AUTO_COLLAPSE_TIMEOUT_MS, parsed).apply()
+                                            X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_AUTO_COLLAPSE_TIMEOUT_MS)
+                                        }
+                                    },
+                                    modifier = Modifier.width(110.dp),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    placeholder = { Text("5000") }
+                                )
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsSwitchListItem(
+                        headline = "Expand on Stylus Hover",
+                        supporting = "Automatically expand the collapsed toolbar when hovering over it with a stylus pen.",
+                        checked = stylusHoverExpands,
+                        leadingContent = {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .alpha(if (stylusHoverExpands) 1f else 0.4f)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        },
+                        onCheckedChange = {
+                            stylusHoverExpands = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_STYLUS_HOVER_EXPANDS, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_STYLUS_HOVER_EXPANDS)
+                        }
+                    )
+                }
+            }
+
+            // 3. Visible Elements & Action Buttons
+            Text("Visible Elements & Shortcuts", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    SettingsSwitchListItem(
+                        headline = "Stylus Click Mode (L / M / R)",
+                        supporting = "Displays Left / Middle / Right click toggle capsule directly in the toolbar.",
+                        checked = showStylusMode,
+                        leadingContent = {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier.alpha(if (showStylusMode) 1f else 0.4f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(2.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp, 18.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(
+                                                text = "L",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onPrimary
+                                            )
+                                        }
+                                    }
+                                    Box(modifier = Modifier.size(18.dp, 18.dp), contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = "M",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Box(modifier = Modifier.size(18.dp, 18.dp), contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = "R",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        onCheckedChange = {
+                            showStylusMode = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE)
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsSwitchListItem(
+                        headline = "Window Title & Document Icon",
+                        supporting = "Displays note title and dynamic window type icon.",
+                        checked = showTitle,
+                        leadingContent = {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier.alpha(if (showTitle) 1f else 0.4f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Description,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = "Notes.xopp",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        },
+                        onCheckedChange = {
+                            showTitle = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_SHOW_TITLE, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_SHOW_TITLE)
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsSwitchListItem(
+                        headline = "Back Button",
+                        supporting = "Displays back arrow button to gracefully save and exit canvas.",
+                        checked = showBack,
+                        leadingContent = {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .alpha(if (showBack) 1f else 0.4f)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        },
+                        onCheckedChange = {
+                            showBack = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_SHOW_BACK, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_SHOW_BACK)
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsSwitchListItem(
+                        headline = "Soft Keyboard Toggle",
+                        supporting = "Displays soft keyboard show/hide action button.",
+                        checked = showKeyboard,
+                        leadingContent = {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .alpha(if (showKeyboard) 1f else 0.4f)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Keyboard,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        },
+                        onCheckedChange = {
+                            showKeyboard = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD)
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsSwitchListItem(
+                        headline = "Movable Drag Handle",
+                        supporting = "Displays handle to long-press and drag toolbar anywhere.",
+                        checked = showDragHandle,
+                        leadingContent = {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .alpha(if (showDragHandle) 1f else 0.4f)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.DragIndicator,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        },
+                        onCheckedChange = {
+                            showDragHandle = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_SHOW_DRAG_HANDLE, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_SHOW_DRAG_HANDLE)
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsSwitchListItem(
+                        headline = "Cut Action (Ctrl+X)",
+                        supporting = "Displays Cut clipboard action button.",
+                        checked = showCut,
+                        leadingContent = {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .alpha(if (showCut) 1f else 0.4f)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.ContentCut,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        },
+                        onCheckedChange = {
+                            showCut = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CUT, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_SHOW_CUT)
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsSwitchListItem(
+                        headline = "Copy Action (Ctrl+C)",
+                        supporting = "Displays Copy clipboard action button.",
+                        checked = showCopy,
+                        leadingContent = {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .alpha(if (showCopy) 1f else 0.4f)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.ContentCopy,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        },
+                        onCheckedChange = {
+                            showCopy = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_SHOW_COPY, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_SHOW_COPY)
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsSwitchListItem(
+                        headline = "Paste Action (Ctrl+V)",
+                        supporting = "Displays Paste clipboard action button.",
+                        checked = showPaste,
+                        leadingContent = {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .alpha(if (showPaste) 1f else 0.4f)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.ContentPaste,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        },
+                        onCheckedChange = {
+                            showPaste = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_SHOW_PASTE, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_SHOW_PASTE)
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 fun KeyboardSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
@@ -1253,6 +1878,7 @@ fun KeyboardSettingsScreen(onBack: () -> Unit) {
 @Composable
 fun InputSettingsScreen(
     onNavigateToLenovoPen: () -> Unit,
+    onNavigateToToolbar: () -> Unit = {},
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -1272,6 +1898,9 @@ fun InputSettingsScreen(
     }
     var showStylusClickOverride by remember {
         mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE, false))
+    }
+    var stylusHoverExpands by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_STYLUS_HOVER_EXPANDS, true))
     }
     var showMouseHelper by remember {
         mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_SHOW_MOUSE_HELPER, false))
@@ -1336,13 +1965,26 @@ fun InputSettingsScreen(
             OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                 Column(modifier = Modifier.padding(8.dp)) {
                     SettingsSwitchListItem(
-                        headline = "Show Stylus Click Mode in Top Bar",
-                        supporting = "Displays Left / Middle / Right click toggle chip directly in the Canvas floating header.",
+                        headline = "Show Stylus Click Mode in Toolbar",
+                        supporting = "Displays Left / Middle / Right click toggle capsule directly in the floating toolbar (also configurable in Floating Toolbar settings).",
                         checked = showStylusClickOverride,
                         onCheckedChange = {
                             showStylusClickOverride = it
                             x11Prefs.edit().putBoolean(X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE, it).apply()
                             X11Preferences.notifyChanged(context, X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE)
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsSwitchListItem(
+                        headline = "Expand Toolbar on Stylus Hover",
+                        supporting = "Automatically expand the collapsed floating toolbar when hovering over it with a stylus pen.",
+                        checked = stylusHoverExpands,
+                        onCheckedChange = {
+                            stylusHoverExpands = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_STYLUS_HOVER_EXPANDS, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_STYLUS_HOVER_EXPANDS)
                         }
                     )
 

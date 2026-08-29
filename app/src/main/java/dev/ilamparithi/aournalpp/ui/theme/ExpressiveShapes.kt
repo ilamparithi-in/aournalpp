@@ -22,8 +22,8 @@ import kotlin.math.sin
  */
 object ExpressiveSprings {
     val Bouncy: AnimationSpec<Float> = spring(
-        dampingRatio = Spring.DampingRatioMediumBouncy,
-        stiffness = Spring.StiffnessLow
+        dampingRatio = 0.6f,
+        stiffness = Spring.StiffnessMediumLow
     )
 
     val Snappy: AnimationSpec<Float> = spring(

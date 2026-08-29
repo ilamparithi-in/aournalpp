@@ -29,6 +29,25 @@ object X11Preferences {
     const val KEY_SAFE_AREA_DISABLE_IN_MULTIWINDOW = "safeAreaDisableInMultiwindow"
     const val KEY_TOP_BAR_CENTER_WITHIN_BOUNDS = "topBarCenterWithinBounds"
 
+    // Floating Toolbar Configuration
+    const val KEY_TOOLBAR_POSITION_PRESET = "toolbarPositionPreset"
+    const val KEY_TOOLBAR_POS_X_RATIO = "toolbarPosXRatio"
+    const val KEY_TOOLBAR_POS_Y_RATIO = "toolbarPosYRatio"
+    const val KEY_TOOLBAR_START_COLLAPSED = "toolbarStartCollapsed"
+    const val KEY_TOOLBAR_ALWAYS_SHOW_FILE_NAME = "toolbarAlwaysShowFileName"
+    const val KEY_TOOLBAR_PIN_BUTTON_MODE = "toolbarPinButtonMode"
+    const val KEY_TOOLBAR_AUTO_COLLAPSE_TIMEOUT_MS = "toolbarAutoCollapseTimeoutMs"
+    const val KEY_TOOLBAR_STYLUS_HOVER_EXPANDS = "toolbarStylusHoverExpands"
+    const val KEY_TOOLBAR_SHOW_STYLUS_MODE = "toolbarShowStylusMode"
+    const val KEY_TOOLBAR_SHOW_KEYBOARD = "toolbarShowKeyboard"
+    const val KEY_TOOLBAR_SHOW_CUT = "toolbarShowCut"
+    const val KEY_TOOLBAR_SHOW_COPY = "toolbarShowCopy"
+    const val KEY_TOOLBAR_SHOW_PASTE = "toolbarShowPaste"
+    const val KEY_TOOLBAR_SHOW_TITLE = "toolbarShowTitle"
+    const val KEY_TOOLBAR_SHOW_BACK = "toolbarShowBack"
+    const val KEY_TOOLBAR_SHOW_DRAG_HANDLE = "toolbarShowDragHandle"
+    const val KEY_TOOLBAR_CENTER_WITHIN_SAFE_AREA = "topBarCenterWithinBounds"
+
     // Pointer / Stylus
     const val KEY_TOUCH_MODE = "touchMode"
     const val KEY_SCALE_TOUCHPAD = "scaleTouchpad"

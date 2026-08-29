@@ -271,6 +271,9 @@ fun ScreenSafeAreaEditorScreen(
         val rightPx = with(density) { rightMarginDp.dp.toPx() }
         val bottomPx = with(density) { bottomMarginDp.dp.toPx() }
 
+        // Display Cutout Material 3 Camera Lens Overlay
+        DisplayCutoutCameraLensOverlay()
+
         // 1:1 Canvas Full-Screen Scrim & Bounds Drawing
         Canvas(modifier = Modifier.fillMaxSize()) {
             val width = size.width
@@ -645,7 +648,7 @@ fun ScreenSafeAreaEditorScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Center top bar within safe bounds",
+                                text = "Center toolbar within safe bounds",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
@@ -780,7 +783,7 @@ fun ScreenSafeAreaEditorScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Center top bar within safe bounds",
+                            text = "Center toolbar within safe bounds",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
