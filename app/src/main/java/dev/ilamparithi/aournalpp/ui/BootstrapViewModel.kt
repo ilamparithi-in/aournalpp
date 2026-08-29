@@ -132,7 +132,10 @@ class BootstrapViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     private fun performInstallOrUpgrade() {
-        installJob?.cancel()
+        if (installJob?.isActive == true) {
+            Log.i(TAG, "Extraction job is already active in ViewModel. Ignoring duplicate trigger.")
+            return
+        }
         installJob = viewModelScope.launch {
             _uiState.value = BootstrapState.Installing(message = "Starting runtime extraction...")
             Log.i(TAG, "Starting bootstrap extraction/upgrade...")

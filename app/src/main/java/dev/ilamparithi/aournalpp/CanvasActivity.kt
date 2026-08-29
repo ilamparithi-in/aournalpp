@@ -859,11 +859,11 @@ private fun FloatingToolbarOverlay(
             AnimatedContent(
                 targetState = isHeaderExpanded,
                 transitionSpec = {
-                    fadeIn(animationSpec = tween(durationMillis = 200, delayMillis = 60, easing = M3MorphEasing)) togetherWith
-                    fadeOut(animationSpec = tween(durationMillis = 100, easing = M3MorphEasing)) using
+                    fadeIn(animationSpec = tween(durationMillis = 180, easing = M3MorphEasing)) togetherWith
+                    fadeOut(animationSpec = tween(durationMillis = 120, easing = M3MorphEasing)) using
                     SizeTransform(
                         clip = true,
-                        sizeAnimationSpec = { _, _ -> tween(durationMillis = 350, easing = M3MorphEasing) }
+                        sizeAnimationSpec = { _, _ -> tween(durationMillis = 300, easing = M3MorphEasing) }
                     )
                 },
                 contentAlignment = Alignment.Center,
@@ -942,7 +942,7 @@ private fun FloatingToolbarOverlay(
 
                             val indicatorOffset by animateDpAsState(
                                 targetValue = (itemWidth + spacing) * selectedIndex,
-                                animationSpec = tween(durationMillis = 320, easing = M3MorphEasing),
+                                animationSpec = tween(durationMillis = 240, easing = M3MorphEasing),
                                 label = "StylusIndicatorOffset"
                             )
 
@@ -973,7 +973,7 @@ private fun FloatingToolbarOverlay(
                                             val isSelected = stylusClickMode == modeValue
                                             val textColor by animateColorAsState(
                                                 targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                animationSpec = tween(durationMillis = 200, easing = M3MorphEasing),
+                                                animationSpec = tween(durationMillis = 240, easing = M3MorphEasing),
                                                 label = "StylusTextColor"
                                             )
 

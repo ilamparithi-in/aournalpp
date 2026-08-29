@@ -5,8 +5,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -337,18 +338,22 @@ fun CustomColorPickerDialog(
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(pureHueColor)
                                 .pointerInput(Unit) {
-                                    detectTapGestures { offset ->
-                                        val s = (offset.x / size.width).coerceIn(0f, 1f)
-                                        val v = (1f - (offset.y / size.height)).coerceIn(0f, 1f)
+                                    awaitEachGesture {
+                                        val down = awaitFirstDown(requireUnconsumed = false)
+                                        down.consume()
+                                        val s = (down.position.x / size.width).coerceIn(0f, 1f)
+                                        val v = (1f - (down.position.y / size.height)).coerceIn(0f, 1f)
                                         updateFromHsv(hue, s, v)
-                                    }
-                                }
-                                .pointerInput(Unit) {
-                                    detectDragGestures { change, _ ->
-                                        change.consume()
-                                        val s = (change.position.x / size.width).coerceIn(0f, 1f)
-                                        val v = (1f - (change.position.y / size.height)).coerceIn(0f, 1f)
-                                        updateFromHsv(hue, s, v)
+
+                                        while (true) {
+                                            val event = awaitPointerEvent()
+                                            val change = event.changes.firstOrNull() ?: break
+                                            if (!change.pressed) break
+                                            change.consume()
+                                            val curS = (change.position.x / size.width).coerceIn(0f, 1f)
+                                            val curV = (1f - (change.position.y / size.height)).coerceIn(0f, 1f)
+                                            updateFromHsv(hue, curS, curV)
+                                        }
                                     }
                                 }
                         ) {
@@ -413,16 +418,20 @@ fun CustomColorPickerDialog(
                                 .height(32.dp)
                                 .clip(RoundedCornerShape(16.dp))
                                 .pointerInput(Unit) {
-                                    detectTapGestures { offset ->
-                                        val newH = ((offset.x / size.width) * 360f).coerceIn(0f, 360f)
+                                    awaitEachGesture {
+                                        val down = awaitFirstDown(requireUnconsumed = false)
+                                        down.consume()
+                                        val newH = ((down.position.x / size.width) * 360f).coerceIn(0f, 360f)
                                         updateFromHsv(newH, saturation, value)
-                                    }
-                                }
-                                .pointerInput(Unit) {
-                                    detectDragGestures { change, _ ->
-                                        change.consume()
-                                        val newH = ((change.position.x / size.width) * 360f).coerceIn(0f, 360f)
-                                        updateFromHsv(newH, saturation, value)
+
+                                        while (true) {
+                                            val event = awaitPointerEvent()
+                                            val change = event.changes.firstOrNull() ?: break
+                                            if (!change.pressed) break
+                                            change.consume()
+                                            val curH = ((change.position.x / size.width) * 360f).coerceIn(0f, 360f)
+                                            updateFromHsv(curH, saturation, value)
+                                        }
                                     }
                                 }
                         ) {

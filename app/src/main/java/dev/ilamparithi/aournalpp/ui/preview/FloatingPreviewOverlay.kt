@@ -17,6 +17,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -231,13 +233,28 @@ private fun FloatingPreviewOverlay(
                 rippleInteractionSource.emit(PressInteraction.Release(press))
                 activePress = null
             }
-            fadeAlpha.animateTo(
-                targetValue = 0f,
-                animationSpec = tween(
-                    durationMillis = 180,
-                    easing = FastOutLinearInEasing
-                )
-            )
+            // Concurrently drive morphProgress to 1f and fadeAlpha to 0f
+            // so the card never freezes in a miniature intermediate state
+            coroutineScope {
+                launch {
+                    morphProgress.animateTo(
+                        targetValue = 1f,
+                        animationSpec = tween(
+                            durationMillis = 180,
+                            easing = FastOutLinearInEasing
+                        )
+                    )
+                }
+                launch {
+                    fadeAlpha.animateTo(
+                        targetValue = 0f,
+                        animationSpec = tween(
+                            durationMillis = 180,
+                            easing = FastOutLinearInEasing
+                        )
+                    )
+                }
+            }
             onDismissFinished()
         }
     }
@@ -386,12 +403,12 @@ private fun FloatingPreviewOverlay(
 
         val animatedPushX by animateFloatAsState(
             targetValue = targetPushX,
-            animationSpec = spring(dampingRatio = 0.78f, stiffness = 320f),
+            animationSpec = spring(dampingRatio = 0.80f, stiffness = 340f),
             label = "pushX"
         )
         val animatedPushY by animateFloatAsState(
             targetValue = targetPushY,
-            animationSpec = spring(dampingRatio = 0.78f, stiffness = 320f),
+            animationSpec = spring(dampingRatio = 0.80f, stiffness = 340f),
             label = "pushY"
         )
 
@@ -413,7 +430,7 @@ private fun FloatingPreviewOverlay(
         val targetScale = if (activeAction != DragActionTarget.NONE) 0.98f else 1.0f
         val animatedScale by animateFloatAsState(
             targetValue = targetScale,
-            animationSpec = spring(dampingRatio = 0.75f, stiffness = 350f),
+            animationSpec = spring(dampingRatio = 0.80f, stiffness = 340f),
             label = "scale"
         )
 

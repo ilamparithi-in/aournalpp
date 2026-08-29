@@ -102,6 +102,11 @@ class MainActivity : ComponentActivity() {
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 val isOnboardingCompleted by viewModel.isOnboardingCompleted.collectAsStateWithLifecycle()
 
+                // Intercept back presses while bootstrap/update/extraction is active
+                BackHandler(enabled = state !is BootstrapState.Ready) {
+                    // No-op: Prevent dismissal during checking, update prompt, or extraction
+                }
+
                 Box(modifier = Modifier.fillMaxSize()) {
                     when (state) {
                         is BootstrapState.UpdatePrompt -> {

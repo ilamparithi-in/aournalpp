@@ -40,25 +40,28 @@ fun SpeedDialActionItem(
     contentColor: Color,
     onClick: () -> Unit
 ) {
-    if (progress <= 0.01f) return
+    if (progress <= 0.0005f) return
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
         targetValue = if (isPressed) 0.92f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
         label = "actionPressScale"
     )
+
+    val isInteractive = progress > 0.5f
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
             .graphicsLayer {
-                scaleX = progress * pressScale
-                scaleY = progress * pressScale
+                val effectiveScale = (progress * pressScale).coerceAtLeast(0f)
+                scaleX = effectiveScale
+                scaleY = effectiveScale
                 alpha = progress.coerceIn(0f, 1f)
-                translationY = (1f - progress) * 28f
+                translationY = (1f - progress.coerceIn(0f, 1f)) * 28f
             }
     ) {
         Surface(
@@ -66,6 +69,7 @@ fun SpeedDialActionItem(
             color = MaterialTheme.colorScheme.surfaceVariant,
             shadowElevation = 6.dp,
             modifier = Modifier.clickable(
+                enabled = isInteractive,
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
@@ -80,7 +84,7 @@ fun SpeedDialActionItem(
         }
 
         FloatingActionButton(
-            onClick = onClick,
+            onClick = { if (isInteractive) onClick() },
             interactionSource = interactionSource,
             shape = RoundedCornerShape(18.dp),
             containerColor = containerColor,

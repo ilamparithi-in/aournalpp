@@ -1,5 +1,7 @@
 package dev.ilamparithi.aournalpp.ui
 
+import androidx.activity.compose.BackHandler
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -79,6 +81,11 @@ fun BootstrapScreen(
     state: BootstrapState,
     onRetry: () -> Unit
 ) {
+    // Intercept back button during checking, extraction or bootstrap error
+    BackHandler(enabled = true) {
+        // No-op: Prevent dismissal via back button
+    }
+
     val isError = state is BootstrapState.Error
 
     // Material 3 Expressive Infinite Animations
@@ -104,17 +111,6 @@ fun BootstrapScreen(
             repeatMode = RepeatMode.Reverse
         ),
         label = "iconBreathingPulse"
-    )
-
-    // Shimmer offset for progress bar animation
-    val shimmerOffset by infiniteTransition.animateFloat(
-        initialValue = -1f,
-        targetValue = 2f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1800, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "progressShimmer"
     )
 
     // Rotating Tip Index
@@ -226,7 +222,7 @@ fun BootstrapScreen(
                     val installingState = state as? BootstrapState.Installing
                     val progress = installingState?.progress
 
-                    // Progress Bar Container with Non-Blocking Shimmer
+                    // Progress Bar Container (Clean, Direct Progress)
                     Column(
                         modifier = Modifier.fillMaxWidth(0.9f),
                         horizontalAlignment = Alignment.CenterHorizontally
@@ -252,23 +248,6 @@ fun BootstrapScreen(
                                     trackColor = MaterialTheme.colorScheme.surfaceVariant
                                 )
                             }
-
-                            // Continuous Shimmer Overlay to ensure dynamic motion during large file extraction
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        Brush.horizontalGradient(
-                                            colors = listOf(
-                                                Color.Transparent,
-                                                MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.35f),
-                                                Color.Transparent
-                                            ),
-                                            startX = shimmerOffset * 500f,
-                                            endX = (shimmerOffset + 0.5f) * 500f
-                                        )
-                                    )
-                            )
                         }
 
                         Spacer(modifier = Modifier.height(10.dp))
@@ -301,37 +280,27 @@ fun BootstrapScreen(
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        // Current File Ticker
+                        // Current File Log Line (Simple rapidly changing single log line, no animation)
                         val currentFileText = if (progress != null && progress.currentFile.isNotBlank()) {
                             progress.currentFile.substringAfterLast('/')
                         } else {
                             installingState?.message?.ifBlank { "Unpacking system libraries..." } ?: "Initializing environment..."
                         }
 
-                        AnimatedContent(
-                            targetState = currentFileText,
-                            transitionSpec = {
-                                (slideInVertically { it / 2 } + fadeIn()).togetherWith(
-                                    slideOutVertically { -it / 2 } + fadeOut()
-                                )
-                            },
-                            label = "fileTicker"
-                        ) { file ->
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    text = file,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                                )
-                            }
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = currentFileText,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
                         }
                     }
 

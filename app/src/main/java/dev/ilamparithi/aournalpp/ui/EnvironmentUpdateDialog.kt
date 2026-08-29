@@ -1,8 +1,8 @@
 package dev.ilamparithi.aournalpp.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -33,18 +33,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
-import dev.ilamparithi.aournalpp.ui.theme.ExpressiveSprings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,21 +52,20 @@ fun EnvironmentUpdateDialog(
     onUpdate: () -> Unit,
     onSkip: () -> Unit
 ) {
-    val totalSeconds = 10f
-    val progress = (countdownSeconds / totalSeconds).coerceIn(0f, 1f)
-    val animatedProgress by animateFloatAsState(
-        targetValue = progress,
-        animationSpec = tween(durationMillis = 900, easing = FastOutSlowInEasing),
-        label = "countdownProgress"
-    )
+    // Intercept back button to prevent dismissing the update prompt
+    BackHandler(enabled = true) {
+        // No-op: Prevent dismissal via back button
+    }
 
-    // Bouncy pulse scale effect for the countdown number on every tick
-    val pulseScale = remember { Animatable(1f) }
-    LaunchedEffect(countdownSeconds) {
-        pulseScale.snapTo(1.28f)
-        pulseScale.animateTo(
-            targetValue = 1f,
-            animationSpec = ExpressiveSprings.Bouncy
+    // Smooth continuous linear timeout draining animation for the circle
+    val continuousProgress = remember { Animatable(countdownSeconds / 10f) }
+    LaunchedEffect(Unit) {
+        continuousProgress.animateTo(
+            targetValue = 0f,
+            animationSpec = tween(
+                durationMillis = countdownSeconds * 1000,
+                easing = LinearEasing
+            )
         )
     }
 
@@ -130,7 +126,7 @@ fun EnvironmentUpdateDialog(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Expressive Circular Countdown Timer
+                // Continuous Circular Countdown Indicator with sole centered countdown number
                 Box(
                     modifier = Modifier.size(96.dp),
                     contentAlignment = Alignment.Center
@@ -142,7 +138,7 @@ fun EnvironmentUpdateDialog(
                         strokeWidth = 6.dp
                     )
                     CircularProgressIndicator(
-                        progress = { animatedProgress },
+                        progress = { continuousProgress.value },
                         modifier = Modifier.size(96.dp),
                         color = MaterialTheme.colorScheme.primary,
                         strokeWidth = 6.dp
@@ -155,8 +151,7 @@ fun EnvironmentUpdateDialog(
                             text = "$countdownSeconds",
                             style = MaterialTheme.typography.headlineMedium.copy(fontSize = 28.sp),
                             fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.scale(pulseScale.value)
+                            color = MaterialTheme.colorScheme.primary
                         )
                         Text(
                             text = "sec",
@@ -165,15 +160,6 @@ fun EnvironmentUpdateDialog(
                         )
                     }
                 }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text(
-                    text = "Auto-updating in $countdownSeconds seconds...",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
 
                 Spacer(modifier = Modifier.height(28.dp))
 

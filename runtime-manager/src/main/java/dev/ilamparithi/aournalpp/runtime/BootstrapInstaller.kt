@@ -12,6 +12,9 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
 data class InstallProgress(
     val currentFile: String,
     val extractedBytes: Long,
@@ -23,7 +26,10 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
         private const val TAG = "BootstrapInstaller"
         const val ASSET_NAME = "bootstrap.tar.xz"
         const val VERSION_FLAG = "bootstrap_installed.ver"
+        private val installMutex = Mutex()
     }
+
+    fun isExtractionInProgress(): Boolean = installMutex.isLocked
 
     fun getCurrentAppVersionCode(): Long {
         return try {
@@ -84,6 +90,17 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
     }
 
     suspend fun installOrUpgrade(onProgress: (InstallProgress) -> Unit): Result<Unit> = withContext(Dispatchers.IO) {
+        if (!installMutex.tryLock()) {
+            Log.w(TAG, "installOrUpgrade is already running in background. Waiting for active extraction to complete...")
+            installMutex.withLock {
+                return@withContext if (hasValidInstallation()) {
+                    Log.i(TAG, "Active extraction completed successfully.")
+                    Result.success(Unit)
+                } else {
+                    Result.failure(IllegalStateException("Active extraction failed or was incomplete"))
+                }
+            }
+        }
         try {
             // Safely purge system-only userland (/files/usr) to eliminate stale/mismatched binaries
             // User data (/files/home and /files/home/.config) remains untouched
@@ -242,6 +259,8 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
         } catch (e: Exception) {
             Log.e(TAG, "Bootstrap installation/upgrade failed", e)
             Result.failure(e)
+        } finally {
+            installMutex.unlock()
         }
     }
 

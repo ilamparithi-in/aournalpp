@@ -774,17 +774,17 @@ fun HomeScreen(
         ) {
             val folderItemSpring by animateFloatAsState(
                 targetValue = if (isFabExpanded) 1f else 0f,
-                animationSpec = spring(dampingRatio = 0.72f, stiffness = 240f),
+                animationSpec = spring(dampingRatio = 0.78f, stiffness = 320f),
                 label = "folderItemSpring"
             )
             val pdfItemSpring by animateFloatAsState(
                 targetValue = if (isFabExpanded) 1f else 0f,
-                animationSpec = spring(dampingRatio = 0.72f, stiffness = 310f),
+                animationSpec = spring(dampingRatio = 0.78f, stiffness = 340f),
                 label = "pdfItemSpring"
             )
             val noteItemSpring by animateFloatAsState(
                 targetValue = if (isFabExpanded) 1f else 0f,
-                animationSpec = spring(dampingRatio = 0.72f, stiffness = 390f),
+                animationSpec = spring(dampingRatio = 0.78f, stiffness = 360f),
                 label = "noteItemSpring"
             )
 
@@ -1312,7 +1312,7 @@ private fun EnlargedContinueHeroSection(
 
     val cardScale by animateFloatAsState(
         targetValue = if (isPressed) 0.98f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
         label = "heroScale"
     )
 
