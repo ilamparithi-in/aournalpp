@@ -102,6 +102,19 @@ import dev.ilamparithi.aournalpp.runtime.CanvasSessionManager
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
 import dev.ilamparithi.aournalpp.runtime.WallpaperHelper
+import android.os.Build
+import android.view.Surface
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.LayoutDirection
+import dev.ilamparithi.aournalpp.ui.SafeAreaInsets
+import dev.ilamparithi.aournalpp.ui.getRotatedSafeAreaInsets
+import dev.ilamparithi.aournalpp.ui.rememberCutoutPlacement
 import dev.ilamparithi.aournalpp.ui.theme.AournalTheme
 import dev.ilamparithi.aournalpp.x11.X11Viewport
 import java.io.File
@@ -142,13 +155,20 @@ class CanvasActivity : ComponentActivity() {
 
         val isFullscreen = x11Prefs.getBoolean(dev.ilamparithi.aournalpp.data.X11Preferences.KEY_FULLSCREEN, false)
         val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         if (isFullscreen) {
-            WindowCompat.setDecorFitsSystemWindows(window, false)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                window.attributes.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
             insetsController.systemBarsBehavior =
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             insetsController.hide(WindowInsetsCompat.Type.systemBars())
         } else {
-            WindowCompat.setDecorFitsSystemWindows(window, true)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                window.attributes.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT
+            }
             insetsController.show(WindowInsetsCompat.Type.systemBars())
         }
 
@@ -269,24 +289,58 @@ class CanvasActivity : ComponentActivity() {
                     }
 
                     Box(
-                        modifier = if (isFullscreen) {
-                            Modifier.fillMaxSize()
-                        } else {
-                            Modifier
-                                .fillMaxSize()
-                                .systemBarsPadding()
-                        }
+                        modifier = Modifier.fillMaxSize()
                     ) {
-                        // Wallpaper Backdrop Layer
+                        // Wallpaper Backdrop Layer (covers edge-to-edge)
                         Image(
-                            bitmap = wallpaperBitmap.asImageBitmap(),
+                            bitmap = WallpaperHelper.resolveWallpaperBitmap(this@CanvasActivity).asImageBitmap(),
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         )
 
+                        val currentRotation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            this@CanvasActivity.display?.rotation ?: Surface.ROTATION_0
+                        } else {
+                            @Suppress("DEPRECATION")
+                            windowManager.defaultDisplay.rotation
+                        }
+
+                        val safeCustom = x11Prefs.getBoolean(dev.ilamparithi.aournalpp.data.X11Preferences.KEY_SAFE_AREA_CUSTOM_EDGES, false)
+                        val safeAll = x11Prefs.getInt(dev.ilamparithi.aournalpp.data.X11Preferences.KEY_SAFE_AREA_MARGIN_ALL, 0)
+                        val rawLeft = if (safeCustom) x11Prefs.getInt(dev.ilamparithi.aournalpp.data.X11Preferences.KEY_SAFE_AREA_LEFT, 0) else safeAll
+                        val rawTop = if (safeCustom) x11Prefs.getInt(dev.ilamparithi.aournalpp.data.X11Preferences.KEY_SAFE_AREA_TOP, 0) else safeAll
+                        val rawRight = if (safeCustom) x11Prefs.getInt(dev.ilamparithi.aournalpp.data.X11Preferences.KEY_SAFE_AREA_RIGHT, 0) else safeAll
+                        val rawBottom = if (safeCustom) x11Prefs.getInt(dev.ilamparithi.aournalpp.data.X11Preferences.KEY_SAFE_AREA_BOTTOM, 0) else safeAll
+                        val refRotation = x11Prefs.getInt(dev.ilamparithi.aournalpp.data.X11Preferences.KEY_SAFE_AREA_REF_ROTATION, Surface.ROTATION_0)
+                        val disableInMulti = x11Prefs.getBoolean(dev.ilamparithi.aournalpp.data.X11Preferences.KEY_SAFE_AREA_DISABLE_IN_MULTIWINDOW, true)
+
+                        val isAndroidMultiWindow = isInMultiWindowMode
+                        val effectiveInsets = if (disableInMulti && isAndroidMultiWindow) {
+                            SafeAreaInsets(0, 0, 0, 0)
+                        } else {
+                            getRotatedSafeAreaInsets(
+                                calibrated = SafeAreaInsets(rawLeft, rawTop, rawRight, rawBottom),
+                                refRotation = refRotation,
+                                currentRotation = currentRotation
+                            )
+                        }
+
+                        val systemBarPadding = if (isFullscreen) {
+                            PaddingValues(0.dp)
+                        } else {
+                            WindowInsets.systemBars.asPaddingValues()
+                        }
+
                         X11Viewport(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(
+                                    start = effectiveInsets.left.dp + systemBarPadding.calculateStartPadding(LayoutDirection.Ltr),
+                                    top = effectiveInsets.top.dp + systemBarPadding.calculateTopPadding(),
+                                    end = effectiveInsets.right.dp + systemBarPadding.calculateEndPadding(LayoutDirection.Ltr),
+                                    bottom = effectiveInsets.bottom.dp + systemBarPadding.calculateBottomPadding()
+                                ),
                             onLorieViewReady = { lorieView ->
                                 activeLorieView = lorieView
                                 sessionManager.startSession(lorieView, targetPath, openPreferences)
@@ -302,20 +356,47 @@ class CanvasActivity : ComponentActivity() {
                             }
                         )
 
-                        // Floating Top Header Bar with Material 3 Morphing
+                        // Floating Top Header Bar with Material 3 Morphing & Display Cutout Placement
                         val M3MorphEasing = remember { CubicBezierEasing(0.2f, 0.0f, 0.0f, 1.0f) }
+                        val centerTopBarWithinBounds = x11Prefs.getBoolean(dev.ilamparithi.aournalpp.data.X11Preferences.KEY_TOP_BAR_CENTER_WITHIN_BOUNDS, false)
+                        val cutoutPlacement = rememberCutoutPlacement()
+                        val density = LocalDensity.current
+                        val cutoutTopOffsetDp = with(density) { cutoutPlacement.topOffsetPx.toDp() }
+                        val cutoutStartOffsetDp = with(density) { cutoutPlacement.startOffsetPx.toDp() }
+                        val cutoutEndOffsetDp = with(density) { cutoutPlacement.endOffsetPx.toDp() }
+
+                        val topBarTopPadding = if (isFullscreen) {
+                            if (cutoutPlacement.hasCenterCutout) {
+                                cutoutTopOffsetDp + 8.dp
+                            } else if (centerTopBarWithinBounds) {
+                                maxOf(8.dp, effectiveInsets.top.dp + 8.dp)
+                            } else {
+                                8.dp
+                            }
+                        } else {
+                            systemBarPadding.calculateTopPadding() + 8.dp
+                        }
+
+                        val topBarStartPadding = if (centerTopBarWithinBounds) {
+                            maxOf(8.dp, cutoutStartOffsetDp + 8.dp, effectiveInsets.left.dp + systemBarPadding.calculateStartPadding(LayoutDirection.Ltr) + 8.dp)
+                        } else {
+                            maxOf(8.dp, cutoutStartOffsetDp + 8.dp)
+                        }
+
+                        val topBarEndPadding = if (centerTopBarWithinBounds) {
+                            maxOf(8.dp, cutoutEndOffsetDp + 8.dp, effectiveInsets.right.dp + systemBarPadding.calculateEndPadding(LayoutDirection.Ltr) + 8.dp)
+                        } else {
+                            maxOf(8.dp, cutoutEndOffsetDp + 8.dp)
+                        }
 
                         Box(
-                            modifier = if (isFullscreen) {
-                                Modifier
-                                    .align(Alignment.TopCenter)
-                                    .statusBarsPadding()
-                                    .padding(top = 8.dp)
-                            } else {
-                                Modifier
-                                    .align(Alignment.TopCenter)
-                                    .padding(top = 8.dp)
-                            }
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(
+                                    top = topBarTopPadding,
+                                    start = topBarStartPadding,
+                                    end = topBarEndPadding
+                                )
                         ) {
                             Surface(
                                 modifier = Modifier

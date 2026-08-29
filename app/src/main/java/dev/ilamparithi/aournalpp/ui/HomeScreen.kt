@@ -366,6 +366,16 @@ fun HomeScreen(
         noteToDelete = note
     }
 
+    fun promptNewNote() {
+        newNoteDefaultName = SimpleDateFormat("yyyy-MM-dd-'Note'-HH-mm", Locale.getDefault()).format(Date())
+        scope.launch {
+            allFoldersForNewNote = withContext(Dispatchers.IO) {
+                repository.getAllFolders()
+            }
+        }
+        showNewNoteDialog = true
+    }
+
     fun startNewNote() {
         val intent = Intent(context, CanvasActivity::class.java)
         val options = ActivityOptionsCompat.makeClipRevealAnimation(
@@ -690,7 +700,7 @@ fun HomeScreen(
                         }
 
                         if (recentNotes.isEmpty()) {
-                            CreativeEmptyCollageState(onNewNoteClick = { startNewNote() })
+                            CreativeEmptyCollageState(onNewNoteClick = { promptNewNote() })
                         } else if (viewMode == "EXPRESSIVE") {
                             OrganicCollageView(
                                 notes = recentNotes,
@@ -702,7 +712,7 @@ fun HomeScreen(
                                         openNote(note.file)
                                     }
                                 },
-                                onNewNoteClick = { startNewNote() },
+                                onNewNoteClick = { promptNewNote() },
                                 refreshSeed = refreshSeed,
                                 onTogglePin = onTogglePin,
                                 onExportPdf = onExportPdf,
@@ -816,13 +826,7 @@ fun HomeScreen(
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     onClick = {
                         isFabExpanded = false
-                        newNoteDefaultName = SimpleDateFormat("yyyy-MM-dd-'Note'-HH-mm", Locale.getDefault()).format(Date())
-                        scope.launch {
-                            allFoldersForNewNote = withContext(Dispatchers.IO) {
-                                repository.getAllFolders()
-                            }
-                        }
-                        showNewNoteDialog = true
+                        promptNewNote()
                     }
                 )
 

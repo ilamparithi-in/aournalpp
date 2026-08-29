@@ -37,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -228,6 +229,29 @@ fun MainResponsiveAppShell() {
         selectedTab = 0
     }
 
+    val renderTab = remember {
+        movableContentOf { tab: Int ->
+            when (tab) {
+                0 -> HomeScreen(
+                    onNavigateToFiles = { selectedTab = 1 },
+                    onNavigateToSettings = { selectedTab = 2 },
+                    onNavigateToAbout = { selectedTab = 3 }
+                )
+                1 -> DocumentHubScreen(
+                    onNavigateToSettings = { selectedTab = 2 },
+                    onNavigateToLicenses = { selectedTab = 3 }
+                )
+                2 -> SettingsScreen(onBack = { selectedTab = 0 })
+                3 -> LicensesScreen(onBack = { selectedTab = 0 })
+                else -> HomeScreen(
+                    onNavigateToFiles = { selectedTab = 1 },
+                    onNavigateToSettings = { selectedTab = 2 },
+                    onNavigateToAbout = { selectedTab = 3 }
+                )
+            }
+        }
+    }
+
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val isWideScreen = maxWidth >= 600.dp
 
@@ -307,9 +331,9 @@ fun MainResponsiveAppShell() {
                                 ) + fadeIn(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f)))
                                     .togetherWith(
                                         slideOutHorizontally(
-                                            animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
-                                            targetOffsetX = { -it / 3 }
-                                        ) + fadeOut(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f))
+                                             animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
+                                             targetOffsetX = { -it / 3 }
+                                         ) + fadeOut(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f))
                                     )
                             } else {
                                 (slideInHorizontally(
@@ -320,25 +344,13 @@ fun MainResponsiveAppShell() {
                                         slideOutHorizontally(
                                             animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
                                             targetOffsetX = { it / 3 }
-                                        ) + fadeOut(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f))
+                                         ) + fadeOut(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f))
                                     )
                             }
                         },
                         label = "railTabTransition"
                     ) { tab ->
-                        when (tab) {
-                            0 -> HomeScreen(
-                                onNavigateToFiles = { selectedTab = 1 },
-                                onNavigateToSettings = { selectedTab = 2 },
-                                onNavigateToAbout = { selectedTab = 3 }
-                            )
-                            1 -> DocumentHubScreen(
-                                onNavigateToSettings = { selectedTab = 2 },
-                                onNavigateToLicenses = { selectedTab = 3 }
-                            )
-                            2 -> SettingsScreen(onBack = { selectedTab = 0 })
-                            3 -> LicensesScreen(onBack = { selectedTab = 0 })
-                        }
+                        renderTab(tab)
                     }
                 }
             }
@@ -429,19 +441,7 @@ fun MainResponsiveAppShell() {
                         },
                         label = "bottomTabTransition"
                     ) { tab ->
-                        when (tab) {
-                            0 -> HomeScreen(
-                                onNavigateToFiles = { selectedTab = 1 },
-                                onNavigateToSettings = { selectedTab = 2 },
-                                onNavigateToAbout = { selectedTab = 3 }
-                            )
-                            1 -> DocumentHubScreen(
-                                onNavigateToSettings = { selectedTab = 2 },
-                                onNavigateToLicenses = { selectedTab = 3 }
-                            )
-                            2 -> SettingsScreen(onBack = { selectedTab = 0 })
-                            3 -> LicensesScreen(onBack = { selectedTab = 0 })
-                        }
+                        renderTab(tab)
                     }
                 }
             }

@@ -18,6 +18,17 @@ object X11Preferences {
     const val KEY_FULLSCREEN = "fullscreen"
     const val KEY_SCREEN_IDLE_TIMEOUT = "screenIdleTimeout"
 
+    // Screen Safe Area Margins
+    const val KEY_SAFE_AREA_MARGIN_ALL = "safeAreaMarginAll"
+    const val KEY_SAFE_AREA_CUSTOM_EDGES = "safeAreaCustomEdges"
+    const val KEY_SAFE_AREA_LEFT = "safeAreaLeft"
+    const val KEY_SAFE_AREA_TOP = "safeAreaTop"
+    const val KEY_SAFE_AREA_RIGHT = "safeAreaRight"
+    const val KEY_SAFE_AREA_BOTTOM = "safeAreaBottom"
+    const val KEY_SAFE_AREA_REF_ROTATION = "safeAreaRefRotation"
+    const val KEY_SAFE_AREA_DISABLE_IN_MULTIWINDOW = "safeAreaDisableInMultiwindow"
+    const val KEY_TOP_BAR_CENTER_WITHIN_BOUNDS = "topBarCenterWithinBounds"
+
     // Pointer / Stylus
     const val KEY_TOUCH_MODE = "touchMode"
     const val KEY_SCALE_TOUCHPAD = "scaleTouchpad"

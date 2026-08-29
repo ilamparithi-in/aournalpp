@@ -26,13 +26,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DisplaySettings
@@ -98,6 +101,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import dev.ilamparithi.aournalpp.data.X11Preferences
 import dev.ilamparithi.aournalpp.runtime.ConfigFileType
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
@@ -105,6 +110,7 @@ import dev.ilamparithi.aournalpp.runtime.NotesHomeConfigManager
 import dev.ilamparithi.aournalpp.runtime.WallpaperHelper
 import dev.ilamparithi.aournalpp.runtime.XournalConfigManager
 import dev.ilamparithi.aournalpp.ui.ConfigViewerDialog
+import dev.ilamparithi.aournalpp.ui.ScreenSafeAreaEditorScreen
 import dev.ilamparithi.aournalpp.ui.theme.AournalTheme
 import dev.ilamparithi.aournalpp.utils.NoteOpenAction
 import dev.ilamparithi.aournalpp.utils.NoteOpenManager
@@ -117,7 +123,8 @@ enum class SettingsSubpage {
     KEYBOARD,
     INPUT,
     LENOVO_PEN,
-    DISPLAY
+    DISPLAY,
+    SAFE_AREA_EDITOR
 }
 
 class SettingsActivity : ComponentActivity() {
@@ -143,6 +150,40 @@ class SettingsActivity : ComponentActivity() {
 }
 
 @Composable
+fun SettingsSwitchListItem(
+    headline: String,
+    supporting: String? = null,
+    checked: Boolean,
+    enabled: Boolean = true,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    ListItem(
+        headlineContent = {
+            Text(headline, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+        },
+        supportingContent = supporting?.let {
+            { Text(it, style = MaterialTheme.typography.bodySmall) }
+        },
+        trailingContent = {
+            Switch(
+                checked = checked,
+                enabled = enabled,
+                onCheckedChange = null
+            )
+        },
+        modifier = modifier
+            .toggleable(
+                value = checked,
+                enabled = enabled,
+                role = Role.Switch,
+                onValueChange = onCheckedChange
+            ),
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+    )
+}
+
+@Composable
 fun SettingsScreen(onBack: (() -> Unit)? = null) {
     SettingsNavigationHost(onFinish = { onBack?.invoke() })
 }
@@ -155,6 +196,7 @@ fun SettingsNavigationHost(onFinish: () -> Unit) {
         when (currentSubpage) {
             SettingsSubpage.MAIN -> onFinish()
             SettingsSubpage.LENOVO_PEN -> currentSubpage = SettingsSubpage.INPUT
+            SettingsSubpage.SAFE_AREA_EDITOR -> currentSubpage = SettingsSubpage.DISPLAY
             else -> currentSubpage = SettingsSubpage.MAIN
         }
     }
@@ -186,8 +228,22 @@ fun SettingsNavigationHost(onFinish: () -> Unit) {
                 onBack = { currentSubpage = SettingsSubpage.INPUT }
             )
             SettingsSubpage.DISPLAY -> DisplaySettingsScreen(
+                onNavigateToSafeAreaEditor = { currentSubpage = SettingsSubpage.SAFE_AREA_EDITOR },
                 onBack = { currentSubpage = SettingsSubpage.MAIN }
             )
+            SettingsSubpage.SAFE_AREA_EDITOR -> {
+                Dialog(
+                    onDismissRequest = { currentSubpage = SettingsSubpage.DISPLAY },
+                    properties = DialogProperties(
+                        usePlatformDefaultWidth = false,
+                        decorFitsSystemWindows = false
+                    )
+                ) {
+                    ScreenSafeAreaEditorScreen(
+                        onNavigateBack = { currentSubpage = SettingsSubpage.DISPLAY }
+                    )
+                }
+            }
         }
     }
 }
@@ -513,46 +569,28 @@ fun MainSettingsScreen(
                         mutableStateOf(prefs.getBoolean("pref_show_hidden_files", false))
                     }
 
-                    ListItem(
-                        headlineContent = {
-                            Text("Show Hidden & Backup Files", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                        },
-                        supportingContent = {
-                            Text("Display hidden files and backup copies in the Document Hub.", style = MaterialTheme.typography.bodySmall)
-                        },
-                        trailingContent = {
-                            Switch(
-                                checked = showHiddenFilesPref,
-                                onCheckedChange = {
-                                    showHiddenFilesPref = it
-                                    prefs.edit().putBoolean("pref_show_hidden_files", it).apply()
-                                }
-                            )
-                        },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    SettingsSwitchListItem(
+                        headline = "Show Hidden & Backup Files",
+                        supporting = "Display hidden files and backup copies in the Document Hub.",
+                        checked = showHiddenFilesPref,
+                        onCheckedChange = {
+                            showHiddenFilesPref = it
+                            prefs.edit().putBoolean("pref_show_hidden_files", it).apply()
+                        }
                     )
 
                     var intelligentRecoveryPref by remember {
                         mutableStateOf(prefs.getBoolean("pref_intelligent_emergency_recovery", true))
                     }
 
-                    ListItem(
-                        headlineContent = {
-                            Text("Intelligent Session Recovery", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                        },
-                        supportingContent = {
-                            Text("Detect crashed/unsaved note sessions and offer restoration.", style = MaterialTheme.typography.bodySmall)
-                        },
-                        trailingContent = {
-                            Switch(
-                                checked = intelligentRecoveryPref,
-                                onCheckedChange = {
-                                    intelligentRecoveryPref = it
-                                    prefs.edit().putBoolean("pref_intelligent_emergency_recovery", it).apply()
-                                }
-                            )
-                        },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    SettingsSwitchListItem(
+                        headline = "Intelligent Session Recovery",
+                        supporting = "Detect crashed/unsaved note sessions and offer restoration.",
+                        checked = intelligentRecoveryPref,
+                        onCheckedChange = {
+                            intelligentRecoveryPref = it
+                            prefs.edit().putBoolean("pref_intelligent_emergency_recovery", it).apply()
+                        }
                     )
                 }
             }
@@ -1171,50 +1209,38 @@ fun KeyboardSettingsScreen(onBack: () -> Unit) {
         ) {
             OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                 Column(modifier = Modifier.padding(8.dp)) {
-                    ListItem(
-                        headlineContent = { Text("Auto-toggle Keyboard on Focus", fontWeight = FontWeight.SemiBold) },
-                        supportingContent = { Text("Automatically open the soft keyboard when tapping into text boxes or canvas annotations.") },
-                        trailingContent = {
-                            Switch(
-                                checked = autoShowIme,
-                                onCheckedChange = {
-                                    autoShowIme = it
-                                    prefs.edit().putBoolean("pref_auto_show_ime_on_focus", it).apply()
-                                }
-                            )
+                    SettingsSwitchListItem(
+                        headline = "Auto-toggle Keyboard on Focus",
+                        supporting = "Automatically open the soft keyboard when tapping into text boxes or canvas annotations.",
+                        checked = autoShowIme,
+                        onCheckedChange = {
+                            autoShowIme = it
+                            prefs.edit().putBoolean("pref_auto_show_ime_on_focus", it).apply()
                         }
                     )
 
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-                    ListItem(
-                        headlineContent = { Text("Enforce Character-Based Input", fontWeight = FontWeight.SemiBold) },
-                        supportingContent = { Text("Directly dispatch committed Unicode characters rather than synthesized hardware key scancodes.") },
-                        trailingContent = {
-                            Switch(
-                                checked = enforceCharBasedInput,
-                                onCheckedChange = {
-                                    enforceCharBasedInput = it
-                                    x11Prefs.edit().putBoolean(X11Preferences.KEY_ENFORCE_CHAR_BASED_INPUT, it).apply()
-                                    X11Preferences.notifyChanged(context, X11Preferences.KEY_ENFORCE_CHAR_BASED_INPUT)
-                                }
-                            )
+                    SettingsSwitchListItem(
+                        headline = "Enforce Character-Based Input",
+                        supporting = "Directly dispatch committed Unicode characters rather than synthesized hardware key scancodes.",
+                        checked = enforceCharBasedInput,
+                        onCheckedChange = {
+                            enforceCharBasedInput = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_ENFORCE_CHAR_BASED_INPUT, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_ENFORCE_CHAR_BASED_INPUT)
                         }
                     )
 
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-                    ListItem(
-                        headlineContent = { Text("Triple-Back Emergency Force Close", fontWeight = FontWeight.SemiBold) },
-                        supportingContent = { Text("Pressing Back 3 times rapidly inside Canvas brings up a force-close dialog if X11 becomes unresponsive.") },
-                        trailingContent = {
-                            Switch(
-                                checked = tripleBackForceClose,
-                                onCheckedChange = {
-                                    tripleBackForceClose = it
-                                    prefs.edit().putBoolean("pref_triple_back_force_close", it).apply()
-                                }
-                            )
+                    SettingsSwitchListItem(
+                        headline = "Triple-Back Emergency Force Close",
+                        supporting = "Pressing Back 3 times rapidly inside Canvas brings up a force-close dialog if X11 becomes unresponsive.",
+                        checked = tripleBackForceClose,
+                        onCheckedChange = {
+                            tripleBackForceClose = it
+                            prefs.edit().putBoolean("pref_triple_back_force_close", it).apply()
                         }
                     )
                 }
@@ -1309,118 +1335,90 @@ fun InputSettingsScreen(
             Text("Stylus & Pointer Options", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                 Column(modifier = Modifier.padding(8.dp)) {
-                    ListItem(
-                        headlineContent = { Text("Show Stylus Click Mode in Top Bar", fontWeight = FontWeight.SemiBold) },
-                        supportingContent = { Text("Displays Left / Middle / Right click toggle chip directly in the Canvas floating header.") },
-                        trailingContent = {
-                            Switch(
-                                checked = showStylusClickOverride,
-                                onCheckedChange = {
-                                    showStylusClickOverride = it
-                                    x11Prefs.edit().putBoolean(X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE, it).apply()
-                                    X11Preferences.notifyChanged(context, X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE)
-                                }
-                            )
+                    SettingsSwitchListItem(
+                        headline = "Show Stylus Click Mode in Top Bar",
+                        supporting = "Displays Left / Middle / Right click toggle chip directly in the Canvas floating header.",
+                        checked = showStylusClickOverride,
+                        onCheckedChange = {
+                            showStylusClickOverride = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE)
                         }
                     )
 
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-                    ListItem(
-                        headlineContent = { Text("Enable Stylus Mouse Mode", fontWeight = FontWeight.SemiBold) },
-                        supportingContent = { Text("Treat hardware stylus touch events as desktop mouse pointer clicks.") },
-                        trailingContent = {
-                            Switch(
-                                checked = stylusIsMouse,
-                                onCheckedChange = {
-                                    stylusIsMouse = it
-                                    x11Prefs.edit().putBoolean(X11Preferences.KEY_STYLUS_IS_MOUSE, it).apply()
-                                    X11Preferences.notifyChanged(context, X11Preferences.KEY_STYLUS_IS_MOUSE)
-                                }
-                            )
+                    SettingsSwitchListItem(
+                        headline = "Enable Stylus Mouse Mode",
+                        supporting = "Treat hardware stylus touch events as desktop mouse pointer clicks.",
+                        checked = stylusIsMouse,
+                        onCheckedChange = {
+                            stylusIsMouse = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_STYLUS_IS_MOUSE, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_STYLUS_IS_MOUSE)
                         }
                     )
 
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-                    ListItem(
-                        headlineContent = { Text("Stylus Button Contact Modifier Mode", fontWeight = FontWeight.SemiBold) },
-                        supportingContent = { Text("Modify contact properties when the stylus side barrel button is depressed.") },
-                        trailingContent = {
-                            Switch(
-                                checked = stylusButtonContactModifier,
-                                onCheckedChange = {
-                                    stylusButtonContactModifier = it
-                                    x11Prefs.edit().putBoolean(X11Preferences.KEY_STYLUS_BUTTON_CONTACT_MODIFIER, it).apply()
-                                    X11Preferences.notifyChanged(context, X11Preferences.KEY_STYLUS_BUTTON_CONTACT_MODIFIER)
-                                }
-                            )
+                    SettingsSwitchListItem(
+                        headline = "Stylus Button Contact Modifier Mode",
+                        supporting = "Modify contact properties when the stylus side barrel button is depressed.",
+                        checked = stylusButtonContactModifier,
+                        onCheckedChange = {
+                            stylusButtonContactModifier = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_STYLUS_BUTTON_CONTACT_MODIFIER, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_STYLUS_BUTTON_CONTACT_MODIFIER)
                         }
                     )
 
                     if (touchMode == "1") {
                         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                        ListItem(
-                            headlineContent = { Text("Show Mouse Click Helper Overlay", fontWeight = FontWeight.SemiBold) },
-                            supportingContent = { Text("On-screen Left / Middle / Right floating mouse buttons for trackpad mode.") },
-                            trailingContent = {
-                                Switch(
-                                    checked = showMouseHelper,
-                                    onCheckedChange = {
-                                        showMouseHelper = it
-                                        x11Prefs.edit().putBoolean(X11Preferences.KEY_SHOW_MOUSE_HELPER, it).apply()
-                                        X11Preferences.notifyChanged(context, X11Preferences.KEY_SHOW_MOUSE_HELPER)
-                                    }
-                                )
+                        SettingsSwitchListItem(
+                            headline = "Show Mouse Click Helper Overlay",
+                            supporting = "On-screen Left / Middle / Right floating mouse buttons for trackpad mode.",
+                            checked = showMouseHelper,
+                            onCheckedChange = {
+                                showMouseHelper = it
+                                x11Prefs.edit().putBoolean(X11Preferences.KEY_SHOW_MOUSE_HELPER, it).apply()
+                                X11Preferences.notifyChanged(context, X11Preferences.KEY_SHOW_MOUSE_HELPER)
                             }
                         )
 
                         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                        ListItem(
-                            headlineContent = { Text("Scale Trackpad to Display Factor", fontWeight = FontWeight.SemiBold) },
-                            supportingContent = { Text("Scale cursor movement speed according to display resolution.") },
-                            trailingContent = {
-                                Switch(
-                                    checked = scaleTouchpad,
-                                    onCheckedChange = {
-                                        scaleTouchpad = it
-                                        x11Prefs.edit().putBoolean(X11Preferences.KEY_SCALE_TOUCHPAD, it).apply()
-                                        X11Preferences.notifyChanged(context, X11Preferences.KEY_SCALE_TOUCHPAD)
-                                    }
-                                )
+                        SettingsSwitchListItem(
+                            headline = "Scale Trackpad to Display Factor",
+                            supporting = "Scale cursor movement speed according to display resolution.",
+                            checked = scaleTouchpad,
+                            onCheckedChange = {
+                                scaleTouchpad = it
+                                x11Prefs.edit().putBoolean(X11Preferences.KEY_SCALE_TOUCHPAD, it).apply()
+                                X11Preferences.notifyChanged(context, X11Preferences.KEY_SCALE_TOUCHPAD)
                             }
                         )
 
                         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                        ListItem(
-                            headlineContent = { Text("Enable Tap-to-Move", fontWeight = FontWeight.SemiBold) },
-                            supportingContent = { Text("Tap and drag to move pointer without holding physical clicks.") },
-                            trailingContent = {
-                                Switch(
-                                    checked = tapToMove,
-                                    onCheckedChange = {
-                                        tapToMove = it
-                                        x11Prefs.edit().putBoolean(X11Preferences.KEY_TAP_TO_MOVE, it).apply()
-                                        X11Preferences.notifyChanged(context, X11Preferences.KEY_TAP_TO_MOVE)
-                                    }
-                                )
+                        SettingsSwitchListItem(
+                            headline = "Enable Tap-to-Move",
+                            supporting = "Tap and drag to move pointer without holding physical clicks.",
+                            checked = tapToMove,
+                            onCheckedChange = {
+                                tapToMove = it
+                                x11Prefs.edit().putBoolean(X11Preferences.KEY_TAP_TO_MOVE, it).apply()
+                                X11Preferences.notifyChanged(context, X11Preferences.KEY_TAP_TO_MOVE)
                             }
                         )
                     }
 
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    ListItem(
-                        headlineContent = { Text("Ignore Gamepad Events", fontWeight = FontWeight.SemiBold) },
-                        supportingContent = { Text("Suppress controller joystick and button input events from driving pointer.") },
-                        trailingContent = {
-                            Switch(
-                                checked = ignoreGamepad,
-                                onCheckedChange = {
-                                    ignoreGamepad = it
-                                    x11Prefs.edit().putBoolean(X11Preferences.KEY_IGNORE_GAMEPAD_EVENTS, it).apply()
-                                    X11Preferences.notifyChanged(context, X11Preferences.KEY_IGNORE_GAMEPAD_EVENTS)
-                                }
-                            )
+                    SettingsSwitchListItem(
+                        headline = "Ignore Gamepad Events",
+                        supporting = "Suppress controller joystick and button input events from driving pointer.",
+                        checked = ignoreGamepad,
+                        onCheckedChange = {
+                            ignoreGamepad = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_IGNORE_GAMEPAD_EVENTS, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_IGNORE_GAMEPAD_EVENTS)
                         }
                     )
                 }
@@ -1551,33 +1549,25 @@ fun LenovoPenSettingsScreen(onBack: () -> Unit) {
         ) {
             OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                 Column(modifier = Modifier.padding(8.dp)) {
-                    ListItem(
-                        headlineContent = { Text("Show Detection Toasts", fontWeight = FontWeight.SemiBold) },
-                        supportingContent = { Text("Display transient toast messages when barrel button gestures are detected.") },
-                        trailingContent = {
-                            Switch(
-                                checked = showDetections,
-                                onCheckedChange = {
-                                    showDetections = it
-                                    x11Prefs.edit().putBoolean(X11Preferences.KEY_LENOVO_PEN_SHOW_DETECTIONS, it).apply()
-                                    X11Preferences.notifyChanged(context, X11Preferences.KEY_LENOVO_PEN_SHOW_DETECTIONS)
-                                }
-                            )
+                    SettingsSwitchListItem(
+                        headline = "Show Detection Toasts",
+                        supporting = "Display transient toast messages when barrel button gestures are detected.",
+                        checked = showDetections,
+                        onCheckedChange = {
+                            showDetections = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_LENOVO_PEN_SHOW_DETECTIONS, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_LENOVO_PEN_SHOW_DETECTIONS)
                         }
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    ListItem(
-                        headlineContent = { Text("Show Toggle Debug Toasts", fontWeight = FontWeight.SemiBold) },
-                        supportingContent = { Text("Display state toasts when toggle mode button states change.") },
-                        trailingContent = {
-                            Switch(
-                                checked = showToggleDebug,
-                                onCheckedChange = {
-                                    showToggleDebug = it
-                                    x11Prefs.edit().putBoolean(X11Preferences.KEY_LENOVO_PEN_DEBUG_TOGGLE_TOASTS, it).apply()
-                                    X11Preferences.notifyChanged(context, X11Preferences.KEY_LENOVO_PEN_DEBUG_TOGGLE_TOASTS)
-                                }
-                            )
+                    SettingsSwitchListItem(
+                        headline = "Show Toggle Debug Toasts",
+                        supporting = "Display state toasts when toggle mode button states change.",
+                        checked = showToggleDebug,
+                        onCheckedChange = {
+                            showToggleDebug = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_LENOVO_PEN_DEBUG_TOGGLE_TOASTS, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_LENOVO_PEN_DEBUG_TOGGLE_TOASTS)
                         }
                     )
                 }
@@ -1655,51 +1645,35 @@ fun LenovoPenSettingsScreen(onBack: () -> Unit) {
 
                         HorizontalDivider()
 
-                        ListItem(
-                            headlineContent = { Text("Toggle Target Button", fontWeight = FontWeight.SemiBold) },
-                            supportingContent = {
-                                Text(
-                                    if (toggleVal)
-                                        "On: toggle mode — gesture once for down and again for up."
-                                    else
-                                        "Off: momentary mode — press and hold target for specified duration."
-                                )
+                        SettingsSwitchListItem(
+                            headline = "Toggle Target Button",
+                            supporting = if (toggleVal)
+                                "On: toggle mode — gesture once for down and again for up."
+                            else
+                                "Off: momentary mode — press and hold target for specified duration.",
+                            checked = toggleVal,
+                            enabled = isActionEnabled,
+                            onCheckedChange = {
+                                toggleVal = it
+                                x11Prefs.edit().putBoolean(toggleKey, it).apply()
+                                X11Preferences.notifyChanged(context, toggleKey)
                             },
-                            trailingContent = {
-                                Switch(
-                                    checked = toggleVal,
-                                    enabled = isActionEnabled,
-                                    onCheckedChange = {
-                                        toggleVal = it
-                                        x11Prefs.edit().putBoolean(toggleKey, it).apply()
-                                        X11Preferences.notifyChanged(context, toggleKey)
-                                    }
-                                )
-                            },
-                            modifier = Modifier.alpha(if (isActionEnabled) 1f else 0.38f),
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                            modifier = Modifier.alpha(if (isActionEnabled) 1f else 0.38f)
                         )
 
                         HorizontalDivider()
 
-                        ListItem(
-                            headlineContent = { Text("Toggle OFF on Lift", fontWeight = FontWeight.SemiBold) },
-                            supportingContent = {
-                                Text("When toggled ON and pen lifts after contact, release the mapped button automatically.")
+                        SettingsSwitchListItem(
+                            headline = "Toggle OFF on Lift",
+                            supporting = "When toggled ON and pen lifts after contact, release the mapped button automatically.",
+                            checked = offOnLiftVal,
+                            enabled = isOffOnLiftEnabled,
+                            onCheckedChange = {
+                                offOnLiftVal = it
+                                x11Prefs.edit().putBoolean(offOnLiftKey, it).apply()
+                                X11Preferences.notifyChanged(context, offOnLiftKey)
                             },
-                            trailingContent = {
-                                Switch(
-                                    checked = offOnLiftVal,
-                                    enabled = isOffOnLiftEnabled,
-                                    onCheckedChange = {
-                                        offOnLiftVal = it
-                                        x11Prefs.edit().putBoolean(offOnLiftKey, it).apply()
-                                        X11Preferences.notifyChanged(context, offOnLiftKey)
-                                    }
-                                )
-                            },
-                            modifier = Modifier.alpha(if (isOffOnLiftEnabled) 1f else 0.38f),
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                            modifier = Modifier.alpha(if (isOffOnLiftEnabled) 1f else 0.38f)
                         )
 
                         HorizontalDivider()
@@ -1776,7 +1750,10 @@ fun LenovoPenSettingsScreen(onBack: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DisplaySettingsScreen(onBack: () -> Unit) {
+fun DisplaySettingsScreen(
+    onNavigateToSafeAreaEditor: () -> Unit,
+    onBack: () -> Unit
+) {
     val context = LocalContext.current
     val x11Prefs = remember { X11Preferences.getPrefs(context) }
     val aournalPrefs = remember { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
@@ -2090,69 +2067,85 @@ fun DisplaySettingsScreen(onBack: () -> Unit) {
             Text("Canvas Layout & System Insets", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                 Column(modifier = Modifier.padding(8.dp)) {
-                    ListItem(
-                        headlineContent = { Text("Adjust Resolution for Orientation", fontWeight = FontWeight.SemiBold) },
-                        supportingContent = { Text("Automatically swap width and height when device orientation rotates.") },
-                        trailingContent = {
-                            Switch(
-                                checked = adjustRes,
-                                onCheckedChange = {
-                                    adjustRes = it
-                                    x11Prefs.edit().putBoolean(X11Preferences.KEY_ADJUST_RESOLUTION, it).apply()
-                                    X11Preferences.notifyChanged(context, X11Preferences.KEY_ADJUST_RESOLUTION)
-                                }
-                            )
+                    SettingsSwitchListItem(
+                        headline = "Adjust Resolution for Orientation",
+                        supporting = "Automatically swap width and height when device orientation rotates.",
+                        checked = adjustRes,
+                        onCheckedChange = {
+                            adjustRes = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_ADJUST_RESOLUTION, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_ADJUST_RESOLUTION)
                         }
                     )
 
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-                    ListItem(
-                        headlineContent = { Text("Stretch to Fit Display", fontWeight = FontWeight.SemiBold) },
-                        supportingContent = { Text("Scale canvas image non-proportionally to eliminate black letterbox bars.") },
-                        trailingContent = {
-                            Switch(
-                                checked = displayStretch,
-                                onCheckedChange = {
-                                    displayStretch = it
-                                    x11Prefs.edit().putBoolean(X11Preferences.KEY_DISPLAY_STRETCH, it).apply()
-                                    X11Preferences.notifyChanged(context, X11Preferences.KEY_DISPLAY_STRETCH)
-                                }
-                            )
+                    SettingsSwitchListItem(
+                        headline = "Stretch to Fit Display",
+                        supporting = "Scale canvas image non-proportionally to eliminate black letterbox bars.",
+                        checked = displayStretch,
+                        onCheckedChange = {
+                            displayStretch = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_DISPLAY_STRETCH, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_DISPLAY_STRETCH)
                         }
                     )
 
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-                    ListItem(
-                        headlineContent = { Text("Reseed Screen with Soft Keyboard", fontWeight = FontWeight.SemiBold) },
-                        supportingContent = { Text("Dynamically adjust X11 screen dimensions when on-screen keyboard appears.") },
-                        trailingContent = {
-                            Switch(
-                                checked = reseedIme,
-                                onCheckedChange = {
-                                    reseedIme = it
-                                    x11Prefs.edit().putBoolean(X11Preferences.KEY_RESEED, it).apply()
-                                    X11Preferences.notifyChanged(context, X11Preferences.KEY_RESEED)
-                                }
-                            )
+                    SettingsSwitchListItem(
+                        headline = "Reseed Screen with Soft Keyboard",
+                        supporting = "Dynamically adjust X11 screen dimensions when on-screen keyboard appears.",
+                        checked = reseedIme,
+                        onCheckedChange = {
+                            reseedIme = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_RESEED, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_RESEED)
                         }
                     )
 
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
+                    SettingsSwitchListItem(
+                        headline = "Fullscreen Canvas",
+                        supporting = "Hide status and navigation bars. Disabling allows Android's floating rotation button to appear.",
+                        checked = fullscreenCanvas,
+                        onCheckedChange = {
+                            fullscreenCanvas = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_FULLSCREEN, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_FULLSCREEN)
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    val safeCustom = x11Prefs.getBoolean(X11Preferences.KEY_SAFE_AREA_CUSTOM_EDGES, false)
+                    val safeAll = x11Prefs.getInt(X11Preferences.KEY_SAFE_AREA_MARGIN_ALL, 0)
+                    val safeLeft = if (safeCustom) x11Prefs.getInt(X11Preferences.KEY_SAFE_AREA_LEFT, 0) else safeAll
+                    val safeTop = if (safeCustom) x11Prefs.getInt(X11Preferences.KEY_SAFE_AREA_TOP, 0) else safeAll
+                    val safeRight = if (safeCustom) x11Prefs.getInt(X11Preferences.KEY_SAFE_AREA_RIGHT, 0) else safeAll
+                    val safeBottom = if (safeCustom) x11Prefs.getInt(X11Preferences.KEY_SAFE_AREA_BOTTOM, 0) else safeAll
+
+                    val summaryText = if (safeCustom) {
+                        "Custom: L:${safeLeft}dp T:${safeTop}dp R:${safeRight}dp B:${safeBottom}dp"
+                    } else if (safeAll > 0) {
+                        "Uniform: ${safeAll} dp on all edges"
+                    } else {
+                        "Full Screen (0 dp)"
+                    }
+
                     ListItem(
-                        headlineContent = { Text("Fullscreen Canvas", fontWeight = FontWeight.SemiBold) },
-                        supportingContent = { Text("Hide status and navigation bars. Disabling allows Android's floating rotation button to appear.") },
+                        headlineContent = { Text("Screen Safe Area Calibration", fontWeight = FontWeight.SemiBold) },
+                        supportingContent = { Text("Set margin insets to prevent UI clipping from rounded corners ($summaryText).") },
                         trailingContent = {
-                            Switch(
-                                checked = fullscreenCanvas,
-                                onCheckedChange = {
-                                    fullscreenCanvas = it
-                                    x11Prefs.edit().putBoolean(X11Preferences.KEY_FULLSCREEN, it).apply()
-                                    X11Preferences.notifyChanged(context, X11Preferences.KEY_FULLSCREEN)
-                                }
-                            )
+                            FilledTonalButton(
+                                onClick = onNavigateToSafeAreaEditor,
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(imageVector = Icons.Default.AspectRatio, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Calibrate")
+                            }
                         }
                     )
                 }

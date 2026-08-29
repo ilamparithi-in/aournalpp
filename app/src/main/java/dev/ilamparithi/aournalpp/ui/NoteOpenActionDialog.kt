@@ -228,7 +228,7 @@ fun NoteOpenActionDialog(
                 ) {
                     Checkbox(
                         checked = dontAskAgain,
-                        onCheckedChange = { dontAskAgain = it },
+                        onCheckedChange = null,
                         colors = CheckboxDefaults.colors(
                             checkedColor = MaterialTheme.colorScheme.primary
                         )
