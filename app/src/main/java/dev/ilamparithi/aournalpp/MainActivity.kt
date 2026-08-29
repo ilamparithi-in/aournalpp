@@ -53,8 +53,10 @@ import dev.ilamparithi.aournalpp.ui.BootstrapScreen
 import dev.ilamparithi.aournalpp.ui.BootstrapState
 import dev.ilamparithi.aournalpp.ui.BootstrapViewModel
 import dev.ilamparithi.aournalpp.ui.DocumentHubScreen
+import dev.ilamparithi.aournalpp.ui.EnvironmentUpdateDialog
 import dev.ilamparithi.aournalpp.ui.HomeScreen
 import dev.ilamparithi.aournalpp.ui.LicensesScreen
+import dev.ilamparithi.aournalpp.ui.OnboardingScreen
 import dev.ilamparithi.aournalpp.SettingsScreen
 import dev.ilamparithi.aournalpp.data.DocumentRepository
 import dev.ilamparithi.aournalpp.utils.ExternalFileHandler
@@ -98,82 +100,108 @@ class MainActivity : ComponentActivity() {
             AournalTheme {
                 val viewModel: BootstrapViewModel = viewModel()
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
+                val isOnboardingCompleted by viewModel.isOnboardingCompleted.collectAsStateWithLifecycle()
 
-                when (state) {
-                    is BootstrapState.Ready -> {
-                        LaunchedEffect(state) {
-                            pendingIntentToProcess?.let { intentToHandle ->
-                                handleExternalIntent(intentToHandle)
-                                pendingIntentToProcess = null
+                Box(modifier = Modifier.fillMaxSize()) {
+                    when (state) {
+                        is BootstrapState.UpdatePrompt -> {
+                            val updateState = state as BootstrapState.UpdatePrompt
+                            BootstrapScreen(
+                                state = BootstrapState.Checking,
+                                onRetry = { viewModel.retry() }
+                            )
+                            if (isOnboardingCompleted) {
+                                EnvironmentUpdateDialog(
+                                    installedVersion = updateState.installedVersion,
+                                    newVersion = updateState.newVersion,
+                                    countdownSeconds = updateState.countdownSeconds,
+                                    onUpdate = { viewModel.startInstallOrUpgrade() },
+                                    onSkip = { viewModel.skipUpdateForCurrentSession() }
+                                )
                             }
                         }
-                        // Provision the runtime tree once the bootstrap is ready.
-                        LaunchedEffect(Unit) {
-                            withContext(Dispatchers.IO) {
-                                LinuxEnvironment(this@MainActivity).ensureDirectoryTree()
+                        is BootstrapState.Ready -> {
+                            LaunchedEffect(state) {
+                                pendingIntentToProcess?.let { intentToHandle ->
+                                    handleExternalIntent(intentToHandle)
+                                    pendingIntentToProcess = null
+                                }
                             }
-                        }
-                        val env = remember { LinuxEnvironment(this@MainActivity) }
-                        val supervisor = remember { ProcessSupervisor(env) }
-                        val pdfExportManager = remember { PdfExportManager(env, supervisor) }
-                        val repo = remember { DocumentRepository(this@MainActivity) }
+                            // Provision the runtime tree once the bootstrap is ready.
+                            LaunchedEffect(Unit) {
+                                withContext(Dispatchers.IO) {
+                                    LinuxEnvironment(this@MainActivity).ensureDirectoryTree()
+                                }
+                            }
+                            val env = remember { LinuxEnvironment(this@MainActivity) }
+                            val supervisor = remember { ProcessSupervisor(env) }
+                            val pdfExportManager = remember { PdfExportManager(env, supervisor) }
+                            val repo = remember { DocumentRepository(this@MainActivity) }
 
-                        FloatingPreviewHost(
-                            onTriggerAction = { note, action ->
-                                when (action) {
-                                    DragActionTarget.VIEW_PDF -> {
+                            FloatingPreviewHost(
+                                onTriggerAction = { note, action ->
+                                    when (action) {
+                                        DragActionTarget.VIEW_PDF -> {
+                                            NoteOpenManager.openAsPdf(
+                                                context = this@MainActivity,
+                                                file = note.file,
+                                                pdfExportManager = pdfExportManager,
+                                                scope = lifecycleScope,
+                                                repository = repo
+                                            )
+                                        }
+                                        DragActionTarget.EDIT_CANVAS -> {
+                                            NoteOpenManager.openInCanvas(
+                                                context = this@MainActivity,
+                                                file = note.file,
+                                                repository = repo
+                                            )
+                                        }
+                                        DragActionTarget.NONE -> {}
+                                    }
+                                }
+                            ) {
+                                MainResponsiveAppShell()
+                            }
+
+                            val promptFile = externalFileToOpen.value
+                            if (promptFile != null && isOnboardingCompleted) {
+                                NoteOpenActionDialog(
+                                    file = promptFile,
+                                    onDismiss = { externalFileToOpen.value = null },
+                                    onViewAsPdf = {
+                                        externalFileToOpen.value = null
                                         NoteOpenManager.openAsPdf(
                                             context = this@MainActivity,
-                                            file = note.file,
+                                            file = promptFile,
                                             pdfExportManager = pdfExportManager,
                                             scope = lifecycleScope,
                                             repository = repo
                                         )
-                                    }
-                                    DragActionTarget.EDIT_CANVAS -> {
+                                    },
+                                    onEditInCanvas = {
+                                        externalFileToOpen.value = null
                                         NoteOpenManager.openInCanvas(
                                             context = this@MainActivity,
-                                            file = note.file,
+                                            file = promptFile,
                                             repository = repo
                                         )
                                     }
-                                    DragActionTarget.NONE -> {}
-                                }
+                                )
                             }
-                        ) {
-                            MainResponsiveAppShell()
                         }
-
-                        val promptFile = externalFileToOpen.value
-                        if (promptFile != null) {
-                            NoteOpenActionDialog(
-                                file = promptFile,
-                                onDismiss = { externalFileToOpen.value = null },
-                                onViewAsPdf = {
-                                    externalFileToOpen.value = null
-                                    NoteOpenManager.openAsPdf(
-                                        context = this@MainActivity,
-                                        file = promptFile,
-                                        pdfExportManager = pdfExportManager,
-                                        scope = lifecycleScope,
-                                        repository = repo
-                                    )
-                                },
-                                onEditInCanvas = {
-                                    externalFileToOpen.value = null
-                                    NoteOpenManager.openInCanvas(
-                                        context = this@MainActivity,
-                                        file = promptFile,
-                                        repository = repo
-                                    )
-                                }
+                        else -> {
+                            BootstrapScreen(
+                                state = state,
+                                onRetry = { viewModel.retry() }
                             )
                         }
                     }
-                    else -> {
-                        BootstrapScreen(
-                            state = state,
-                            onRetry = { viewModel.retry() }
+
+                    if (!isOnboardingCompleted) {
+                        OnboardingScreen(
+                            bootstrapState = state,
+                            onFinish = { viewModel.completeOnboarding() }
                         )
                     }
                 }

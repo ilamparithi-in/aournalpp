@@ -18,6 +18,17 @@ class LinuxEnvironment(private val context: Context) {
         const val PREF_KEY_AUDIO_DIR = "pref_special_audio_dir"
         const val PREF_KEY_IMPORTED_DIR = "pref_special_imported_dir"
         const val PREF_KEY_EMERGENCY_DIR = "pref_special_emergency_dir"
+        const val PREF_KEY_ONBOARDING_COMPLETED = "pref_onboarding_completed"
+    }
+
+    fun isOnboardingCompleted(): Boolean {
+        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        return prefs.getBoolean(PREF_KEY_ONBOARDING_COMPLETED, false)
+    }
+
+    fun setOnboardingCompleted(completed: Boolean) {
+        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(PREF_KEY_ONBOARDING_COMPLETED, completed).apply()
     }
 
     val rootDir: File = context.filesDir

@@ -178,14 +178,19 @@ fun Modifier.floatingPreviewLongPress(
                 val downPos = down.position
                 val touchSlop = viewConfiguration.touchSlop
                 val pointerType = down.type
-                // Stylus/eraser is a precise tool: even a small measured displacement at the
-                // tip is real intentional movement (not finger wobble). Use a tighter slop so
-                // that horizontal scrolling with a stylus is never mistaken for a tap.
-                val effectiveSlop = if (pointerType == PointerType.Stylus || pointerType == PointerType.Eraser) {
-                    touchSlop * 0.5f
-                } else {
-                    touchSlop
-                }
+                // Stylus handling:
+                // 1. Long-press hold tolerance:
+                // When holding a stylus down on glass for ~400-500ms, active digitizers capture minute
+                // hand tremor and micro-jitter at high sampling rates. We give adequate slop tolerance
+                // during the wait window so holding still does NOT prematurely cancel the long press.
+                val isStylus = pointerType == PointerType.Stylus || pointerType == PointerType.Eraser
+                val longPressSlop = if (isStylus) touchSlop * 1.5f else touchSlop
+
+                // 2. Tap vs scroll/swipe rejection tolerance:
+                // If released before long-press timeout, we check if the gesture was a quick flick/swipe.
+                // A tighter slop for stylus ensures fast scrolling swipes are rejected and not mistaken for taps.
+                val swipeRejectionSlop = if (isStylus) touchSlop * 0.5f else touchSlop
+
                 var maxDist = 0f
                 var previousAction = DragActionTarget.NONE
 
@@ -208,10 +213,9 @@ fun Modifier.floatingPreviewLongPress(
                         val change = event.changes.firstOrNull { it.id == down.id }
                         if (change == null || !change.pressed) {
                             // UP event: if the parent scroll detector consumed it, or if this is a
-                            // stylus that accumulated meaningful displacement, treat as a scroll cancel.
-                            val isStylusScroll = (pointerType == PointerType.Stylus ||
-                                    pointerType == PointerType.Eraser) && maxDist > effectiveSlop
-                            if (change != null && (change.isConsumed || isStylusScroll)) {
+                            // swipe that accumulated displacement beyond swipeRejectionSlop, treat as a scroll cancel.
+                            val isScrollSwipe = change != null && (change.isConsumed || maxDist > swipeRejectionSlop)
+                            if (isScrollSwipe) {
                                 return@withTimeoutOrNull GesturePhase.CANCEL
                             }
                             return@withTimeoutOrNull GesturePhase.TAP
@@ -220,11 +224,10 @@ fun Modifier.floatingPreviewLongPress(
                         if (change.isConsumed) {
                             return@withTimeoutOrNull GesturePhase.CANCEL
                         }
-                        // Fallback slop guard (defense-in-depth when parent hasn't consumed yet on
-                        // the very first MOVE, which can happen at the start of a fast swipe).
+                        // Fallback slop guard: if movement exceeds hold tolerance, user is swiping/dragging.
                         val dist = (change.position - downPos).getDistance()
                         maxDist = maxOf(maxDist, dist)
-                        if (dist > effectiveSlop) {
+                        if (dist > longPressSlop) {
                             return@withTimeoutOrNull GesturePhase.CANCEL
                         }
                     }

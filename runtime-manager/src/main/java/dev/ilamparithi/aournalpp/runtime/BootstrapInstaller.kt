@@ -47,6 +47,26 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
         }
     }
 
+    fun getInstalledVersion(): Long? {
+        val versionFile = File(env.rootDir, VERSION_FLAG)
+        if (!versionFile.exists()) return null
+        return try {
+            versionFile.readText().trim().toLong()
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun hasValidInstallation(): Boolean {
+        val versionFile = File(env.rootDir, VERSION_FLAG)
+        val xournalBin = env.resolveExecutable("xournalpp")
+        return versionFile.exists() && xournalBin.exists() && xournalBin.canExecute()
+    }
+
+    fun isUpgradeAvailable(): Boolean {
+        return hasValidInstallation() && needsBootstrap()
+    }
+
     fun isInstalled(): Boolean = !needsBootstrap()
 
     fun clearInstallation() {
