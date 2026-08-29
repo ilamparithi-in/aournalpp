@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DisplaySettings
 import androidx.compose.material.icons.filled.DragIndicator
+import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
@@ -1261,6 +1262,15 @@ fun ToolbarSettingsScreen(
     var showStylusMode by remember {
         mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE, false))
     }
+    var showTouchStylus by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_TOUCH_STYLUS, true))
+    }
+    var disableTouchStylusOnStylusHover by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_DISABLE_TOUCH_STYLUS_ON_STYLUS_HOVER, true))
+    }
+    var rememberFingerAsStylusState by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_REMEMBER_FINGER_AS_STYLUS_STATE, false))
+    }
     var showTitle by remember {
         mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_TITLE, true))
     }
@@ -1511,8 +1521,8 @@ fun ToolbarSettingsScreen(
             OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                 Column(modifier = Modifier.padding(8.dp)) {
                     SettingsSwitchListItem(
-                        headline = "Stylus Click Mode (L / M / R)",
-                        supporting = "Displays Left / Middle / Right click toggle capsule directly in the toolbar.",
+                        headline = "Stylus Click Mode Switcher (L/M/R)",
+                        supporting = "Displays Left / Middle / Right click toggle buttons directly in the floating toolbar.",
                         checked = showStylusMode,
                         leadingContent = {
                             Surface(
@@ -1521,23 +1531,17 @@ fun ToolbarSettingsScreen(
                                 modifier = Modifier.alpha(if (showStylusMode) 1f else 0.4f)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(2.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp)
                                 ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp, 18.dp)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Text(
-                                                text = "L",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onPrimary
-                                            )
-                                        }
+                                    Box(modifier = Modifier.size(18.dp, 18.dp), contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = "L",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
                                     }
                                     Box(modifier = Modifier.size(18.dp, 18.dp), contentAlignment = Alignment.Center) {
                                         Text(
@@ -1562,6 +1566,64 @@ fun ToolbarSettingsScreen(
                             showStylusMode = it
                             x11Prefs.edit().putBoolean(X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE, it).apply()
                             X11Preferences.notifyChanged(context, X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE)
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsSwitchListItem(
+                        headline = "Finger as Stylus Toggle",
+                        supporting = "Displays a toolbar button to quickly switch between drawing with your finger as a stylus and standard touch/gesture navigation.",
+                        checked = showTouchStylus,
+                        leadingContent = {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier.alpha(if (showTouchStylus) 1f else 0.4f)
+                            ) {
+                                Box(
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Draw,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        },
+                        onCheckedChange = {
+                            showTouchStylus = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_SHOW_TOUCH_STYLUS, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_SHOW_TOUCH_STYLUS)
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsSwitchListItem(
+                        headline = "Turn off Touch as Stylus on Stylus Hover",
+                        supporting = "Automatically disables finger drawing and restores touch navigation as soon as a physical stylus pen hovers over or touches the screen.",
+                        checked = disableTouchStylusOnStylusHover,
+                        onCheckedChange = {
+                            disableTouchStylusOnStylusHover = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_DISABLE_TOUCH_STYLUS_ON_STYLUS_HOVER, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_DISABLE_TOUCH_STYLUS_ON_STYLUS_HOVER)
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsSwitchListItem(
+                        headline = "Remember Last Toggled State",
+                        supporting = "Preserves whether Finger as Stylus was active across app launches. When disabled, Finger as Stylus resets to off on startup.",
+                        checked = rememberFingerAsStylusState,
+                        onCheckedChange = {
+                            rememberFingerAsStylusState = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_REMEMBER_FINGER_AS_STYLUS_STATE, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_REMEMBER_FINGER_AS_STYLUS_STATE)
                         }
                     )
 
@@ -1899,6 +1961,15 @@ fun InputSettingsScreen(
     var showStylusClickOverride by remember {
         mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE, false))
     }
+    var showTouchStylus by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_TOUCH_STYLUS, true))
+    }
+    var disableTouchStylusOnStylusHover by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_DISABLE_TOUCH_STYLUS_ON_STYLUS_HOVER, true))
+    }
+    var rememberFingerAsStylusState by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_REMEMBER_FINGER_AS_STYLUS_STATE, false))
+    }
     var stylusHoverExpands by remember {
         mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_STYLUS_HOVER_EXPANDS, true))
     }
@@ -1956,6 +2027,49 @@ fun InputSettingsScreen(
                         },
                         shape = SegmentedButtonDefaults.itemShape(index, touchOptions.size),
                         label = { Text(label, style = MaterialTheme.typography.bodySmall) }
+                    )
+                }
+            }
+
+            // Finger as Stylus Section
+            Text("Finger as Stylus", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    SettingsSwitchListItem(
+                        headline = "Show Finger as Stylus Toggle in Toolbar",
+                        supporting = "Displays a toggle button in the floating toolbar to quickly switch between drawing with your finger as a stylus and standard touch navigation.",
+                        checked = showTouchStylus,
+                        onCheckedChange = {
+                            showTouchStylus = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_SHOW_TOUCH_STYLUS, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_SHOW_TOUCH_STYLUS)
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsSwitchListItem(
+                        headline = "Turn off Touch as Stylus on Stylus Hover",
+                        supporting = "Automatically disables finger drawing and restores touch navigation as soon as a physical stylus pen hovers over or touches the screen.",
+                        checked = disableTouchStylusOnStylusHover,
+                        onCheckedChange = {
+                            disableTouchStylusOnStylusHover = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_DISABLE_TOUCH_STYLUS_ON_STYLUS_HOVER, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_DISABLE_TOUCH_STYLUS_ON_STYLUS_HOVER)
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsSwitchListItem(
+                        headline = "Remember Last Toggled State",
+                        supporting = "Preserves whether Finger as Stylus was active across app launches. When disabled, Finger as Stylus resets to off on startup.",
+                        checked = rememberFingerAsStylusState,
+                        onCheckedChange = {
+                            rememberFingerAsStylusState = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_REMEMBER_FINGER_AS_STYLUS_STATE, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_REMEMBER_FINGER_AS_STYLUS_STATE)
+                        }
                     )
                 }
             }

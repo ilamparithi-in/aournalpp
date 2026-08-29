@@ -48,6 +48,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -3120,32 +3121,35 @@ fun DynamicRecentsCarousel(
             )
         }
 
-        androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel(
-            state = androidx.compose.material3.carousel.rememberCarouselState { recentNotes.size },
-            preferredItemWidth = 230.dp,
-            itemSpacing = 10.dp,
-            contentPadding = PaddingValues(horizontal = 8.dp),
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(180.dp)
-        ) { index ->
-            val note = recentNotes[index]
-            StandardNoteCard(
-                note = note,
-                modifier = Modifier
-                    .maskClip(MaterialTheme.shapes.extraLarge)
-                    .fillMaxSize(),
-                shape = MaterialTheme.shapes.extraLarge,
-                pdfExportManager = pdfExportManager,
-                onClick = { onOpenNote(note) },
-                onTogglePin = { onTogglePin(note) },
-                onExportPdf = { onExportPdf(note) },
-                onSharePdf = { onSharePdf(note) },
-                onShareXopp = { onShareXopp(note) },
-                onRename = { onRenameNote(note) },
-                onDuplicate = onDuplicate?.let { { it(note) } },
-                onDelete = { onDeleteNote(note) }
-            )
+        ) {
+            items(recentNotes, key = { it.path }) { note ->
+                Box(
+                    modifier = Modifier
+                        .width(230.dp)
+                        .fillMaxHeight()
+                ) {
+                    StandardNoteCard(
+                        note = note,
+                        modifier = Modifier.fillMaxSize(),
+                        shape = MaterialTheme.shapes.extraLarge,
+                        pdfExportManager = pdfExportManager,
+                        onClick = { onOpenNote(note) },
+                        onTogglePin = { onTogglePin(note) },
+                        onExportPdf = { onExportPdf(note) },
+                        onSharePdf = { onSharePdf(note) },
+                        onShareXopp = { onShareXopp(note) },
+                        onRename = { onRenameNote(note) },
+                        onDuplicate = onDuplicate?.let { { it(note) } },
+                        onDelete = { onDeleteNote(note) }
+                    )
+                }
+            }
         }
     }
 }

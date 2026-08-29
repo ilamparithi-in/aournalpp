@@ -34,6 +34,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,6 +60,7 @@ import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DragIndicator
+import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -348,6 +350,27 @@ class CanvasActivity : ComponentActivity() {
                 val showStylusClickOverride = remember {
                     x11Prefs.getBoolean(X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE, false)
                 }
+                val showTouchStylus = remember {
+                    x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_TOUCH_STYLUS, true)
+                }
+                val disableTouchStylusOnStylusHover = remember {
+                    x11Prefs.getBoolean(X11Preferences.KEY_DISABLE_TOUCH_STYLUS_ON_STYLUS_HOVER, true)
+                }
+                val rememberFingerAsStylusState = remember {
+                    x11Prefs.getBoolean(X11Preferences.KEY_REMEMBER_FINGER_AS_STYLUS_STATE, false)
+                }
+                var isFingerAsStylus by remember {
+                    mutableStateOf(
+                        if (rememberFingerAsStylusState) {
+                            x11Prefs.getBoolean(X11Preferences.KEY_FINGER_AS_STYLUS_ENABLED, false)
+                        } else {
+                            false
+                        }
+                    )
+                }
+                var stylusClickMode by remember {
+                    mutableIntStateOf(1)
+                }
                 val showTitle = remember {
                     x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_TITLE, true)
                 }
@@ -445,6 +468,17 @@ class CanvasActivity : ComponentActivity() {
                             },
                             onInputHandlerReady = { handler ->
                                 inputHandler = handler
+                                handler.setDisableTouchStylusOnStylusHover(disableTouchStylusOnStylusHover)
+                                handler.setTouchStylusStateListener {
+                                    runOnUiThread {
+                                        isFingerAsStylus = false
+                                        if (rememberFingerAsStylusState) {
+                                            x11Prefs.edit().putBoolean(X11Preferences.KEY_FINGER_AS_STYLUS_ENABLED, false).apply()
+                                        }
+                                    }
+                                }
+                                handler.setFingerAsStylusEnabled(isFingerAsStylus)
+                                handler.setStylusInputHelperMode(stylusClickMode)
                             },
                             onInputSenderReady = { sender ->
                                 inputSender = sender
@@ -470,6 +504,21 @@ class CanvasActivity : ComponentActivity() {
                             pinButtonMode = pinButtonMode,
                             autoCollapseTimeoutMs = autoCollapseTimeoutMs,
                             showStylusClickOverride = showStylusClickOverride,
+                            showTouchStylus = showTouchStylus,
+                            isFingerAsStylus = isFingerAsStylus,
+                            onToggleFingerAsStylus = {
+                                val next = !isFingerAsStylus
+                                isFingerAsStylus = next
+                                inputHandler?.setFingerAsStylusEnabled(next)
+                                if (rememberFingerAsStylusState) {
+                                    x11Prefs.edit().putBoolean(X11Preferences.KEY_FINGER_AS_STYLUS_ENABLED, next).apply()
+                                }
+                            },
+                            stylusClickMode = stylusClickMode,
+                            onStylusClickModeChange = { mode ->
+                                stylusClickMode = mode
+                                inputHandler?.setStylusInputHelperMode(mode)
+                            },
                             showTitle = showTitle,
                             showBack = showBack,
                             showKeyboard = showKeyboard,
@@ -741,6 +790,11 @@ private fun FloatingToolbarOverlay(
     pinButtonMode: Boolean,
     autoCollapseTimeoutMs: Int,
     showStylusClickOverride: Boolean,
+    showTouchStylus: Boolean,
+    isFingerAsStylus: Boolean,
+    onToggleFingerAsStylus: () -> Unit,
+    stylusClickMode: Int,
+    onStylusClickModeChange: (Int) -> Unit,
     showTitle: Boolean,
     showBack: Boolean,
     showKeyboard: Boolean,
@@ -921,9 +975,6 @@ private fun FloatingToolbarOverlay(
 
                         // Stylus Click Override Mode Switcher
                         if (showStylusClickOverride) {
-                            var stylusClickMode by remember {
-                                mutableIntStateOf(com.termux.x11.input.TouchInputHandler.STYLUS_INPUT_HELPER_MODE)
-                            }
                             val modes = listOf(
                                 1 to "L",
                                 2 to "M",
@@ -986,8 +1037,7 @@ private fun FloatingToolbarOverlay(
                                                         indication = null
                                                     ) {
                                                         interactionSignal.tryEmit(Unit)
-                                                        com.termux.x11.input.TouchInputHandler.STYLUS_INPUT_HELPER_MODE = modeValue
-                                                        stylusClickMode = modeValue
+                                                        onStylusClickModeChange(modeValue)
                                                     },
                                                 contentAlignment = Alignment.Center
                                             ) {
@@ -1000,6 +1050,48 @@ private fun FloatingToolbarOverlay(
                                             }
                                         }
                                     }
+                                }
+                            }
+                        }
+
+                        // Touch Stylus Mode Toggle (Finger as Stylus)
+                        if (showTouchStylus) {
+                            val activeBgColor by animateColorAsState(
+                                targetValue = if (isFingerAsStylus) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                animationSpec = tween(durationMillis = 240, easing = M3MorphEasing),
+                                label = "TouchStylusBgColor"
+                            )
+                            val activeIconColor by animateColorAsState(
+                                targetValue = if (isFingerAsStylus) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                animationSpec = tween(durationMillis = 240, easing = M3MorphEasing),
+                                label = "TouchStylusIconColor"
+                            )
+
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = activeBgColor,
+                                modifier = Modifier
+                                    .padding(horizontal = 2.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+                                        interactionSignal.tryEmit(Unit)
+                                        try { haptics.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                                        onToggleFingerAsStylus()
+                                    }
+                            ) {
+                                Box(
+                                    modifier = Modifier.size(32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Draw,
+                                        contentDescription = if (isFingerAsStylus) "Finger as Stylus (Enabled)" else "Finger as Stylus (Disabled)",
+                                        modifier = Modifier.size(17.dp),
+                                        tint = activeIconColor
+                                    )
                                 }
                             }
                         }
@@ -1241,6 +1333,14 @@ private fun FloatingToolbarOverlay(
                     Row(
                         modifier = Modifier
                             .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onTap = {
+                                        interactionSignal.tryEmit(Unit)
+                                        isHeaderExpanded = true
+                                    }
+                                )
+                            }
+                            .pointerInput(Unit) {
                                 detectDragGesturesAfterLongPress(
                                     onDragStart = {
                                         coroutineScope.launch { animPixelOffset.snapTo(Offset.Zero) }
@@ -1267,13 +1367,6 @@ private fun FloatingToolbarOverlay(
                                     },
                                     onDragCancel = {}
                                 )
-                            }
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) {
-                                interactionSignal.tryEmit(Unit)
-                                isHeaderExpanded = true
                             }
                             .padding(horizontal = 14.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically,

@@ -39,6 +39,7 @@ object X11Preferences {
     const val KEY_TOOLBAR_AUTO_COLLAPSE_TIMEOUT_MS = "toolbarAutoCollapseTimeoutMs"
     const val KEY_TOOLBAR_STYLUS_HOVER_EXPANDS = "toolbarStylusHoverExpands"
     const val KEY_TOOLBAR_SHOW_STYLUS_MODE = "toolbarShowStylusMode"
+    const val KEY_TOOLBAR_SHOW_TOUCH_STYLUS = "toolbarShowTouchStylus"
     const val KEY_TOOLBAR_SHOW_KEYBOARD = "toolbarShowKeyboard"
     const val KEY_TOOLBAR_SHOW_CUT = "toolbarShowCut"
     const val KEY_TOOLBAR_SHOW_COPY = "toolbarShowCopy"
@@ -49,6 +50,9 @@ object X11Preferences {
     const val KEY_TOOLBAR_CENTER_WITHIN_SAFE_AREA = "topBarCenterWithinBounds"
 
     // Pointer / Stylus
+    const val KEY_FINGER_AS_STYLUS_ENABLED = "fingerAsStylusEnabled"
+    const val KEY_DISABLE_TOUCH_STYLUS_ON_STYLUS_HOVER = "disableTouchStylusOnStylusHover"
+    const val KEY_REMEMBER_FINGER_AS_STYLUS_STATE = "rememberFingerAsStylusState"
     const val KEY_TOUCH_MODE = "touchMode"
     const val KEY_SCALE_TOUCHPAD = "scaleTouchpad"
     const val KEY_SHOW_STYLUS_CLICK_OVERRIDE = "showStylusClickOverride"
