@@ -9,6 +9,7 @@ import androidx.core.app.ActivityOptionsCompat
 import androidx.core.content.FileProvider
 import dev.ilamparithi.aournalpp.CanvasActivity
 import dev.ilamparithi.aournalpp.data.DocumentRepository
+import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -58,14 +59,29 @@ object NoteOpenManager {
         repository: DocumentRepository? = null,
         localView: View? = null
     ) {
+        val targetFile = if (file.absolutePath.contains("/cache/staged_imports/")) {
+            val env = repository?.getLinuxEnvironment() ?: LinuxEnvironment(context)
+            try {
+                val importedDir = env.getImportedDirectory()
+                if (!importedDir.exists()) importedDir.mkdirs()
+                val dest = File(importedDir, file.name)
+                file.copyTo(dest, overwrite = true)
+                dest
+            } catch (e: Exception) {
+                file
+            }
+        } else {
+            file
+        }
+
         try {
-            repository?.recordNoteOpened(file.absolutePath) ?: run {
-                DocumentRepository(context).recordNoteOpened(file.absolutePath)
+            repository?.recordNoteOpened(targetFile.absolutePath) ?: run {
+                DocumentRepository(context).recordNoteOpened(targetFile.absolutePath)
             }
         } catch (_: Exception) {}
 
         val intent = Intent(context, CanvasActivity::class.java).apply {
-            putExtra(CanvasActivity.EXTRA_NOTE_PATH, file.absolutePath)
+            putExtra(CanvasActivity.EXTRA_NOTE_PATH, targetFile.absolutePath)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
 
@@ -96,8 +112,10 @@ object NoteOpenManager {
         onError: ((String) -> Unit)? = null
     ) {
         try {
-            repository?.recordNoteOpened(file.absolutePath) ?: run {
-                DocumentRepository(context).recordNoteOpened(file.absolutePath)
+            if (!file.absolutePath.contains("staged_imports") && !file.absolutePath.contains("/cache/")) {
+                repository?.recordNoteOpened(file.absolutePath) ?: run {
+                    DocumentRepository(context).recordNoteOpened(file.absolutePath)
+                }
             }
         } catch (_: Exception) {}
 

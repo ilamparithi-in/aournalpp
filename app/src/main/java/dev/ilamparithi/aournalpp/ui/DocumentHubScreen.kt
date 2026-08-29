@@ -75,6 +75,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
@@ -92,6 +93,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FolderShared
@@ -120,11 +122,17 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -345,6 +353,8 @@ fun DocumentHubScreen(
     var folderToRename by remember { mutableStateOf<FolderItem?>(null) }
     var renameFolderNameInput by remember { mutableStateOf("") }
     var showMoveToFolderDialog by remember { mutableStateOf(false) }
+    var showEmptyTrashConfirmDialog by remember { mutableStateOf(false) }
+    var showBatchDeletePermanentDialog by remember { mutableStateOf(false) }
 
     // Emergency recovery
     var quarantinedEmergencySave by remember { mutableStateOf<File?>(null) }
@@ -359,6 +369,14 @@ fun DocumentHubScreen(
 
     // Autoload override conflict notification state
     var showAutoloadOverrideDialog by remember { mutableStateOf(false) }
+
+    // Speed Dial FAB State
+    var isFabExpanded by remember { mutableStateOf(false) }
+    val fabRotation by animateFloatAsState(
+        targetValue = if (isFabExpanded) 135f else 0f,
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = 300f),
+        label = "fabRotation"
+    )
 
     // New Note dialog state
     var showNewNoteDialog by remember { mutableStateOf(false) }
@@ -452,17 +470,19 @@ fun DocumentHubScreen(
         handleNoteOpen(noteFile)
     }
 
-    // SAF Import Document / Note Launcher
-    val importPdfLauncher = rememberLauncherForActivityResult(
+    // SAF Import Document / Note Launcher (imports directly to current folder)
+    val importFileLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
             scope.launch {
-                val result = ExternalFileHandler.stageExternalUri(context, uri, env)
+                val result = ExternalFileHandler.importUriToDirectory(context, uri, currentDirectory)
                 if (result.isSuccess) {
-                    val staged = result.getOrThrow()
-                    loadContent()
-                    handleNoteOpen(staged)
+                    val imported = result.getOrThrow()
+                    loadContentNow()
+                    val folderName = if (currentDirectory.canonicalPath == repository.getRootNotesDirectory().canonicalPath) "Notes" else currentDirectory.name
+                    snackbarHostState.showSnackbar("Imported \"${imported.name}\" to $folderName")
+                    handleNoteOpen(imported)
                 } else {
                     snackbarHostState.showSnackbar("Failed to import file: ${result.exceptionOrNull()?.message}")
                 }
@@ -470,9 +490,11 @@ fun DocumentHubScreen(
         }
     }
 
-    // Handle Back Press in Subfolders or Selection Mode
-    BackHandler(enabled = isSelectionMode || isViewingTrash || currentDirectory.canonicalPath != repository.getRootNotesDirectory().canonicalPath) {
-        if (isSelectionMode) {
+    // Handle Back Press in Subfolders, Selection Mode, or Expanded FAB
+    BackHandler(enabled = isFabExpanded || isSelectionMode || isViewingTrash || currentDirectory.canonicalPath != repository.getRootNotesDirectory().canonicalPath) {
+        if (isFabExpanded) {
+            isFabExpanded = false
+        } else if (isSelectionMode) {
             isSelectionMode = false
             selectedNotePaths = emptySet()
         } else if (isViewingTrash) {
@@ -507,6 +529,7 @@ fun DocumentHubScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             if (isSelectionMode) {
+                val currentDisplayNotes = if (isViewingTrash) trashedNotes else notes
                 // Contextual Multi-Selection Top Bar
                 TopAppBar(
                     title = {
@@ -516,7 +539,7 @@ fun DocumentHubScreen(
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
-                            val selectedDocs = notes.filter { selectedNotePaths.contains(it.path) }
+                            val selectedDocs = currentDisplayNotes.filter { selectedNotePaths.contains(it.path) }
                             val pdfCount = selectedDocs.count { it.fileType == NoteFileType.PDF }
                             val noteCount = selectedDocs.size - pdfCount
                             val summary = listOfNotNull(
@@ -543,12 +566,12 @@ fun DocumentHubScreen(
                         }
                     },
                     actions = {
-                        val allSelected = selectedNotePaths.size == notes.size && notes.isNotEmpty()
+                        val allSelected = selectedNotePaths.size == currentDisplayNotes.size && currentDisplayNotes.isNotEmpty()
                         IconButton(onClick = {
                             if (allSelected) {
                                 selectedNotePaths = emptySet()
                             } else {
-                                selectedNotePaths = notes.map { it.path }.toSet()
+                                selectedNotePaths = currentDisplayNotes.map { it.path }.toSet()
                             }
                         }) {
                             Icon(
@@ -557,7 +580,7 @@ fun DocumentHubScreen(
                             )
                         }
                         IconButton(onClick = {
-                            val allPaths = notes.map { it.path }.toSet()
+                            val allPaths = currentDisplayNotes.map { it.path }.toSet()
                             selectedNotePaths = allPaths.minus(selectedNotePaths)
                         }) {
                             Icon(imageVector = Icons.AutoMirrored.Filled.CompareArrows, contentDescription = "Invert Selection")
@@ -707,16 +730,22 @@ fun DocumentHubScreen(
                                 )
                                 HorizontalDivider()
                             } else {
+                                if (trashedNotes.isNotEmpty()) {
+                                    DropdownMenuItem(
+                                        text = { Text("Select Notes") },
+                                        leadingIcon = { Icon(Icons.Default.SelectAll, contentDescription = null) },
+                                        onClick = {
+                                            showTopMenu = false
+                                            isSelectionMode = true
+                                        }
+                                    )
+                                }
                                 DropdownMenuItem(
                                     text = { Text("Empty Trash", color = MaterialTheme.colorScheme.error) },
-                                    leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                    leadingIcon = { Icon(Icons.Default.DeleteSweep, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                                     onClick = {
                                         showTopMenu = false
-                                        scope.launch {
-                                            repository.emptyTrash()
-                                            snackbarHostState.showSnackbar("Emptied Trash")
-                                            loadContent()
-                                        }
+                                        showEmptyTrashConfirmDialog = true
                                     }
                                 )
                                 HorizontalDivider()
@@ -757,25 +786,102 @@ fun DocumentHubScreen(
         },
         floatingActionButton = {
             if (!isViewingTrash && !isSelectionMode) {
-                FloatingActionButton(
-                    onClick = {
-                        if (!hasPermission) {
-                            showPermissionDialog = true
-                        } else {
-                            newNoteDefaultName = SimpleDateFormat("yyyy-MM-dd-'Note'-HH-mm", Locale.getDefault()).format(Date())
-                            scope.launch {
-                                allFoldersForNewNote = withContext(Dispatchers.IO) {
-                                    repository.getAllFolders()
-                                }
-                            }
-                            showNewNoteDialog = true
-                        }
-                    },
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    shape = RoundedCornerShape(18.dp)
+                val folderItemSpring by animateFloatAsState(
+                    targetValue = if (isFabExpanded) 1f else 0f,
+                    animationSpec = spring(dampingRatio = 0.72f, stiffness = 240f),
+                    label = "folderItemSpring"
+                )
+                val pdfItemSpring by animateFloatAsState(
+                    targetValue = if (isFabExpanded) 1f else 0f,
+                    animationSpec = spring(dampingRatio = 0.72f, stiffness = 310f),
+                    label = "pdfItemSpring"
+                )
+                val noteItemSpring by animateFloatAsState(
+                    targetValue = if (isFabExpanded) 1f else 0f,
+                    animationSpec = spring(dampingRatio = 0.72f, stiffness = 390f),
+                    label = "noteItemSpring"
+                )
+
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = "New Note")
+                    // Staggered Spring Action Items
+                    SpeedDialActionItem(
+                        progress = folderItemSpring,
+                        icon = Icons.Default.CreateNewFolder,
+                        label = "New Folder",
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        onClick = {
+                            isFabExpanded = false
+                            newFolderNameInput = ""
+                            showNewFolderDialog = true
+                        }
+                    )
+
+                    SpeedDialActionItem(
+                        progress = pdfItemSpring,
+                        icon = Icons.Default.FileOpen,
+                        label = "Import File",
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        onClick = {
+                            isFabExpanded = false
+                            importFileLauncher.launch(arrayOf("*/*", "application/pdf", "application/x-xopp", "application/x-xoj", "application/octet-stream"))
+                        }
+                    )
+
+                    SpeedDialActionItem(
+                        progress = noteItemSpring,
+                        icon = Icons.Default.Edit,
+                        label = "New Note",
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        onClick = {
+                            isFabExpanded = false
+                            if (!hasPermission) {
+                                showPermissionDialog = true
+                            } else {
+                                newNoteDefaultName = SimpleDateFormat("yyyy-MM-dd-'Note'-HH-mm", Locale.getDefault()).format(Date())
+                                scope.launch {
+                                    allFoldersForNewNote = withContext(Dispatchers.IO) {
+                                        repository.getAllFolders()
+                                    }
+                                }
+                                showNewNoteDialog = true
+                            }
+                        }
+                    )
+
+                    // Main Speed Dial FAB
+                    val fabInteractionSource = remember { MutableInteractionSource() }
+                    val isFabPressed by fabInteractionSource.collectIsPressedAsState()
+                    val fabPressScale by animateFloatAsState(
+                        targetValue = if (isFabPressed) 0.90f else 1f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                        label = "fabPressScale"
+                    )
+
+                    FloatingActionButton(
+                        onClick = { isFabExpanded = !isFabExpanded },
+                        interactionSource = fabInteractionSource,
+                        shape = RoundedCornerShape(20.dp),
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 8.dp),
+                        modifier = Modifier
+                            .size(64.dp)
+                            .scale(fabPressScale)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Expand Actions",
+                            modifier = Modifier
+                                .size(32.dp)
+                                .rotate(fabRotation)
+                        )
+                    }
                 }
             }
         }
@@ -804,7 +910,7 @@ fun DocumentHubScreen(
                         val result = repository.createBlankNote(name, targetFolder)
                         if (result.isSuccess) {
                             val file = result.getOrThrow()
-                            loadContent()
+                            loadContentNow()
                             NoteOpenManager.openInCanvas(
                                 context = context,
                                 file = file,
@@ -902,63 +1008,28 @@ fun DocumentHubScreen(
             )
         }
 
-        // 3. Create Folder Dialog
+        // 3. Create Folder Dialog (Modular)
         if (showNewFolderDialog) {
-            AlertDialog(
-                onDismissRequest = { showNewFolderDialog = false },
-                icon = { Icon(Icons.Default.CreateNewFolder, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                title = { Text("New Folder", fontWeight = FontWeight.Bold) },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(
-                            value = newFolderNameInput,
-                            onValueChange = { newFolderNameInput = it },
-                            label = { Text("Folder Name") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("Folder Icon / Emoji:", style = MaterialTheme.typography.labelMedium)
-                            FolderIconPickerRow(
-                                selectedEmoji = selectedFolderEmoji,
-                                selectedIconType = selectedFolderIconType,
-                                onIconSelected = { emoji, iconType ->
-                                    selectedFolderEmoji = emoji
-                                    selectedFolderIconType = iconType
-                                }
-                            )
-                        }
-
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("Folder Color Accent:", style = MaterialTheme.typography.labelMedium)
-                            FolderColorPickerRow(
-                                selectedColorHex = selectedFolderColor,
-                                onColorSelected = { selectedFolderColor = it }
-                            )
+            val isRootFolder = currentDirectory.canonicalPath == repository.getRootNotesDirectory().canonicalPath
+            CreateFolderDialog(
+                parentFolder = currentDirectory,
+                title = if (isRootFolder) "Create New Folder" else "New Folder in \"${currentDirectory.name}\"",
+                confirmButtonLabel = "Create",
+                initialColorHex = selectedFolderColor,
+                initialEmoji = selectedFolderEmoji,
+                initialIconType = selectedFolderIconType,
+                onDismiss = { showNewFolderDialog = false },
+                onCreate = { name, colorHex, iconEmoji, iconType ->
+                    showNewFolderDialog = false
+                    scope.launch {
+                        val result = repository.createFolder(currentDirectory, name, colorHex, iconEmoji, iconType)
+                        if (result.isSuccess) {
+                            loadContentNow()
+                            snackbarHostState.showSnackbar("Created folder \"$name\"")
+                        } else {
+                            snackbarHostState.showSnackbar("Failed to create folder: ${result.exceptionOrNull()?.message}")
                         }
                     }
-                },
-                confirmButton = {
-                    Button(onClick = {
-                        if (newFolderNameInput.isNotBlank()) {
-                            showNewFolderDialog = false
-                            val result = repository.createFolder(currentDirectory, newFolderNameInput, selectedFolderColor, selectedFolderEmoji, selectedFolderIconType)
-                            scope.launch {
-                                if (result.isSuccess) {
-                                    snackbarHostState.showSnackbar("Created folder \"${newFolderNameInput.trim()}\"")
-                                    loadContent()
-                                } else {
-                                    snackbarHostState.showSnackbar("Failed: ${result.exceptionOrNull()?.message}")
-                                }
-                            }
-                        }
-                    }) {
-                        Text("Create")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showNewFolderDialog = false }) { Text("Cancel") }
                 }
             )
         }
@@ -976,6 +1047,7 @@ fun DocumentHubScreen(
                             FolderIconPickerRow(
                                 selectedEmoji = editFolderSelectedEmoji,
                                 selectedIconType = editFolderSelectedIconType,
+                                defaultRoleIconType = folder.role ?: (if (folder.isEmergencyFolder) "emergency" else null),
                                 onIconSelected = { emoji, iconType ->
                                     editFolderSelectedEmoji = emoji
                                     editFolderSelectedIconType = iconType
@@ -1042,8 +1114,8 @@ fun DocumentHubScreen(
                             scope.launch {
                                 val result = repository.renameFolder(target.file, renameFolderNameInput)
                                 if (result.isSuccess) {
+                                    loadContentNow()
                                     snackbarHostState.showSnackbar("Renamed folder to \"${renameFolderNameInput.trim()}\"")
-                                    loadContent()
                                 } else {
                                     snackbarHostState.showSnackbar("Failed to rename: ${result.exceptionOrNull()?.message}")
                                 }
@@ -1118,8 +1190,8 @@ fun DocumentHubScreen(
                                                 showMoveToFolderDialog = false
                                                 isSelectionMode = false
                                                 selectedNotePaths = emptySet()
+                                                loadContentNow()
                                                 snackbarHostState.showSnackbar("Moved $count note(s) to \"${dest.name}\"")
-                                                loadContent()
                                             }
                                         }
                                     }
@@ -1145,8 +1217,8 @@ fun DocumentHubScreen(
                                                     showMoveToFolderDialog = false
                                                     isSelectionMode = false
                                                     selectedNotePaths = emptySet()
+                                                    loadContentNow()
                                                     snackbarHostState.showSnackbar("Moved $count note(s) to Notes Root")
-                                                    loadContent()
                                                 }
                                             }
                                     ) {
@@ -1174,8 +1246,8 @@ fun DocumentHubScreen(
                                                     showMoveToFolderDialog = false
                                                     isSelectionMode = false
                                                     selectedNotePaths = emptySet()
+                                                    loadContentNow()
                                                     snackbarHostState.showSnackbar("Moved $count note(s) to \"${folder.name}\"")
-                                                    loadContent()
                                                 }
                                             }
                                     ) {
@@ -1237,8 +1309,8 @@ fun DocumentHubScreen(
                                 scope.launch {
                                     val result = repository.renameNote(note, renameInputText)
                                     if (result.isSuccess) {
+                                        loadContentNow()
                                         snackbarHostState.showSnackbar("Renamed note successfully")
-                                        loadContent()
                                     } else {
                                         snackbarHostState.showSnackbar("Rename failed: ${result.exceptionOrNull()?.message}")
                                     }
@@ -1251,13 +1323,20 @@ fun DocumentHubScreen(
             )
         }
 
-        // 7. Delete / Move to Trash Dialog
+        // 7. Delete / Move to Trash / Permanent Delete Dialog
         noteToDelete?.let { doc ->
             AlertDialog(
                 onDismissRequest = { noteToDelete = null },
                 icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                title = { Text("Move to Trash?", fontWeight = FontWeight.Bold) },
-                text = { Text("Move \"${doc.title}\" to Trash? You can restore it later.") },
+                title = { Text(if (isViewingTrash) "Delete Permanently?" else "Move to Trash?", fontWeight = FontWeight.Bold) },
+                text = {
+                    Text(
+                        if (isViewingTrash)
+                            "Permanently delete \"${doc.title}\"? This action cannot be undone."
+                        else
+                            "Move \"${doc.title}\" to Trash? You can restore it later."
+                    )
+                },
                 confirmButton = {
                     Button(
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
@@ -1266,15 +1345,82 @@ fun DocumentHubScreen(
                             noteToDelete = null
                             target?.let { note ->
                                 scope.launch {
-                                    repository.deleteNote(note)
-                                    snackbarHostState.showSnackbar("Moved \"${note.title}\" to Trash")
-                                    loadContent()
+                                    if (isViewingTrash) {
+                                        repository.deletePermanently(listOf(note))
+                                        loadContentNow()
+                                        snackbarHostState.showSnackbar("Permanently deleted \"${note.title}\"")
+                                    } else {
+                                        repository.deleteNote(note)
+                                        loadContentNow()
+                                        snackbarHostState.showSnackbar("Moved \"${note.title}\" to Trash")
+                                    }
                                 }
                             }
                         }
-                    ) { Text("Move to Trash") }
+                    ) { Text(if (isViewingTrash) "Delete Permanently" else "Move to Trash") }
                 },
                 dismissButton = { TextButton(onClick = { noteToDelete = null }) { Text("Cancel") } }
+            )
+        }
+
+        // 7b. Batch Delete Permanent Confirmation Dialog
+        if (showBatchDeletePermanentDialog) {
+            val currentDisplayNotes = if (isViewingTrash) trashedNotes else notes
+            val selectedDocs = currentDisplayNotes.filter { selectedNotePaths.contains(it.path) }
+
+            AlertDialog(
+                onDismissRequest = { showBatchDeletePermanentDialog = false },
+                icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                title = { Text("Delete Permanently?", fontWeight = FontWeight.Bold) },
+                text = {
+                    Text("Permanently delete ${selectedDocs.size} item(s)? This action cannot be undone.")
+                },
+                confirmButton = {
+                    Button(
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        onClick = {
+                            showBatchDeletePermanentDialog = false
+                            scope.launch {
+                                val count = repository.deletePermanently(selectedDocs).getOrDefault(0)
+                                isSelectionMode = false
+                                selectedNotePaths = emptySet()
+                                loadContentNow()
+                                snackbarHostState.showSnackbar("Permanently deleted $count item(s)")
+                            }
+                        }
+                    ) { Text("Delete Permanently") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showBatchDeletePermanentDialog = false }) { Text("Cancel") }
+                }
+            )
+        }
+
+        // 7c. Empty Trash Confirmation Dialog
+        if (showEmptyTrashConfirmDialog) {
+            AlertDialog(
+                onDismissRequest = { showEmptyTrashConfirmDialog = false },
+                icon = { Icon(Icons.Default.DeleteSweep, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                title = { Text("Empty Trash?", fontWeight = FontWeight.Bold) },
+                text = {
+                    Text("All items in Trash will be permanently deleted. This action cannot be undone.")
+                },
+                confirmButton = {
+                    Button(
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        onClick = {
+                            showEmptyTrashConfirmDialog = false
+                            scope.launch {
+                                repository.emptyTrash()
+                                loadContentNow()
+                                snackbarHostState.showSnackbar("Emptied Trash")
+                            }
+                        }
+                    ) { Text("Empty Trash") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showEmptyTrashConfirmDialog = false }) { Text("Cancel") }
+                }
             )
         }
 
@@ -1508,30 +1654,31 @@ fun DocumentHubScreen(
             )
         }
 
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = {
-                scope.launch {
-                    isRefreshing = true
-                    loadContent()
-                    delay(500)
-                    isRefreshing = false
-                }
-            },
-            state = pullRefreshState,
-            indicator = {
-                PullToRefreshDefaults.Indicator(
-                    state = pullRefreshState,
-                    isRefreshing = isRefreshing,
-                    modifier = Modifier.align(Alignment.TopCenter),
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            },
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = {
+                    scope.launch {
+                        isRefreshing = true
+                        loadContentNow()
+                        delay(400)
+                        isRefreshing = false
+                    }
+                },
+                state = pullRefreshState,
+                indicator = {
+                    PullToRefreshDefaults.Indicator(
+                        state = pullRefreshState,
+                        isRefreshing = isRefreshing,
+                        modifier = Modifier.align(Alignment.TopCenter),
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) {
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
@@ -1767,10 +1914,24 @@ fun DocumentHubScreen(
                                             text = folder.iconEmoji,
                                             fontSize = 28.sp
                                         )
-                                    } else if (folder.iconType == "emergency" || folder.isEmergencyFolder) {
+                                    } else if (folder.iconType == "emergency" || folder.isEmergencyFolder || folder.role == "emergency") {
                                         Icon(
                                             imageVector = Icons.Default.Emergency,
                                             contentDescription = "Emergency Saves",
+                                            tint = accentColor,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                    } else if (folder.iconType == "import" || folder.iconType == "imported" || folder.role == "import") {
+                                        Icon(
+                                            imageVector = Icons.Default.FileDownload,
+                                            contentDescription = "Imported Folder",
+                                            tint = accentColor,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                    } else if (folder.iconType == "audio" || folder.role == "audio") {
+                                        Icon(
+                                            imageVector = Icons.Default.AudioFile,
+                                            contentDescription = "Audio Folder",
                                             tint = accentColor,
                                             modifier = Modifier.size(32.dp)
                                         )
@@ -1783,13 +1944,35 @@ fun DocumentHubScreen(
                                         )
                                     }
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = folder.name,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Text(
+                                                text = folder.name,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f, fill = false)
+                                            )
+                                            if (folder.isPinned || folder.isVirtuallyPinned) {
+                                                Icon(
+                                                    imageVector = if (folder.isPinned) Icons.Default.PushPin else Icons.Outlined.PushPin,
+                                                    contentDescription = "Pinned Folder",
+                                                    tint = accentColor,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
+                                            if (folder.isExcludedFromRecents) {
+                                                Icon(
+                                                    imageVector = Icons.Default.VisibilityOff,
+                                                    contentDescription = "Excluded from Recents",
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
+                                        }
                                         Text(
                                             text = "${folder.itemCount} notes",
                                             style = MaterialTheme.typography.labelSmall,
@@ -1805,6 +1988,48 @@ fun DocumentHubScreen(
                                             expanded = showFolderMenu,
                                             onDismissRequest = { showFolderMenu = false }
                                         ) {
+                                            val isPinnedOrVirtual = folder.isPinned || folder.isVirtuallyPinned
+                                            androidx.compose.material3.DropdownMenuItem(
+                                                text = { Text(if (isPinnedOrVirtual) "Unpin Folder" else "Pin Folder") },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        if (isPinnedOrVirtual) Icons.Outlined.PushPin else Icons.Default.PushPin,
+                                                        contentDescription = null,
+                                                        tint = if (isPinnedOrVirtual) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showFolderMenu = false
+                                                    val nowPinned = repository.togglePinFolder(folder)
+                                                    loadContent()
+                                                    scope.launch {
+                                                        snackbarHostState.showSnackbar(
+                                                            if (nowPinned) "Pinned \"${folder.name}\"" else "Unpinned \"${folder.name}\""
+                                                        )
+                                                    }
+                                                }
+                                            )
+                                            androidx.compose.material3.DropdownMenuItem(
+                                                text = { Text(if (folder.isExcludedFromRecents) "Include in Recents" else "Exclude from Recents") },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        if (folder.isExcludedFromRecents) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                                        contentDescription = null,
+                                                        tint = if (folder.isExcludedFromRecents) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showFolderMenu = false
+                                                    val newExcluded = !folder.isExcludedFromRecents
+                                                    repository.setFolderExcludeFromRecents(folder.file, newExcluded)
+                                                    loadContent()
+                                                    scope.launch {
+                                                        snackbarHostState.showSnackbar(
+                                                            if (newExcluded) "Excluded \"${folder.name}\" from Recents" else "Included \"${folder.name}\" in Recents"
+                                                        )
+                                                    }
+                                                }
+                                            )
                                             androidx.compose.material3.DropdownMenuItem(
                                                 text = { Text("Rename Folder") },
                                                 leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null) },
@@ -1821,7 +2046,7 @@ fun DocumentHubScreen(
                                                     showFolderMenu = false
                                                     editFolderSelectedColor = folder.colorHex ?: (if (folder.isEmergencyFolder) DocumentRepository.EMERGENCY_SAVES_DEFAULT_COLOR else PRESET_FOLDER_COLORS.first())
                                                     editFolderSelectedEmoji = folder.iconEmoji
-                                                    editFolderSelectedIconType = folder.iconType ?: (if (folder.isEmergencyFolder) "emergency" else "folder")
+                                                    editFolderSelectedIconType = folder.iconType ?: (if (folder.isEmergencyFolder) "emergency" else (folder.role ?: "folder"))
                                                     folderToEdit = folder
                                                 }
                                             )
@@ -1832,8 +2057,8 @@ fun DocumentHubScreen(
                                                     showFolderMenu = false
                                                     scope.launch {
                                                         repository.moveFolderToTrash(folder.file)
+                                                        loadContentNow()
                                                         snackbarHostState.showSnackbar("Moved folder \"${folder.name}\" to Trash")
-                                                        loadContent()
                                                     }
                                                 }
                                             )
@@ -1844,17 +2069,19 @@ fun DocumentHubScreen(
                         }
                     }
 
-                    // Documents Section
+                    // Notes Grid Section
                     val currentNotes = if (isViewingTrash) trashedNotes else notes
 
                     if (currentNotes.isNotEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            Text(
-                                text = if (isViewingTrash) "Trashed Notes (${currentNotes.size})" else "Notes (${currentNotes.size})",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                        if (folders.isNotEmpty() && !isViewingTrash) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                Text(
+                                    text = if (isViewingTrash) "Trashed Notes (${currentNotes.size})" else "Notes (${currentNotes.size})",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
 
                         items(currentNotes, key = { it.path }) { note ->
@@ -1882,27 +2109,25 @@ fun DocumentHubScreen(
                                     }
                                 },
                                 onLongClick = {
-                                    if (!isViewingTrash) {
-                                        if (isSelectionMode && !isSelected && selectedNotePaths.isNotEmpty()) {
-                                            val lastPath = lastSelectedNotePath ?: selectedNotePaths.lastOrNull()
-                                            val currentList = currentNotes.map { it.path }
-                                            val lastIdx = currentList.indexOf(lastPath)
-                                            val currentIdx = currentList.indexOf(note.path)
-                                            if (lastIdx >= 0 && currentIdx >= 0) {
-                                                val start = minOf(lastIdx, currentIdx)
-                                                val end = maxOf(lastIdx, currentIdx)
-                                                val range = currentNotes.subList(start, end + 1).map { it.path }.toSet()
-                                                selectedNotePaths = selectedNotePaths + range
-                                            } else {
-                                                selectedNotePaths = selectedNotePaths + note.path
-                                            }
+                                    if (isSelectionMode && !isSelected && selectedNotePaths.isNotEmpty()) {
+                                        val lastPath = lastSelectedNotePath ?: selectedNotePaths.lastOrNull()
+                                        val currentList = currentNotes.map { it.path }
+                                        val lastIdx = currentList.indexOf(lastPath)
+                                        val currentIdx = currentList.indexOf(note.path)
+                                        if (lastIdx >= 0 && currentIdx >= 0) {
+                                            val start = minOf(lastIdx, currentIdx)
+                                            val end = maxOf(lastIdx, currentIdx)
+                                            val range = currentNotes.subList(start, end + 1).map { it.path }.toSet()
+                                            selectedNotePaths = selectedNotePaths + range
                                         } else {
-                                            isSelectionMode = true
                                             selectedNotePaths = selectedNotePaths + note.path
                                         }
-                                        lastSelectedNotePath = note.path
-                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    } else {
+                                        isSelectionMode = true
+                                        selectedNotePaths = selectedNotePaths + note.path
                                     }
+                                    lastSelectedNotePath = note.path
+                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                 },
                                 onTogglePin = {
                                     repository.togglePinNote(note.file.absolutePath)
@@ -1932,8 +2157,8 @@ fun DocumentHubScreen(
                                     scope.launch {
                                         val result = repository.duplicateNote(note)
                                         if (result.isSuccess) {
+                                            loadContentNow()
                                             snackbarHostState.showSnackbar("Duplicated \"${note.title}\"")
-                                            loadContent()
                                         }
                                     }
                                 },
@@ -1942,8 +2167,8 @@ fun DocumentHubScreen(
                                     scope.launch {
                                         val res = repository.restoreFromTrash(note)
                                         if (res.isSuccess) {
+                                            loadContentNow()
                                             snackbarHostState.showSnackbar("Restored \"${note.title}\"")
-                                            loadContent()
                                         }
                                     }
                                 }
@@ -1999,84 +2224,144 @@ fun DocumentHubScreen(
                         .fillMaxWidth()
                         .padding(16.dp)
                 ) {
-                    val selectedDocs = notes.filter { selectedNotePaths.contains(it.path) }
-                    val allSelectedPinned = selectedDocs.isNotEmpty() && selectedDocs.all { it.isPinned }
+                    val currentDisplayNotes = if (isViewingTrash) trashedNotes else notes
+                    val selectedDocs = currentDisplayNotes.filter { selectedNotePaths.contains(it.path) }
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Pin / Unpin Selected Action
-                        IconButton(onClick = {
-                            selectedDocs.forEach { doc ->
-                                if (allSelectedPinned) {
-                                    repository.unpinNote(doc.file.absolutePath)
-                                } else {
-                                    repository.pinNote(doc.file.absolutePath)
-                                }
-                            }
-                            scope.launch {
-                                snackbarHostState.showSnackbar(if (allSelectedPinned) "Unpinned selected notes from Home" else "Pinned selected notes to Home")
-                            }
-                            loadContent()
-                        }) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    Icons.Default.PushPin,
-                                    contentDescription = if (allSelectedPinned) "Unpin" else "Pin to Home",
-                                    tint = if (allSelectedPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    if (isViewingTrash) {
+                        // TRASH BIN MULTI-SELECTION ACTIONS
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // 1. Restore Selected Action
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        val count = repository.restoreMultipleFromTrash(selectedDocs).getOrDefault(0)
+                                        isSelectionMode = false
+                                        selectedNotePaths = emptySet()
+                                        loadContentNow()
+                                        snackbarHostState.showSnackbar("Restored $count item(s) from Trash")
+                                    }
+                                },
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
                                 )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Restore,
+                                    contentDescription = "Restore Selected",
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Restore (${selectedDocs.size})", fontWeight = FontWeight.Bold)
+                            }
+
+                            // 2. Delete Permanently Selected Action
+                            OutlinedButton(
+                                onClick = {
+                                    showBatchDeletePermanentDialog = true
+                                },
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Delete Permanently",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Delete", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
                             }
                         }
+                    } else {
+                        // NORMAL MULTI-SELECTION ACTIONS
+                        val allSelectedPinned = selectedDocs.isNotEmpty() && selectedDocs.all { it.isPinned }
 
-                        // Move to Folder Action
-                        IconButton(onClick = { showMoveToFolderDialog = true }) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = "Move to Folder", tint = MaterialTheme.colorScheme.primary)
-                            }
-                        }
-
-                        // Share as PDF Action
-                        IconButton(onClick = {
-                            isPdfConverting = true
-                            convertingMessage = "Rendering ${selectedDocs.size} PDFs..."
-                            scope.launch {
-                                val result = repository.shareMultipleNotesAsPdf(context, selectedDocs, pdfExportManager)
-                                isPdfConverting = false
-                                if (result.isFailure) {
-                                    snackbarHostState.showSnackbar("Batch share failed: ${result.exceptionOrNull()?.message}")
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Pin / Unpin Selected Action
+                            IconButton(onClick = {
+                                selectedDocs.forEach { doc ->
+                                    if (allSelectedPinned) {
+                                        repository.unpinNote(doc.file.absolutePath)
+                                    } else {
+                                        repository.pinNote(doc.file.absolutePath)
+                                    }
+                                }
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(if (allSelectedPinned) "Unpinned selected notes from Home" else "Pinned selected notes to Home")
+                                }
+                                loadContent()
+                            }) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        Icons.Default.PushPin,
+                                        contentDescription = if (allSelectedPinned) "Unpin" else "Pin to Home",
+                                        tint = if (allSelectedPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
-                        }) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.PictureAsPdf, contentDescription = "Share as PDF")
-                            }
-                        }
 
-                        // Share as Notes Action
-                        IconButton(onClick = {
-                            repository.shareMultipleNotesAsXopp(context, selectedDocs)
-                        }) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.Share, contentDescription = "Share Notes")
+                            // Move to Folder Action
+                            IconButton(onClick = { showMoveToFolderDialog = true }) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = "Move to Folder", tint = MaterialTheme.colorScheme.primary)
+                                }
                             }
-                        }
 
-                        // Move to Trash Action
-                        IconButton(onClick = {
-                            scope.launch {
-                                val count = repository.moveToTrash(selectedDocs).getOrDefault(0)
-                                snackbarHostState.showSnackbar("Moved $count note(s) to Trash")
-                                isSelectionMode = false
-                                selectedNotePaths = emptySet()
-                                loadContent()
+                            // Share as PDF Action
+                            IconButton(onClick = {
+                                isPdfConverting = true
+                                convertingMessage = "Rendering ${selectedDocs.size} PDFs..."
+                                scope.launch {
+                                    val result = repository.shareMultipleNotesAsPdf(context, selectedDocs, pdfExportManager)
+                                    isPdfConverting = false
+                                    if (result.isFailure) {
+                                        snackbarHostState.showSnackbar("Batch share failed: ${result.exceptionOrNull()?.message}")
+                                    }
+                                }
+                            }) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(Icons.Default.PictureAsPdf, contentDescription = "Share as PDF")
+                                }
                             }
-                        }) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.Delete, contentDescription = "Trash Selected", tint = MaterialTheme.colorScheme.error)
+
+                            // Share as Notes Action
+                            IconButton(onClick = {
+                                repository.shareMultipleNotesAsXopp(context, selectedDocs)
+                            }) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(Icons.Default.Share, contentDescription = "Share Notes")
+                                }
+                            }
+
+                            // Move to Trash Action
+                            IconButton(onClick = {
+                                scope.launch {
+                                    val count = repository.moveToTrash(selectedDocs).getOrDefault(0)
+                                    isSelectionMode = false
+                                    selectedNotePaths = emptySet()
+                                    loadContentNow()
+                                    snackbarHostState.showSnackbar("Moved $count note(s) to Trash")
+                                }
+                            }) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Trash Selected", tint = MaterialTheme.colorScheme.error)
+                                }
                             }
                         }
                     }
@@ -2084,6 +2369,24 @@ fun DocumentHubScreen(
             }
         }
     }
+
+    // Speed Dial Scrim Overlay
+    AnimatedVisibility(
+        visible = isFabExpanded,
+        enter = fadeIn(animationSpec = spring(stiffness = 400f)),
+        exit = fadeOut(animationSpec = spring(stiffness = 400f))
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.45f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { isFabExpanded = false }
+        )
+    }
+}
 }
 }
 
@@ -2546,22 +2849,51 @@ fun AutosaveResolutionDialog(
         },
         confirmButton = {
             if (isNewer) {
-                Button(onClick = onReplaceWithAutosave) {
-                    Text("Replace with Autosave")
+                Button(
+                    onClick = onReplaceWithAutosave,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    Text("Replace with Autosave", fontWeight = FontWeight.SemiBold)
                 }
             } else {
-                OutlinedButton(onClick = onReplaceWithAutosave) {
-                    Text("Replace with Autosave")
+                Button(
+                    onClick = onKeepExisting,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    Text("Keep Existing", fontWeight = FontWeight.SemiBold)
                 }
             }
         },
         dismissButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 TextButton(onClick = onKeepBoth) {
                     Text("Keep Both")
                 }
-                TextButton(onClick = onKeepExisting) {
-                    Text("Keep Existing")
+                if (isNewer) {
+                    TextButton(onClick = onKeepExisting) {
+                        Text("Keep Existing")
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = onReplaceWithAutosave,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text("Replace with Autosave", color = MaterialTheme.colorScheme.error)
+                    }
                 }
             }
         }

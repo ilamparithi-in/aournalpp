@@ -33,7 +33,9 @@ class DocumentRepository(private val context: Context) {
     data class FolderMetaData(
         val colorHex: String? = null,
         val iconEmoji: String? = null,
-        val iconType: String? = null
+        val iconType: String? = null,
+        val role: String? = null,
+        val excludeFromRecents: Boolean = false
     )
 
     private val env = LinuxEnvironment(context)
@@ -105,12 +107,109 @@ class DocumentRepository(private val context: Context) {
         prefs.edit().putString("pref_pinned_notes_order_json", array.toString()).apply()
     }
 
+    // Pinned Folders Persistence
+    fun getPinnedFolderPaths(): List<String> {
+        val raw = prefs.getString("pref_pinned_folders_order_json", null) ?: return emptyList()
+        return try {
+            val array = org.json.JSONArray(raw)
+            val list = mutableListOf<String>()
+            for (i in 0 until array.length()) {
+                val p = array.optString(i)
+                if (p.isNotBlank()) list.add(p)
+            }
+            list
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun getUnpinnedSpecialRoles(): Set<String> {
+        val raw = prefs.getString("pref_unpinned_special_roles_json", null) ?: return emptySet()
+        return try {
+            val array = org.json.JSONArray(raw)
+            val set = mutableSetOf<String>()
+            for (i in 0 until array.length()) {
+                val r = array.optString(i)
+                if (r.isNotBlank()) set.add(r.lowercase())
+            }
+            set
+        } catch (e: Exception) {
+            emptySet()
+        }
+    }
+
+    private fun saveUnpinnedSpecialRoles(roles: Set<String>) {
+        val array = org.json.JSONArray()
+        roles.forEach { array.put(it.lowercase()) }
+        prefs.edit().putString("pref_unpinned_special_roles_json", array.toString()).apply()
+    }
+
+    fun isFolderPinned(path: String): Boolean {
+        return getPinnedFolderPaths().contains(path)
+    }
+
+    fun pinFolder(path: String) {
+        val current = getPinnedFolderPaths().toMutableList()
+        current.remove(path)
+        current.add(0, path)
+        savePinnedFolders(current)
+    }
+
+    fun unpinFolder(path: String) {
+        val current = getPinnedFolderPaths().toMutableList()
+        current.remove(path)
+        savePinnedFolders(current)
+    }
+
+    fun togglePinFolder(folder: FolderItem): Boolean {
+        val path = folder.file.absolutePath
+        val role = folder.role
+        val userPinned = isFolderPinned(path)
+
+        if (userPinned) {
+            unpinFolder(path)
+            if (role != null) {
+                // Also mark special role as unpinned
+                val unpinnedRoles = getUnpinnedSpecialRoles().toMutableSet()
+                unpinnedRoles.add(role.lowercase())
+                saveUnpinnedSpecialRoles(unpinnedRoles)
+            }
+            return false
+        } else if (folder.isVirtuallyPinned) {
+            // User wants to unpin a virtually pinned special folder
+            if (role != null) {
+                val unpinnedRoles = getUnpinnedSpecialRoles().toMutableSet()
+                unpinnedRoles.add(role.lowercase())
+                saveUnpinnedSpecialRoles(unpinnedRoles)
+            }
+            return false
+        } else {
+            // Pin the folder
+            pinFolder(path)
+            if (role != null) {
+                val unpinnedRoles = getUnpinnedSpecialRoles().toMutableSet()
+                unpinnedRoles.remove(role.lowercase())
+                saveUnpinnedSpecialRoles(unpinnedRoles)
+            }
+            return true
+        }
+    }
+
+    private fun savePinnedFolders(paths: List<String>) {
+        val array = org.json.JSONArray()
+        paths.forEach { array.put(it) }
+        prefs.edit().putString("pref_pinned_folders_order_json", array.toString()).apply()
+    }
+
     private fun canonicalOf(file: File): String =
         try { file.canonicalPath } catch (e: Exception) { file.absolutePath }
 
     /** Per-scan cache for the values every file in a scan shares. */
     private inner class ScanCache {
         val pinnedPaths: Set<String> by lazy { getPinnedNotePaths().toSet() }
+        val pinnedFolderOrder: List<String> by lazy { getPinnedFolderPaths() }
+        val pinnedFolderPaths: Set<String> by lazy { pinnedFolderOrder.toSet() }
+        val unpinnedSpecialRoles: Set<String> by lazy { getUnpinnedSpecialRoles() }
 
         val openedTimestamps: Map<String, Long> by lazy {
             val raw = prefs.getString("pref_opened_notes_timestamps_json", null) ?: return@lazy emptyMap()
@@ -141,6 +240,7 @@ class DocumentRepository(private val context: Context) {
         fun isRoot(dir: File): Boolean = canonicalOf(dir) == rootCanonical
     }
 
+
     suspend fun scanDirectory(
         targetDir: File,
         query: String = "",
@@ -165,7 +265,10 @@ class DocumentRepository(private val context: Context) {
             }
 
             val meta = cache.folderMeta(dir)
-            val isEmergency = isEmergencySavesFolder(dir)
+            val isEmergency = meta.role == "emergency" || isEmergencySavesFolder(dir)
+            val role = meta.role
+            val isUserPinned = cache.pinnedFolderPaths.contains(dir.absolutePath)
+            val isVirtuallyPinned = role != null && !cache.unpinnedSpecialRoles.contains(role.lowercase()) && !isUserPinned
             val itemCount = dir.listFiles()?.count { file ->
                 file.isFile && isOpenableFile(file) && !file.name.startsWith(".")
             } ?: 0
@@ -178,6 +281,10 @@ class DocumentRepository(private val context: Context) {
                     iconEmoji = meta.iconEmoji,
                     iconType = meta.iconType,
                     isEmergencyFolder = isEmergency,
+                    isPinned = isUserPinned,
+                    isVirtuallyPinned = isVirtuallyPinned,
+                    role = role,
+                    isExcludedFromRecents = meta.excludeFromRecents,
                     itemCount = itemCount,
                     lastModifiedMs = dir.lastModified(),
                     isHidden = isHidden
@@ -280,8 +387,30 @@ class DocumentRepository(private val context: Context) {
             }
         }
 
+        // Sort folder items:
+        // 1. User pinned folders in user pin order
+        // 2. Virtually pinned special folders in alphabetical order
+        // 3. Regular unpinned folders in alphabetical order
+        val sortedFolders = folderItems.sortedWith { a, b ->
+            val aUserPinned = cache.pinnedFolderPaths.contains(a.file.absolutePath)
+            val bUserPinned = cache.pinnedFolderPaths.contains(b.file.absolutePath)
+            when {
+                aUserPinned && bUserPinned -> {
+                    val aIndex = cache.pinnedFolderOrder.indexOf(a.file.absolutePath)
+                    val bIndex = cache.pinnedFolderOrder.indexOf(b.file.absolutePath)
+                    aIndex.compareTo(bIndex)
+                }
+                aUserPinned -> -1
+                bUserPinned -> 1
+                a.isVirtuallyPinned && b.isVirtuallyPinned -> a.name.lowercase().compareTo(b.name.lowercase())
+                a.isVirtuallyPinned -> -1
+                b.isVirtuallyPinned -> 1
+                else -> a.name.lowercase().compareTo(b.name.lowercase())
+            }
+        }
+
         Pair(
-            folderItems.sortedBy { it.name.lowercase() },
+            sortedFolders,
             resultNotes.sortedByDescending { it.lastModifiedMs }
         )
     }
@@ -318,7 +447,9 @@ class DocumentRepository(private val context: Context) {
         name: String,
         colorHex: String? = null,
         iconEmoji: String? = null,
-        iconType: String? = null
+        iconType: String? = null,
+        role: String? = null,
+        excludeFromRecents: Boolean = false
     ): Result<File> {
         val cleanName = name.trim().replace(Regex("[/\\\\:*?\"<>|]"), "_")
         if (cleanName.isBlank()) return Result.failure(IllegalArgumentException("Folder name cannot be blank"))
@@ -330,29 +461,44 @@ class DocumentRepository(private val context: Context) {
             return Result.failure(IllegalStateException("Failed to create folder '$cleanName'"))
         }
 
-        if (colorHex != null || iconEmoji != null || iconType != null) {
-            writeFolderMeta(newDir, colorHex, iconEmoji, iconType)
+        if (colorHex != null || iconEmoji != null || iconType != null || role != null || excludeFromRecents) {
+            writeFolderMeta(newDir, colorHex, iconEmoji, iconType, role, excludeFromRecents)
         }
         return Result.success(newDir)
     }
 
     fun setFolderColor(folderDir: File, colorHex: String): Result<Unit> {
         val meta = readFolderMeta(folderDir)
-        return writeFolderMeta(folderDir, colorHex, meta.iconEmoji, meta.iconType)
+        return writeFolderMeta(folderDir, colorHex, meta.iconEmoji, meta.iconType, meta.role, meta.excludeFromRecents)
     }
 
     fun setFolderEmoji(folderDir: File, emoji: String?): Result<Unit> {
         val meta = readFolderMeta(folderDir)
-        return writeFolderMeta(folderDir, meta.colorHex, emoji, if (emoji == null) "folder" else null)
+        return writeFolderMeta(folderDir, meta.colorHex, emoji, if (emoji == null) (meta.iconType ?: "folder") else null, meta.role, meta.excludeFromRecents)
     }
 
     fun setFolderIcon(folderDir: File, iconType: String?): Result<Unit> {
         val meta = readFolderMeta(folderDir)
-        return writeFolderMeta(folderDir, meta.colorHex, null, iconType)
+        return writeFolderMeta(folderDir, meta.colorHex, null, iconType, meta.role, meta.excludeFromRecents)
     }
 
-    fun updateFolderMeta(folderDir: File, colorHex: String?, iconEmoji: String?, iconType: String? = null): Result<Unit> {
-        return writeFolderMeta(folderDir, colorHex, iconEmoji, iconType)
+    fun setFolderExcludeFromRecents(folderDir: File, exclude: Boolean): Result<Unit> {
+        val meta = readFolderMeta(folderDir)
+        return writeFolderMeta(folderDir, meta.colorHex, meta.iconEmoji, meta.iconType, meta.role, exclude)
+    }
+
+    fun updateFolderMeta(
+        folderDir: File,
+        colorHex: String?,
+        iconEmoji: String?,
+        iconType: String? = null,
+        role: String? = null,
+        excludeFromRecents: Boolean? = null
+    ): Result<Unit> {
+        val existing = readFolderMeta(folderDir)
+        val existingRole = role ?: existing.role
+        val existingExclude = excludeFromRecents ?: existing.excludeFromRecents
+        return writeFolderMeta(folderDir, colorHex, iconEmoji, iconType, existingRole, existingExclude)
     }
 
     suspend fun renameFolder(folderDir: File, newFolderName: String): Result<File> = withContext(Dispatchers.IO) {
@@ -375,8 +521,26 @@ class DocumentRepository(private val context: Context) {
                 return@runCatching folderDir
             }
 
+            val oldMeta = readFolderMeta(folderDir)
+            val wasPinned = isFolderPinned(folderDir.absolutePath)
+
             if (!folderDir.renameTo(targetDir)) {
                 error("Failed to rename folder to '$cleanName'")
+            }
+
+            // If folder had a special role, update LinuxEnvironment special path
+            if (!oldMeta.role.isNullOrBlank()) {
+                env.setSpecialDirectoryPath(oldMeta.role, targetDir.absolutePath)
+            }
+
+            // If folder was pinned, update the pinned path list
+            if (wasPinned) {
+                val currentPinned = getPinnedFolderPaths().toMutableList()
+                val index = currentPinned.indexOf(folderDir.absolutePath)
+                if (index != -1) {
+                    currentPinned[index] = targetDir.absolutePath
+                    savePinnedFolders(currentPinned)
+                }
             }
 
             targetDir
@@ -388,66 +552,104 @@ class DocumentRepository(private val context: Context) {
     }
 
     private fun readFolderMeta(folderDir: File): FolderMetaData {
-        val isEmergency = isEmergencySavesFolder(folderDir)
         val metaFile = File(folderDir, FOLDER_META_FILE)
-        if (!metaFile.exists()) {
-            return if (isEmergency) {
-                FolderMetaData(
-                    colorHex = EMERGENCY_SAVES_DEFAULT_COLOR,
-                    iconEmoji = null,
-                    iconType = EMERGENCY_SAVES_DEFAULT_ICON
-                )
-            } else {
-                FolderMetaData()
+        val dirName = folderDir.name
+
+        var detectedRole: String? = null
+        var defaultColor: String? = null
+        var defaultIcon: String? = null
+
+        when {
+            dirName.equals("Emergency Saves", ignoreCase = true) || isEmergencySavesFolder(folderDir) -> {
+                detectedRole = "emergency"
+                defaultColor = EMERGENCY_SAVES_DEFAULT_COLOR
+                defaultIcon = EMERGENCY_SAVES_DEFAULT_ICON
+            }
+            dirName.equals("Imported", ignoreCase = true) ||
+                try { folderDir.canonicalPath == env.getImportedDirectory().canonicalPath } catch (_: Exception) { false } -> {
+                detectedRole = "import"
+                defaultIcon = "import"
+            }
+            dirName.equals("Audio", ignoreCase = true) ||
+                try { folderDir.canonicalPath == env.getAudioDirectory().canonicalPath } catch (_: Exception) { false } -> {
+                detectedRole = "audio"
+                defaultIcon = "audio"
             }
         }
+
+        if (!metaFile.exists()) {
+            return FolderMetaData(
+                colorHex = defaultColor,
+                iconEmoji = null,
+                iconType = defaultIcon,
+                role = detectedRole,
+                excludeFromRecents = false
+            )
+        }
+
         return try {
             val json = JSONObject(metaFile.readText())
+            val role = if (json.has("role")) {
+                json.optString("role").takeIf { it.isNotBlank() } ?: detectedRole
+            } else {
+                detectedRole
+            }
+
             val color = if (json.has("color")) {
                 json.optString("color").takeIf { it.isNotBlank() }
-            } else if (isEmergency) {
-                EMERGENCY_SAVES_DEFAULT_COLOR
             } else {
-                null
+                defaultColor
             }
+
             val emoji = if (json.has("emoji")) {
                 json.optString("emoji").takeIf { it.isNotBlank() }
             } else {
                 null
             }
+
             val icon = if (json.has("icon")) {
                 json.optString("icon").takeIf { it.isNotBlank() }
-            } else if (isEmergency && emoji == null) {
-                EMERGENCY_SAVES_DEFAULT_ICON
+            } else if (emoji == null) {
+                defaultIcon
             } else {
                 null
             }
-            FolderMetaData(color, emoji, icon)
+
+            val excludeFromRecents = json.optBoolean("excludeFromRecents", false) || json.optBoolean("exclude_from_recents", false)
+
+            FolderMetaData(color, emoji, icon, role, excludeFromRecents)
         } catch (e: Exception) {
-            if (isEmergency) {
-                FolderMetaData(
-                    colorHex = EMERGENCY_SAVES_DEFAULT_COLOR,
-                    iconEmoji = null,
-                    iconType = EMERGENCY_SAVES_DEFAULT_ICON
-                )
-            } else {
-                FolderMetaData()
-            }
+            FolderMetaData(
+                colorHex = defaultColor,
+                iconEmoji = null,
+                iconType = defaultIcon,
+                role = detectedRole,
+                excludeFromRecents = false
+            )
         }
     }
 
-    private fun writeFolderMeta(folderDir: File, colorHex: String?, iconEmoji: String?, iconType: String? = null): Result<Unit> = runCatching {
+    private fun writeFolderMeta(
+        folderDir: File,
+        colorHex: String?,
+        iconEmoji: String?,
+        iconType: String? = null,
+        role: String? = null,
+        excludeFromRecents: Boolean? = null
+    ): Result<Unit> = runCatching {
         val metaFile = File(folderDir, FOLDER_META_FILE)
         val json = if (metaFile.exists()) {
             try { JSONObject(metaFile.readText()) } catch (e: Exception) { JSONObject() }
         } else {
             JSONObject()
         }
+
         if (colorHex != null) {
             json.put("color", colorHex)
         } else {
             json.remove("color")
         }
+
         if (iconEmoji != null && iconEmoji.isNotBlank()) {
             json.put("emoji", iconEmoji.trim())
             json.remove("icon")
@@ -459,6 +661,20 @@ class DocumentRepository(private val context: Context) {
                 json.remove("icon")
             }
         }
+
+        if (role != null && role.isNotBlank()) {
+            json.put("role", role.trim())
+        }
+
+        if (excludeFromRecents != null) {
+            if (excludeFromRecents) {
+                json.put("excludeFromRecents", true)
+            } else {
+                json.remove("excludeFromRecents")
+                json.remove("exclude_from_recents")
+            }
+        }
+
         metaFile.writeText(json.toString(2))
     }
 
@@ -469,7 +685,10 @@ class DocumentRepository(private val context: Context) {
             val subdirs = dir.listFiles { f -> f.isDirectory && f.name != TRASH_DIR_NAME && !f.name.startsWith(".") } ?: return
             for (sub in subdirs) {
                 val meta = cache.folderMeta(sub)
-                val isEmergency = isEmergencySavesFolder(sub)
+                val isEmergency = meta.role == "emergency" || isEmergencySavesFolder(sub)
+                val role = meta.role
+                val isUserPinned = cache.pinnedFolderPaths.contains(sub.absolutePath)
+                val isVirtuallyPinned = role != null && !cache.unpinnedSpecialRoles.contains(role.lowercase()) && !isUserPinned
                 val count = sub.listFiles { f -> f.isFile && isOpenableFile(f) && !f.name.startsWith(".") }?.size ?: 0
                 list.add(
                     FolderItem(
@@ -479,6 +698,10 @@ class DocumentRepository(private val context: Context) {
                         iconEmoji = meta.iconEmoji,
                         iconType = meta.iconType,
                         isEmergencyFolder = isEmergency,
+                        isPinned = isUserPinned,
+                        isVirtuallyPinned = isVirtuallyPinned,
+                        role = role,
+                        isExcludedFromRecents = meta.excludeFromRecents,
                         itemCount = count,
                         lastModifiedMs = sub.lastModified()
                     )
@@ -487,8 +710,26 @@ class DocumentRepository(private val context: Context) {
             }
         }
         recurse(root)
-        list.sortedBy { it.name.lowercase() }
+
+        list.sortedWith { a, b ->
+            val aUserPinned = cache.pinnedFolderPaths.contains(a.file.absolutePath)
+            val bUserPinned = cache.pinnedFolderPaths.contains(b.file.absolutePath)
+            when {
+                aUserPinned && bUserPinned -> {
+                    val aIndex = cache.pinnedFolderOrder.indexOf(a.file.absolutePath)
+                    val bIndex = cache.pinnedFolderOrder.indexOf(b.file.absolutePath)
+                    aIndex.compareTo(bIndex)
+                }
+                aUserPinned -> -1
+                bUserPinned -> 1
+                a.isVirtuallyPinned && b.isVirtuallyPinned -> a.name.lowercase().compareTo(b.name.lowercase())
+                a.isVirtuallyPinned -> -1
+                b.isVirtuallyPinned -> 1
+                else -> a.name.lowercase().compareTo(b.name.lowercase())
+            }
+        }
     }
+
 
     private fun findAssociatedAutosaveAndBackupFiles(mainFile: File): List<File> {
         val parentDir = mainFile.parentFile ?: return emptyList()
@@ -666,6 +907,60 @@ class DocumentRepository(private val context: Context) {
             } else {
                 error("Failed to restore ${note.title}")
             }
+        }
+    }
+
+    suspend fun restoreMultipleFromTrash(notes: List<NoteDocument>): Result<Int> = withContext(Dispatchers.IO) {
+        runCatching {
+            val trashDir = getTrashDirectory()
+            val manifestFile = File(trashDir, TRASH_MANIFEST_FILE)
+            val manifest = if (manifestFile.exists()) {
+                try { JSONObject(manifestFile.readText()) } catch (e: Exception) { JSONObject() }
+            } else {
+                JSONObject()
+            }
+
+            var count = 0
+            for (note in notes) {
+                val originalPath = manifest.optString(note.file.name).takeIf { it.isNotBlank() }
+                val destFile = if (!originalPath.isNullOrBlank()) {
+                    File(originalPath)
+                } else {
+                    File(env.getNotesDirectory(), note.title)
+                }
+
+                destFile.parentFile?.mkdirs()
+                if (note.file.renameTo(destFile)) {
+                    manifest.remove(note.file.name)
+                    count++
+                }
+            }
+
+            manifestFile.writeText(manifest.toString(2))
+            count
+        }
+    }
+
+    suspend fun deletePermanently(notes: List<NoteDocument>): Result<Int> = withContext(Dispatchers.IO) {
+        runCatching {
+            val trashDir = getTrashDirectory()
+            val manifestFile = File(trashDir, TRASH_MANIFEST_FILE)
+            val manifest = if (manifestFile.exists()) {
+                try { JSONObject(manifestFile.readText()) } catch (e: Exception) { JSONObject() }
+            } else {
+                JSONObject()
+            }
+
+            var count = 0
+            for (note in notes) {
+                if (note.file.deleteRecursively()) {
+                    manifest.remove(note.file.name)
+                    count++
+                }
+            }
+
+            manifestFile.writeText(manifest.toString(2))
+            count
         }
     }
 
@@ -987,16 +1282,39 @@ class DocumentRepository(private val context: Context) {
         env.clearQuarantinedEmergencySave()
     }
 
+    /** Returns true if the file is in staged_imports, cache, trash, or in a folder marked excludeFromRecents. */
+    fun isExcludedFromRecents(file: File): Boolean = isExcludedFromRecents(file, null)
+
+    private fun isExcludedFromRecents(file: File, cache: ScanCache? = null): Boolean {
+        val path = file.absolutePath
+        if (path.contains("staged_imports") || path.contains("/cache/") || path.contains("/.Trash/")) return true
+        val rootCanonical = canonicalOf(getRootNotesDirectory())
+        var curr: File? = file.parentFile
+        while (curr != null) {
+            val meta = cache?.folderMeta(curr) ?: readFolderMeta(curr)
+            if (meta.excludeFromRecents) return true
+            if (canonicalOf(curr) == rootCanonical) break
+            curr = curr.parentFile
+        }
+        return false
+    }
+
     /** Collects openable files under [root], skipping trash, hidden dirs, backups and autosaves. */
-    private fun collectOpenableFiles(root: File): List<File> {
+    private fun collectOpenableFiles(root: File, cache: ScanCache? = null, skipRecentsExcluded: Boolean = false): List<File> {
         val found = mutableListOf<File>()
         fun scan(dir: File) {
+            if (skipRecentsExcluded) {
+                val meta = cache?.folderMeta(dir) ?: readFolderMeta(dir)
+                if (meta.excludeFromRecents) return
+            }
             val children = dir.listFiles() ?: return
             for (c in children) {
                 if (c.isDirectory && c.name != TRASH_DIR_NAME && !c.name.startsWith(".")) {
                     scan(c)
                 } else if (c.isFile && isOpenableFile(c) && !c.name.startsWith(".") && !c.name.endsWith("~") && !c.name.contains(".autosave.")) {
-                    found.add(c)
+                    if (!skipRecentsExcluded || !isExcludedFromRecents(c, cache)) {
+                        found.add(c)
+                    }
                 }
             }
         }
@@ -1046,14 +1364,17 @@ class DocumentRepository(private val context: Context) {
 
     // Open History Tracking
     fun recordNoteOpened(path: String) {
-        if (path.isBlank()) return
+        if (path.isBlank() || path.contains("staged_imports") || path.contains("/cache/") || path.contains("/.Trash/")) return
+        val file = File(path)
+        if (isExcludedFromRecents(file)) return
+
         val raw = prefs.getString("pref_opened_notes_history_json", null)
         val list = try {
             val array = org.json.JSONArray(raw ?: "[]")
             val l = mutableListOf<String>()
             for (i in 0 until array.length()) {
                 val p = array.optString(i)
-                if (p.isNotBlank() && p != path) {
+                if (p.isNotBlank() && p != path && !p.contains("staged_imports") && !p.contains("/cache/")) {
                     l.add(p)
                 }
             }
@@ -1139,7 +1460,9 @@ class DocumentRepository(private val context: Context) {
                 val array = org.json.JSONArray(raw)
                 for (i in 0 until array.length()) {
                     val p = array.optString(i)
-                    if (p.isNotBlank() && !list.contains(p)) list.add(p)
+                    if (p.isNotBlank() && !list.contains(p) && !p.contains("staged_imports") && !p.contains("/cache/")) {
+                        list.add(p)
+                    }
                 }
             } catch (e: Exception) {
                 // ignore
@@ -1151,11 +1474,11 @@ class DocumentRepository(private val context: Context) {
         } catch (e: Exception) {
             null
         }
-        if (!mainPrefsLastOpened.isNullOrBlank() && !list.contains(mainPrefsLastOpened)) {
+        if (!mainPrefsLastOpened.isNullOrBlank() && !mainPrefsLastOpened.contains("staged_imports") && !mainPrefsLastOpened.contains("/cache/") && !list.contains(mainPrefsLastOpened)) {
             list.add(0, mainPrefsLastOpened)
         }
         val docHubLastOpened = prefs.getString("pref_last_opened_note_path", null)
-        if (!docHubLastOpened.isNullOrBlank() && !list.contains(docHubLastOpened)) {
+        if (!docHubLastOpened.isNullOrBlank() && !docHubLastOpened.contains("staged_imports") && !docHubLastOpened.contains("/cache/") && !list.contains(docHubLastOpened)) {
             list.add(0, docHubLastOpened)
         }
         return list
@@ -1166,13 +1489,13 @@ class DocumentRepository(private val context: Context) {
         // 1. Check open history first (the most recently opened valid note)
         for (path in getRecentlyOpenedPaths()) {
             val file = File(path)
-            if (file.exists() && file.isFile && isOpenableFile(file) && !file.absolutePath.contains("/.Trash/")) {
+            if (file.exists() && file.isFile && isOpenableFile(file) && !isExcludedFromRecents(file, cache)) {
                 val doc = buildNoteDocument(file, cache)
                 if (doc != null) return@withContext doc
             }
         }
         // 2. Fallback to latest modified file
-        collectOpenableFiles(getRootNotesDirectory())
+        collectOpenableFiles(getRootNotesDirectory(), cache, skipRecentsExcluded = true)
             .sortedByDescending { it.lastModified() }
             .firstOrNull()
             ?.let { buildNoteDocument(it, cache) }
@@ -1194,7 +1517,7 @@ class DocumentRepository(private val context: Context) {
         // 1. Prioritize recently opened notes
         for (path in getRecentlyOpenedPaths()) {
             val file = File(path)
-            if (file.exists() && file.isFile && isOpenableFile(file) && !file.absolutePath.contains("/.Trash/")) {
+            if (file.exists() && file.isFile && isOpenableFile(file) && !isExcludedFromRecents(file, cache)) {
                 val canonical = canonicalOf(file)
                 if (!seenPaths.contains(file.absolutePath) && !seenPaths.contains(canonical)) {
                     seenPaths.add(file.absolutePath)
@@ -1209,7 +1532,7 @@ class DocumentRepository(private val context: Context) {
 
         // 2. Fill remaining slots with latest modified files
         if (result.size < limit) {
-            val remainingFiles = collectOpenableFiles(getRootNotesDirectory())
+            val remainingFiles = collectOpenableFiles(getRootNotesDirectory(), cache, skipRecentsExcluded = true)
                 .sortedByDescending { it.lastModified() }
             for (file in remainingFiles) {
                 val canonical = canonicalOf(file)
@@ -1249,7 +1572,7 @@ class DocumentRepository(private val context: Context) {
             // Add recently opened first
             for (path in getRecentlyOpenedPaths()) {
                 val file = File(path)
-                if (file.exists() && file.isFile && isOpenableFile(file) && !file.absolutePath.contains("/.Trash/")) {
+                if (file.exists() && file.isFile && isOpenableFile(file) && !isExcludedFromRecents(file, cache)) {
                     val canonical = canonicalOf(file)
                     if (!seenPaths.contains(file.absolutePath) && !seenPaths.contains(canonical)) {
                         seenPaths.add(file.absolutePath)
@@ -1264,7 +1587,7 @@ class DocumentRepository(private val context: Context) {
 
             // Fill remaining with latest modified
             if (dynamicDocs.size < remainingLimit) {
-                val remainingFiles = collectOpenableFiles(getRootNotesDirectory())
+                val remainingFiles = collectOpenableFiles(getRootNotesDirectory(), cache, skipRecentsExcluded = true)
                     .sortedByDescending { it.lastModified() }
                 for (file in remainingFiles) {
                     val canonical = canonicalOf(file)

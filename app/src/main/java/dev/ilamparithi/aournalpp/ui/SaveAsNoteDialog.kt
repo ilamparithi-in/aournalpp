@@ -15,11 +15,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.AlertDialog
@@ -202,11 +204,29 @@ fun SaveAsNoteDialog(
                                     selectedFolderItem?.iconEmoji?.isNotBlank() == true -> {
                                         Text(selectedFolderItem.iconEmoji, fontSize = 16.sp)
                                     }
-                                    selectedFolderItem?.iconType == "emergency" || selectedFolderItem?.isEmergencyFolder == true -> {
+                                    selectedFolderItem?.iconType == "emergency" || selectedFolderItem?.isEmergencyFolder == true || selectedFolderItem?.role == "emergency" -> {
                                         Icon(
                                             imageVector = Icons.Default.Emergency,
                                             contentDescription = null,
                                             tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    selectedFolderItem?.iconType == "import" || selectedFolderItem?.iconType == "imported" || selectedFolderItem?.role == "import" -> {
+                                        val tintColor = parseHexColor(selectedFolderItem?.colorHex) ?: MaterialTheme.colorScheme.primary
+                                        Icon(
+                                            imageVector = Icons.Default.FileDownload,
+                                            contentDescription = null,
+                                            tint = tintColor,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    selectedFolderItem?.iconType == "audio" || selectedFolderItem?.role == "audio" -> {
+                                        val tintColor = parseHexColor(selectedFolderItem?.colorHex) ?: MaterialTheme.colorScheme.primary
+                                        Icon(
+                                            imageVector = Icons.Default.AudioFile,
+                                            contentDescription = null,
+                                            tint = tintColor,
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
@@ -220,6 +240,7 @@ fun SaveAsNoteDialog(
                                         )
                                     }
                                 }
+
 
                                 Spacer(modifier = Modifier.width(10.dp))
 
@@ -306,11 +327,27 @@ fun SaveAsNoteDialog(
                                             !folder.iconEmoji.isNullOrBlank() -> {
                                                 Text(folder.iconEmoji, fontSize = 16.sp)
                                             }
-                                            folder.iconType == "emergency" || folder.isEmergencyFolder -> {
+                                            folder.iconType == "emergency" || folder.isEmergencyFolder || folder.role == "emergency" -> {
                                                 Icon(
                                                     imageVector = Icons.Default.Emergency,
                                                     contentDescription = null,
                                                     tint = MaterialTheme.colorScheme.error
+                                                )
+                                            }
+                                            folder.iconType == "import" || folder.iconType == "imported" || folder.role == "import" -> {
+                                                val folderColor = parseHexColor(folder.colorHex) ?: MaterialTheme.colorScheme.primary
+                                                Icon(
+                                                    imageVector = Icons.Default.FileDownload,
+                                                    contentDescription = null,
+                                                    tint = folderColor
+                                                )
+                                            }
+                                            folder.iconType == "audio" || folder.role == "audio" -> {
+                                                val folderColor = parseHexColor(folder.colorHex) ?: MaterialTheme.colorScheme.primary
+                                                Icon(
+                                                    imageVector = Icons.Default.AudioFile,
+                                                    contentDescription = null,
+                                                    tint = folderColor
                                                 )
                                             }
                                             else -> {
@@ -361,111 +398,37 @@ fun SaveAsNoteDialog(
     )
 
     // Inline "Create New Folder" Dialog
+    // Modular CreateFolderDialog
     if (showCreateFolderDialog && onCreateFolder != null) {
-        var newFolderName by remember { mutableStateOf("") }
-        var selectedFolderColor by remember { mutableStateOf("#4CAF50") }
-        var selectedFolderEmoji by remember { mutableStateOf<String?>(null) }
-        var selectedFolderIconType by remember { mutableStateOf<String?>("folder") }
         var isCreating by remember { mutableStateOf(false) }
 
-        Dialog(onDismissRequest = { if (!isCreating) showCreateFolderDialog = false }) {
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 6.dp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Text(
-                        text = "Create New Folder",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    OutlinedTextField(
-                        value = newFolderName,
-                        onValueChange = { newFolderName = it },
-                        label = { Text("Folder Name") },
-                        placeholder = { Text("e.g. Physics, Sketches") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Folder Icon / Emoji", style = MaterialTheme.typography.labelMedium)
-                        FolderIconPickerRow(
-                            selectedEmoji = selectedFolderEmoji,
-                            selectedIconType = selectedFolderIconType,
-                            onIconSelected = { emoji, iconType ->
-                                selectedFolderEmoji = emoji
-                                selectedFolderIconType = iconType
-                            }
+        CreateFolderDialog(
+            title = "Create New Folder",
+            confirmButtonLabel = "Create & Select",
+            isCreating = isCreating,
+            onDismiss = { showCreateFolderDialog = false },
+            onCreate = { name, colorHex, iconEmoji, iconType ->
+                isCreating = true
+                coroutineScope.launch {
+                    val result = onCreateFolder(name, colorHex, iconEmoji, iconType)
+                    if (result.isSuccess) {
+                        val createdDir = result.getOrThrow()
+                        val newFolderItem = FolderItem(
+                            file = createdDir,
+                            name = createdDir.name,
+                            colorHex = colorHex,
+                            iconEmoji = iconEmoji,
+                            iconType = iconType,
+                            isEmergencyFolder = false
                         )
+                        currentFolders.add(newFolderItem)
+                        selectedFolder = createdDir
+                        showCreateFolderDialog = false
                     }
-
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Folder Color Accent", style = MaterialTheme.typography.labelMedium)
-                        FolderColorPickerRow(
-                            selectedColorHex = selectedFolderColor,
-                            onColorSelected = { selectedFolderColor = it }
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextButton(
-                            onClick = { showCreateFolderDialog = false },
-                            enabled = !isCreating
-                        ) {
-                            Text("Cancel")
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                if (newFolderName.isNotBlank() && !isCreating) {
-                                    isCreating = true
-                                    coroutineScope.launch {
-                                        val result = onCreateFolder(
-                                            newFolderName.trim(),
-                                            selectedFolderColor,
-                                            selectedFolderEmoji,
-                                            selectedFolderIconType
-                                        )
-                                        if (result.isSuccess) {
-                                            val createdDir = result.getOrThrow()
-                                            val newFolderItem = FolderItem(
-                                                file = createdDir,
-                                                name = createdDir.name,
-                                                colorHex = selectedFolderColor,
-                                                iconEmoji = selectedFolderEmoji,
-                                                iconType = selectedFolderIconType,
-                                                isEmergencyFolder = false
-                                            )
-                                            currentFolders.add(newFolderItem)
-                                            selectedFolder = createdDir
-                                            showCreateFolderDialog = false
-                                        }
-                                        isCreating = false
-                                    }
-                                }
-                            },
-                            enabled = newFolderName.isNotBlank() && !isCreating
-                        ) {
-                            Text("Create & Select")
-                        }
-                    }
+                    isCreating = false
                 }
             }
-        }
+        )
     }
 }
 

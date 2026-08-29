@@ -33,7 +33,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Emergency
+import androidx.compose.material.icons.filled.FileDownload
 
 val DEFAULT_PRESET_FOLDER_EMOJIS = listOf(
     "📝", "📚", "🎨", "💡", "🔬", "📐", "💼", "🏠", "⭐", "🚀", "🧪", "📓", "🏷️", "🎯", "🌿", "💻", "☕"
@@ -41,8 +43,8 @@ val DEFAULT_PRESET_FOLDER_EMOJIS = listOf(
 
 /**
  * An expressive folder icon & emoji selector with:
- * 1. Default Folder Icon (Icons.Default.Folder) as the first choice
- * 2. Exclusive Emergency Icon (Icons.Default.Emergency)
+ * 1. Default Role Icon (if folder has a special role, e.g. Audio, Import, Emergency)
+ * 2. Default Folder Icon (Icons.Default.Folder)
  * 3. Curated emoji presets
  * 4. Custom selected emoji (if active)
  * 5. Plus (+) button for custom emoji input
@@ -50,21 +52,65 @@ val DEFAULT_PRESET_FOLDER_EMOJIS = listOf(
 @Composable
 fun FolderIconPickerRow(
     selectedEmoji: String?,
-    selectedIconType: String?, // "folder", "emergency", or null
+    selectedIconType: String?, // "folder", "emergency", "import", "audio", or null
     onIconSelected: (emoji: String?, iconType: String?) -> Unit,
+    defaultRoleIconType: String? = null,
     presetEmojis: List<String> = DEFAULT_PRESET_FOLDER_EMOJIS,
     modifier: Modifier = Modifier
 ) {
     var showCustomEmojiDialog by remember { mutableStateOf(false) }
 
-    val isDefaultFolderSelected = selectedEmoji.isNullOrBlank() && (selectedIconType == "folder" || selectedIconType == null)
-    val isEmergencySelected = selectedEmoji.isNullOrBlank() && selectedIconType == "emergency"
+    val effectiveRoleIcon = defaultRoleIconType?.lowercase()
+    val isRoleIconSelected = selectedEmoji.isNullOrBlank() && selectedIconType == effectiveRoleIcon && effectiveRoleIcon != null
+    val isDefaultFolderSelected = selectedEmoji.isNullOrBlank() && (selectedIconType == "folder" || (selectedIconType == null && effectiveRoleIcon == null))
 
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier.fillMaxWidth()
     ) {
-        // 1. Default Folder Icon Option (First Choice)
+        // 1. Role-specific Default Icon Option (First Choice if present)
+        if (effectiveRoleIcon != null) {
+            item {
+                val roleVector = when (effectiveRoleIcon) {
+                    "emergency" -> Icons.Default.Emergency
+                    "import", "imported" -> Icons.Default.FileDownload
+                    "audio" -> Icons.Default.AudioFile
+                    else -> Icons.Default.Folder
+                }
+                val roleContainerColor = if (isRoleIconSelected) {
+                    if (effectiveRoleIcon == "emergency") MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                }
+                val roleBorder = if (isRoleIconSelected) {
+                    if (effectiveRoleIcon == "emergency") BorderStroke(2.dp, MaterialTheme.colorScheme.error) else BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                } else null
+
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = roleContainerColor,
+                    border = roleBorder,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clickable { onIconSelected(null, effectiveRoleIcon) }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = roleVector,
+                            contentDescription = "Role Default Icon ($effectiveRoleIcon)",
+                            tint = if (isRoleIconSelected) {
+                                if (effectiveRoleIcon == "emergency") MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 2. Standard Default Folder Icon Option
         item {
             Surface(
                 shape = RoundedCornerShape(10.dp),
@@ -79,27 +125,6 @@ fun FolderIconPickerRow(
                         imageVector = Icons.Default.Folder,
                         contentDescription = "Default Folder Icon",
                         tint = if (isDefaultFolderSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-        }
-
-        // 2. Exclusive Emergency Icon Option (Material 3)
-        item {
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = if (isEmergencySelected) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                border = if (isEmergencySelected) BorderStroke(2.dp, MaterialTheme.colorScheme.error) else null,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clickable { onIconSelected(null, "emergency") }
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Emergency,
-                        contentDescription = "Emergency Icon",
-                        tint = if (isEmergencySelected) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -122,6 +147,7 @@ fun FolderIconPickerRow(
                 }
             }
         }
+
 
         // 4. Custom Selected Emoji (if selected and not in preset list)
         if (!selectedEmoji.isNullOrBlank() && !presetEmojis.contains(selectedEmoji)) {

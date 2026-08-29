@@ -15,6 +15,9 @@ class LinuxEnvironment(private val context: Context) {
         const val PREF_KEY_GTK_THEME = "pref_gtk_theme"
         const val PREF_KEY_WALLPAPER_MODE = "pref_canvas_wallpaper_mode"
         const val PREF_KEY_PENDING_AUTOLOAD_NOTIFICATION = "pref_pending_autoload_conflict_notification"
+        const val PREF_KEY_AUDIO_DIR = "pref_special_audio_dir"
+        const val PREF_KEY_IMPORTED_DIR = "pref_special_imported_dir"
+        const val PREF_KEY_EMERGENCY_DIR = "pref_special_emergency_dir"
     }
 
     val rootDir: File = context.filesDir
@@ -65,7 +68,14 @@ class LinuxEnvironment(private val context: Context) {
     }
 
     fun getEmergencySavesDirectory(): File {
-        val dir = File(getNotesDirectory(), "Emergency Saves")
+        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        val savedPath = prefs.getString(PREF_KEY_EMERGENCY_DIR, null)
+        val dir = if (!savedPath.isNullOrBlank()) {
+            val f = File(savedPath)
+            if (f.exists()) f else File(getNotesDirectory(), "Emergency Saves")
+        } else {
+            File(getNotesDirectory(), "Emergency Saves")
+        }
         if (!dir.exists()) {
             dir.mkdirs()
         }
@@ -75,6 +85,7 @@ class LinuxEnvironment(private val context: Context) {
                 metaFile.writeText(
                     """
                     {
+                      "role": "emergency",
                       "color": "#F44336",
                       "icon": "emergency"
                     }
@@ -85,6 +96,79 @@ class LinuxEnvironment(private val context: Context) {
             }
         }
         return dir
+    }
+
+    fun getImportedDirectory(): File {
+        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        val savedPath = prefs.getString(PREF_KEY_IMPORTED_DIR, null)
+        val dir = if (!savedPath.isNullOrBlank()) {
+            val f = File(savedPath)
+            if (f.exists()) f else File(getNotesDirectory(), "Imported")
+        } else {
+            File(getNotesDirectory(), "Imported")
+        }
+        if (!dir.exists()) {
+            dir.mkdirs()
+        }
+        val metaFile = File(dir, ".folder.json")
+        if (!metaFile.exists()) {
+            try {
+                metaFile.writeText(
+                    """
+                    {
+                      "role": "import",
+                      "icon": "import"
+                    }
+                    """.trimIndent()
+                )
+            } catch (e: Exception) {
+                // ignore
+            }
+        }
+        return dir
+    }
+
+    fun getAudioDirectory(): File {
+        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        val savedPath = prefs.getString(PREF_KEY_AUDIO_DIR, null)
+        val dir = if (!savedPath.isNullOrBlank()) {
+            val f = File(savedPath)
+            if (f.exists()) f else File(getNotesDirectory(), "Audio")
+        } else {
+            File(getNotesDirectory(), "Audio")
+        }
+        if (!dir.exists()) {
+            dir.mkdirs()
+        }
+        val metaFile = File(dir, ".folder.json")
+        if (!metaFile.exists()) {
+            try {
+                metaFile.writeText(
+                    """
+                    {
+                      "role": "audio",
+                      "icon": "audio"
+                    }
+                    """.trimIndent()
+                )
+            } catch (e: Exception) {
+                // ignore
+            }
+        }
+        return dir
+    }
+
+    fun setSpecialDirectoryPath(role: String, newPath: String) {
+        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        val prefKey = when (role.lowercase()) {
+            "emergency" -> PREF_KEY_EMERGENCY_DIR
+            "import", "imported" -> PREF_KEY_IMPORTED_DIR
+            "audio" -> PREF_KEY_AUDIO_DIR
+            else -> null
+        }
+        if (prefKey != null) {
+            prefs.edit().putString(prefKey, newPath).apply()
+        }
     }
 
     fun setNotesDirectory(newPath: String) {

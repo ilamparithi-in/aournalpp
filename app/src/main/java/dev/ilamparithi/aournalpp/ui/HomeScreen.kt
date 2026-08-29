@@ -316,8 +316,8 @@ fun HomeScreen(
         scope.launch {
             val result = repository.duplicateNote(note)
             if (result.isSuccess) {
-                snackbarHostState.showSnackbar("Duplicated \"${note.title}\"")
                 loadHomeData()
+                snackbarHostState.showSnackbar("Duplicated \"${note.title}\"")
             } else {
                 snackbarHostState.showSnackbar("Failed to duplicate: ${result.exceptionOrNull()?.message}")
             }
@@ -860,94 +860,29 @@ fun HomeScreen(
 
     // Create Folder Dialog
     if (showCreateFolderDialog) {
-        val folderColors = listOf("#4CAF50", "#3F51B5", "#FF5722", "#FFC107", "#9C27B0", "#00BCD4")
-        val folderEmojis = listOf("📁", "📝", "📚", "🎨", "💡", "🔬", "📐", "💼", "🏠", "⭐", "🚀", "🧪", "📓", "🏷️", "🎯", "🌿")
-
-        Dialog(onDismissRequest = { showCreateFolderDialog = false }) {
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 6.dp,
-                modifier = Modifier.fillMaxWidth().padding(16.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Text(
-                        "Create New Folder",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
+        CreateFolderDialog(
+            title = "Create New Folder",
+            confirmButtonLabel = "Create",
+            onDismiss = { showCreateFolderDialog = false },
+            onCreate = { name, colorHex, iconEmoji, iconType ->
+                showCreateFolderDialog = false
+                scope.launch {
+                    val res = repository.createFolder(
+                        parentDir = repository.getRootNotesDirectory(),
+                        name = name,
+                        colorHex = colorHex,
+                        iconEmoji = iconEmoji,
+                        iconType = iconType
                     )
-
-                    OutlinedTextField(
-                        value = newFolderName,
-                        onValueChange = { newFolderName = it },
-                        label = { Text("Folder Name") },
-                        placeholder = { Text("e.g. Physics, Sketches") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Folder Icon / Emoji", style = MaterialTheme.typography.labelMedium)
-                        FolderIconPickerRow(
-                            selectedEmoji = selectedFolderEmoji,
-                            selectedIconType = selectedFolderIconType,
-                            onIconSelected = { emoji, iconType ->
-                                selectedFolderEmoji = emoji
-                                selectedFolderIconType = iconType
-                            }
-                        )
-                    }
-
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Folder Color Accent", style = MaterialTheme.typography.labelMedium)
-                        FolderColorPickerRow(
-                            selectedColorHex = selectedFolderColor,
-                            onColorSelected = { selectedFolderColor = it }
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextButton(onClick = { showCreateFolderDialog = false }) {
-                            Text("Cancel")
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                if (newFolderName.isNotBlank()) {
-                                    showCreateFolderDialog = false
-                                    scope.launch {
-                                        val res = repository.createFolder(
-                                            parentDir = repository.getRootNotesDirectory(),
-                                            name = newFolderName.trim(),
-                                            colorHex = selectedFolderColor,
-                                            iconEmoji = selectedFolderEmoji,
-                                            iconType = selectedFolderIconType
-                                        )
-                                        if (res.isSuccess) {
-                                            snackbarHostState.showSnackbar("Created folder \"${newFolderName.trim()}\"")
-                                            loadHomeData()
-                                        } else {
-                                            snackbarHostState.showSnackbar("Failed to create folder")
-                                        }
-                                    }
-                                }
-                            },
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Create")
-                        }
+                    if (res.isSuccess) {
+                        snackbarHostState.showSnackbar("Created folder \"$name\"")
+                        loadHomeData()
+                    } else {
+                        snackbarHostState.showSnackbar("Failed to create folder: ${res.exceptionOrNull()?.message}")
                     }
                 }
             }
-        }
+        )
     }
 
     // Emergency Recovery Launch Dialog
@@ -1288,8 +1223,8 @@ fun HomeScreen(
                         scope.launch {
                             val result = repository.renameNote(target, renameInputText)
                             if (result.isSuccess) {
-                                snackbarHostState.showSnackbar("Renamed to \"${renameInputText.trim()}\"")
                                 loadHomeData()
+                                snackbarHostState.showSnackbar("Renamed to \"${renameInputText.trim()}\"")
                             } else {
                                 snackbarHostState.showSnackbar("Failed to rename: ${result.exceptionOrNull()?.message}")
                             }
@@ -1356,70 +1291,7 @@ fun HomeScreen(
     }
 }
 
-/**
- * Expressive Speed Dial Action Item with Spring Motion Physics
- */
-@Composable
-private fun SpeedDialActionItem(
-    progress: Float,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    containerColor: Color,
-    contentColor: Color,
-    onClick: () -> Unit
-) {
-    if (progress <= 0.01f) return
 
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.92f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-        label = "actionPressScale"
-    )
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier
-            .graphicsLayer {
-                scaleX = progress * pressScale
-                scaleY = progress * pressScale
-                alpha = progress.coerceIn(0f, 1f)
-                translationY = (1f - progress) * 28f
-            }
-    ) {
-        Surface(
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            shadowElevation = 6.dp,
-            modifier = Modifier.clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-            )
-        }
-
-        FloatingActionButton(
-            onClick = onClick,
-            interactionSource = interactionSource,
-            shape = RoundedCornerShape(18.dp),
-            containerColor = containerColor,
-            contentColor = contentColor,
-            elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
-            modifier = Modifier.size(52.dp)
-        ) {
-            Icon(imageVector = icon, contentDescription = label, modifier = Modifier.size(24.dp))
-        }
-    }
-}
 
 /**
  * Enlarged "Continue where you left off" Hero Section
