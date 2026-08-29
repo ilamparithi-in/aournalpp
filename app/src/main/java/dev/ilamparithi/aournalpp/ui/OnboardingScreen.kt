@@ -189,6 +189,12 @@ fun OnboardingScreen(
 
     // Live storage permission state with lifecycle resume observer
     var isPermissionGranted by remember { mutableStateOf(checkStoragePermissionGranted(context)) }
+    val legacyPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        isPermissionGranted = checkStoragePermissionGranted(context)
+    }
+
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -318,7 +324,18 @@ fun OnboardingScreen(
                         )
                         1 -> OnboardingStoragePermissionPage(
                             isGranted = isPermissionGranted,
-                            onRequestPermission = { launchStoragePermissionSettings(context) },
+                            onRequestPermission = {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                    launchStoragePermissionSettings(context)
+                                } else {
+                                    legacyPermissionLauncher.launch(
+                                        arrayOf(
+                                            Manifest.permission.READ_EXTERNAL_STORAGE,
+                                            Manifest.permission.WRITE_EXTERNAL_STORAGE
+                                        )
+                                    )
+                                }
+                            },
                             onContinue = {
                                 scope.launch { pagerState.animateScrollToPage(2) }
                             }
