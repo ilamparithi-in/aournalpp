@@ -68,7 +68,7 @@ class XoppNativeRendererTest {
     @Test
     fun `test collage layout memory cache`() {
         CollageLayoutMemoryCache.clear()
-        assertNull(CollageLayoutMemoryCache.getLayout(800))
+        assertNull(CollageLayoutMemoryCache.getLayout(800, 123))
 
         val dummyResult = CollageLayoutResult(
             cards = emptyList(),
@@ -76,15 +76,15 @@ class XoppNativeRendererTest {
             totalHeight = 600f,
             isScrollable = false
         )
-        CollageLayoutMemoryCache.putLayout(800, dummyResult)
+        CollageLayoutMemoryCache.putLayout(800, 123, dummyResult)
 
-        val retrieved = CollageLayoutMemoryCache.getLayout(800)
+        val retrieved = CollageLayoutMemoryCache.getLayout(800, 123)
         assertNotNull(retrieved)
         assertEquals(800f, retrieved?.totalWidth)
         assertEquals(600f, retrieved?.totalHeight)
 
         CollageLayoutMemoryCache.clear()
-        assertNull(CollageLayoutMemoryCache.getLayout(800))
+        assertNull(CollageLayoutMemoryCache.getLayout(800, 123))
     }
 
     @Test

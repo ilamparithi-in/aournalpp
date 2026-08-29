@@ -15,12 +15,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FolderCopy
 import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.FolderCopy
 import androidx.compose.material.icons.outlined.Gavel
@@ -64,6 +66,8 @@ import dev.ilamparithi.aournalpp.ui.EnvironmentUpdateDialog
 import dev.ilamparithi.aournalpp.ui.HomeScreen
 import dev.ilamparithi.aournalpp.ui.LicensesScreen
 import dev.ilamparithi.aournalpp.ui.OnboardingScreen
+import dev.ilamparithi.aournalpp.ui.cloud.CloudScreen
+import dev.ilamparithi.aournalpp.backup.worker.BackupScheduler
 import dev.ilamparithi.aournalpp.SettingsScreen
 import dev.ilamparithi.aournalpp.data.DocumentRepository
 import dev.ilamparithi.aournalpp.utils.ExternalFileHandler
@@ -100,6 +104,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        BackupScheduler.updateSchedules(this)
 
         pendingIntentToProcess = intent
 
@@ -272,6 +278,11 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onStop() {
+        super.onStop()
+        BackupScheduler.triggerOnAppExitSync(this)
+    }
 }
 
 enum class AppTab(
@@ -281,6 +292,7 @@ enum class AppTab(
 ) {
     HOME("Home", Icons.Filled.Home, Icons.Outlined.Home),
     FILES("Files", Icons.Filled.FolderCopy, Icons.Outlined.FolderCopy),
+    CLOUD("Cloud", Icons.Filled.Cloud, Icons.Outlined.Cloud),
     SETTINGS("Settings", Icons.Filled.Settings, Icons.Outlined.Settings),
     ABOUT("About", Icons.Filled.Info, Icons.Outlined.Info);
 
@@ -331,6 +343,9 @@ fun MainResponsiveAppShell() {
             AppTab.FILES.id -> DocumentHubScreen(
                 onNavigateToSettings = { selectedTab = AppTab.SETTINGS.id },
                 onNavigateToLicenses = { selectedTab = AppTab.ABOUT.id }
+            )
+            AppTab.CLOUD.id -> CloudScreen(
+                onNavigateToSettings = { selectedTab = AppTab.SETTINGS.id }
             )
             AppTab.SETTINGS.id -> SettingsScreen(onBack = { selectedTab = AppTab.HOME.id })
             AppTab.ABOUT.id -> LicensesScreen(onBack = { selectedTab = AppTab.HOME.id })

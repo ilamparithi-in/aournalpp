@@ -70,3 +70,28 @@
     public static **[] values();
     public static ** valueOf(java.lang.String);
 }
+
+# -----------------------------------------------------------------------
+# Room DB
+# -----------------------------------------------------------------------
+-keep class * extends androidx.room.RoomDatabase
+-dontwarn androidx.room.paging.**
+-keep class androidx.room.** { *; }
+
+# -----------------------------------------------------------------------
+# SSHJ / Bouncy Castle / SMBJ / OkHttp / Commons-Net / SLF4J
+# -----------------------------------------------------------------------
+-keep class net.schmizz.sshj.** { *; }
+-keep class com.hierynomus.** { *; }
+-keep class okhttp3.** { *; }
+-keep class okio.** { *; }
+-keep class org.apache.commons.net.** { *; }
+-keep class org.slf4j.** { *; }
+-keep class org.bouncycastle.** { *; }
+-dontwarn net.schmizz.sshj.**
+-dontwarn com.hierynomus.**
+-dontwarn org.apache.commons.net.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.slf4j.**
+-dontwarn okhttp3.**
+-dontwarn okio.**
