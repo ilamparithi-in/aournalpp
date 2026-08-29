@@ -27,11 +27,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -44,6 +47,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -51,6 +55,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import dev.ilamparithi.aournalpp.ui.FloatingToolbarLayout
+import dev.ilamparithi.aournalpp.ui.InteractiveMarqueeText
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -774,6 +781,7 @@ class CanvasActivity : ComponentActivity() {
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun FloatingToolbarOverlay(
     canvasWidthPx: Float,
@@ -924,410 +932,446 @@ private fun FloatingToolbarOverlay(
                 label = "HeaderMorphTransition"
             ) { expanded ->
                 if (expanded) {
-                    Row(
+                    FloatingToolbarLayout(
                         modifier = Modifier
+                            .widthIn(max = with(density) { (canvasWidthPx - 16.dp.toPx()).toDp() })
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
                             ) { interactionSignal.tryEmit(Unit) },
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        // Navigation & Document Info
-                        if (showBack) {
-                            IconButton(
-                                onClick = {
-                                    interactionSignal.tryEmit(Unit)
-                                    onSmartBackPress()
-                                },
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "Exit Note",
-                                    modifier = Modifier.size(20.dp),
-                                    tint = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
-
-                        if (showTitle) {
-                            Icon(
-                                imageVector = windowIcon,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-
-                            Spacer(modifier = Modifier.width(2.dp))
-
-                            Text(
-                                text = displayTitle,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(end = 4.dp)
-                            )
-                        }
-
-                        // Stylus Click Override Mode Switcher
-                        if (showStylusClickOverride) {
-                            val modes = listOf(
-                                1 to "L",
-                                2 to "M",
-                                4 to "R"
-                            )
-                            val selectedIndex = when (stylusClickMode) {
-                                2 -> 1
-                                4 -> 2
-                                else -> 0
-                            }
-
-                            val itemWidth = 26.dp
-                            val itemHeight = 24.dp
-                            val spacing = 2.dp
-                            val padding = 2.dp
-
-                            val indicatorOffset by animateDpAsState(
-                                targetValue = (itemWidth + spacing) * selectedIndex,
-                                animationSpec = tween(durationMillis = 240, easing = M3MorphEasing),
-                                label = "StylusIndicatorOffset"
-                            )
-
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier.padding(horizontal = 4.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier.padding(padding)
+                        mainContent = {
+                            // Navigation & Document Info
+                            if (showBack) {
+                                IconButton(
+                                    onClick = {
+                                        interactionSignal.tryEmit(Unit)
+                                        onSmartBackPress()
+                                    },
+                                    modifier = Modifier.size(36.dp)
                                 ) {
-                                    // Animated Active Indicator Pill
-                                    Surface(
-                                        modifier = Modifier
-                                            .offset(x = indicatorOffset)
-                                            .size(itemWidth, itemHeight),
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = MaterialTheme.colorScheme.primary,
-                                        shadowElevation = 1.dp
-                                    ) {}
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Exit Note",
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
 
-                                    // Interactive Mode Buttons
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(spacing),
-                                        verticalAlignment = Alignment.CenterVertically
+                            if (showTitle) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
+                                    modifier = Modifier
+                                        .height(36.dp)
+                                        .padding(horizontal = 4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = windowIcon,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+
+                                    Spacer(modifier = Modifier.width(6.dp))
+
+                                    dev.ilamparithi.aournalpp.ui.InteractiveMarqueeText(
+                                        text = displayTitle,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        minWidth = 90.dp,
+                                        maxWidth = 220.dp
+                                    )
+                                }
+                            }
+
+                            // Stylus Click Override Mode Switcher
+                            if (showStylusClickOverride) {
+                                val modes = listOf(
+                                    1 to "L",
+                                    2 to "M",
+                                    4 to "R"
+                                )
+                                val selectedIndex = when (stylusClickMode) {
+                                    2 -> 1
+                                    4 -> 2
+                                    else -> 0
+                                }
+
+                                val itemWidth = 26.dp
+                                val itemHeight = 24.dp
+                                val spacing = 2.dp
+                                val padding = 2.dp
+
+                                val indicatorOffset by animateDpAsState(
+                                    targetValue = (itemWidth + spacing) * selectedIndex,
+                                    animationSpec = tween(durationMillis = 240, easing = M3MorphEasing),
+                                    label = "StylusIndicatorOffset"
+                                )
+
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier.padding(horizontal = 4.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier.padding(padding)
                                     ) {
-                                        modes.forEach { (modeValue, label) ->
-                                            val isSelected = stylusClickMode == modeValue
-                                            val textColor by animateColorAsState(
-                                                targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                animationSpec = tween(durationMillis = 240, easing = M3MorphEasing),
-                                                label = "StylusTextColor"
-                                            )
+                                        // Animated Active Indicator Pill
+                                        Surface(
+                                            modifier = Modifier
+                                                .offset(x = indicatorOffset)
+                                                .size(itemWidth, itemHeight),
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            shadowElevation = 1.dp
+                                        ) {}
 
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(itemWidth, itemHeight)
-                                                    .clip(RoundedCornerShape(8.dp))
-                                                    .clickable(
-                                                        interactionSource = remember { MutableInteractionSource() },
-                                                        indication = null
-                                                    ) {
-                                                        interactionSignal.tryEmit(Unit)
-                                                        onStylusClickModeChange(modeValue)
-                                                    },
-                                                contentAlignment = Alignment.Center
+                                        // Interactive Mode Buttons
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(spacing),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            modes.forEach { (modeValue, label) ->
+                                                val isSelected = stylusClickMode == modeValue
+                                                val textColor by animateColorAsState(
+                                                    targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    animationSpec = tween(durationMillis = 240, easing = M3MorphEasing),
+                                                    label = "StylusTextColor"
+                                                )
+
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(itemWidth, itemHeight)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .clickable(
+                                                            interactionSource = remember { MutableInteractionSource() },
+                                                            indication = null
+                                                        ) {
+                                                            interactionSignal.tryEmit(Unit)
+                                                            onStylusClickModeChange(modeValue)
+                                                        },
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        text = label,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                        color = textColor
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Touch Stylus Mode Toggle (Finger as Stylus)
+                            if (showTouchStylus) {
+                                val activeBgColor by animateColorAsState(
+                                    targetValue = if (isFingerAsStylus) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    animationSpec = tween(durationMillis = 240, easing = M3MorphEasing),
+                                    label = "TouchStylusBgColor"
+                                )
+                                val activeIconColor by animateColorAsState(
+                                    targetValue = if (isFingerAsStylus) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    animationSpec = tween(durationMillis = 240, easing = M3MorphEasing),
+                                    label = "TouchStylusIconColor"
+                                )
+
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = activeBgColor,
+                                    modifier = Modifier
+                                        .padding(horizontal = 2.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            interactionSignal.tryEmit(Unit)
+                                            try { haptics.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                                            onToggleFingerAsStylus()
+                                        }
+                                ) {
+                                    Box(
+                                        modifier = Modifier.size(32.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Draw,
+                                            contentDescription = if (isFingerAsStylus) "Finger as Stylus (Enabled)" else "Finger as Stylus (Disabled)",
+                                            modifier = Modifier.size(17.dp),
+                                            tint = activeIconColor
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Shared Clipboard Actions Capsule (Cut Ctrl+X, Copy Ctrl+C, Paste Ctrl+V)
+                            if (showCut || showCopy || showPaste) {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier.padding(horizontal = 2.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(0.dp)
+                                    ) {
+                                        if (showCut) {
+                                            IconButton(
+                                                onClick = {
+                                                    interactionSignal.tryEmit(Unit)
+                                                    try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
+                                                    onInjectShortcut(KeyEvent.KEYCODE_X, "ctrl+x")
+                                                },
+                                                modifier = Modifier.size(32.dp)
                                             ) {
-                                                Text(
-                                                    text = label,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                    color = textColor
+                                                Icon(
+                                                    imageVector = Icons.Default.ContentCut,
+                                                    contentDescription = "Cut (Ctrl+X)",
+                                                    modifier = Modifier.size(16.dp),
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+
+                                        if (showCopy) {
+                                            IconButton(
+                                                onClick = {
+                                                    interactionSignal.tryEmit(Unit)
+                                                    try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
+                                                    onInjectShortcut(KeyEvent.KEYCODE_C, "ctrl+c")
+                                                },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.ContentCopy,
+                                                    contentDescription = "Copy (Ctrl+C)",
+                                                    modifier = Modifier.size(16.dp),
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+
+                                        if (showPaste) {
+                                            IconButton(
+                                                onClick = {
+                                                    interactionSignal.tryEmit(Unit)
+                                                    try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
+                                                    onInjectShortcut(KeyEvent.KEYCODE_V, "ctrl+v")
+                                                },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.ContentPaste,
+                                                    contentDescription = "Paste (Ctrl+V)",
+                                                    modifier = Modifier.size(16.dp),
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
 
-                        // Touch Stylus Mode Toggle (Finger as Stylus)
-                        if (showTouchStylus) {
-                            val activeBgColor by animateColorAsState(
-                                targetValue = if (isFingerAsStylus) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                animationSpec = tween(durationMillis = 240, easing = M3MorphEasing),
-                                label = "TouchStylusBgColor"
-                            )
-                            val activeIconColor by animateColorAsState(
-                                targetValue = if (isFingerAsStylus) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                animationSpec = tween(durationMillis = 240, easing = M3MorphEasing),
-                                label = "TouchStylusIconColor"
-                            )
+                            // Stateful Keyboard Toggle Action
+                            if (showKeyboard) {
+                                val activeBgColor by animateColorAsState(
+                                    targetValue = if (isKeyboardOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    animationSpec = tween(durationMillis = 240, easing = M3MorphEasing),
+                                    label = "KeyboardBgColor"
+                                )
+                                val activeIconColor by animateColorAsState(
+                                    targetValue = if (isKeyboardOpen) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    animationSpec = tween(durationMillis = 240, easing = M3MorphEasing),
+                                    label = "KeyboardIconColor"
+                                )
 
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = activeBgColor,
-                                modifier = Modifier
-                                    .padding(horizontal = 2.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = activeBgColor,
+                                    modifier = Modifier
+                                        .padding(horizontal = 2.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            interactionSignal.tryEmit(Unit)
+                                            onToggleKeyboard()
+                                        }
+                                ) {
+                                    Box(
+                                        modifier = Modifier.size(32.dp),
+                                        contentAlignment = Alignment.Center
                                     ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Keyboard,
+                                            contentDescription = if (isKeyboardOpen) "Hide Keyboard" else "Show Keyboard",
+                                            modifier = Modifier.size(17.dp),
+                                            tint = activeIconColor
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Animated Reset Position Button
+                            AnimatedVisibility(
+                                visible = isMovedFromDefault,
+                                enter = fadeIn() + scaleIn(initialScale = 0.6f),
+                                exit = fadeOut() + scaleOut(targetScale = 0.6f)
+                            ) {
+                                IconButton(
+                                    onClick = {
                                         interactionSignal.tryEmit(Unit)
                                         try { haptics.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
-                                        onToggleFingerAsStylus()
-                                    }
-                            ) {
+
+                                        val (startDeltaX, startDeltaY) = with(density) {
+                                            val totalW = canvasWidthPx
+                                            val totalH = canvasHeightPx
+                                            val tW = if (toolbarSizePx.width > 0) toolbarSizePx.width.toFloat() else 320f
+                                            val tH = if (toolbarSizePx.height > 0) toolbarSizePx.height.toFloat() else 48f
+
+                                            val minX: Float
+                                            val maxX: Float
+                                            val minY: Float
+                                            val maxY: Float
+
+                                            if (centerTopBarWithinBounds) {
+                                                minX = effectiveInsets.left.dp.toPx() + systemBarPadding.calculateStartPadding(LayoutDirection.Ltr).toPx() + 8.dp.toPx()
+                                                maxX = maxOf(minX, totalW - tW - effectiveInsets.right.dp.toPx() - systemBarPadding.calculateEndPadding(LayoutDirection.Ltr).toPx() - 8.dp.toPx())
+                                                minY = effectiveInsets.top.dp.toPx() + systemBarPadding.calculateTopPadding().toPx() + 8.dp.toPx()
+                                                maxY = maxOf(minY, totalH - tH - effectiveInsets.bottom.dp.toPx() - systemBarPadding.calculateBottomPadding().toPx() - 8.dp.toPx())
+                                            } else {
+                                                minX = 8.dp.toPx()
+                                                maxX = maxOf(minX, totalW - tW - 8.dp.toPx())
+                                                minY = if (isFullscreen) {
+                                                    if (cutoutPlacement.hasCenterCutout) cutoutTopOffsetDp.toPx() + 8.dp.toPx() else 8.dp.toPx()
+                                                } else {
+                                                    systemBarPadding.calculateTopPadding().toPx() + 8.dp.toPx()
+                                                }
+                                                maxY = maxOf(minY, totalH - tH - 8.dp.toPx())
+                                            }
+
+                                            val currentBaseX = minX + (maxX - minX) * dragNormX
+                                            val currentBaseY = minY + (maxY - minY) * dragNormY
+                                            val targetBaseX = minX + (maxX - minX) * defaultNormX
+                                            val targetBaseY = minY + (maxY - minY) * defaultNormY
+
+                                            (currentBaseX - targetBaseX) to (currentBaseY - targetBaseY)
+                                        }
+
+                                        dragNormX = defaultNormX
+                                        dragNormY = defaultNormY
+                                        isMovedFromDefault = false
+
+                                        coroutineScope.launch {
+                                            animPixelOffset.snapTo(Offset(startDeltaX, startDeltaY))
+                                            animPixelOffset.animateTo(
+                                                targetValue = Offset.Zero,
+                                                animationSpec = spring(
+                                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                    stiffness = Spring.StiffnessMediumLow
+                                                )
+                                            )
+                                        }
+                                    },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.RestartAlt,
+                                        contentDescription = "Reset Toolbar Position",
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        },
+                        trailingContent = {
+                            // Pin/Unpin Mode or Collapse Action
+                            if (pinButtonMode) {
+                                IconButton(
+                                    onClick = {
+                                        interactionSignal.tryEmit(Unit)
+                                        isPinned = !isPinned
+                                        try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
+                                    },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
+                                        contentDescription = if (isPinned) "Unpin Toolbar" else "Pin Toolbar",
+                                        modifier = Modifier.size(20.dp),
+                                        tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            } else {
+                                IconButton(
+                                    onClick = {
+                                        interactionSignal.tryEmit(Unit)
+                                        isHeaderExpanded = false
+                                    },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ExpandLess,
+                                        contentDescription = "Collapse Toolbar",
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            // Movable Drag Handle
+                            if (showDragHandle) {
                                 Box(
-                                    modifier = Modifier.size(32.dp),
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .pointerInput(Unit) {
+                                            detectDragGesturesAfterLongPress(
+                                                onDragStart = {
+                                                    coroutineScope.launch { animPixelOffset.snapTo(Offset.Zero) }
+                                                    interactionSignal.tryEmit(Unit)
+                                                    try { haptics.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                                                },
+                                                onDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    interactionSignal.tryEmit(Unit)
+                                                    val totalW = canvasWidthPx
+                                                    val totalH = canvasHeightPx
+                                                    val tW = if (toolbarSizePx.width > 0) toolbarSizePx.width.toFloat() else 320f
+                                                    val tH = if (toolbarSizePx.height > 0) toolbarSizePx.height.toFloat() else 48f
+                                                    val spanX = maxOf(1f, totalW - tW)
+                                                    val spanY = maxOf(1f, totalH - tH)
+                                                    dragNormX = (dragNormX + dragAmount.x / spanX).coerceIn(0f, 1f)
+                                                    dragNormY = (dragNormY + dragAmount.y / spanY).coerceIn(0f, 1f)
+                                                    isMovedFromDefault = abs(dragNormX - defaultNormX) > 0.03f || abs(dragNormY - defaultNormY) > 0.03f
+                                                },
+                                                onDragEnd = {
+                                                    interactionSignal.tryEmit(Unit)
+                                                    try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
+                                                    isMovedFromDefault = abs(dragNormX - defaultNormX) > 0.03f || abs(dragNormY - defaultNormY) > 0.03f
+                                                },
+                                                onDragCancel = {}
+                                            )
+                                        },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.Draw,
-                                        contentDescription = if (isFingerAsStylus) "Finger as Stylus (Enabled)" else "Finger as Stylus (Disabled)",
-                                        modifier = Modifier.size(17.dp),
-                                        tint = activeIconColor
+                                        imageVector = Icons.Default.DragIndicator,
+                                        contentDescription = "Drag to Move Toolbar",
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
                         }
-
-                        // Shared Clipboard Actions Capsule (Cut Ctrl+X, Copy Ctrl+C, Paste Ctrl+V)
-                        if (showCut || showCopy || showPaste) {
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier.padding(horizontal = 2.dp)
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(0.dp)
-                                ) {
-                                    if (showCut) {
-                                        IconButton(
-                                            onClick = {
-                                                interactionSignal.tryEmit(Unit)
-                                                try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
-                                                onInjectShortcut(KeyEvent.KEYCODE_X, "ctrl+x")
-                                            },
-                                            modifier = Modifier.size(32.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.ContentCut,
-                                                contentDescription = "Cut (Ctrl+X)",
-                                                modifier = Modifier.size(16.dp),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-
-                                    if (showCopy) {
-                                        IconButton(
-                                            onClick = {
-                                                interactionSignal.tryEmit(Unit)
-                                                try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
-                                                onInjectShortcut(KeyEvent.KEYCODE_C, "ctrl+c")
-                                            },
-                                            modifier = Modifier.size(32.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.ContentCopy,
-                                                contentDescription = "Copy (Ctrl+C)",
-                                                modifier = Modifier.size(16.dp),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-
-                                    if (showPaste) {
-                                        IconButton(
-                                            onClick = {
-                                                interactionSignal.tryEmit(Unit)
-                                                try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
-                                                onInjectShortcut(KeyEvent.KEYCODE_V, "ctrl+v")
-                                            },
-                                            modifier = Modifier.size(32.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.ContentPaste,
-                                                contentDescription = "Paste (Ctrl+V)",
-                                                modifier = Modifier.size(16.dp),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Stateful Keyboard Toggle Action
-                        if (showKeyboard) {
-                            IconButton(
-                                onClick = {
-                                    interactionSignal.tryEmit(Unit)
-                                    onToggleKeyboard()
-                                },
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Keyboard,
-                                    contentDescription = "Toggle Keyboard",
-                                    modifier = Modifier.size(20.dp),
-                                    tint = if (isKeyboardOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        // Position Reset Action (shown when dragged away from configured default)
-                        if (isMovedFromDefault) {
-                            IconButton(
-                                onClick = {
-                                    interactionSignal.tryEmit(Unit)
-                                    try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
-                                    val (startDeltaX, startDeltaY) = with(density) {
-                                        val totalW = canvasWidthPx
-                                        val totalH = canvasHeightPx
-                                        val tW = if (toolbarSizePx.width > 0) toolbarSizePx.width.toFloat() else 320.dp.toPx()
-                                        val tH = if (toolbarSizePx.height > 0) toolbarSizePx.height.toFloat() else 48.dp.toPx()
-
-                                        val minX: Float
-                                        val maxX: Float
-                                        val minY: Float
-                                        val maxY: Float
-
-                                        if (centerTopBarWithinBounds) {
-                                            minX = effectiveInsets.left.dp.toPx() + systemBarPadding.calculateStartPadding(LayoutDirection.Ltr).toPx() + 8.dp.toPx()
-                                            maxX = maxOf(minX, totalW - tW - effectiveInsets.right.dp.toPx() - systemBarPadding.calculateEndPadding(LayoutDirection.Ltr).toPx() - 8.dp.toPx())
-                                            minY = effectiveInsets.top.dp.toPx() + systemBarPadding.calculateTopPadding().toPx() + 8.dp.toPx()
-                                            maxY = maxOf(minY, totalH - tH - effectiveInsets.bottom.dp.toPx() - systemBarPadding.calculateBottomPadding().toPx() - 8.dp.toPx())
-                                        } else {
-                                            minX = 8.dp.toPx()
-                                            maxX = maxOf(minX, totalW - tW - 8.dp.toPx())
-                                            minY = if (isFullscreen) {
-                                                if (cutoutPlacement.hasCenterCutout) cutoutTopOffsetDp.toPx() + 8.dp.toPx() else 8.dp.toPx()
-                                            } else {
-                                                systemBarPadding.calculateTopPadding().toPx() + 8.dp.toPx()
-                                            }
-                                            maxY = maxOf(minY, totalH - tH - 8.dp.toPx())
-                                        }
-
-                                        val currentBaseX = minX + (maxX - minX) * dragNormX
-                                        val currentBaseY = minY + (maxY - minY) * dragNormY
-                                        val targetBaseX = minX + (maxX - minX) * defaultNormX
-                                        val targetBaseY = minY + (maxY - minY) * defaultNormY
-
-                                        (currentBaseX - targetBaseX) to (currentBaseY - targetBaseY)
-                                    }
-
-                                    dragNormX = defaultNormX
-                                    dragNormY = defaultNormY
-                                    isMovedFromDefault = false
-
-                                    coroutineScope.launch {
-                                        animPixelOffset.snapTo(Offset(startDeltaX, startDeltaY))
-                                        animPixelOffset.animateTo(
-                                            targetValue = Offset.Zero,
-                                            animationSpec = spring(
-                                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                stiffness = Spring.StiffnessMediumLow
-                                            )
-                                        )
-                                    }
-                                },
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.RestartAlt,
-                                    contentDescription = "Reset Toolbar Position",
-                                    modifier = Modifier.size(20.dp),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-
-                        // Pin/Unpin Mode or Collapse Action
-                        if (pinButtonMode) {
-                            IconButton(
-                                onClick = {
-                                    interactionSignal.tryEmit(Unit)
-                                    isPinned = !isPinned
-                                    try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
-                                },
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
-                                    contentDescription = if (isPinned) "Unpin Toolbar" else "Pin Toolbar",
-                                    modifier = Modifier.size(20.dp),
-                                    tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        } else {
-                            IconButton(
-                                onClick = {
-                                    interactionSignal.tryEmit(Unit)
-                                    isHeaderExpanded = false
-                                },
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.ExpandLess,
-                                    contentDescription = "Collapse Toolbar",
-                                    modifier = Modifier.size(20.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        // Movable Drag Handle
-                        if (showDragHandle) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .pointerInput(Unit) {
-                                        detectDragGesturesAfterLongPress(
-                                            onDragStart = {
-                                                coroutineScope.launch { animPixelOffset.snapTo(Offset.Zero) }
-                                                interactionSignal.tryEmit(Unit)
-                                                try { haptics.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
-                                            },
-                                            onDrag = { change, dragAmount ->
-                                                change.consume()
-                                                interactionSignal.tryEmit(Unit)
-                                                val totalW = canvasWidthPx
-                                                val totalH = canvasHeightPx
-                                                val tW = if (toolbarSizePx.width > 0) toolbarSizePx.width.toFloat() else 320f
-                                                val tH = if (toolbarSizePx.height > 0) toolbarSizePx.height.toFloat() else 48f
-                                                val spanX = maxOf(1f, totalW - tW)
-                                                val spanY = maxOf(1f, totalH - tH)
-                                                dragNormX = (dragNormX + dragAmount.x / spanX).coerceIn(0f, 1f)
-                                                dragNormY = (dragNormY + dragAmount.y / spanY).coerceIn(0f, 1f)
-                                                isMovedFromDefault = abs(dragNormX - defaultNormX) > 0.03f || abs(dragNormY - defaultNormY) > 0.03f
-                                            },
-                                            onDragEnd = {
-                                                interactionSignal.tryEmit(Unit)
-                                                try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
-                                                isMovedFromDefault = abs(dragNormX - defaultNormX) > 0.03f || abs(dragNormY - defaultNormY) > 0.03f
-                                            },
-                                            onDragCancel = {}
-                                        )
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.DragIndicator,
-                                    contentDescription = "Drag to Move Toolbar",
-                                    modifier = Modifier.size(20.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
+                    )
                 } else {
                     // Collapsed Pill View: Entire pill is draggable on long-press & expandable on single-tap (no handle icon)
                     Row(

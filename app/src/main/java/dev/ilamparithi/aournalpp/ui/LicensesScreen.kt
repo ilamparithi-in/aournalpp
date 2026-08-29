@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -70,7 +71,7 @@ val BUNDLED_LIBRARIES = listOf(
         copyright = "Copyright (c) 2026 Ilamparithi and Contributors",
         licenseType = "GPL-3.0-or-later",
         description = "Material 3 interface, headless background conversion, X11 runtime orchestration, and storage bridge.",
-        repositoryUrl = "https://github.com/ilamparithi/xopp-android",
+        repositoryUrl = "https://github.com/ilamparithi/aournalpp",
         licenseText = """
 GNU GENERAL PUBLIC LICENSE
 Version 3, 29 June 2007
@@ -117,16 +118,79 @@ Everyone is permitted to copy and distribute verbatim copies of this license doc
         """.trimIndent()
     ),
     OpenSourceLibrary(
-        name = "Matchbox Window Manager",
-        copyright = "Copyright (c) 2001-2006 Matthew Allum, OpenedHand Ltd",
+        name = "Openbox Window Manager",
+        copyright = "Copyright (c) 2007-2026 Dana Jansens, Mikael Magnusson, Derek Foreman, Tore Anderson",
         licenseType = "GPL-2.0-or-later",
-        description = "Lightweight kiosk window manager engineered for non-overlapping mobile viewports.",
-        repositoryUrl = "https://git.yoctoproject.org/matchbox-window-manager",
+        description = "Highly configurable, standards-compliant next-generation window manager for X11.",
+        repositoryUrl = "https://github.com/mikachu/openbox",
         licenseText = """
 GNU GENERAL PUBLIC LICENSE
 Version 2, June 1991
 
 Copyright (C) 1989, 1991 Free Software Foundation, Inc.
+51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+Everyone is permitted to copy and distribute verbatim copies of this license document.
+        """.trimIndent()
+    ),
+    OpenSourceLibrary(
+        name = "xdotool",
+        copyright = "Copyright (c) 2007-2026 Jordan Sissel",
+        licenseType = "BSD-3-Clause",
+        description = "Command-line X11 automation tool for programmatic keyboard, mouse, and window interactions.",
+        repositoryUrl = "https://github.com/jordansissel/xdotool",
+        licenseText = """
+Copyright (c) 2007-2026, Jordan Sissel
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+        """.trimIndent()
+    ),
+    OpenSourceLibrary(
+        name = "librsvg",
+        copyright = "Copyright (c) The GNOME Project, Raph Levien, Federico Mena Quintero",
+        licenseType = "LGPL-2.0-or-later",
+        description = "High performance SVG rendering library powering vector graphics and GTK icon rasterization.",
+        repositoryUrl = "https://gitlab.gnome.org/GNOME/librsvg",
+        licenseText = """
+GNU LIBRARY GENERAL PUBLIC LICENSE
+Version 2, June 1991
+
+Copyright (C) 1991 Free Software Foundation, Inc.
+51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+Everyone is permitted to copy and distribute verbatim copies of this license document.
+        """.trimIndent()
+    ),
+    OpenSourceLibrary(
+        name = "Adwaita Icon Theme",
+        copyright = "Copyright (c) The GNOME Project, Lapo Calamandrei, Jakub Steiner",
+        licenseType = "LGPL-3.0 / CC-BY-SA-3.0",
+        description = "Standard system icon assets and vector symbolic icons for GTK desktop environments.",
+        repositoryUrl = "https://gitlab.gnome.org/GNOME/adwaita-icon-theme",
+        licenseText = """
+GNU LESSER GENERAL PUBLIC LICENSE
+Version 3, 29 June 2007
+
+Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+Everyone is permitted to copy and distribute verbatim copies of this license document.
+Creative Commons Attribution-ShareAlike 3.0 Unported applies to graphical icon artworks.
+        """.trimIndent()
+    ),
+    OpenSourceLibrary(
+        name = "shared-mime-info",
+        copyright = "Copyright (c) freedesktop.org, Thomas Leonard, Bastien Nocera",
+        licenseType = "GPL-2.0-or-later",
+        description = "Freedesktop MIME type database and file format sniffing definitions.",
+        repositoryUrl = "https://gitlab.freedesktop.org/xdg/shared-mime-info",
+        licenseText = """
+GNU GENERAL PUBLIC LICENSE
+Version 2, June 1991
+
+Copyright (C) 1989, 1991 Free Software Foundation, Inc.
+51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 Everyone is permitted to copy and distribute verbatim copies of this license document.
         """.trimIndent()
     ),
@@ -192,6 +256,7 @@ fun LicensesScreen(onBack: (() -> Unit)? = null) {
     var selectedLibraryForDialog by remember { mutableStateOf<OpenSourceLibrary?>(null) }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = {
@@ -223,8 +288,8 @@ fun LicensesScreen(onBack: (() -> Unit)? = null) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
                 Surface(

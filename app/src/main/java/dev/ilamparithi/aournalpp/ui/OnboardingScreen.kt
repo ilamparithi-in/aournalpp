@@ -783,8 +783,8 @@ private fun OnboardingChooseFolderPage(
     val defaultNotesPath = remember {
         File(Environment.getExternalStorageDirectory(), "Documents/Notes").absolutePath
     }
-    val defaultDocsPath = remember {
-        File(Environment.getExternalStorageDirectory(), "Documents").absolutePath
+    val defaultXournalPath = remember {
+        File(Environment.getExternalStorageDirectory(), "Documents/Xournal").absolutePath
     }
     val defaultDownloadPath = remember {
         File(Environment.getExternalStorageDirectory(), "Download").absolutePath
@@ -919,12 +919,12 @@ private fun OnboardingChooseFolderPage(
                 label = { Text("Documents/Notes (Default)") }
             )
             FilterChip(
-                selected = selectedPath == defaultDocsPath,
+                selected = selectedPath == defaultXournalPath,
                 onClick = {
-                    env.setNotesDirectory(defaultDocsPath)
-                    selectedPath = defaultDocsPath
+                    env.setNotesDirectory(defaultXournalPath)
+                    selectedPath = defaultXournalPath
                 },
-                label = { Text("Documents") }
+                label = { Text("Documents/Xournal") }
             )
             FilterChip(
                 selected = selectedPath == defaultDownloadPath,
@@ -982,6 +982,11 @@ private fun OnboardingSettingsPage(
     // 2. Fullscreen Canvas
     var fullscreenCanvas by remember {
         mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_FULLSCREEN, false))
+    }
+
+    // 3. Reduce Animations
+    var reduceAnimations by remember {
+        mutableStateOf(aournalPrefs.getBoolean(LinuxEnvironment.PREF_KEY_REDUCE_ANIMATIONS, false))
     }
 
     // 3. Screen Idle Timeout
@@ -1140,6 +1145,34 @@ private fun OnboardingSettingsPage(
                                 }
                             }
                         }
+                    }
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                // Setting 4: Reduce Animations
+                ListItem(
+                    leadingContent = {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    headlineContent = {
+                        Text("Reduce Animations", fontWeight = FontWeight.SemiBold)
+                    },
+                    supportingContent = {
+                        Text("Disable expressive motion effects to optimize performance on lower-end devices.")
+                    },
+                    trailingContent = {
+                        Switch(
+                            checked = reduceAnimations,
+                            onCheckedChange = {
+                                reduceAnimations = it
+                                aournalPrefs.edit().putBoolean(LinuxEnvironment.PREF_KEY_REDUCE_ANIMATIONS, it).apply()
+                            }
+                        )
                     }
                 )
             }

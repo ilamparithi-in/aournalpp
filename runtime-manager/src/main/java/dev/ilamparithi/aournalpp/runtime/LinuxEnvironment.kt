@@ -19,6 +19,17 @@ class LinuxEnvironment(private val context: Context) {
         const val PREF_KEY_IMPORTED_DIR = "pref_special_imported_dir"
         const val PREF_KEY_EMERGENCY_DIR = "pref_special_emergency_dir"
         const val PREF_KEY_ONBOARDING_COMPLETED = "pref_onboarding_completed"
+        const val PREF_KEY_REDUCE_ANIMATIONS = "pref_reduce_animations"
+    }
+
+    fun isReduceAnimations(): Boolean {
+        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        return prefs.getBoolean(PREF_KEY_REDUCE_ANIMATIONS, false)
+    }
+
+    fun setReduceAnimations(reduce: Boolean) {
+        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(PREF_KEY_REDUCE_ANIMATIONS, reduce).apply()
     }
 
     fun isOnboardingCompleted(): Boolean {
@@ -189,6 +200,7 @@ class LinuxEnvironment(private val context: Context) {
         val newNotesDir = File(newPath)
         NotesHomeConfigManager.copyConfigToNewNotesHome(oldNotesDir, newNotesDir, context, this)
         ensureDirectoryTree()
+        ensureGtkBookmarks()
     }
 
     fun ensureDirectoryTree() {
@@ -594,8 +606,41 @@ class LinuxEnvironment(private val context: Context) {
 
             settingsFile.writeText(content)
             Log.i(TAG, "Provisioned GTK settings.ini with isDark=$isDark at ${settingsFile.absolutePath}")
+            ensureGtkBookmarks()
         } catch (e: Exception) {
             Log.w(TAG, "Failed to write GTK settings.ini", e)
+        }
+    }
+
+    fun ensureGtkBookmarks() {
+        try {
+            val gtk3ConfigDir = File(configDir, "gtk-3.0")
+            if (!gtk3ConfigDir.exists()) {
+                gtk3ConfigDir.mkdirs()
+            }
+            val bookmarksFile = File(gtk3ConfigDir, "bookmarks")
+            val notesDir = getNotesDirectory()
+            val docsDir = File(Environment.getExternalStorageDirectory(), "Documents")
+            val downloadsDir = sharedDownloadsDir
+
+            val lines = mutableListOf<String>()
+            lines.add("file://${notesDir.absolutePath} Notes Home")
+            if (docsDir.exists() && docsDir.absolutePath != notesDir.absolutePath) {
+                lines.add("file://${docsDir.absolutePath} Documents")
+            }
+            if (downloadsDir.exists() && downloadsDir.absolutePath != notesDir.absolutePath) {
+                lines.add("file://${downloadsDir.absolutePath} Downloads")
+            }
+
+            val content = lines.joinToString("\n") + "\n"
+            bookmarksFile.writeText(content)
+
+            // Also mirror to legacy ~/.gtk-bookmarks for older GTK versions
+            val legacyBookmarks = File(homeDir, ".gtk-bookmarks")
+            legacyBookmarks.writeText(content)
+            Log.i(TAG, "Provisioned dynamic GTK bookmarks pointing to Notes Home: ${notesDir.absolutePath}")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to write GTK bookmarks", e)
         }
     }
 
@@ -712,6 +757,34 @@ class LinuxEnvironment(private val context: Context) {
                     modified = true
                 } else {
                     content = content.replace("</settings>", "  <property name=\"defaultOpenDir\" value=\"$defaultNotesPath\"/>\n</settings>")
+                    modified = true
+                }
+
+                val savePathRegex = Regex("""<property\b(?=[^>]*\bname\s*=\s*["']lastSavePath["'])(?=[^>]*\bvalue\s*=\s*["']([^"']*)["'])[^>]*/>""")
+                val savePathMatch = savePathRegex.find(content)
+                if (savePathMatch != null) {
+                    val currentSavePath = savePathMatch.groupValues[1].trim()
+                    val saveDir = File(currentSavePath)
+                    if (!saveDir.exists() || !currentSavePath.startsWith(defaultNotesPath)) {
+                        content = content.replace(savePathMatch.value, "<property name=\"lastSavePath\" value=\"$defaultNotesPath\"/>")
+                        modified = true
+                    }
+                } else if (content.contains("</settings>")) {
+                    content = content.replace("</settings>", "  <property name=\"lastSavePath\" value=\"$defaultNotesPath\"/>\n</settings>")
+                    modified = true
+                }
+
+                val openPathRegex = Regex("""<property\b(?=[^>]*\bname\s*=\s*["']lastOpenPath["'])(?=[^>]*\bvalue\s*=\s*["']([^"']*)["'])[^>]*/>""")
+                val openPathMatch = openPathRegex.find(content)
+                if (openPathMatch != null) {
+                    val currentOpenPath = openPathMatch.groupValues[1].trim()
+                    val openDir = File(currentOpenPath)
+                    if (!openDir.exists() || !currentOpenPath.startsWith(defaultNotesPath)) {
+                        content = content.replace(openPathMatch.value, "<property name=\"lastOpenPath\" value=\"$defaultNotesPath\"/>")
+                        modified = true
+                    }
+                } else if (content.contains("</settings>")) {
+                    content = content.replace("</settings>", "  <property name=\"lastOpenPath\" value=\"$defaultNotesPath\"/>\n</settings>")
                     modified = true
                 }
 

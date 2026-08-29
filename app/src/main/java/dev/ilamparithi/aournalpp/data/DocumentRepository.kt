@@ -3,6 +3,7 @@ package dev.ilamparithi.aournalpp.data
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.core.content.FileProvider
 import dev.ilamparithi.aournalpp.model.AutosaveInfo
 import dev.ilamparithi.aournalpp.model.FolderItem
@@ -91,15 +92,31 @@ class DocumentRepository(private val context: Context) {
         return SUPPORTED_EXTENSIONS.contains(ext)
     }
 
+    fun isWithinRootDirectory(file: File): Boolean {
+        return try {
+            val root = getRootNotesDirectory().canonicalPath
+            val target = file.canonicalPath
+            target == root || target.startsWith("$root/") || target.startsWith("$root\\")
+        } catch (e: Exception) {
+            val root = getRootNotesDirectory().absolutePath
+            val target = file.absolutePath
+            target == root || target.startsWith("$root/") || target.startsWith("$root\\")
+        }
+    }
+
     // Pinned Notes Persistence
-    fun getPinnedNotePaths(): List<String> {
+    fun getPinnedNotePaths(strictlyWithinRoot: Boolean = true): List<String> {
         val raw = prefs.getString("pref_pinned_notes_order_json", null) ?: return emptyList()
         return try {
             val array = org.json.JSONArray(raw)
             val list = mutableListOf<String>()
             for (i in 0 until array.length()) {
                 val p = array.optString(i)
-                if (p.isNotBlank()) list.add(p)
+                if (p.isNotBlank()) {
+                    if (!strictlyWithinRoot || isWithinRootDirectory(File(p))) {
+                        list.add(p)
+                    }
+                }
             }
             list
         } catch (e: Exception) {
@@ -1089,7 +1106,30 @@ class DocumentRepository(private val context: Context) {
     }
 
     // Sharing Actions
-    fun shareNoteAsXopp(context: Context, doc: NoteDocument) {
+    fun shareNoteAsXopp(context: Context, doc: NoteDocument, customName: String? = null) {
+        if (!customName.isNullOrBlank() && customName != doc.title) {
+            val shareStagingDir = File(context.cacheDir, "shared_notes").apply { mkdirs() }
+            val ext = if (doc.file.extension.equals("pdf", ignoreCase = true)) "pdf" else "xopp"
+            val stagedFile = File(shareStagingDir, "$customName.$ext")
+            try {
+                doc.file.copyTo(stagedFile, overwrite = true)
+                val fileUri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    stagedFile
+                )
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = if (ext == "pdf") "application/pdf" else "application/x-xopp"
+                    putExtra(Intent.EXTRA_STREAM, fileUri)
+                    putExtra(Intent.EXTRA_SUBJECT, customName)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(intent, "Share Note"))
+                return
+            } catch (e: Exception) {
+                Log.w("DocumentRepository", "Failed to stage custom named file for share, falling back to original", e)
+            }
+        }
         shareMultipleNotesAsXopp(context, listOf(doc))
     }
 
@@ -1126,9 +1166,44 @@ class DocumentRepository(private val context: Context) {
     suspend fun shareNoteAsPdf(
         context: Context,
         doc: NoteDocument,
-        pdfExportManager: PdfExportManager
-    ): Result<Unit> {
-        return shareMultipleNotesAsPdf(context, listOf(doc), pdfExportManager)
+        pdfExportManager: PdfExportManager,
+        customName: String? = null
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val pdfFile = if (doc.file.extension.equals("pdf", ignoreCase = true)) {
+                if (!customName.isNullOrBlank() && customName != doc.title) {
+                    val shareStagingDir = File(context.cacheDir, "shared_notes").apply { mkdirs() }
+                    val staged = File(shareStagingDir, "$customName.pdf")
+                    doc.file.copyTo(staged, overwrite = true)
+                    staged
+                } else {
+                    doc.file
+                }
+            } else {
+                val basePdf = pdfExportManager.renderPdfForSharing(context, doc.file).getOrThrow()
+                if (!customName.isNullOrBlank() && customName != doc.title) {
+                    val shareStagingDir = File(context.cacheDir, "shared_notes").apply { mkdirs() }
+                    val staged = File(shareStagingDir, "$customName.pdf")
+                    basePdf.copyTo(staged, overwrite = true)
+                    staged
+                } else {
+                    basePdf
+                }
+            }
+
+            val pdfUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", pdfFile)
+            val subjectName = customName ?: doc.title
+
+            withContext(Dispatchers.Main) {
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/pdf"
+                    putExtra(Intent.EXTRA_STREAM, pdfUri)
+                    putExtra(Intent.EXTRA_SUBJECT, "$subjectName.pdf")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(intent, "Share PDF"))
+            }
+        }
     }
 
     suspend fun shareMultipleNotesAsPdf(
@@ -1505,7 +1580,7 @@ class DocumentRepository(private val context: Context) {
         }
     }
 
-    fun getRecentlyOpenedPaths(): List<String> {
+    fun getRecentlyOpenedPaths(strictlyWithinRoot: Boolean = true): List<String> {
         val raw = prefs.getString("pref_opened_notes_history_json", null)
         val list = mutableListOf<String>()
         if (!raw.isNullOrBlank()) {
@@ -1514,7 +1589,9 @@ class DocumentRepository(private val context: Context) {
                 for (i in 0 until array.length()) {
                     val p = array.optString(i)
                     if (p.isNotBlank() && !list.contains(p) && !p.contains("staged_imports") && !p.contains("/cache/")) {
-                        list.add(p)
+                        if (!strictlyWithinRoot || isWithinRootDirectory(File(p))) {
+                            list.add(p)
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -1528,11 +1605,15 @@ class DocumentRepository(private val context: Context) {
             null
         }
         if (!mainPrefsLastOpened.isNullOrBlank() && !mainPrefsLastOpened.contains("staged_imports") && !mainPrefsLastOpened.contains("/cache/") && !list.contains(mainPrefsLastOpened)) {
-            list.add(0, mainPrefsLastOpened)
+            if (!strictlyWithinRoot || isWithinRootDirectory(File(mainPrefsLastOpened))) {
+                list.add(0, mainPrefsLastOpened)
+            }
         }
         val docHubLastOpened = prefs.getString("pref_last_opened_note_path", null)
         if (!docHubLastOpened.isNullOrBlank() && !docHubLastOpened.contains("staged_imports") && !docHubLastOpened.contains("/cache/") && !list.contains(docHubLastOpened)) {
-            list.add(0, docHubLastOpened)
+            if (!strictlyWithinRoot || isWithinRootDirectory(File(docHubLastOpened))) {
+                list.add(0, docHubLastOpened)
+            }
         }
         return list
     }

@@ -14,10 +14,12 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -45,6 +47,7 @@ import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DragIndicator
+import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.RestartAlt
@@ -120,7 +123,7 @@ val STANDARD_TOOLBAR_PRESETS = listOf(
     ToolbarPresetOption("bottom_right", "Bottom Right", 1.0f, 1.0f)
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun ToolbarPositionEditorScreen(
     onNavigateBack: () -> Unit
@@ -220,12 +223,8 @@ fun ToolbarPositionEditorScreen(
         val safeRightPx = with(density) { rotatedInsets.right.dp.toPx() }
         val safeBottomPx = with(density) { rotatedInsets.bottom.dp.toPx() }
 
-        val contentLeftPx = if (centerWithinBounds) safeLeftPx else 0f
-        val contentTopPx = if (centerWithinBounds) safeTopPx else 0f
-        val contentRightPx = if (centerWithinBounds) (screenWPx - safeRightPx) else screenWPx
-        val contentBottomPx = if (centerWithinBounds) (screenHPx - safeBottomPx) else screenHPx
-
         val showStylusClickOverride = remember { x11Prefs.getBoolean(X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE, false) }
+        val showTouchStylus = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_TOUCH_STYLUS, true) }
         val showTitle = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_TITLE, true) }
         val showBack = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_BACK, true) }
         val showKeyboard = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD, true) }
@@ -239,6 +238,14 @@ fun ToolbarPositionEditorScreen(
         var measuredToolbarHPx by remember { mutableFloatStateOf(0f) }
         val toolbarWidthPx = if (measuredToolbarWPx > 0f) measuredToolbarWPx else with(density) { 380.dp.toPx() }
         val toolbarHeightPx = if (measuredToolbarHPx > 0f) measuredToolbarHPx else with(density) { 48.dp.toPx() }
+
+        val cutoutPlacement = rememberCutoutPlacement()
+        val cutoutTopOffsetPx = with(density) { cutoutPlacement.topOffsetPx.toDp().toPx() }
+
+        val contentLeftPx = if (centerWithinBounds) safeLeftPx else 0f
+        val contentTopPx = if (centerWithinBounds) safeTopPx else if (cutoutPlacement.hasCenterCutout) cutoutTopOffsetPx else 0f
+        val contentRightPx = if (centerWithinBounds) screenWPx - safeRightPx else screenWPx
+        val contentBottomPx = if (centerWithinBounds) screenHPx - safeBottomPx else screenHPx
 
         val marginPadPx = with(density) { 8.dp.toPx() }
         val minX = contentLeftPx + marginPadPx
@@ -256,9 +263,6 @@ fun ToolbarPositionEditorScreen(
             safeInsets = rotatedInsets,
             density = density
         )
-
-        // 2. Display Cutout M3 Camera Lens Overlay
-        DisplayCutoutCameraLensOverlay()
 
         // 3. Dynamic Magnetic Snapping Guide Lines
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -390,41 +394,6 @@ fun ToolbarPositionEditorScreen(
                                 try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
                             }
 
-                            // 3. Cutout Horizontal / Vertical Snap (if cutout present)
-                            if (mainCutout != null) {
-                                val cutoutCY = mainCutout.centerY
-                                val cutoutCX = mainCutout.centerX
-
-                                val distCutoutY = abs(toolbarCenterY - cutoutCY)
-                                if (isSnapCutoutHorizontal) {
-                                    if (distCutoutY > hysteresisBufferPx) {
-                                        isSnapCutoutHorizontal = false
-                                    } else {
-                                        targetY = cutoutCY - toolbarHeightPx / 2f
-                                    }
-                                } else if (distCutoutY < snapThresholdPx) {
-                                    isSnapCutoutHorizontal = true
-                                    targetY = cutoutCY - toolbarHeightPx / 2f
-                                    try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
-                                }
-
-                                val isCutoutOffCenter = abs(cutoutCX - screenCenterX) > 40f
-                                if (isCutoutOffCenter) {
-                                    val distCutoutX = abs(toolbarCenterX - cutoutCX)
-                                    if (isSnapCutoutVertical) {
-                                        if (distCutoutX > hysteresisBufferPx) {
-                                            isSnapCutoutVertical = false
-                                        } else {
-                                            targetX = cutoutCX - toolbarWidthPx / 2f
-                                        }
-                                    } else if (distCutoutX < snapThresholdPx) {
-                                        isSnapCutoutVertical = true
-                                        targetX = cutoutCX - toolbarWidthPx / 2f
-                                        try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
-                                    }
-                                }
-                            }
-
                             val availableSpanX = (maxX - minX).coerceAtLeast(1f)
                             val availableSpanY = (maxY - minY).coerceAtLeast(1f)
                             normX = ((targetX - minX) / availableSpanX).coerceIn(0f, 1f)
@@ -458,200 +427,214 @@ fun ToolbarPositionEditorScreen(
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
                 tonalElevation = 6.dp
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    if (showBack) {
-                        IconButton(
-                            onClick = {},
-                            modifier = Modifier.size(36.dp),
-                            enabled = false
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
+                FloatingToolbarLayout(
+                    modifier = Modifier
+                        .widthIn(max = with(density) { (screenWPx - 16.dp.toPx()).toDp() })
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    mainContent = {
+                        if (showBack) {
+                            IconButton(
+                                onClick = {},
+                                modifier = Modifier.size(36.dp),
+                                enabled = false
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         }
-                    }
 
-                    if (showTitle) {
-                        Icon(
-                            imageVector = Icons.Default.Description,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Text(
-                            text = "Physics_Lecture.xopp",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(end = 4.dp)
-                        )
-                    }
+                        if (showTitle) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier
+                                    .height(36.dp)
+                                    .padding(horizontal = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Description,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                InteractiveMarqueeText(
+                                    text = "Physics_Lecture.xopp",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    minWidth = 90.dp,
+                                    maxWidth = 220.dp
+                                )
+                            }
+                        }
 
-                    if (showStylusClickOverride) {
-                        val modes = listOf("L", "M", "R")
-                        val itemWidth = 26.dp
-                        val itemHeight = 24.dp
-                        val spacing = 2.dp
-                        val padding = 2.dp
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            modifier = Modifier.padding(horizontal = 4.dp)
-                        ) {
-                            Box(modifier = Modifier.padding(padding)) {
-                                Surface(
-                                    modifier = Modifier.size(itemWidth, itemHeight),
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    shadowElevation = 1.dp
-                                ) {}
+                        if (showStylusClickOverride) {
+                            val modes = listOf("L", "M", "R")
+                            val itemWidth = 26.dp
+                            val itemHeight = 24.dp
+                            val spacing = 2.dp
+                            val padding = 2.dp
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.padding(horizontal = 4.dp)
+                            ) {
+                                Box(modifier = Modifier.padding(padding)) {
+                                    Surface(
+                                        modifier = Modifier.size(itemWidth, itemHeight),
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        shadowElevation = 1.dp
+                                    ) {}
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(spacing),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        modes.forEachIndexed { idx, label ->
+                                            Box(
+                                                modifier = Modifier.size(itemWidth, itemHeight),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = label,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = if (idx == 0) FontWeight.Bold else FontWeight.Medium,
+                                                    color = if (idx == 0) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (showTouchStylus) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.padding(horizontal = 2.dp)
+                            ) {
+                                Box(modifier = Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Draw,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(17.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+
+                        if (showCut || showCopy || showPaste) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.padding(horizontal = 2.dp)
+                            ) {
                                 Row(
-                                    horizontalArrangement = Arrangement.spacedBy(spacing),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(0.dp)
                                 ) {
-                                    modes.forEachIndexed { idx, label ->
-                                        Box(
-                                            modifier = Modifier.size(itemWidth, itemHeight),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = label,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = if (idx == 0) FontWeight.Bold else FontWeight.Medium,
-                                                color = if (idx == 0) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    if (showCut) {
+                                        IconButton(onClick = {}, modifier = Modifier.size(32.dp), enabled = false) {
+                                            Icon(
+                                                imageVector = Icons.Default.ContentCut,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                    if (showCopy) {
+                                        IconButton(onClick = {}, modifier = Modifier.size(32.dp), enabled = false) {
+                                            Icon(
+                                                imageVector = Icons.Default.ContentCopy,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                    if (showPaste) {
+                                        IconButton(onClick = {}, modifier = Modifier.size(32.dp), enabled = false) {
+                                            Icon(
+                                                imageVector = Icons.Default.ContentPaste,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    if (showCut || showCopy || showPaste) {
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            modifier = Modifier.padding(horizontal = 2.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(0.dp)
+                        if (showKeyboard) {
+                            IconButton(
+                                onClick = {},
+                                modifier = Modifier.size(36.dp),
+                                enabled = false
                             ) {
-                                if (showCut) {
-                                    IconButton(
-                                        onClick = {},
-                                        modifier = Modifier.size(32.dp),
-                                        enabled = false
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.ContentCut,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                                if (showCopy) {
-                                    IconButton(
-                                        onClick = {},
-                                        modifier = Modifier.size(32.dp),
-                                        enabled = false
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.ContentCopy,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                                if (showPaste) {
-                                    IconButton(
-                                        onClick = {},
-                                        modifier = Modifier.size(32.dp),
-                                        enabled = false
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.ContentPaste,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
+                                Icon(
+                                    imageVector = Icons.Default.Keyboard,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    },
+                    trailingContent = {
+                        if (pinButtonMode) {
+                            IconButton(
+                                onClick = {},
+                                modifier = Modifier.size(36.dp),
+                                enabled = false
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.PushPin,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        } else {
+                            IconButton(
+                                onClick = {},
+                                modifier = Modifier.size(36.dp),
+                                enabled = false
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ExpandLess,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        if (showDragHandle) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DragIndicator,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
                             }
                         }
                     }
-
-                    if (showKeyboard) {
-                        IconButton(
-                            onClick = {},
-                            modifier = Modifier.size(36.dp),
-                            enabled = false
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Keyboard,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    if (pinButtonMode) {
-                        IconButton(
-                            onClick = {},
-                            modifier = Modifier.size(36.dp),
-                            enabled = false
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.PushPin,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    } else {
-                        IconButton(
-                            onClick = {},
-                            modifier = Modifier.size(36.dp),
-                            enabled = false
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ExpandLess,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    if (showDragHandle) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.DragIndicator,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                }
+                )
             }
         }
 

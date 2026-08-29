@@ -10,6 +10,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -39,6 +40,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -107,7 +109,80 @@ class MainActivity : ComponentActivity() {
                     // No-op: Prevent dismissal during checking, update prompt, or extraction
                 }
 
+                var hasBootstrapRevealed by remember { mutableStateOf(false) }
+
                 Box(modifier = Modifier.fillMaxSize()) {
+                    if (state is BootstrapState.Ready) {
+                        LaunchedEffect(state) {
+                            pendingIntentToProcess?.let { intentToHandle ->
+                                handleExternalIntent(intentToHandle)
+                                pendingIntentToProcess = null
+                            }
+                        }
+                        // Provision the runtime tree once the bootstrap is ready.
+                        LaunchedEffect(Unit) {
+                            withContext(Dispatchers.IO) {
+                                LinuxEnvironment(this@MainActivity).ensureDirectoryTree()
+                            }
+                        }
+                        val env = remember { LinuxEnvironment(this@MainActivity) }
+                        val supervisor = remember { ProcessSupervisor(env) }
+                        val pdfExportManager = remember { PdfExportManager(env, supervisor) }
+                        val repo = remember { DocumentRepository(this@MainActivity) }
+
+                        FloatingPreviewHost(
+                            onTriggerAction = { note, action ->
+                                when (action) {
+                                    DragActionTarget.VIEW_PDF -> {
+                                        NoteOpenManager.openAsPdf(
+                                            context = this@MainActivity,
+                                            file = note.file,
+                                            pdfExportManager = pdfExportManager,
+                                            scope = lifecycleScope,
+                                            repository = repo
+                                        )
+                                    }
+                                    DragActionTarget.EDIT_CANVAS -> {
+                                        NoteOpenManager.openInCanvas(
+                                            context = this@MainActivity,
+                                            file = note.file,
+                                            repository = repo
+                                        )
+                                    }
+                                    DragActionTarget.NONE -> {}
+                                }
+                            }
+                        ) {
+                            MainResponsiveAppShell()
+                        }
+
+                        val promptFile = externalFileToOpen.value
+                        if (promptFile != null && isOnboardingCompleted) {
+                            NoteOpenActionDialog(
+                                file = promptFile,
+                                onDismiss = { externalFileToOpen.value = null },
+                                onViewAsPdf = {
+                                    externalFileToOpen.value = null
+                                    NoteOpenManager.openAsPdf(
+                                        context = this@MainActivity,
+                                        file = promptFile,
+                                        pdfExportManager = pdfExportManager,
+                                        scope = lifecycleScope,
+                                        repository = repo
+                                    )
+                                },
+                                onEditInCanvas = {
+                                    externalFileToOpen.value = null
+                                    NoteOpenManager.openInCanvas(
+                                        context = this@MainActivity,
+                                        file = promptFile,
+                                        repository = repo
+                                    )
+                                }
+                            )
+                        }
+                    }
+
                     when (state) {
                         is BootstrapState.UpdatePrompt -> {
                             val updateState = state as BootstrapState.UpdatePrompt
@@ -126,72 +201,12 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         is BootstrapState.Ready -> {
-                            LaunchedEffect(state) {
-                                pendingIntentToProcess?.let { intentToHandle ->
-                                    handleExternalIntent(intentToHandle)
-                                    pendingIntentToProcess = null
-                                }
-                            }
-                            // Provision the runtime tree once the bootstrap is ready.
-                            LaunchedEffect(Unit) {
-                                withContext(Dispatchers.IO) {
-                                    LinuxEnvironment(this@MainActivity).ensureDirectoryTree()
-                                }
-                            }
-                            val env = remember { LinuxEnvironment(this@MainActivity) }
-                            val supervisor = remember { ProcessSupervisor(env) }
-                            val pdfExportManager = remember { PdfExportManager(env, supervisor) }
-                            val repo = remember { DocumentRepository(this@MainActivity) }
-
-                            FloatingPreviewHost(
-                                onTriggerAction = { note, action ->
-                                    when (action) {
-                                        DragActionTarget.VIEW_PDF -> {
-                                            NoteOpenManager.openAsPdf(
-                                                context = this@MainActivity,
-                                                file = note.file,
-                                                pdfExportManager = pdfExportManager,
-                                                scope = lifecycleScope,
-                                                repository = repo
-                                            )
-                                        }
-                                        DragActionTarget.EDIT_CANVAS -> {
-                                            NoteOpenManager.openInCanvas(
-                                                context = this@MainActivity,
-                                                file = note.file,
-                                                repository = repo
-                                            )
-                                        }
-                                        DragActionTarget.NONE -> {}
-                                    }
-                                }
-                            ) {
-                                MainResponsiveAppShell()
-                            }
-
-                            val promptFile = externalFileToOpen.value
-                            if (promptFile != null && isOnboardingCompleted) {
-                                NoteOpenActionDialog(
-                                    file = promptFile,
-                                    onDismiss = { externalFileToOpen.value = null },
-                                    onViewAsPdf = {
-                                        externalFileToOpen.value = null
-                                        NoteOpenManager.openAsPdf(
-                                            context = this@MainActivity,
-                                            file = promptFile,
-                                            pdfExportManager = pdfExportManager,
-                                            scope = lifecycleScope,
-                                            repository = repo
-                                        )
-                                    },
-                                    onEditInCanvas = {
-                                        externalFileToOpen.value = null
-                                        NoteOpenManager.openInCanvas(
-                                            context = this@MainActivity,
-                                            file = promptFile,
-                                            repository = repo
-                                        )
-                                    }
+                            if (isOnboardingCompleted && !hasBootstrapRevealed) {
+                                BootstrapScreen(
+                                    state = state,
+                                    onRetry = { viewModel.retry() },
+                                    isReady = true,
+                                    onRevealFinished = { hasBootstrapRevealed = true }
                                 )
                             }
                         }
@@ -389,6 +404,7 @@ fun MainResponsiveAppShell() {
         } else {
             // Mobile Portrait: Bottom Navigation Bar
             Scaffold(
+                contentWindowInsets = WindowInsets(0, 0, 0, 0),
                 bottomBar = {
                     NavigationBar(
                         containerColor = MaterialTheme.colorScheme.surface

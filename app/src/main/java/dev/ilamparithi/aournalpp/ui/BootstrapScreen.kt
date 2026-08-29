@@ -49,6 +49,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -68,6 +69,26 @@ import dev.ilamparithi.aournalpp.ui.theme.ScallopShape
 import dev.ilamparithi.aournalpp.ui.theme.SunnyShape
 import kotlinx.coroutines.delay
 
+import android.content.Context
+import androidx.compose.animation.core.Animatable
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.asAndroidPath
+import androidx.compose.ui.graphics.asComposePath
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
+import kotlin.math.hypot
+
 private val TIPS_LIST = listOf(
     "Direct Touch mode provides ultra-low latency stylus handwriting.",
     "Intelligent Session Recovery automatically safeguards your notes.",
@@ -79,8 +100,15 @@ private val TIPS_LIST = listOf(
 @Composable
 fun BootstrapScreen(
     state: BootstrapState,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    isReady: Boolean = false,
+    onRevealFinished: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val aournalPrefs = remember { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
+    val reduceAnimations = remember { aournalPrefs.getBoolean(LinuxEnvironment.PREF_KEY_REDUCE_ANIMATIONS, false) }
+
     // Intercept back button during checking, extraction or bootstrap error
     BackHandler(enabled = true) {
         // No-op: Prevent dismissal via back button
@@ -92,7 +120,7 @@ fun BootstrapScreen(
     val infiniteTransition = rememberInfiniteTransition(label = "expressiveWaitingTransition")
     
     // Slow decorative rotation
-    val rotation by infiniteTransition.animateFloat(
+    val animatedRotation by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
@@ -101,9 +129,10 @@ fun BootstrapScreen(
         ),
         label = "organicRotation"
     )
+    val rotation = if (reduceAnimations || isError) 0f else animatedRotation
 
     // Breathing pulse for icon
-    val pulseScale by infiniteTransition.animateFloat(
+    val animatedPulseScale by infiniteTransition.animateFloat(
         initialValue = 0.94f,
         targetValue = 1.06f,
         animationSpec = infiniteRepeatable(
@@ -112,6 +141,7 @@ fun BootstrapScreen(
         ),
         label = "iconBreathingPulse"
     )
+    val pulseScale = if (reduceAnimations || isError) 1f else animatedPulseScale
 
     // Rotating Tip Index
     var tipIndex by remember { mutableIntStateOf(0) }
@@ -122,8 +152,110 @@ fun BootstrapScreen(
         }
     }
 
+    // Hero Element Expand & Punch-Out Reveal Animation State
+    var rootLayoutCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var heroCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var capturedRotationAngle by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    var heroCenterOffset by remember { mutableStateOf<Offset?>(null) }
+    var isRevealing by remember { mutableStateOf(false) }
+    val revealRadius = remember { Animatable(0f) }
+
+    LaunchedEffect(isReady, state) {
+        if ((isReady || state is BootstrapState.Ready) && !isRevealing && !isError) {
+            isRevealing = true
+            capturedRotationAngle = rotation
+            val rootCoords = rootLayoutCoordinates
+            val heroCoords = heroCoordinates
+
+            val (heroW, heroH) = if (heroCoords != null) {
+                heroCoords.size.let { it.component1().toFloat() to it.component2().toFloat() }
+            } else {
+                (140f * density.density) to (140f * density.density)
+            }
+
+            val (rootW, rootH) = if (rootCoords != null) {
+                rootCoords.size.let { it.component1().toFloat() to it.component2().toFloat() }
+            } else {
+                2500f to 1600f
+            }
+
+            val center = if (rootCoords != null && heroCoords != null && rootCoords.isAttached && heroCoords.isAttached) {
+                val pos = rootCoords.localPositionOf(heroCoords, Offset.Zero)
+                Offset(pos.x + heroW / 2f, pos.y + heroH / 2f)
+            } else {
+                Offset(rootW / 2f, rootH / 2f)
+            }
+            heroCenterOffset = center
+
+            val maxRadius = maxOf(
+                hypot(center.x, center.y),
+                hypot(rootW - center.x, center.y),
+                hypot(center.x, rootH - center.y),
+                hypot(rootW - center.x, rootH - center.y)
+            ) * 1.35f
+
+            if (reduceAnimations) {
+                onRevealFinished()
+            } else {
+                val initialRadius = heroW / 2f
+                revealRadius.snapTo(initialRadius)
+                revealRadius.animateTo(
+                    targetValue = maxRadius,
+                    animationSpec = tween(
+                        durationMillis = 750,
+                        easing = FastOutSlowInEasing
+                    )
+                )
+                onRevealFinished()
+            }
+        }
+    }
+
+    val reusableMatrix = remember { android.graphics.Matrix() }
+    val reusableTransformedPath = remember { android.graphics.Path() }
+
     Surface(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .onGloballyPositioned { rootLayoutCoordinates = it }
+            .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+            .drawWithContent {
+                drawContent()
+                val radius = revealRadius.value
+                if (radius > 0f) {
+                    val center = heroCenterOffset ?: Offset(size.width / 2f, size.height / 2f)
+                    val sunnyOutline = SunnyShape(vertices = 10, roundness = 0.35f)
+                        .createOutline(Size(radius * 2f, radius * 2f), layoutDirection, density)
+                    if (sunnyOutline is Outline.Generic) {
+                        val androidPath = sunnyOutline.path.asAndroidPath()
+                        reusableMatrix.reset()
+                        reusableMatrix.postTranslate(-radius, -radius)
+                        reusableMatrix.postRotate(capturedRotationAngle)
+                        reusableMatrix.postTranslate(center.x, center.y)
+
+                        reusableTransformedPath.reset()
+                        androidPath.transform(reusableMatrix, reusableTransformedPath)
+                        val composePath = reusableTransformedPath.asComposePath()
+
+                        // Punch out hero shape hole revealing Home screen
+                        drawPath(
+                            path = composePath,
+                            color = Color.Black,
+                            blendMode = BlendMode.Clear
+                        )
+
+                        // Glowing rim along outer contour of SunnyShape
+                        val ringAlpha = (1f - (radius / (size.maxDimension * 0.95f)).coerceIn(0f, 1f))
+                        if (ringAlpha > 0.01f) {
+                            drawPath(
+                                path = composePath,
+                                color = Color.White.copy(alpha = ringAlpha * 0.65f),
+                                style = Stroke(width = 3.5.dp.toPx())
+                            )
+                        }
+                    }
+                }
+            },
         color = MaterialTheme.colorScheme.background
     ) {
         Box(
@@ -141,7 +273,9 @@ fun BootstrapScreen(
             ) {
                 // Expressive Multi-Layered Hero Animation
                 Box(
-                    modifier = Modifier.size(140.dp),
+                    modifier = Modifier
+                        .size(140.dp)
+                        .onGloballyPositioned { heroCoordinates = it },
                     contentAlignment = Alignment.Center
                 ) {
                     if (!isError) {

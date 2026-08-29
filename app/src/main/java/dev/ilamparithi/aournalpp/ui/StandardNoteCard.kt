@@ -1,5 +1,6 @@
 package dev.ilamparithi.aournalpp.ui
 
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -56,6 +57,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.compositeOver
@@ -133,8 +138,22 @@ fun StandardNoteCard(
             shape = shape
         )
 
+    var cardInteractionTimestamp by remember { mutableStateOf(0L) }
+
+    val touchObservingModifier = baseModifier.pointerInput(note.path) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val hasTouch = event.changes.any { it.pressed || it.positionChanged() }
+                if (hasTouch || event.type == PointerEventType.Enter || event.type == PointerEventType.Move) {
+                    cardInteractionTimestamp = System.currentTimeMillis()
+                }
+            }
+        }
+    }
+
     val interactiveModifier = if (enableFloatingPreview && !isSelectionMode && !isTrashMode) {
-        baseModifier.floatingPreviewLongPress(
+        touchObservingModifier.floatingPreviewLongPress(
             note = note,
             thumbnailFile = thumbnailFile,
             folderColor = folderAccentColor,
@@ -143,7 +162,7 @@ fun StandardNoteCard(
             onLongPressFallback = onLongClick
         )
     } else {
-        baseModifier.combinedClickable(
+        touchObservingModifier.combinedClickable(
             onClick = onClick,
             onLongClick = onLongClick
         )
@@ -309,6 +328,7 @@ fun StandardNoteCard(
         FloatingDetailsPill(
             note = note,
             folderColor = folderAccentColor,
+            externalTrigger = cardInteractionTimestamp,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(8.dp)
@@ -323,6 +343,7 @@ fun StandardNoteCard(
 fun FloatingDetailsPill(
     note: NoteDocument,
     folderColor: Color,
+    externalTrigger: Any? = null,
     modifier: Modifier = Modifier
 ) {
     val tintedBgColor = folderColor.copy(alpha = 0.22f)
@@ -340,13 +361,12 @@ fun FloatingDetailsPill(
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             // Title
-            Text(
+            InteractiveMarqueeText(
                 text = note.title,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Black,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                externalTrigger = externalTrigger,
                 modifier = Modifier.fillMaxWidth()
             )
 

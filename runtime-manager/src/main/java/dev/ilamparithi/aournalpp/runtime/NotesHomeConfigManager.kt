@@ -276,12 +276,21 @@ object NotesHomeConfigManager {
         }
     }
 
+    private val EXCLUDED_SHARED_PREFS_KEYS = setOf(
+        LinuxEnvironment.PREF_KEY_NOTES_DIR,
+        LinuxEnvironment.PREF_KEY_ONBOARDING_COMPLETED,
+        "pref_last_opened_note_path",
+        "pref_last_crash_timestamp"
+    )
+
     private fun exportSharedPreferencesToJson(prefs: SharedPreferences, destFile: File) {
         try {
             val allEntries = prefs.all
             val json = JSONObject()
             for ((key, value) in allEntries) {
-                json.put(key, value)
+                if (key !in EXCLUDED_SHARED_PREFS_KEYS) {
+                    json.put(key, value)
+                }
             }
             destFile.writeText(json.toString(2), Charsets.UTF_8)
         } catch (e: Exception) {
@@ -298,6 +307,7 @@ object NotesHomeConfigManager {
             val keys = json.keys()
             while (keys.hasNext()) {
                 val key = keys.next()
+                if (key in EXCLUDED_SHARED_PREFS_KEYS) continue
                 when (val value = json.get(key)) {
                     is Boolean -> editor.putBoolean(key, value)
                     is Int -> editor.putInt(key, value)

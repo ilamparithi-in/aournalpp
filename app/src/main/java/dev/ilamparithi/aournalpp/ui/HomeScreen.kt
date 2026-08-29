@@ -9,12 +9,14 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -22,12 +24,15 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
+import dev.ilamparithi.aournalpp.utils.FileNameTemplateEngine
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -51,12 +56,14 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -211,15 +218,26 @@ fun HomeScreen(
     val isScrolled by remember { derivedStateOf { scrollState.value > 100 } }
 
     suspend fun loadHomeDataNow() {
-        val homeNotes = repository.getHomeNotes(16)
-        recentNotes = homeNotes
-        totalNotesCount = repository.countAllNotes()
-        totalFoldersCount = repository.scanDirectory(repository.getRootNotesDirectory()).first.size
-
-        continueNote = repository.getLastOpenedOrModifiedNote()
+        data class HomeDataPayload(
+            val notes: List<NoteDocument>,
+            val count: Int,
+            val folders: Int,
+            val lastNote: NoteDocument?
+        )
+        val payload = withContext(Dispatchers.IO) {
+            val notes = repository.getHomeNotes(16)
+            val count = repository.countAllNotes()
+            val folders = repository.scanDirectory(repository.getRootNotesDirectory()).first.size
+            val lastNote = repository.getLastOpenedOrModifiedNote()
+            HomeDataPayload(notes, count, folders, lastNote)
+        }
+        recentNotes = payload.notes
+        totalNotesCount = payload.count
+        totalFoldersCount = payload.folders
+        continueNote = payload.lastNote
 
         // Prefetch thumbnails off the main thread
-        ThumbnailManager.prefetchThumbnails(context, homeNotes, pdfExportManager, scope)
+        ThumbnailManager.prefetchThumbnails(context, payload.notes, pdfExportManager, scope)
 
         val emergencyFile = withContext(Dispatchers.IO) { env.checkAndQuarantineEmergencySave() }
         if (emergencyFile != null && emergencyFile.exists() && emergencyFile.length() > 0) {
@@ -323,37 +341,38 @@ fun HomeScreen(
         }
     }
 
+    data class SingleFileActionPrompt(
+        val note: NoteDocument,
+        val actionType: FileActionPromptType,
+        val defaultName: String
+    )
+    var activeFilePrompt by remember { mutableStateOf<SingleFileActionPrompt?>(null) }
+
     val onShareXopp: (NoteDocument) -> Unit = { note ->
-        repository.shareNoteAsXopp(context, note)
+        val defaultName = FileNameTemplateEngine.evaluate(
+            FileNameTemplateEngine.getShareXoppTemplate(context),
+            context,
+            note.file
+        )
+        activeFilePrompt = SingleFileActionPrompt(note, FileActionPromptType.SHARE_XOPP, defaultName)
     }
 
     val onSharePdf: (NoteDocument) -> Unit = { note ->
-        scope.launch {
-            isPdfConverting = true
-            convertingMessage = "Rendering PDF for \"${note.title}\"..."
-            val result = repository.shareNoteAsPdf(context, note, pdfExportManager)
-            isPdfConverting = false
-            if (result.isFailure) {
-                snackbarHostState.showSnackbar("PDF Export failed: ${result.exceptionOrNull()?.message}")
-            }
-        }
+        val defaultName = FileNameTemplateEngine.evaluate(
+            FileNameTemplateEngine.getSharePdfTemplate(context),
+            context,
+            note.file
+        )
+        activeFilePrompt = SingleFileActionPrompt(note, FileActionPromptType.SHARE_PDF, defaultName)
     }
 
     val onExportPdf: (NoteDocument) -> Unit = { note ->
-        scope.launch {
-            isPdfConverting = true
-            convertingMessage = "Exporting \"${note.title}\" to PDF..."
-            val exportDir = File(repository.getRootNotesDirectory(), "Exports").apply { mkdirs() }
-            val destPdf = File(exportDir, "${note.title}.pdf")
-            val result = pdfExportManager.convertXoppToPdf(note.file, destPdf)
-            isPdfConverting = false
-            if (result.isSuccess) {
-                val pdfFile = result.getOrThrow()
-                snackbarHostState.showSnackbar("Exported to Exports/${pdfFile.name}")
-            } else {
-                snackbarHostState.showSnackbar("PDF Export failed: ${result.exceptionOrNull()?.message}")
-            }
-        }
+        val defaultName = FileNameTemplateEngine.evaluate(
+            FileNameTemplateEngine.getExportPdfTemplate(context),
+            context,
+            note.file
+        )
+        activeFilePrompt = SingleFileActionPrompt(note, FileActionPromptType.EXPORT_PDF, defaultName)
     }
 
     val onRename: (NoteDocument) -> Unit = { note ->
@@ -366,7 +385,8 @@ fun HomeScreen(
     }
 
     fun promptNewNote() {
-        newNoteDefaultName = SimpleDateFormat("yyyy-MM-dd-'Note'-HH-mm", Locale.getDefault()).format(Date())
+        val template = FileNameTemplateEngine.getNewFileTemplate(context)
+        newNoteDefaultName = FileNameTemplateEngine.evaluate(template, context)
         scope.launch {
             allFoldersForNewNote = withContext(Dispatchers.IO) {
                 repository.getAllFolders()
@@ -407,15 +427,18 @@ fun HomeScreen(
         }
     }
 
+    val reduceAnimations = remember { prefs.getBoolean(LinuxEnvironment.PREF_KEY_REDUCE_ANIMATIONS, false) }
+
     // FAB Rotation Animation
     val fabRotation by animateFloatAsState(
         targetValue = if (isFabExpanded) 135f else 0f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        animationSpec = if (reduceAnimations) snap() else spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
         label = "fabRotation"
     )
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
@@ -505,8 +528,8 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(scrollState)
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(28.dp)
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     // 1. Dynamic Hero Header & Stats
                     Column(modifier = Modifier.fillMaxWidth()) {
@@ -598,7 +621,8 @@ fun HomeScreen(
                     }
 
                     // 3. M3 Expressive Studio Notes (Collage vs Gallery)
-                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        // Header Row 1: Studio Notes Title + Files Hub button
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -619,80 +643,75 @@ fun HomeScreen(
                                 )
                             }
 
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                // View Mode Toggle (Expressive vs Normal)
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                ) {
-                                    Row(modifier = Modifier.padding(3.dp)) {
-                                        Surface(
-                                            shape = RoundedCornerShape(9.dp),
-                                            color = if (viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.primary else Color.Transparent,
-                                            modifier = Modifier.clickable {
-                                                viewMode = "EXPRESSIVE"
-                                                prefs.edit().putString("pref_home_view_mode", "EXPRESSIVE").apply()
-                                            }
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.AutoAwesome,
-                                                    contentDescription = "Expressive Collage",
-                                                    tint = if (viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.size(14.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text(
-                                                    "Collage",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = if (viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                        }
+                            TextButton(onClick = onNavigateToFiles) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Files Hub", fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
 
-                                        Surface(
-                                            shape = RoundedCornerShape(9.dp),
-                                            color = if (viewMode == "NORMAL") MaterialTheme.colorScheme.primary else Color.Transparent,
-                                            modifier = Modifier.clickable {
-                                                viewMode = "NORMAL"
-                                                prefs.edit().putString("pref_home_view_mode", "NORMAL").apply()
-                                            }
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.GridView,
-                                                    contentDescription = "Normal Gallery",
-                                                    tint = if (viewMode == "NORMAL") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.size(14.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text(
-                                                    "Gallery",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = if (viewMode == "NORMAL") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                        }
+                        // Header Row 2: Segmented Collage / Gallery toggle
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.align(Alignment.Start)
+                        ) {
+                            Row(modifier = Modifier.padding(3.dp)) {
+                                Surface(
+                                    shape = RoundedCornerShape(9.dp),
+                                    color = if (viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.primary else Color.Transparent,
+                                    modifier = Modifier.clickable {
+                                        viewMode = "EXPRESSIVE"
+                                        prefs.edit().putString("pref_home_view_mode", "EXPRESSIVE").apply()
+                                    }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.Default.AutoAwesome,
+                                            contentDescription = "Expressive Collage",
+                                            tint = if (viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            "Collage",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
                                     }
                                 }
 
-                                TextButton(onClick = onNavigateToFiles) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text("Files Hub", fontWeight = FontWeight.Bold)
+                                Surface(
+                                    shape = RoundedCornerShape(9.dp),
+                                    color = if (viewMode == "NORMAL") MaterialTheme.colorScheme.primary else Color.Transparent,
+                                    modifier = Modifier.clickable {
+                                        viewMode = "NORMAL"
+                                        prefs.edit().putString("pref_home_view_mode", "NORMAL").apply()
+                                    }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.Default.GridView,
+                                            contentDescription = "Normal Gallery",
+                                            tint = if (viewMode == "NORMAL") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(14.dp)
+                                        )
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Text(
+                                            "Gallery",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (viewMode == "NORMAL") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
                                     }
                                 }
                             }
@@ -743,7 +762,7 @@ fun HomeScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(60.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
             }
         }
@@ -1292,6 +1311,86 @@ fun HomeScreen(
             }
         )
     }
+
+    // Single-File Action Name Prompt Dialog (Export as PDF, Share as PDF, Share as XOPP)
+    activeFilePrompt?.let { prompt ->
+        val title: String
+        val subtitle: String
+        val ext: String
+        val icon: androidx.compose.ui.graphics.vector.ImageVector
+        val btnText: String
+
+        when (prompt.actionType) {
+            FileActionPromptType.EXPORT_PDF -> {
+                title = "Export as PDF"
+                subtitle = "Enter a file name for the exported PDF in Exports/."
+                ext = ".pdf"
+                icon = Icons.Default.FileDownload
+                btnText = "Export"
+            }
+            FileActionPromptType.SHARE_PDF -> {
+                title = "Share as PDF"
+                subtitle = "Enter a file name for the rendered PDF before sharing."
+                ext = ".pdf"
+                icon = Icons.Default.PictureAsPdf
+                btnText = "Share"
+            }
+            FileActionPromptType.SHARE_XOPP -> {
+                title = "Share Note"
+                subtitle = "Enter a file name for the shared notebook file."
+                ext = ".xopp"
+                icon = Icons.Default.Share
+                btnText = "Share"
+            }
+        }
+
+        FileNamePromptDialog(
+            title = title,
+            subtitle = subtitle,
+            extension = ext,
+            icon = icon,
+            initialName = prompt.defaultName,
+            confirmButtonText = btnText,
+            onDismiss = { activeFilePrompt = null },
+            onConfirm = { customName ->
+                val note = prompt.note
+                val actionType = prompt.actionType
+                activeFilePrompt = null
+                when (actionType) {
+                    FileActionPromptType.EXPORT_PDF -> {
+                        scope.launch {
+                            isPdfConverting = true
+                            convertingMessage = "Exporting \"$customName\" to PDF..."
+                            val exportDir = File(repository.getRootNotesDirectory(), "Exports").apply { mkdirs() }
+                            val destPdf = File(exportDir, "$customName.pdf")
+                            val result = pdfExportManager.convertXoppToPdf(note.file, destPdf)
+                            isPdfConverting = false
+                            if (result.isSuccess) {
+                                val pdfFile = result.getOrThrow()
+                                snackbarHostState.showSnackbar("Exported to Exports/${pdfFile.name}")
+                            } else {
+                                snackbarHostState.showSnackbar("PDF Export failed: ${result.exceptionOrNull()?.message}")
+                            }
+                        }
+                    }
+                    FileActionPromptType.SHARE_PDF -> {
+                        scope.launch {
+                            isPdfConverting = true
+                            convertingMessage = "Rendering PDF for \"$customName\"..."
+                            val result = repository.shareNoteAsPdf(context, note, pdfExportManager, customName = customName)
+                            isPdfConverting = false
+                            if (result.isFailure) {
+                                snackbarHostState.showSnackbar("PDF Export failed: ${result.exceptionOrNull()?.message}")
+                            }
+                        }
+                    }
+                    FileActionPromptType.SHARE_XOPP -> {
+                        repository.shareNoteAsXopp(context, note, customName = customName)
+                    }
+                }
+            }
+        )
+    }
 }
 
 
@@ -1421,7 +1520,7 @@ private fun EnlargedContinueHeroSection(
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Black,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    modifier = Modifier.basicMarquee()
                 )
 
                 val folderDisplayName = if (note.folder.isBlank() || note.folder == "Notes Home") "Notes Home" else "In ${note.folder}"

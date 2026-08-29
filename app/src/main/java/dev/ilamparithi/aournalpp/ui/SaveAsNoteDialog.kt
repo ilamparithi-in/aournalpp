@@ -53,7 +53,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.res.Configuration
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import dev.ilamparithi.aournalpp.model.FolderItem
 import kotlinx.coroutines.launch
 import java.io.File
@@ -115,8 +118,13 @@ fun SaveAsNoteDialog(
         else -> selectedFolder.name
     }
 
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = isLandscape),
+        modifier = if (isLandscape) Modifier else Modifier.fillMaxWidth().padding(horizontal = 10.dp),
         icon = {
             Icon(
                 imageVector = icon,
@@ -138,7 +146,7 @@ fun SaveAsNoteDialog(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 if (!subtitle.isNullOrBlank()) {
-                    Text(
+                    InteractiveMarqueeText(
                         text = subtitle,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -244,12 +252,10 @@ fun SaveAsNoteDialog(
 
                                 Spacer(modifier = Modifier.width(10.dp))
 
-                                Text(
+                                InteractiveMarqueeText(
                                     text = targetFolderDisplayName,
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Medium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f)
                                 )
 

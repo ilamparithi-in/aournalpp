@@ -70,7 +70,8 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
             command.add(targetFilePath)
         }
         
-        val xoppWorkingDir = File(env.shareDir, "xournalpp").takeIf { it.exists() } ?: env.homeDir
+        val notesDir = env.getNotesDirectory()
+        val xoppWorkingDir = if (notesDir.exists()) notesDir else env.homeDir
         val process = ProcessBuilder(command)
             .directory(xoppWorkingDir)
             .redirectErrorStream(true)

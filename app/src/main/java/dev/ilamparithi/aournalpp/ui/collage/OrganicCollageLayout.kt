@@ -405,12 +405,12 @@ object OrganicCollageEngine {
  * or on cold startup. It is never recalculated during tab navigation.
  */
 object CollageLayoutMemoryCache {
-    private val layoutCache = ConcurrentHashMap<Int, CollageLayoutResult>()
+    private val layoutCache = ConcurrentHashMap<String, CollageLayoutResult>()
 
-    fun getLayout(widthKey: Int): CollageLayoutResult? = layoutCache[widthKey]
+    fun getLayout(widthKey: Int, notesSignature: Int): CollageLayoutResult? = layoutCache["$widthKey:$notesSignature"]
 
-    fun putLayout(widthKey: Int, layout: CollageLayoutResult) {
-        layoutCache[widthKey] = layout
+    fun putLayout(widthKey: Int, notesSignature: Int, layout: CollageLayoutResult) {
+        layoutCache["$widthKey:$notesSignature"] = layout
     }
 
     fun clear() {
@@ -454,16 +454,22 @@ fun OrganicCollageView(
         val availableWidthDp = maxWidth.value
         val widthKey = (availableWidthDp / 4).toInt() * 4
 
-        val initialLayout = remember(widthKey) {
-            CollageLayoutMemoryCache.getLayout(widthKey)
+        val notesSignature = remember(notes) {
+            notes.map { "${it.path}:${it.lastModifiedMs}" }.hashCode()
         }
 
-        // Layout algorithm only runs when window size / orientation changes or on cold launch
+        val initialLayout = remember(widthKey, notesSignature) {
+            CollageLayoutMemoryCache.getLayout(widthKey, notesSignature)
+        }
+
+        // Layout algorithm only runs when window size / orientation or notes list changes
         val layoutState by produceState<CollageLayoutResult?>(
             initialValue = initialLayout,
-            key1 = widthKey
+            key1 = widthKey,
+            key2 = notesSignature,
+            key3 = refreshSeed
         ) {
-            val cached = CollageLayoutMemoryCache.getLayout(widthKey)
+            val cached = CollageLayoutMemoryCache.getLayout(widthKey, notesSignature)
             if (cached != null) {
                 value = cached
             } else {
@@ -471,10 +477,10 @@ fun OrganicCollageView(
                     OrganicCollageEngine.computeLayout(
                         notes = notes,
                         maxWidthDp = availableWidthDp,
-                        seed = 0L
+                        seed = refreshSeed
                     )
                 }
-                CollageLayoutMemoryCache.putLayout(widthKey, computed)
+                CollageLayoutMemoryCache.putLayout(widthKey, notesSignature, computed)
                 value = computed
             }
         }
@@ -504,8 +510,8 @@ fun OrganicCollageView(
                         .width(layout.totalWidth.dp)
                         .height(layout.totalHeight.dp)
                 ) {
-                    layout.cards.forEach { card ->
-                        val liveNote = notes.find { it.path == card.note.path } ?: card.note
+                    layout.cards.forEachIndexed { index, card ->
+                        val liveNote = notes.find { it.path == card.note.path } ?: notes.getOrNull(index) ?: card.note
                         Box(
                             modifier = Modifier
                                 .offset(x = card.x.dp, y = card.y.dp)

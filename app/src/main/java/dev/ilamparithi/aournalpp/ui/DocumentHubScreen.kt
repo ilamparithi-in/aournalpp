@@ -8,6 +8,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
+import android.content.res.Configuration
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.window.DialogProperties
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -15,10 +18,13 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
+import dev.ilamparithi.aournalpp.utils.FileNameTemplateEngine
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
@@ -36,8 +42,10 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.unit.round
 import androidx.compose.ui.unit.toIntRect
 import kotlinx.coroutines.withTimeoutOrNull
@@ -45,6 +53,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -373,11 +382,21 @@ fun DocumentHubScreen(
     // Autoload override conflict notification state
     var showAutoloadOverrideDialog by remember { mutableStateOf(false) }
 
+    data class SingleFileActionPrompt(
+        val note: NoteDocument,
+        val actionType: FileActionPromptType,
+        val defaultName: String
+    )
+    var activeFilePrompt by remember { mutableStateOf<SingleFileActionPrompt?>(null) }
+
+    val aournalPrefs = remember { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
+    val reduceAnimations = remember { aournalPrefs.getBoolean(LinuxEnvironment.PREF_KEY_REDUCE_ANIMATIONS, false) }
+
     // Speed Dial FAB State
     var isFabExpanded by remember { mutableStateOf(false) }
     val fabRotation by animateFloatAsState(
         targetValue = if (isFabExpanded) 135f else 0f,
-        animationSpec = spring(dampingRatio = 0.65f, stiffness = 300f),
+        animationSpec = if (reduceAnimations) snap() else spring(dampingRatio = 0.65f, stiffness = 300f),
         label = "fabRotation"
     )
 
@@ -533,6 +552,7 @@ fun DocumentHubScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             if (isSelectionMode) {
@@ -850,7 +870,10 @@ fun DocumentHubScreen(
                             if (!hasPermission) {
                                 showPermissionDialog = true
                             } else {
-                                newNoteDefaultName = SimpleDateFormat("yyyy-MM-dd-'Note'-HH-mm", Locale.getDefault()).format(Date())
+                                newNoteDefaultName = FileNameTemplateEngine.evaluate(
+                                    FileNameTemplateEngine.getNewFileTemplate(context),
+                                    context
+                                )
                                 scope.launch {
                                     allFoldersForNewNote = withContext(Dispatchers.IO) {
                                         repository.getAllFolders()
@@ -952,6 +975,74 @@ fun DocumentHubScreen(
                         loadContent()
                     }
                     result
+                }
+            )
+        }
+
+        // Single-File Action Name Prompt Dialog (Export as PDF, Share as PDF, Share as XOPP)
+        activeFilePrompt?.let { prompt ->
+            val title: String
+            val subtitle: String
+            val ext: String
+            val icon: androidx.compose.ui.graphics.vector.ImageVector
+            val btnText: String
+
+            when (prompt.actionType) {
+                FileActionPromptType.EXPORT_PDF -> {
+                    title = "Export as PDF"
+                    subtitle = "Enter a file name for the exported PDF."
+                    ext = ".pdf"
+                    icon = Icons.Default.FileDownload
+                    btnText = "Export"
+                }
+                FileActionPromptType.SHARE_PDF -> {
+                    title = "Share as PDF"
+                    subtitle = "Enter a file name for the rendered PDF before sharing."
+                    ext = ".pdf"
+                    icon = Icons.Default.PictureAsPdf
+                    btnText = "Share"
+                }
+                FileActionPromptType.SHARE_XOPP -> {
+                    title = "Share Note"
+                    subtitle = "Enter a file name for the shared notebook file."
+                    ext = ".xopp"
+                    icon = Icons.Default.Share
+                    btnText = "Share"
+                }
+            }
+
+            FileNamePromptDialog(
+                title = title,
+                subtitle = subtitle,
+                extension = ext,
+                icon = icon,
+                initialName = prompt.defaultName,
+                confirmButtonText = btnText,
+                onDismiss = { activeFilePrompt = null },
+                onConfirm = { customName ->
+                    val note = prompt.note
+                    val actionType = prompt.actionType
+                    activeFilePrompt = null
+                    when (actionType) {
+                        FileActionPromptType.EXPORT_PDF -> {
+                            pendingExportNote = note
+                            exportPdfLauncher.launch("$customName.pdf")
+                        }
+                        FileActionPromptType.SHARE_PDF -> {
+                            isPdfConverting = true
+                            convertingMessage = "Rendering PDF for sharing..."
+                            scope.launch {
+                                val result = repository.shareNoteAsPdf(context, note, pdfExportManager, customName = customName)
+                                isPdfConverting = false
+                                if (result.isFailure) {
+                                    snackbarHostState.showSnackbar("Failed to share PDF: ${result.exceptionOrNull()?.message}")
+                                }
+                            }
+                        }
+                        FileActionPromptType.SHARE_XOPP -> {
+                            repository.shareNoteAsXopp(context, note, customName = customName)
+                        }
+                    }
                 }
             )
         }
@@ -1293,10 +1384,15 @@ fun DocumentHubScreen(
             )
         }
 
+        val configuration = LocalConfiguration.current
+        val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
         // 6. Rename Dialog
         noteToRename?.let { doc ->
             AlertDialog(
                 onDismissRequest = { noteToRename = null },
+                properties = DialogProperties(usePlatformDefaultWidth = isLandscape),
+                modifier = if (isLandscape) Modifier else Modifier.fillMaxWidth().padding(horizontal = 10.dp),
                 title = { Text("Rename Note", fontWeight = FontWeight.Bold) },
                 text = {
                     OutlinedTextField(
@@ -1334,6 +1430,8 @@ fun DocumentHubScreen(
         noteToDelete?.let { doc ->
             AlertDialog(
                 onDismissRequest = { noteToDelete = null },
+                properties = DialogProperties(usePlatformDefaultWidth = isLandscape),
+                modifier = if (isLandscape) Modifier else Modifier.fillMaxWidth().padding(horizontal = 10.dp),
                 icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                 title = { Text(if (isViewingTrash) "Delete Permanently?" else "Move to Trash?", fontWeight = FontWeight.Bold) },
                 text = {
@@ -1807,9 +1905,9 @@ fun DocumentHubScreen(
                 LazyVerticalGrid(
                     state = pageGridState,
                     columns = if (isGridView) GridCells.Adaptive(minSize = 200.dp) else GridCells.Fixed(1),
-                    contentPadding = PaddingValues(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier
                         .fillMaxSize()
                         .notesGridDragSelect(
@@ -1846,17 +1944,28 @@ fun DocumentHubScreen(
                                     loadContent()
                                 },
                                 onSharePdf = { note ->
-                                    scope.launch {
-                                        val result = repository.shareNoteAsPdf(context, note, pdfExportManager)
-                                        if (result.isFailure) {
-                                            snackbarHostState.showSnackbar("Failed to share PDF: ${result.exceptionOrNull()?.message}")
-                                        }
-                                    }
+                                    val defaultName = FileNameTemplateEngine.evaluate(
+                                        FileNameTemplateEngine.getSharePdfTemplate(context),
+                                        context,
+                                        note.file
+                                    )
+                                    activeFilePrompt = SingleFileActionPrompt(note, FileActionPromptType.SHARE_PDF, defaultName)
                                 },
-                                onShareXopp = { note -> repository.shareNoteAsXopp(context, note) },
+                                onShareXopp = { note ->
+                                    val defaultName = FileNameTemplateEngine.evaluate(
+                                        FileNameTemplateEngine.getShareXoppTemplate(context),
+                                        context,
+                                        note.file
+                                    )
+                                    activeFilePrompt = SingleFileActionPrompt(note, FileActionPromptType.SHARE_XOPP, defaultName)
+                                },
                                 onExportPdf = { note ->
-                                    pendingExportNote = note
-                                    exportPdfLauncher.launch("${note.title}.pdf")
+                                    val defaultName = FileNameTemplateEngine.evaluate(
+                                        FileNameTemplateEngine.getExportPdfTemplate(context),
+                                        context,
+                                        note.file
+                                    )
+                                    activeFilePrompt = SingleFileActionPrompt(note, FileActionPromptType.EXPORT_PDF, defaultName)
                                 },
                                 onDuplicate = { note ->
                                     scope.launch {
@@ -1891,6 +2000,7 @@ fun DocumentHubScreen(
 
                         items(displayFolders, key = { it.file.absolutePath }) { folder ->
                             var showFolderMenu by remember { mutableStateOf(false) }
+                            var folderInteractionTimestamp by remember { mutableStateOf(0L) }
                             val accentColor = folder.colorHex?.let {
                                 try { Color(android.graphics.Color.parseColor(it)) } catch (e: Exception) { null }
                             } ?: MaterialTheme.colorScheme.primary
@@ -1898,6 +2008,17 @@ fun DocumentHubScreen(
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .pointerInput(folder.file.absolutePath) {
+                                        awaitPointerEventScope {
+                                            while (true) {
+                                                val event = awaitPointerEvent(PointerEventPass.Initial)
+                                                val hasTouch = event.changes.any { it.pressed || it.positionChanged() }
+                                                if (hasTouch || event.type == PointerEventType.Enter || event.type == PointerEventType.Move) {
+                                                    folderInteractionTimestamp = System.currentTimeMillis()
+                                                }
+                                            }
+                                        }
+                                    }
                                     .clickable {
                                         currentDirectory = folder.file
                                     },
@@ -1952,12 +2073,11 @@ fun DocumentHubScreen(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
-                                            Text(
+                                            InteractiveMarqueeText(
                                                 text = folder.name,
                                                 style = MaterialTheme.typography.titleSmall,
                                                 fontWeight = FontWeight.Bold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
+                                                externalTrigger = folderInteractionTimestamp,
                                                 modifier = Modifier.weight(1f, fill = false)
                                             )
                                             if (folder.isPinned || folder.isVirtuallyPinned) {
@@ -2136,21 +2256,29 @@ fun DocumentHubScreen(
                                     loadContent()
                                 },
                                 onExportPdf = {
-                                    pendingExportNote = note
-                                    exportPdfLauncher.launch("${note.title}.pdf")
+                                    val defaultName = FileNameTemplateEngine.evaluate(
+                                        FileNameTemplateEngine.getExportPdfTemplate(context),
+                                        context,
+                                        note.file
+                                    )
+                                    activeFilePrompt = SingleFileActionPrompt(note, FileActionPromptType.EXPORT_PDF, defaultName)
                                 },
                                 onSharePdf = {
-                                    isPdfConverting = true
-                                    convertingMessage = "Rendering PDF for sharing..."
-                                    scope.launch {
-                                        val result = repository.shareNoteAsPdf(context, note, pdfExportManager)
-                                        isPdfConverting = false
-                                        if (result.isFailure) {
-                                            snackbarHostState.showSnackbar("Failed to share PDF: ${result.exceptionOrNull()?.message}")
-                                        }
-                                    }
+                                    val defaultName = FileNameTemplateEngine.evaluate(
+                                        FileNameTemplateEngine.getSharePdfTemplate(context),
+                                        context,
+                                        note.file
+                                    )
+                                    activeFilePrompt = SingleFileActionPrompt(note, FileActionPromptType.SHARE_PDF, defaultName)
                                 },
-                                onShareXopp = { repository.shareNoteAsXopp(context, note) },
+                                onShareXopp = {
+                                    val defaultName = FileNameTemplateEngine.evaluate(
+                                        FileNameTemplateEngine.getShareXoppTemplate(context),
+                                        context,
+                                        note.file
+                                    )
+                                    activeFilePrompt = SingleFileActionPrompt(note, FileActionPromptType.SHARE_XOPP, defaultName)
+                                },
                                 onRename = {
                                     noteToRename = note
                                     renameInputText = note.title
@@ -2427,10 +2555,23 @@ fun ExpressiveNoteCard(
         try { Color(android.graphics.Color.parseColor(it)) } catch (e: Exception) { null }
     } ?: MaterialTheme.colorScheme.primary
 
+    var cardInteractionTimestamp by remember { mutableStateOf(0L) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clip(cardShape)
+            .pointerInput(note.path) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val hasTouch = event.changes.any { it.pressed || it.positionChanged() }
+                        if (hasTouch || event.type == PointerEventType.Enter || event.type == PointerEventType.Move) {
+                            cardInteractionTimestamp = System.currentTimeMillis()
+                        }
+                    }
+                }
+            }
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
@@ -2565,12 +2706,11 @@ fun ExpressiveNoteCard(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
+                        InteractiveMarqueeText(
                             text = note.title,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                            externalTrigger = cardInteractionTimestamp,
                             modifier = Modifier.weight(1f)
                         )
 
@@ -2659,7 +2799,13 @@ fun ExpressiveNoteCard(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(note.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        InteractiveMarqueeText(
+                            text = note.title,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            externalTrigger = cardInteractionTimestamp,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
                         if (note.isPinned) {
                             Spacer(modifier = Modifier.width(6.dp))
                             Icon(Icons.Default.PushPin, contentDescription = "Pinned", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(15.dp))
@@ -2767,9 +2913,13 @@ fun AutosaveResolutionDialog(
     onKeepExisting: () -> Unit
 ) {
     val isNewer = autosaveInfo.isAutosaveNewer
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = isLandscape),
+        modifier = if (isLandscape) Modifier else Modifier.fillMaxWidth().padding(horizontal = 10.dp),
         icon = {
             Icon(
                 imageVector = Icons.Default.History,
