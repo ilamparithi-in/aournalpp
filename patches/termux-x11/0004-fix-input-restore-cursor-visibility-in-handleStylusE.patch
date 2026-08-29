@@ -1,7 +1,7 @@
 From 5441d8e777059f50c0d5e6b0b038daa27043b055 Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Tue, 25 Aug 2026 01:23:42 +0530
-Subject: [PATCH 4/8] fix(input): restore cursor visibility in
+Subject: [PATCH 4/9] fix(input): restore cursor visibility in
  handleStylusEvent
 
 ---

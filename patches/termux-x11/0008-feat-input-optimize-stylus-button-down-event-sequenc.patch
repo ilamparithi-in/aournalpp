@@ -1,7 +1,7 @@
 From 4180aa453ca6a875e21049141bd54c7a7a13fa97 Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Sat, 29 Aug 2026 21:38:50 +0530
-Subject: [PATCH 8/8] feat(input): optimize stylus button down event sequence
+Subject: [PATCH 8/9] feat(input): optimize stylus button down event sequence
  with micro-steps
 
 ---

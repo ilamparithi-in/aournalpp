@@ -1,7 +1,7 @@
 From 17f574dea115ddd803c99d43c678ece4cb87b5a2 Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Sat, 29 Aug 2026 19:30:59 +0530
-Subject: [PATCH 7/8] feat(input): add Touch Stylus mode with single finger
+Subject: [PATCH 7/9] feat(input): add Touch Stylus mode with single finger
  emulation, multi-touch passthrough, and auto-disable on stylus hover
 
 ---

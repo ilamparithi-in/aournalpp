@@ -1,7 +1,7 @@
 From 5718694dd09d5eb62f83a8d91ce3feb6822e6db3 Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Sun, 23 Aug 2026 08:07:54 +0530
-Subject: [PATCH 3/8] feat(ui): add stylus settings, preference definitions,
+Subject: [PATCH 3/9] feat(ui): add stylus settings, preference definitions,
  and null-safety guards
 
 ---

@@ -42,11 +42,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
@@ -83,17 +85,22 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -147,6 +154,19 @@ import com.termux.x11.input.TouchInputHandler
 import dev.ilamparithi.aournalpp.data.DocumentRepository
 import dev.ilamparithi.aournalpp.data.X11Preferences
 import dev.ilamparithi.aournalpp.runtime.CanvasSessionManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
+import android.net.Uri
+import android.util.Log
+import android.view.DragEvent
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Image
+import androidx.core.content.FileProvider
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
 import dev.ilamparithi.aournalpp.runtime.WallpaperHelper
@@ -169,6 +189,7 @@ import dev.ilamparithi.aournalpp.ui.getRotatedSafeAreaInsets
 import dev.ilamparithi.aournalpp.ui.rememberCutoutPlacement
 import dev.ilamparithi.aournalpp.ui.theme.AournalTheme
 import dev.ilamparithi.aournalpp.x11.X11Viewport
+import java.io.ByteArrayOutputStream
 import java.io.File
 
 class CanvasActivity : ComponentActivity() {
@@ -191,6 +212,26 @@ class CanvasActivity : ComponentActivity() {
     private val isKeyboardOpenState = mutableStateOf(false)
     private val backPressTimestamps = mutableListOf<Long>()
 
+    private var cameraTempFile: File? = null
+    private val cameraLauncher = registerForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success && cameraTempFile != null && cameraTempFile!!.exists()) {
+            processAndPasteCameraImage(cameraTempFile!!)
+        }
+    }
+
+    private val galleryLauncher = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) {
+            processAndPasteImageUri(uri)
+        }
+    }
+
+    private val fileLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            processAndPasteImageUri(uri)
+        }
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -399,6 +440,10 @@ class CanvasActivity : ComponentActivity() {
                 val showPaste = remember {
                     x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_PASTE, true)
                 }
+                val showImage = remember {
+                    x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_IMAGE, true)
+                }
+                var showImageSourceDialog by remember { mutableStateOf(false) }
                 val stylusHoverExpands = remember {
                     x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_STYLUS_HOVER_EXPANDS, true)
                 }
@@ -471,6 +516,7 @@ class CanvasActivity : ComponentActivity() {
                                 ),
                             onLorieViewReady = { lorieView ->
                                 activeLorieView = lorieView
+                                setupDragAndDropListener(lorieView)
                                 sessionManager.startSession(lorieView, targetPath, openPreferences)
                             },
                             onInputHandlerReady = { handler ->
@@ -533,6 +579,8 @@ class CanvasActivity : ComponentActivity() {
                             showCut = showCut,
                             showCopy = showCopy,
                             showPaste = showPaste,
+                            showImage = showImage,
+                            onOpenImageSelector = { showImageSourceDialog = true },
                             stylusHoverExpands = stylusHoverExpands,
                             onSmartBackPress = { handleSmartBackPress() },
                             onToggleKeyboard = {
@@ -676,6 +724,114 @@ class CanvasActivity : ComponentActivity() {
                                 }
                             )
                         }
+
+                        // Modern Image Source Selection Bottom Sheet
+                        if (showImageSourceDialog) {
+                            ModalBottomSheet(
+                                onDismissRequest = { showImageSourceDialog = false },
+                                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                tonalElevation = 6.dp
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 24.dp, vertical = 8.dp)
+                                        .navigationBarsPadding(),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = "Insert Image",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(bottom = 8.dp)
+                                    )
+
+                                    // Option 1: Take Photo (Camera)
+                                    ListItem(
+                                        headlineContent = { Text("Take Photo", fontWeight = FontWeight.Medium) },
+                                        supportingContent = { Text("Capture directly using device camera") },
+                                        leadingContent = {
+                                            Surface(
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = MaterialTheme.colorScheme.primaryContainer,
+                                                modifier = Modifier.size(40.dp)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.CameraAlt,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .clickable {
+                                                showImageSourceDialog = false
+                                                launchCameraCapture()
+                                            }
+                                    )
+
+                                    // Option 2: Choose from Photos / Gallery
+                                    ListItem(
+                                        headlineContent = { Text("Photo Gallery", fontWeight = FontWeight.Medium) },
+                                        supportingContent = { Text("Select pictures from your photo library") },
+                                        leadingContent = {
+                                            Surface(
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                                modifier = Modifier.size(40.dp)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Image,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .clickable {
+                                                showImageSourceDialog = false
+                                                launchGalleryPicker()
+                                            }
+                                    )
+
+                                    // Option 3: Browse Files
+                                    ListItem(
+                                        headlineContent = { Text("Browse Files", fontWeight = FontWeight.Medium) },
+                                        supportingContent = { Text("Pick image files from your storage or downloads") },
+                                        leadingContent = {
+                                            Surface(
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = MaterialTheme.colorScheme.tertiaryContainer,
+                                                modifier = Modifier.size(40.dp)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.FolderOpen,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onTertiaryContainer
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .clickable {
+                                                showImageSourceDialog = false
+                                                launchFilePicker()
+                                            }
+                                    )
+
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -732,29 +888,212 @@ class CanvasActivity : ComponentActivity() {
                 view.sendKeyEvent(0, KeyEvent.KEYCODE_CTRL_LEFT, false)
             }
         }
-
-        inputSender?.let { sender ->
-            val now = android.os.SystemClock.uptimeMillis()
-            val ctrlDown = KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_CTRL_LEFT, 0)
-            val keyDown = KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
-            val keyUp = KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON)
-            val ctrlUp = KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_CTRL_LEFT, 0)
-
-            sender.sendKeyEvent(ctrlDown)
-            sender.sendKeyEvent(keyDown)
-            sender.sendKeyEvent(keyUp)
-            sender.sendKeyEvent(ctrlUp)
-        }
-
-        // xdotool window-activated shortcut injection (matching edit settings & back button quit)
-        sessionManager.injectShortcut(shortcutStr)
     }
 
     private fun injectCtrlQDirect() {
         injectKeyboardShortcut(KeyEvent.KEYCODE_Q, "ctrl+q")
     }
 
+    private fun setupDragAndDropListener(view: LorieView) {
+        view.setOnDragListener { _, event ->
+            when (event.action) {
+                DragEvent.ACTION_DRAG_STARTED -> {
+                    val desc = event.clipDescription
+                    desc != null && (
+                        desc.hasMimeType("image/*") ||
+                        desc.hasMimeType("image/png") ||
+                        desc.hasMimeType("image/jpeg") ||
+                        desc.hasMimeType("image/webp") ||
+                        desc.hasMimeType("image/bmp") ||
+                        desc.hasMimeType("text/plain") ||
+                        desc.hasMimeType("text/html")
+                    )
+                }
+                DragEvent.ACTION_DRAG_ENTERED -> true
+                DragEvent.ACTION_DRAG_LOCATION -> true
+                DragEvent.ACTION_DROP -> {
+                    try {
+                        requestDragAndDropPermissions(event)
+                    } catch (e: Exception) {
+                        Log.w("CanvasActivity", "Could not request drag and drop permissions", e)
+                    }
+                    val clipData = event.clipData
+                    if (clipData != null && clipData.itemCount > 0) {
+                        val item = clipData.getItemAt(0)
+                        val uri = item.uri
+                        val text = item.text ?: item.htmlText
+                        if (uri != null) {
+                            processAndPasteImageUri(uri)
+                        } else if (text != null) {
+                            activeLorieView?.stageClipboardText(text.toString())
+                            injectKeyboardShortcut(KeyEvent.KEYCODE_V, "ctrl+v")
+                            Toast.makeText(this@CanvasActivity, "Text pasted", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    true
+                }
+                DragEvent.ACTION_DRAG_ENDED -> true
+                else -> false
+            }
+        }
+    }
 
+    private fun launchCameraCapture() {
+        try {
+            val cameraDir = File(cacheDir, "camera").apply { if (!exists()) mkdirs() }
+            val tempFile = File(cameraDir, "capture_${System.currentTimeMillis()}.jpg")
+            cameraTempFile = tempFile
+            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", tempFile)
+            cameraLauncher.launch(uri)
+        } catch (e: Exception) {
+            Log.e("CanvasActivity", "Error launching camera", e)
+            Toast.makeText(this, "Could not open camera: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun launchGalleryPicker() {
+        try {
+            galleryLauncher.launch(
+                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+            )
+        } catch (e: Exception) {
+            Log.w("CanvasActivity", "PhotoPicker unavailable, falling back to file picker", e)
+            launchFilePicker()
+        }
+    }
+
+    private fun launchFilePicker() {
+        try {
+            fileLauncher.launch(arrayOf("image/*"))
+        } catch (e: Exception) {
+            Log.e("CanvasActivity", "Error launching file picker", e)
+            Toast.makeText(this, "Could not open file picker: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun processAndPasteImageUri(uri: Uri) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                contentResolver.openInputStream(uri)?.use { isStream ->
+                    val raw = isStream.readBytes()
+                    if (raw.isNotEmpty()) {
+                        val isPng = raw.size >= 8 && raw[0] == 0x89.toByte() && raw[1] == 0x50.toByte() && raw[2] == 0x4E.toByte() && raw[3] == 0x47.toByte()
+                        val pngBytes: ByteArray = if (isPng) {
+                            raw
+                        } else {
+                            var rotationDegrees = 0f
+                            try {
+                                contentResolver.openInputStream(uri)?.use { exifStream ->
+                                    val exif = ExifInterface(exifStream)
+                                    val orientation = exif.getAttributeInt(
+                                        ExifInterface.TAG_ORIENTATION,
+                                        ExifInterface.ORIENTATION_NORMAL
+                                    )
+                                    rotationDegrees = when (orientation) {
+                                        ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                                        ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                                        ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                                        else -> 0f
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.w("CanvasActivity", "Could not parse EXIF from URI", e)
+                            }
+
+                            val bmp = BitmapFactory.decodeByteArray(raw, 0, raw.size)
+                            if (bmp != null) {
+                                val finalBmp = if (rotationDegrees != 0f) {
+                                    val matrix = Matrix().apply { postRotate(rotationDegrees) }
+                                    Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true).also {
+                                        if (it != bmp) bmp.recycle()
+                                    }
+                                } else {
+                                    bmp
+                                }
+                                val baos = ByteArrayOutputStream()
+                                finalBmp.compress(Bitmap.CompressFormat.PNG, 100, baos)
+                                finalBmp.recycle()
+                                baos.toByteArray()
+                            } else {
+                                raw
+                            }
+                        }
+
+                        withContext(Dispatchers.Main) {
+                            // Isolated in-memory X11 clipboard push: does NOT touch host Android clipboard!
+                            activeLorieView?.stageClipboardImage(pngBytes)
+                            injectKeyboardShortcut(KeyEvent.KEYCODE_V, "ctrl+v")
+                            Toast.makeText(this@CanvasActivity, "Image inserted", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("CanvasActivity", "Failed to process image URI", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@CanvasActivity, "Failed to insert image: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    private fun processAndPasteCameraImage(file: File) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val exif = ExifInterface(file.absolutePath)
+                val orientation = exif.getAttributeInt(
+                    ExifInterface.TAG_ORIENTATION,
+                    ExifInterface.ORIENTATION_NORMAL
+                )
+                val rotationDegrees = when (orientation) {
+                    ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                    ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                    ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                    else -> 0f
+                }
+
+                val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(file.absolutePath, boundsOptions)
+
+                val maxDim = 2560
+                var sampleSize = 1
+                while (boundsOptions.outWidth / sampleSize > maxDim || boundsOptions.outHeight / sampleSize > maxDim) {
+                    sampleSize *= 2
+                }
+
+                val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+                val originalBitmap = BitmapFactory.decodeFile(file.absolutePath, decodeOptions)
+
+                val finalBitmap = if (rotationDegrees != 0f && originalBitmap != null) {
+                    val matrix = Matrix().apply { postRotate(rotationDegrees) }
+                    Bitmap.createBitmap(originalBitmap, 0, 0, originalBitmap.width, originalBitmap.height, matrix, true).also {
+                        if (it != originalBitmap) originalBitmap.recycle()
+                    }
+                } else {
+                    originalBitmap
+                }
+
+                if (finalBitmap != null) {
+                    val baos = ByteArrayOutputStream()
+                    finalBitmap.compress(Bitmap.CompressFormat.PNG, 100, baos)
+                    val pngBytes = baos.toByteArray()
+                    finalBitmap.recycle()
+
+                    withContext(Dispatchers.Main) {
+                        // Isolated in-memory X11 clipboard push: does NOT touch host Android clipboard!
+                        activeLorieView?.stageClipboardImage(pngBytes)
+                        injectKeyboardShortcut(KeyEvent.KEYCODE_V, "ctrl+v")
+                        Toast.makeText(this@CanvasActivity, "Photo inserted", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                file.delete()
+            } catch (e: Exception) {
+                Log.e("CanvasActivity", "Failed to process captured camera photo", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@CanvasActivity, "Failed to insert photo: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.keyCode == KeyEvent.KEYCODE_BACK) {
@@ -810,6 +1149,8 @@ private fun FloatingToolbarOverlay(
     showCut: Boolean,
     showCopy: Boolean,
     showPaste: Boolean,
+    showImage: Boolean,
+    onOpenImageSelector: () -> Unit,
     stylusHoverExpands: Boolean,
     onSmartBackPress: () -> Unit,
     onToggleKeyboard: () -> Unit,
@@ -1110,8 +1451,8 @@ private fun FloatingToolbarOverlay(
                                 }
                             }
 
-                            // Shared Clipboard Actions Capsule (Cut Ctrl+X, Copy Ctrl+C, Paste Ctrl+V)
-                            if (showCut || showCopy || showPaste) {
+                            // Shared Clipboard & Image Actions Capsule (Cut, Copy, Paste, Insert Image)
+                            if (showCut || showCopy || showPaste || showImage) {
                                 Surface(
                                     shape = RoundedCornerShape(10.dp),
                                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -1169,6 +1510,24 @@ private fun FloatingToolbarOverlay(
                                                 Icon(
                                                     imageVector = Icons.Default.ContentPaste,
                                                     contentDescription = "Paste (Ctrl+V)",
+                                                    modifier = Modifier.size(16.dp),
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+
+                                        if (showImage) {
+                                            IconButton(
+                                                onClick = {
+                                                    interactionSignal.tryEmit(Unit)
+                                                    try { haptics.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                                                    onOpenImageSelector()
+                                                },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Image,
+                                                    contentDescription = "Insert Image (Camera, Gallery, Files)",
                                                     modifier = Modifier.size(16.dp),
                                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )

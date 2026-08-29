@@ -1,7 +1,7 @@
 From 722461f2c4a8c777e438f50637d38e35734671fe Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Tue, 25 Aug 2026 15:42:17 +0530
-Subject: [PATCH 5/8] feat(clipboard): implement multi-MIME shared clipboard
+Subject: [PATCH 5/9] feat(clipboard): implement multi-MIME shared clipboard
  bridge
 
 - Add support for text, HTML, and binary images (PNG, JPEG, BMP) across Android and X11

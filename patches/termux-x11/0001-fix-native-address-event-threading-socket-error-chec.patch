@@ -1,7 +1,7 @@
 From 972c4a01c8b2bfbdcba2a80e77e2f74e561f9202 Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Sun, 23 Aug 2026 08:07:38 +0530
-Subject: [PATCH 1/8] fix(native): address event threading, socket error check
+Subject: [PATCH 1/9] fix(native): address event threading, socket error check
  and choreographer safety
 
 ---

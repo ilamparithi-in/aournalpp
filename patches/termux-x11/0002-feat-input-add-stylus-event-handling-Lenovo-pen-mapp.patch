@@ -1,7 +1,7 @@
 From 5986b503e22dbbac8dee2dd5f1e27aaf36030e6f Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Sun, 23 Aug 2026 08:07:47 +0530
-Subject: [PATCH 2/8] feat(input): add stylus event handling, Lenovo pen
+Subject: [PATCH 2/9] feat(input): add stylus event handling, Lenovo pen
  mapper, and stylus state tracking
 
 ---

@@ -48,6 +48,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
@@ -1355,6 +1356,9 @@ fun ToolbarSettingsScreen(
     var showPaste by remember {
         mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_PASTE, true))
     }
+    var showImage by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_IMAGE, true))
+    }
 
     Scaffold(
         topBar = {
@@ -1912,6 +1916,35 @@ fun ToolbarSettingsScreen(
                             showPaste = it
                             x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_SHOW_PASTE, it).apply()
                             X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_SHOW_PASTE)
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsSwitchListItem(
+                        headline = "Insert Image Action",
+                        supporting = "Displays Image action button on the toolbar to insert pictures from Camera, Photos/Gallery, or Files.",
+                        checked = showImage,
+                        leadingContent = {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Image,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        },
+                        onCheckedChange = {
+                            showImage = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_SHOW_IMAGE, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_SHOW_IMAGE)
                         }
                     )
                 }

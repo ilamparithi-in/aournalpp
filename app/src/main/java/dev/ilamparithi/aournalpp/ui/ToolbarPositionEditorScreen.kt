@@ -41,6 +41,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentCut
@@ -49,6 +50,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.outlined.PushPin
@@ -232,6 +234,7 @@ fun ToolbarPositionEditorScreen(
         val showCut = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CUT, true) }
         val showCopy = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_COPY, true) }
         val showPaste = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_PASTE, true) }
+        val showImage = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_IMAGE, true) }
         val pinButtonMode = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_PIN_BUTTON_MODE, false) }
 
         var measuredToolbarWPx by remember { mutableFloatStateOf(0f) }
@@ -530,7 +533,7 @@ fun ToolbarPositionEditorScreen(
                             }
                         }
 
-                        if (showCut || showCopy || showPaste) {
+                        if (showCut || showCopy || showPaste || showImage) {
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -564,6 +567,16 @@ fun ToolbarPositionEditorScreen(
                                         IconButton(onClick = {}, modifier = Modifier.size(32.dp), enabled = false) {
                                             Icon(
                                                 imageVector = Icons.Default.ContentPaste,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                    if (showImage) {
+                                        IconButton(onClick = {}, modifier = Modifier.size(32.dp), enabled = false) {
+                                            Icon(
+                                                imageVector = Icons.Default.Image,
                                                 contentDescription = null,
                                                 modifier = Modifier.size(16.dp),
                                                 tint = MaterialTheme.colorScheme.onSurfaceVariant

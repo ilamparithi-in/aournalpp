@@ -1,7 +1,7 @@
 From 5babf7707ce18e9637e05c80f30ee373637cdd73 Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Tue, 25 Aug 2026 18:39:47 +0530
-Subject: [PATCH 6/8] fix(input): implement onCheckIsTextEditor and improve
+Subject: [PATCH 6/9] fix(input): implement onCheckIsTextEditor and improve
  soft keyboard dispatch
 
 ---

@@ -44,6 +44,8 @@ object X11Preferences {
     const val KEY_TOOLBAR_SHOW_CUT = "toolbarShowCut"
     const val KEY_TOOLBAR_SHOW_COPY = "toolbarShowCopy"
     const val KEY_TOOLBAR_SHOW_PASTE = "toolbarShowPaste"
+    const val KEY_TOOLBAR_SHOW_IMAGE = "toolbarShowImage"
+    const val KEY_TOOLBAR_SHOW_CAMERA = "toolbarShowImage"
     const val KEY_TOOLBAR_SHOW_TITLE = "toolbarShowTitle"
     const val KEY_TOOLBAR_SHOW_BACK = "toolbarShowBack"
     const val KEY_TOOLBAR_SHOW_DRAG_HANDLE = "toolbarShowDragHandle"
