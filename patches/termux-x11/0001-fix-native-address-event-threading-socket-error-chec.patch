@@ -1,13 +1,13 @@
-From a5b72e65c1fa50340192ab080ceb9ae74f9455a9 Mon Sep 17 00:00:00 2001
+From 972c4a01c8b2bfbdcba2a80e77e2f74e561f9202 Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Sun, 23 Aug 2026 08:07:38 +0530
-Subject: [PATCH 1/6] fix(native): address event threading, socket error check
+Subject: [PATCH 1/8] fix(native): address event threading, socket error check
  and choreographer safety
 
 ---
  lorie/src/main/cpp/lorie/InitInput.c       |   7 +-
- lorie/src/main/cpp/lorie/activity.cpp      |  10 +-
- lorie/src/main/cpp/lorie/cmdentrypoint.cpp | 102 ++++++++++++---------
+ lorie/src/main/cpp/lorie/activity.cpp      |  12 +--
+ lorie/src/main/cpp/lorie/cmdentrypoint.cpp | 100 ++++++++++++---------
  3 files changed, 68 insertions(+), 51 deletions(-)
 
 diff --git a/lorie/src/main/cpp/lorie/InitInput.c b/lorie/src/main/cpp/lorie/InitInput.c
@@ -29,12 +29,12 @@ index a344700..1ff6e52 100644
      (void) mieqInit();
  }
 diff --git a/lorie/src/main/cpp/lorie/activity.cpp b/lorie/src/main/cpp/lorie/activity.cpp
-index eb6057c..b94936c 100644
+index d1e1e47..ee12818 100644
 --- a/lorie/src/main/cpp/lorie/activity.cpp
 +++ b/lorie/src/main/cpp/lorie/activity.cpp
 @@ -143,7 +143,8 @@ static jlong nativeInit(JNIEnv *env, jobject thiz) {
+ 
          MainActivity.self = FindClassOrDie(env,  "com/termux/x11/MainActivity");
-         MainActivity.getInstance = FindMethodOrDie(env, MainActivity.self, "getInstance", "()Lcom/termux/x11/MainActivity;", JNI_TRUE);
          MainActivity.clientConnectedStateChanged = FindMethodOrDie(env, MainActivity.self, "clientConnectedStateChanged", "()V", JNI_FALSE);
 -        MainActivity.resetIme = FindMethodOrDie(env, env->GetObjectClass(thiz), "resetIme", "()V", JNI_FALSE);
 +        MainActivity.resetIme = env->GetMethodID(env->GetObjectClass(thiz), "resetIme", "()V");
@@ -42,16 +42,22 @@ index eb6057c..b94936c 100644
      }
  
      return (jlong) (intptr_t) new (malloc(sizeof(LorieViewResources))) LorieViewResources(env, thiz);
-@@ -253,7 +254,7 @@ int LorieViewResources::xcallback(int fd, int events) {
+@@ -263,12 +264,12 @@ int LorieViewResources::xcallback(int fd, int events) {
                      break;
                  }
                  case EVENT_WINDOW_FOCUS_CHANGED: {
 -                    env->CallVoidMethod(thiz, MainActivity.resetIme);
 +                    if (MainActivity.resetIme && thiz) env->CallVoidMethod(thiz, MainActivity.resetIme);
+                     break;
+                 }
+                 case EVENT_SYNC_REPLY: {
+                     jmethodID id = env->GetMethodID(env->GetObjectClass(thiz), "onSyncReply", "(I)V");
+-                    env->CallVoidMethod(thiz, id, (jint) e.sync.serial);
++                    if (id && thiz) env->CallVoidMethod(thiz, id, (jint) e.sync.serial);
+                     break;
                  }
              }
-         }
-@@ -444,7 +445,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, __unused void *reserved) {
+@@ -479,7 +480,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, __unused void *reserved) {
                  lastInputTimestampMs = nowMs();
                  auto* r = (LorieViewResources*) ptr;
                  if (r && r->connFd != -1) {
@@ -60,7 +66,7 @@ index eb6057c..b94936c 100644
                          env->CallVoidMethod(r->thiz, MainActivity.resetIme);
                      sendEvent(r, .mouse = { .t = EVENT_MOUSE, .x = x, .y = y, .detail = (uint8_t) which_button, .down = button_down, .relative = relative });
                  }
-@@ -455,11 +456,10 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, __unused void *reserved) {
+@@ -490,11 +491,10 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, __unused void *reserved) {
                  if (action != -1)
                      sendEvent(r, .touch = { .t = EVENT_TOUCH, .type = (uint16_t) action, .id = (uint16_t) id, .x = (uint16_t) x, .y = (uint16_t) y });
              }},
@@ -74,10 +80,10 @@ index eb6057c..b94936c 100644
                  }
              }},
 diff --git a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
-index 48ac97a..d111f41 100644
+index 14dd299..c435d52 100644
 --- a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
 +++ b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
-@@ -200,7 +200,9 @@ Java_com_termux_x11_CmdEntryPoint_start(JNIEnv *env, __unused jclass cls, jobjec
+@@ -211,7 +211,9 @@ static jboolean start(JNIEnv *env, jobject self, jobjectArray args) {
  
      AChoreographer *choreographer = AChoreographer_getInstance();
      // Trigger it first time
@@ -87,8 +93,8 @@ index 48ac97a..d111f41 100644
 +    }
  
      xorg_list_init(&registeredBuffers);
-     pthread_create(&t, nullptr, +[](__unused void* cookie) -> void* {
-@@ -244,6 +246,54 @@ static Bool handleTouchEvent(__unused ClientPtr pClient, void *closure) {
+     pthread_create(&t, nullptr, +[](void* cookie) -> void* {
+@@ -257,6 +259,54 @@ static Bool handleTouchEvent(__unused ClientPtr pClient, void *closure) {
      return TRUE;
  }
  
@@ -143,7 +149,7 @@ index 48ac97a..d111f41 100644
  void handleLorieEvents(int fd, __unused int ready, __unused void *ignored) {
      ValuatorMask mask;
      lorieEvent e = {0};
-@@ -288,48 +338,18 @@ void handleLorieEvents(int fd, __unused int ready, __unused void *ignored) {
+@@ -301,48 +351,18 @@ void handleLorieEvents(int fd, __unused int ready, __unused void *ignored) {
                  break;
              }
              case EVENT_STYLUS: {
@@ -201,15 +207,6 @@ index 48ac97a..d111f41 100644
                  break;
              }
              case EVENT_MOUSE: {
-@@ -558,7 +578,7 @@ Java_com_termux_x11_CmdEntryPoint_listenForConnections(JNIEnv *env, jobject thiz
-     // Even in the case if it will fail for some reason everything will work fine
-     // But connection will be delayed a bit
- 
--    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
-+    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-         log(ERROR, "Socket creation failed: %s", strerror(errno));
-         return;
-     }
 -- 
 2.55.0
 

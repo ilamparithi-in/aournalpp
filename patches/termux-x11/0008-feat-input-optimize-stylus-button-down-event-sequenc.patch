@@ -1,0 +1,42 @@
+From 4180aa453ca6a875e21049141bd54c7a7a13fa97 Mon Sep 17 00:00:00 2001
+From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
+Date: Sat, 29 Aug 2026 21:38:50 +0530
+Subject: [PATCH 8/8] feat(input): optimize stylus button down event sequence
+ with micro-steps
+
+---
+ .../termux/x11/input/TouchInputHandler.java    | 18 ++++++++++++++----
+ 1 file changed, 14 insertions(+), 4 deletions(-)
+
+diff --git a/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java b/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java
+index d517153..929e076 100644
+--- a/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java
++++ b/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java
+@@ -1422,10 +1422,20 @@ public class TouchInputHandler {
+                 sendStylusState(state);
+ 
+                 if (action == MotionEvent.ACTION_DOWN && buttons != 0) {
+-                    StylusState dotStep = state.copy();
+-                    dotStep.x += 0.01f;
+-                    dotStep.y += 0.01f;
+-                    sendStylusState(dotStep);
++                    StylusState p1 = state.copy();
++                    p1.x += 0.5f;
++                    p1.y += 0.5f;
++                    sendStylusState(p1);
++
++                    StylusState p2 = state.copy();
++                    p2.x += 1.0f;
++                    p2.y += 1.0f;
++                    sendStylusState(p2);
++
++                    StylusState p3 = state.copy();
++                    p3.x = state.x;
++                    p3.y = state.y;
++                    sendStylusState(p3);
+                 }
+             }
+ 
+-- 
+2.55.0
+

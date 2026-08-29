@@ -1,7 +1,7 @@
-From 2e3a34a23287c4eda002b27e6b0b63308b6ae657 Mon Sep 17 00:00:00 2001
+From 722461f2c4a8c777e438f50637d38e35734671fe Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Tue, 25 Aug 2026 15:42:17 +0530
-Subject: [PATCH 5/6] feat(clipboard): implement multi-MIME shared clipboard
+Subject: [PATCH 5/8] feat(clipboard): implement multi-MIME shared clipboard
  bridge
 
 - Add support for text, HTML, and binary images (PNG, JPEG, BMP) across Android and X11
@@ -11,13 +11,13 @@ Subject: [PATCH 5/6] feat(clipboard): implement multi-MIME shared clipboard
 ---
  lorie/src/main/cpp/lorie/activity.cpp         |  98 +++++--
  lorie/src/main/cpp/lorie/clipboard.c          | 250 ++++++++++++------
- lorie/src/main/cpp/lorie/cmdentrypoint.cpp    |  68 ++++-
+ lorie/src/main/cpp/lorie/cmdentrypoint.cpp    |  70 +++--
  lorie/src/main/cpp/lorie/lorie.h              |  15 +-
- .../main/java/com/termux/x11/LorieView.java   | 184 +++++++++++--
- 5 files changed, 465 insertions(+), 150 deletions(-)
+ .../main/java/com/termux/x11/LorieView.java   | 191 +++++++++++--
+ 5 files changed, 472 insertions(+), 152 deletions(-)
 
 diff --git a/lorie/src/main/cpp/lorie/activity.cpp b/lorie/src/main/cpp/lorie/activity.cpp
-index b94936c..8a58193 100644
+index ee12818..99c199d 100644
 --- a/lorie/src/main/cpp/lorie/activity.cpp
 +++ b/lorie/src/main/cpp/lorie/activity.cpp
 @@ -20,9 +20,37 @@
@@ -59,7 +59,7 @@ index b94936c..8a58193 100644
  
  bool lorieDebugEnabled = false;
  
-@@ -203,23 +231,49 @@ int LorieViewResources::xcallback(int fd, int events) {
+@@ -213,23 +241,49 @@ int LorieViewResources::xcallback(int fd, int events) {
                  case EVENT_CLIPBOARD_SEND: {
                      if (!e.clipboardSend.count)
                          break;
@@ -122,7 +122,7 @@ index b94936c..8a58193 100644
                      break;
                  }
                  case EVENT_SHARED_SERVER_STATE: {
-@@ -420,14 +474,16 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, __unused void *reserved) {
+@@ -455,14 +509,16 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, __unused void *reserved) {
                  auto* r = (LorieViewResources*) ptr;
                  sendEvent(r, .type = EVENT_CLIPBOARD_ANNOUNCE);
              }},
@@ -533,10 +533,10 @@ index 3770e88..573d790 100644
      if (!origProcConvertSelection) {
          origProcConvertSelection = ProcVector[X_ConvertSelection];
 diff --git a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
-index 14c3b6a..5cbdf2e 100644
+index 6ead422..3f2d8b7 100644
 --- a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
 +++ b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
-@@ -31,6 +31,34 @@ extern "C" {
+@@ -32,6 +32,34 @@ extern "C" {
  #include <poll.h>
  #include "lorie.h"
  
@@ -571,7 +571,7 @@ index 14c3b6a..5cbdf2e 100644
  #define log(prio, ...) __android_log_print(ANDROID_LOG_ ## prio, "LorieNative", __VA_ARGS__)
  
  static int argc = 0;
-@@ -409,14 +437,25 @@ void handleLorieEvents(int fd, __unused int ready, __unused void *ignored) {
+@@ -422,14 +450,25 @@ void handleLorieEvents(int fd, __unused int ready, __unused void *ignored) {
                  lorieWakeServer();
                  break;
              case EVENT_CLIPBOARD_SEND: {
@@ -602,7 +602,7 @@ index 14c3b6a..5cbdf2e 100644
                  lorieWakeServer();
                  break;
              }
-@@ -455,19 +494,20 @@ void handleLorieEvents(int fd, __unused int ready, __unused void *ignored) {
+@@ -481,26 +520,27 @@ void handleLorieEvents(int fd, __unused int ready, __unused void *ignored) {
      }
  }
  
@@ -622,6 +622,14 @@ index 14c3b6a..5cbdf2e 100644
      }
  }
  
+ void lorieSendSyncReply(uint32_t serial) {
+     if (conn_fd != -1) {
+         lorieEvent e = { .sync = { .t = EVENT_SYNC_REPLY, .serial = serial } };
+-        write(conn_fd, &e, sizeof(e));
++        lorie_write_all(conn_fd, &e, sizeof(e));
+     }
+ }
+ 
 -void lorieRequestClipboard(void) {
 +void lorieRequestClipboard(uint8_t targetType) {
      if (conn_fd != -1) {
@@ -633,7 +641,7 @@ index 14c3b6a..5cbdf2e 100644
  }
  
 diff --git a/lorie/src/main/cpp/lorie/lorie.h b/lorie/src/main/cpp/lorie/lorie.h
-index 0f18d48..4a634d3 100644
+index d0754f7..55ca549 100644
 --- a/lorie/src/main/cpp/lorie/lorie.h
 +++ b/lorie/src/main/cpp/lorie/lorie.h
 @@ -24,13 +24,17 @@ extern "C" {
@@ -657,7 +665,7 @@ index 0f18d48..4a634d3 100644
  void lorieSetStylusEnabled(Bool enabled);
  void lorieSyncLockKeysState(uint8_t state);
  void lorieWakeServer(void);
-@@ -158,6 +162,11 @@ typedef union {
+@@ -163,6 +167,11 @@ typedef union {
      } clipboardEnable;
      struct {
          uint8_t t;
@@ -670,10 +678,10 @@ index 0f18d48..4a634d3 100644
      } clipboardSend;
      struct {
 diff --git a/lorie/src/main/java/com/termux/x11/LorieView.java b/lorie/src/main/java/com/termux/x11/LorieView.java
-index 85287f4..9cf2a8c 100644
+index 53713e5..a977709 100644
 --- a/lorie/src/main/java/com/termux/x11/LorieView.java
 +++ b/lorie/src/main/java/com/termux/x11/LorieView.java
-@@ -5,11 +5,14 @@ import android.content.ClipData;
+@@ -5,6 +5,8 @@ import android.content.ClipData;
  import android.content.ClipDescription;
  import android.content.ClipboardManager;
  import android.content.Context;
@@ -682,13 +690,15 @@ index 85287f4..9cf2a8c 100644
  import android.graphics.Color;
  import android.graphics.Matrix;
  import android.graphics.Point;
+@@ -12,6 +14,7 @@ import android.graphics.PointF;
  import android.graphics.Rect;
+ import android.graphics.RectF;
  import android.graphics.drawable.ColorDrawable;
 +import android.net.Uri;
  import android.opengl.GLES20;
  import android.os.Build;
  import android.os.Handler;
-@@ -34,12 +37,17 @@ import android.view.inputmethod.SurroundingText;
+@@ -37,11 +40,16 @@ import android.view.inputmethod.SurroundingText;
  
  import androidx.annotation.Keep;
  import androidx.annotation.NonNull;
@@ -696,7 +706,6 @@ index 85287f4..9cf2a8c 100644
  import androidx.core.math.MathUtils;
  
  import com.termux.x11.input.InputStub;
- import com.termux.x11.input.TouchInputHandler;
  import com.termux.x11.utils.SamsungDexUtils;
  
 +import java.io.ByteArrayOutputStream;
@@ -706,24 +715,30 @@ index 85287f4..9cf2a8c 100644
  import java.util.Set;
  import java.util.regex.PatternSyntaxException;
  
-@@ -59,7 +67,8 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -61,7 +69,9 @@ public class LorieView extends SurfaceView implements InputStub {
      }
  
      private ClipboardManager clipboard;
 -    private long lastClipboardTimestamp = System.currentTimeMillis();
 +    private long lastClipboardTimestamp = 0;
 +    private boolean isUpdatingFromX11 = false;
-     private boolean keyboardVisible = false;
++    private boolean keyboardVisible = false;
      private long mNativeContext;
-     private static boolean clipboardSyncEnabled = false;
-@@ -601,31 +610,133 @@ public class LorieView extends SurfaceView implements InputStub {
+     private boolean clipboardSyncEnabled = false;
+     private boolean hardwareKbdScancodesWorkaround = false;
+@@ -600,31 +610,137 @@ public class LorieView extends SurfaceView implements InputStub {
          hardwareKbdScancodesWorkaround = p.hardwareKbdScancodesWorkaround.get();
          clipboardSyncEnabled = p.clipboardEnable.get();
          setClipboardSyncEnabled(mNativeContext, clipboardSyncEnabled, clipboardSyncEnabled);
+-        activity.mInputHandler.refreshInputDevices();
 +        if (clipboardSyncEnabled) {
 +            checkForClipboardChange();
 +        }
-         TouchInputHandler.refreshInputDevices();
++        if (activity != null && activity.mInputHandler != null) {
++            activity.mInputHandler.refreshInputDevices();
++        } else {
++            TouchInputHandler.refreshInputDevices();
++        }
      }
  
      // It is used in native code
@@ -741,7 +756,11 @@ index 85287f4..9cf2a8c 100644
 +            isUpdatingFromX11 = false;
 +        }
 +    }
-+
+ 
+-        // Android does not send PrimaryClipChanged event to the window which posted event
+-        // But in the case we are owning focus and clipboard is unchanged it will be replaced by the same value on X server side.
+-        // Not cool in the case if user installed some clipboard manager, clipboard content will be doubled.
+-        lastClipboardTimestamp = System.currentTimeMillis() + 150;
 +    // It is used in native code
 +    void setClipboardImage(byte[] imageBytes, String mimeType) {
 +        if (clipboard == null || imageBytes == null || imageBytes.length == 0) return;
@@ -766,11 +785,7 @@ index 85287f4..9cf2a8c 100644
 +            isUpdatingFromX11 = false;
 +        }
 +    }
- 
--        // Android does not send PrimaryClipChanged event to the window which posted event
--        // But in the case we are owning focus and clipboard is unchanged it will be replaced by the same value on X server side.
--        // Not cool in the case if user installed some clipboard manager, clipboard content will be doubled.
--        lastClipboardTimestamp = System.currentTimeMillis() + 150;
++
 +    // It is used in native code
 +    void setClipboardHtml(byte[] htmlBytes) {
 +        if (clipboard == null || htmlBytes == null || htmlBytes.length == 0) return;
@@ -864,7 +879,7 @@ index 85287f4..9cf2a8c 100644
      }
  
      public void handleClipboardChange() {
-@@ -633,17 +744,38 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -632,17 +748,38 @@ public class LorieView extends SurfaceView implements InputStub {
      }
  
      public void checkForClipboardChange() {
@@ -913,7 +928,7 @@ index 85287f4..9cf2a8c 100644
          }
      }
  
-@@ -701,7 +833,7 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -700,7 +837,7 @@ public class LorieView extends SurfaceView implements InputStub {
      @FastNative private native void setFiltering(long ptr, int filtering);
      @FastNative private native void setClipboardSyncEnabled(long ptr, boolean enabled, boolean ignored);
      @FastNative private native void sendClipboardAnnounce(long ptr);

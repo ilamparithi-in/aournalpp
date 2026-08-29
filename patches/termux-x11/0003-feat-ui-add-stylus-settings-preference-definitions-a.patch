@@ -1,27 +1,27 @@
-From a7e5e3b9fbd439288ebc9bf9d66f3d40ae7ff9e0 Mon Sep 17 00:00:00 2001
+From 5718694dd09d5eb62f83a8d91ce3feb6822e6db3 Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Sun, 23 Aug 2026 08:07:54 +0530
-Subject: [PATCH 3/6] feat(ui): add stylus settings, preference definitions,
+Subject: [PATCH 3/8] feat(ui): add stylus settings, preference definitions,
  and null-safety guards
 
 ---
  .../java/com/termux/x11/CmdEntryPoint.java    | 52 ++++++++++-------
  .../java/com/termux/x11/LoriePreferences.java | 58 ++++++++++++++++++-
- .../main/java/com/termux/x11/LorieView.java   | 30 +++++++---
+ .../main/java/com/termux/x11/LorieView.java   | 27 ++++++---
  .../java/com/termux/x11/MainActivity.java     | 17 +++++-
  .../termux/x11/extrakeys/ExtraKeysView.java   |  4 +-
- .../termux/x11/utils/ImeHeightProvider.java   |  8 ++-
+ .../termux/x11/utils/ImeHeightProvider.java   |  2 +
  .../termux/x11/utils/TermuxX11ExtraKeys.java  | 15 +++--
  lorie/src/main/res/values/arrays.xml          | 11 ++++
  lorie/src/main/res/values/strings.xml         | 21 +++++++
  lorie/src/main/res/xml/preferences.xml        | 52 +++++++++++++++++
- 10 files changed, 225 insertions(+), 43 deletions(-)
+ 10 files changed, 218 insertions(+), 41 deletions(-)
 
 diff --git a/lorie/src/main/java/com/termux/x11/CmdEntryPoint.java b/lorie/src/main/java/com/termux/x11/CmdEntryPoint.java
-index a18645f..55cb2d3 100644
+index 4ad9f1a..e664132 100644
 --- a/lorie/src/main/java/com/termux/x11/CmdEntryPoint.java
 +++ b/lorie/src/main/java/com/termux/x11/CmdEntryPoint.java
-@@ -45,8 +45,15 @@ public class CmdEntryPoint extends ICmdEntryInterface.Stub {
+@@ -48,8 +48,15 @@ public class CmdEntryPoint extends ICmdEntryInterface.Stub {
          Looper.loop();
      }
  
@@ -37,9 +37,9 @@ index a18645f..55cb2d3 100644
 +        }
 +        if (!connected() && !start(args))
              System.exit(1);
+     }
  
-         spawnListeningThread();
-@@ -76,13 +83,15 @@ public class CmdEntryPoint extends ICmdEntryInterface.Stub {
+@@ -86,13 +93,15 @@ public class CmdEntryPoint extends ICmdEntryInterface.Stub {
  
      static void sendBroadcast(Intent intent) {
          try {
@@ -61,7 +61,7 @@ index a18645f..55cb2d3 100644
              String packageName;
              try {
                  packageName = android.app.ActivityThread.getPackageManager().getPackagesForUid(getuid())[0];
-@@ -105,19 +114,20 @@ public class CmdEntryPoint extends ICmdEntryInterface.Stub {
+@@ -115,19 +124,20 @@ public class CmdEntryPoint extends ICmdEntryInterface.Stub {
                  }
              }
  
@@ -94,7 +94,7 @@ index a18645f..55cb2d3 100644
          }
      }
  
-@@ -177,7 +187,7 @@ public class CmdEntryPoint extends ICmdEntryInterface.Stub {
+@@ -182,7 +192,7 @@ public class CmdEntryPoint extends ICmdEntryInterface.Stub {
          } catch (Exception e) {
              Log.e("CmdEntryPoint", "Something went wrong when preparing MainLooper", e);
          }
@@ -214,20 +214,20 @@ index 1b77423..d6b8f1c 100644
              }
  
 diff --git a/lorie/src/main/java/com/termux/x11/LorieView.java b/lorie/src/main/java/com/termux/x11/LorieView.java
-index 2c550aa..85287f4 100644
+index e61cb14..53713e5 100644
 --- a/lorie/src/main/java/com/termux/x11/LorieView.java
 +++ b/lorie/src/main/java/com/termux/x11/LorieView.java
-@@ -208,7 +208,7 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -210,7 +210,7 @@ public class LorieView extends SurfaceView implements InputStub {
  
              currentComposingText = reuse ? newText : null;
  
--            if (a.useTermuxEKBarBehaviour && a.mExtraKeys != null)
-+            if (a != null && a.useTermuxEKBarBehaviour && a.mExtraKeys != null)
-                 a.mExtraKeys.unsetSpecialKeys();
+-            if (activity.useTermuxEKBarBehaviour && activity.mExtraKeys != null)
++            if (activity != null && activity.useTermuxEKBarBehaviour && activity.mExtraKeys != null)
+                 activity.mExtraKeys.unsetSpecialKeys();
              commitedText = true;
              return true;
 @@ -354,8 +354,17 @@ public class LorieView extends SurfaceView implements InputStub {
-         setKeyboardVisible(!keyboardVisible);
+         }
      }
  
 +    public Prefs getPrefs() {
@@ -249,8 +249,8 @@ index 2c550aa..85287f4 100644
  
          if (getDisplay() == null || getDisplay().getDisplayId() == Display.DEFAULT_DISPLAY)
              name = "builtin";
--        else if (SamsungDexUtils.checkDeXEnabled(MainActivity.getInstance()))
-+        else if (MainActivity.getInstance() != null && SamsungDexUtils.checkDeXEnabled(MainActivity.getInstance()))
+-        else if (SamsungDexUtils.checkDeXEnabled(activity))
++        else if (activity != null && SamsungDexUtils.checkDeXEnabled(activity))
              name = "dex";
          else
              name = "external";
@@ -263,19 +263,16 @@ index 2c550aa..85287f4 100644
  
          int surfaceW = getMeasuredWidth(), surfaceH = getMeasuredHeight();
          // Views the insets reserve room for are hidden while the dimensions are frozen.
-@@ -566,7 +575,10 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -568,7 +577,7 @@ public class LorieView extends SurfaceView implements InputStub {
          if (hardwareKbdScancodesWorkaround)
              return false;
  
--        return MainActivity.getInstance().handleKey(event);
-+        if (MainActivity.getInstance() != null)
-+            return MainActivity.getInstance().handleKey(event);
-+
-+        return super.dispatchKeyEventPreIme(event);
+-        return activity.handleKey(event);
++        return activity != null ? activity.handleKey(event) : super.dispatchKeyEventPreIme(event);
      }
  
      @Override
-@@ -652,7 +664,7 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -654,7 +663,7 @@ public class LorieView extends SurfaceView implements InputStub {
  
      @Override
      public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
@@ -284,9 +281,9 @@ index 2c550aa..85287f4 100644
              outAttrs.inputType = InputType.TYPE_NULL;
          else
              outAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS | InputType.TYPE_TEXT_VARIATION_NORMAL;
-@@ -694,8 +706,10 @@ public class LorieView extends SurfaceView implements InputStub {
-     @FastNative private native void setViewport(long ptr, int x, int y, int width, int height, int expectedWidth, int expectedHeight, int hiddenBottom);
-     @FastNative private native void setRendererZoom(long ptr, int percent);
+@@ -700,8 +709,10 @@ public class LorieView extends SurfaceView implements InputStub {
+     @FastNative private native long getCursorPosition(long ptr);
+     @FastNative private native void sendSync(long ptr, int serial);
  
 -    // Public API stays free of the native pointer; it's threaded through to an overload below.
 -    public void connect(int fd) { connect(mNativeContext, fd); }
@@ -298,10 +295,10 @@ index 2c550aa..85287f4 100644
  
      public boolean connected() { return connected(mNativeContext); }
 diff --git a/lorie/src/main/java/com/termux/x11/MainActivity.java b/lorie/src/main/java/com/termux/x11/MainActivity.java
-index 105b30a..1d4dd78 100644
+index bae2780..507dc26 100644
 --- a/lorie/src/main/java/com/termux/x11/MainActivity.java
 +++ b/lorie/src/main/java/com/termux/x11/MainActivity.java
-@@ -32,6 +32,7 @@ import android.os.Build.VERSION_CODES;
+@@ -33,6 +33,7 @@ import android.os.Build.VERSION_CODES;
  import android.os.Bundle;
  import android.os.Handler;
  import android.os.IBinder;
@@ -309,27 +306,28 @@ index 105b30a..1d4dd78 100644
  import android.os.ParcelFileDescriptor;
  import android.os.RemoteException;
  import android.os.SystemClock;
-@@ -74,6 +75,7 @@ import androidx.viewpager.widget.ViewPager;
- 
+@@ -76,6 +77,7 @@ import androidx.viewpager.widget.ViewPager;
+ import com.termux.x11.extrakeys.ExtraKeysInfo;
  import com.termux.x11.input.InputEventSender;
  import com.termux.x11.input.InputStub;
 +import com.termux.x11.input.LenovoPenButtonMapper;
  import com.termux.x11.input.TouchInputHandler;
  import com.termux.x11.utils.ImeHeightProvider;
  import com.termux.x11.utils.KeyInterceptor;
-@@ -89,9 +91,10 @@ public class MainActivity extends AppCompatActivity {
+@@ -91,10 +93,11 @@ public class MainActivity extends AppCompatActivity {
      public static final String ACTION_STOP = "com.termux.x11.ACTION_STOP";
      public static final String ACTION_CUSTOM = "com.termux.x11.ACTION_CUSTOM";
  
 -    public static Handler handler = new Handler();
 +    public static Handler handler = new Handler(Looper.getMainLooper());
+     private final Runnable connectRetry = this::tryConnect;
      FrameLayout frm;
-     private TouchInputHandler mInputHandler;
+     TouchInputHandler mInputHandler;
 +    private LenovoPenButtonMapper mLenovoPenMapper;
      protected ICmdEntryInterface service = null;
      public TermuxX11ExtraKeys mExtraKeys;
      private Notification mNotification;
-@@ -163,10 +166,14 @@ public class MainActivity extends AppCompatActivity {
+@@ -166,10 +169,14 @@ public class MainActivity extends AppCompatActivity {
          instance = this;
      }
  
@@ -345,16 +343,16 @@ index 105b30a..1d4dd78 100644
      public static MainActivity getInstance() {
          return instance;
      }
-@@ -199,6 +206,8 @@ public class MainActivity extends AppCompatActivity {
+@@ -212,6 +219,8 @@ public class MainActivity extends AppCompatActivity {
          View lorieParent = (View) lorieView.getParent();
  
-         mInputHandler = new TouchInputHandler(this, new InputEventSender(lorieView));
+         mInputHandler = new TouchInputHandler(this, new InputEventSender(this, lorieView));
 +        mLenovoPenMapper = new LenovoPenButtonMapper(this, mInputHandler);
 +        mLenovoPenMapper.reloadPreferences(prefs);
          mLorieKeyListener = (v, k, e) -> {
              InputDevice dev = e.getDevice();
              boolean result = mInputHandler.sendKeyEvent(e);
-@@ -632,6 +641,8 @@ public class MainActivity extends AppCompatActivity {
+@@ -657,6 +666,8 @@ public class MainActivity extends AppCompatActivity {
          LorieView lorieView = getLorieView();
  
          mInputHandler.reloadPreferences(prefs);
@@ -363,7 +361,7 @@ index 105b30a..1d4dd78 100644
          lorieView.reloadPreferences(prefs);
  
          if (mExtraKeys != null)
-@@ -831,6 +842,8 @@ public class MainActivity extends AppCompatActivity {
+@@ -850,6 +861,8 @@ public class MainActivity extends AppCompatActivity {
      }
  
      public boolean handleKey(KeyEvent e) {
@@ -373,58 +371,45 @@ index 105b30a..1d4dd78 100644
              return false;
          return mLorieKeyListener.onKey(getLorieView(), e.getKeyCode(), e);
 diff --git a/lorie/src/main/java/com/termux/x11/extrakeys/ExtraKeysView.java b/lorie/src/main/java/com/termux/x11/extrakeys/ExtraKeysView.java
-index 4bb8d8d..df0f265 100644
+index 7d517af..1f7f1a4 100644
 --- a/lorie/src/main/java/com/termux/x11/extrakeys/ExtraKeysView.java
 +++ b/lorie/src/main/java/com/termux/x11/extrakeys/ExtraKeysView.java
-@@ -321,7 +321,7 @@ public final class ExtraKeysView extends GridLayout {
+@@ -328,7 +328,7 @@ public final class ExtraKeysView extends GridLayout {
          setRowCount(buttons.length);
          setColumnCount(maximumLength(buttons));
  
--        boolean reverseRows = MainActivity.getInstance().getPagerPosition() == PAGER_POSITION_TOP;
-+        boolean reverseRows = MainActivity.getInstance() != null && MainActivity.getInstance().getPagerPosition() == PAGER_POSITION_TOP;
+-        boolean reverseRows = activity.getPagerPosition() == PAGER_POSITION_TOP;
++        boolean reverseRows = activity != null && activity.getPagerPosition() == PAGER_POSITION_TOP;
  
          for (int row = 0; row < buttons.length; row++) {
              int actualRow = reverseRows ? buttons.length - 1 - row : row;
-@@ -519,7 +519,7 @@ public final class ExtraKeysView extends GridLayout {
+@@ -526,7 +526,7 @@ public final class ExtraKeysView extends GridLayout {
      }
  
      void showPopup(View view, ExtraKeyButton extraButton) {
--        int pos = MainActivity.getInstance().getPagerPosition();
-+        int pos = MainActivity.getInstance() != null ? MainActivity.getInstance().getPagerPosition() : PAGER_POSITION_BOTTOM;
+-        int pos = activity.getPagerPosition();
++        int pos = activity != null ? activity.getPagerPosition() : PAGER_POSITION_BOTTOM;
          int width = pos == PAGER_POSITION_TOP || pos == PAGER_POSITION_BOTTOM ? view.getMeasuredWidth() : view.getMeasuredHeight();
          int height = pos == PAGER_POSITION_TOP || pos == PAGER_POSITION_BOTTOM ? view.getMeasuredHeight() : view.getMeasuredWidth();
          Button button;
 diff --git a/lorie/src/main/java/com/termux/x11/utils/ImeHeightProvider.java b/lorie/src/main/java/com/termux/x11/utils/ImeHeightProvider.java
-index 835bf71..147ddfd 100644
+index 54dbbc7..d85d209 100644
 --- a/lorie/src/main/java/com/termux/x11/utils/ImeHeightProvider.java
 +++ b/lorie/src/main/java/com/termux/x11/utils/ImeHeightProvider.java
-@@ -68,8 +68,12 @@ public class ImeHeightProvider {
+@@ -66,6 +66,8 @@ public class ImeHeightProvider {
+     // Both sources measure from the bottom of the screen, so they include the navigation bar
      // whenever it is shown below the keyboard - that space is already handled by fitsSystemWindows.
-     private static void report(Activity activity, FrameLayout content, int bottom, WindowInsetsCompat insets) {
-         View child = content.getChildAt(0);
-+        MainActivity instance = MainActivity.getInstance();
-+        if (instance == null)
+     private static void report(MainActivity activity, FrameLayout content, int bottom, WindowInsetsCompat insets) {
++        if (activity == null)
 +            return;
-+
-         // Whatever part of the caption bar is left here is the one the window was not laid out below.
--        MainActivity.getInstance().setCaptionHeight((insets != null && !child.getFitsSystemWindows())
-+        instance.setCaptionHeight((insets != null && !child.getFitsSystemWindows())
-                 ? insets.getInsets(WindowInsetsCompat.Type.captionBar()).top : 0);
- 
+         View child = content.getChildAt(0);
          int imeHeight = 0;
-@@ -78,6 +82,6 @@ public class ImeHeightProvider {
-                     ? insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom : 0;
-             imeHeight = Math.max(0, bottom - navBottom);
-         }
--        MainActivity.getInstance().setImeHeight(imeHeight);
-+        instance.setImeHeight(imeHeight);
-     }
- }
+         if (activity.hasWindowFocus() && !SamsungDexUtils.checkDeXEnabled(activity) && !activity.isInPictureInPictureMode()) {
 diff --git a/lorie/src/main/java/com/termux/x11/utils/TermuxX11ExtraKeys.java b/lorie/src/main/java/com/termux/x11/utils/TermuxX11ExtraKeys.java
-index aa95871..cd7cce0 100644
+index 0226635..1361253 100644
 --- a/lorie/src/main/java/com/termux/x11/utils/TermuxX11ExtraKeys.java
 +++ b/lorie/src/main/java/com/termux/x11/utils/TermuxX11ExtraKeys.java
-@@ -22,6 +22,7 @@ import androidx.annotation.NonNull;
+@@ -21,6 +21,7 @@ import androidx.annotation.NonNull;
  import com.termux.x11.extrakeys.*;
  import com.termux.x11.LoriePreferences;
  import com.termux.x11.MainActivity;
@@ -432,7 +417,7 @@ index aa95871..cd7cce0 100644
  
  import org.json.JSONException;
  
-@@ -207,19 +208,21 @@ public class TermuxX11ExtraKeys implements ExtraKeysView.IExtraKeysView {
+@@ -208,19 +209,21 @@ public class TermuxX11ExtraKeys implements ExtraKeysView.IExtraKeysView {
          mExtraKeysInfo = null;
  
          try {
@@ -444,18 +429,18 @@ index aa95871..cd7cce0 100644
 +            String extrakeys = p != null ? p.extra_keys_config.get() : TermuxX11ExtraKeys.DEFAULT_IVALUE_EXTRA_KEYS;
              mExtraKeysInfo = new ExtraKeysInfo(extrakeys, "extra-keys-style", ExtraKeysConstants.CONTROL_CHARS_ALIASES);
          } catch (JSONException e) {
--            Toast.makeText(MainActivity.getInstance(), "Could not load and set the \"extra-keys\" property from the properties file: " + e, Toast.LENGTH_LONG).show();
-+            if (MainActivity.getInstance() != null) {
-+                Toast.makeText(MainActivity.getInstance(), "Could not load and set the \"extra-keys\" property from the properties file: " + e, Toast.LENGTH_LONG).show();
+-            Toast.makeText(mActivity, "Could not load and set the \"extra-keys\" property from the properties file: " + e, Toast.LENGTH_LONG).show();
++            if (mActivity != null) {
++                Toast.makeText(mActivity, "Could not load and set the \"extra-keys\" property from the properties file: " + e, Toast.LENGTH_LONG).show();
 +            }
              Log.e(LOG_TAG, "Could not load and set the \"extra-keys\" property from the properties file: ", e);
  
              try {
                  mExtraKeysInfo = new ExtraKeysInfo(TermuxX11ExtraKeys.DEFAULT_IVALUE_EXTRA_KEYS, "default", ExtraKeysConstants.CONTROL_CHARS_ALIASES);
              } catch (JSONException e2) {
--                Toast.makeText(MainActivity.getInstance(), "Can't create default extra keys", Toast.LENGTH_LONG).show();
-+                if (MainActivity.getInstance() != null) {
-+                    Toast.makeText(MainActivity.getInstance(), "Can't create default extra keys", Toast.LENGTH_LONG).show();
+-                Toast.makeText(mActivity, "Can't create default extra keys", Toast.LENGTH_LONG).show();
++                if (mActivity != null) {
++                    Toast.makeText(mActivity, "Can't create default extra keys", Toast.LENGTH_LONG).show();
 +                }
                  Log.e(LOG_TAG, "Could create default extra keys: ", e);
                  mExtraKeysInfo = null;

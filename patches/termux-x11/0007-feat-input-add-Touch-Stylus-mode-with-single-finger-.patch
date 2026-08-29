@@ -1,0 +1,508 @@
+From 17f574dea115ddd803c99d43c678ece4cb87b5a2 Mon Sep 17 00:00:00 2001
+From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
+Date: Sat, 29 Aug 2026 19:30:59 +0530
+Subject: [PATCH 7/8] feat(input): add Touch Stylus mode with single finger
+ emulation, multi-touch passthrough, and auto-disable on stylus hover
+
+---
+ lorie/src/main/cpp/lorie/cmdentrypoint.cpp    |  33 ++-
+ .../main/java/com/termux/x11/LorieView.java   |   9 +-
+ .../java/com/termux/x11/MainActivity.java     |  25 ++
+ .../termux/x11/input/InputEventSender.java    |   4 +
+ .../termux/x11/input/TouchInputHandler.java   | 217 ++++++++++++++++--
+ 5 files changed, 249 insertions(+), 39 deletions(-)
+
+diff --git a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
+index 3f2d8b7..6780459 100644
+--- a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
++++ b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
+@@ -300,8 +300,14 @@ static Bool handleStylusEvent(__unused ClientPtr pClient, void *closure) {
+     uint32_t released, pressed, diff;
+     DeviceIntPtr device = e->stylus.mouse ? lorieMouse : (e->stylus.eraser ? lorieEraser : loriePen);
+     if (!device) {
+-        free(e);
+-        return TRUE;
++        if (!e->stylus.mouse) {
++            lorieSetStylusEnabled(TRUE);
++            device = e->stylus.eraser ? lorieEraser : loriePen;
++        }
++        if (!device) {
++            free(e);
++            return TRUE;
++        }
+     }
+ 
+     double x = max(min((float) e->stylus.x, (float) pScreenPtr->width), 0.0f);
+@@ -314,21 +320,26 @@ static Bool handleStylusEvent(__unused ClientPtr pClient, void *closure) {
+         valuator_mask_set_double(&mask, 4, e->stylus.tilt_y);
+         valuator_mask_set_double(&mask, 5, e->stylus.orientation);
+     }
+-    QueuePointerEvents(device, MotionNotify, 0, POINTER_ABSOLUTE | POINTER_DESKTOP | (device == lorieMouse ? POINTER_NORAW : 0), &mask);
+-
+     diff = buttons_prev ^ e->stylus.buttons;
+     released = diff & ~e->stylus.buttons;
+     pressed = diff & e->stylus.buttons;
+ 
+-    for (int i=0; i<3; i++) {
+-        if (released & 0x1) {
+-            QueuePointerEvents(device, ButtonRelease, i + 1, POINTER_RELATIVE, nullptr);
++    if (pressed) {
++        QueuePointerEvents(device, MotionNotify, 0, POINTER_ABSOLUTE | POINTER_DESKTOP | (device == lorieMouse ? POINTER_NORAW : 0), &mask);
++        for (int i = 0; i < 3; i++) {
++            if (pressed & (1 << i)) {
++                QueuePointerEvents(device, ButtonPress, i + 1, POINTER_ABSOLUTE | POINTER_DESKTOP, &mask);
++            }
+         }
+-        if (pressed & 0x1) {
+-            QueuePointerEvents(device, ButtonPress, i + 1, POINTER_RELATIVE, nullptr);
++    } else if (released) {
++        for (int i = 0; i < 3; i++) {
++            if (released & (1 << i)) {
++                QueuePointerEvents(device, ButtonRelease, i + 1, POINTER_ABSOLUTE | POINTER_DESKTOP, &mask);
++            }
+         }
+-        released >>= 1;
+-        pressed >>= 1;
++        QueuePointerEvents(device, MotionNotify, 0, POINTER_ABSOLUTE | POINTER_DESKTOP | (device == lorieMouse ? POINTER_NORAW : 0), &mask);
++    } else {
++        QueuePointerEvents(device, MotionNotify, 0, POINTER_ABSOLUTE | POINTER_DESKTOP | (device == lorieMouse ? POINTER_NORAW : 0), &mask);
+     }
+     buttons_prev = e->stylus.buttons;
+ 
+diff --git a/lorie/src/main/java/com/termux/x11/LorieView.java b/lorie/src/main/java/com/termux/x11/LorieView.java
+index cbdd02c..b13560f 100644
+--- a/lorie/src/main/java/com/termux/x11/LorieView.java
++++ b/lorie/src/main/java/com/termux/x11/LorieView.java
+@@ -308,6 +308,7 @@ public class LorieView extends SurfaceView implements InputStub {
+         }
+     };
+ 
++    public LorieView(Context context) { this(context, null); }
+     public LorieView(Context context, AttributeSet attrs) { super(context, attrs); }
+ 
+     {
+@@ -371,6 +372,10 @@ public class LorieView extends SurfaceView implements InputStub {
+         }
+     }
+ 
++    public boolean isKeyboardVisible() {
++        return keyboardVisible;
++    }
++
+     public Prefs getPrefs() {
+         Prefs p = MainActivity.getPrefs();
+         if (p == null) {
+@@ -622,8 +627,6 @@ public class LorieView extends SurfaceView implements InputStub {
+         }
+         if (activity != null && activity.mInputHandler != null) {
+             activity.mInputHandler.refreshInputDevices();
+-        } else {
+-            TouchInputHandler.refreshInputDevices();
+         }
+     }
+ 
+@@ -805,8 +808,6 @@ public class LorieView extends SurfaceView implements InputStub {
+ 
+         if (activity != null && activity.mInputHandler != null) {
+             activity.mInputHandler.refreshInputDevices();
+-        } else {
+-            TouchInputHandler.refreshInputDevices();
+         }
+     }
+ 
+diff --git a/lorie/src/main/java/com/termux/x11/MainActivity.java b/lorie/src/main/java/com/termux/x11/MainActivity.java
+index 507dc26..69973c0 100644
+--- a/lorie/src/main/java/com/termux/x11/MainActivity.java
++++ b/lorie/src/main/java/com/termux/x11/MainActivity.java
+@@ -10,6 +10,7 @@ import static com.termux.x11.LoriePreferences.ACTION_PREFERENCES_CHANGED;
+ 
+ import android.Manifest;
+ import android.annotation.SuppressLint;
++import android.app.Activity;
+ import android.app.AppOpsManager;
+ import android.app.Notification;
+ import android.app.NotificationChannel;
+@@ -1159,6 +1160,30 @@ public class MainActivity extends AppCompatActivity {
+             getLorieView().getDisplay().getRealMetrics(m);
+     }
+ 
++    public static void getRealMetrics(Activity activity, DisplayMetrics m) {
++        if (activity instanceof MainActivity) {
++            ((MainActivity) activity).getRealMetrics(m);
++        } else if (activity != null) {
++            View lv = activity.findViewById(R.id.lorieView);
++            if (lv != null && lv.getDisplay() != null) {
++                lv.getDisplay().getRealMetrics(m);
++            } else if (activity.getWindowManager() != null && activity.getWindowManager().getDefaultDisplay() != null) {
++                activity.getWindowManager().getDefaultDisplay().getRealMetrics(m);
++            }
++        }
++    }
++
++    public static void toggleKeyboardVisibility(Activity activity) {
++        if (activity instanceof MainActivity) {
++            ((MainActivity) activity).toggleKeyboardVisibility();
++        } else if (activity != null) {
++            View lv = activity.findViewById(R.id.lorieView);
++            if (lv instanceof LorieView) {
++                ((LorieView) lv).toggleKeyboardVisible();
++            }
++        }
++    }
++
+     public void setCapturingEnabled(boolean enabled) {
+         if (mInputHandler != null)
+             mInputHandler.setCapturingEnabled(enabled);
+diff --git a/lorie/src/main/java/com/termux/x11/input/InputEventSender.java b/lorie/src/main/java/com/termux/x11/input/InputEventSender.java
+index 27aa200..d4d63c7 100644
+--- a/lorie/src/main/java/com/termux/x11/input/InputEventSender.java
++++ b/lorie/src/main/java/com/termux/x11/input/InputEventSender.java
+@@ -66,6 +66,10 @@ public final class InputEventSender {
+         mPressedKeys = new TreeSet<>();
+     }
+ 
++    public InputEventSender(InputStub injector) {
++        this(null, injector);
++    }
++
+     private static final int[][] MODIFIER_KEYS = {
+         {META_SHIFT_ON, KEYCODE_SHIFT_LEFT, KEYCODE_SHIFT_RIGHT},
+         {META_CTRL_ON, KEYCODE_CTRL_LEFT, KEYCODE_CTRL_RIGHT},
+diff --git a/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java b/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java
+index 4e4c0a1..d517153 100644
+--- a/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java
++++ b/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java
+@@ -68,6 +68,14 @@ public class TouchInputHandler {
+ 
+     public int mStylusInputHelperMode = 1; // 1 = Left Click, 2 Middle Click, 4 Right Click
+ 
++    public int getStylusInputHelperMode() {
++        return mStylusInputHelperMode;
++    }
++
++    public void setStylusInputHelperMode(int mode) {
++        mStylusInputHelperMode = mode;
++    }
++
+     /** Used to set/store the selected input mode. */
+     @SuppressWarnings("unused")
+     @IntDef({InputMode.TRACKPAD, InputMode.SIMULATED_TOUCH, InputMode.TOUCH})
+@@ -211,6 +219,59 @@ public class TouchInputHandler {
+         sendStylusState(next);
+     }
+ 
++    private boolean mFingerAsStylusEnabled = false;
++    private boolean mDisableTouchStylusOnStylusHover = true;
++    private boolean mIsEmulatingStylusStroke = false;
++    private boolean mIsMultiFingerGestureActive = false;
++    private TouchStylusStateListener mTouchStylusStateListener = null;
++
++    public interface TouchStylusStateListener {
++        void onTouchStylusAutoDisabled();
++    }
++
++    public void setTouchStylusStateListener(TouchStylusStateListener listener) {
++        mTouchStylusStateListener = listener;
++    }
++
++    public boolean isDisableTouchStylusOnStylusHover() {
++        return mDisableTouchStylusOnStylusHover;
++    }
++
++    public void setDisableTouchStylusOnStylusHover(boolean disable) {
++        mDisableTouchStylusOnStylusHover = disable;
++        if (mTouchpadHandler != null) {
++            mTouchpadHandler.setDisableTouchStylusOnStylusHover(disable);
++        }
++    }
++
++    public boolean isFingerAsStylusEnabled() {
++        return mFingerAsStylusEnabled;
++    }
++
++    public void setFingerAsStylusEnabled(boolean enabled) {
++        if (mFingerAsStylusEnabled != enabled) {
++            mFingerAsStylusEnabled = enabled;
++            if (!enabled && mIsEmulatingStylusStroke) {
++                sendEmulatedStylusRelease();
++                mIsEmulatingStylusStroke = false;
++            }
++            refreshInputDevices();
++            if (mTouchpadHandler != null) {
++                mTouchpadHandler.setFingerAsStylusEnabled(enabled);
++            }
++        }
++    }
++
++    public void sendEmulatedStylusRelease() {
++        StylusState state = getLastRawStylusState();
++        if (state.buttons != 0) {
++            state.buttons = 0;
++            sendStylusState(state);
++        }
++        state.pressure = 0;
++        sendStylusState(state);
++    }
++
+     /**
+      * Used for tracking swipe gestures. Only the Y-direction is needed for responding to swipe-up
+      * or swipe-down.
+@@ -290,8 +351,9 @@ public class TouchInputHandler {
+         }
+ 
+         GestureListener listener = new GestureListener();
+-        if (!isTouchpad)
+-            activity.getLorieView().setSyncListener(listener::onCursorMoveSynced);
++        LorieView lv = getLorieView();
++        if (!isTouchpad && lv != null)
++            lv.setSyncListener(listener::onCursorMoveSynced);
+         mScroller = new GestureDetector(/*desktop*/ activity, listener, null, false);
+ 
+         // If long-press is enabled, the gesture-detector will not emit any further onScroll
+@@ -359,6 +421,8 @@ public class TouchInputHandler {
+     public void refreshInputDevices() {
+         AtomicBoolean stylusAvailable = new AtomicBoolean(false);
+         AtomicBoolean externalKeyboardAvailable = new AtomicBoolean(false);
++        if (mFingerAsStylusEnabled)
++            stylusAvailable.set(true);
+         android.util.Log.d("DEVICES", "external keyboard connected " + stylusAvailable.get());
+         Arrays.stream(InputDevice.getDeviceIds())
+                 .mapToObj(InputDevice::getDevice)
+@@ -439,8 +503,15 @@ public class TouchInputHandler {
+             setCapturingEnabled(true);
+ 
+         if (event.getToolType(event.getActionIndex()) == MotionEvent.TOOL_TYPE_STYLUS
+-                || event.getToolType(event.getActionIndex()) == MotionEvent.TOOL_TYPE_ERASER)
++                || event.getToolType(event.getActionIndex()) == MotionEvent.TOOL_TYPE_ERASER) {
++            if (mDisableTouchStylusOnStylusHover && mFingerAsStylusEnabled) {
++                setFingerAsStylusEnabled(false);
++                if (mTouchStylusStateListener != null) {
++                    mTouchStylusStateListener.onTouchStylusAutoDisabled();
++                }
++            }
+             return mStylusListener.onTouch(event);
++        }
+ 
+         if (!isDexEvent(event) && (event.getToolType(event.getActionIndex()) == MotionEvent.TOOL_TYPE_MOUSE
+                 || (event.getSource() & InputDevice.SOURCE_MOUSE) == InputDevice.SOURCE_MOUSE)
+@@ -452,6 +523,60 @@ public class TouchInputHandler {
+             if (isDexEvent(event) && mDexListener.onTouch(view, event))
+                 return true;
+ 
++            if (mFingerAsStylusEnabled && !isDexEvent(event)) {
++                int actionMasked = event.getActionMasked();
++                int pointerCount = event.getPointerCount();
++
++                if (actionMasked == MotionEvent.ACTION_DOWN) {
++                    mIsMultiFingerGestureActive = false;
++                    mIsEmulatingStylusStroke = true;
++                    mStylusListener.onTouch(event);
++                    return true;
++                } else if (actionMasked == MotionEvent.ACTION_POINTER_DOWN) {
++                    mIsMultiFingerGestureActive = true;
++                    if (mIsEmulatingStylusStroke) {
++                        sendEmulatedStylusRelease();
++                        mIsEmulatingStylusStroke = false;
++                    }
++                } else if (actionMasked == MotionEvent.ACTION_MOVE) {
++                    if (mIsMultiFingerGestureActive || pointerCount > 1) {
++                        // Multi-touch active, fall through to gesture detectors below
++                    } else if (mIsEmulatingStylusStroke) {
++                        return mStylusListener.onTouch(event);
++                    }
++                } else if (actionMasked == MotionEvent.ACTION_POINTER_UP) {
++                    if (mIsMultiFingerGestureActive) {
++                        // Multi-touch ending, let gesture detectors handle it
++                    }
++                } else if (actionMasked == MotionEvent.ACTION_UP) {
++                    if (mIsEmulatingStylusStroke) {
++                        mStylusListener.onTouch(event);
++                        mIsEmulatingStylusStroke = false;
++                        mIsMultiFingerGestureActive = false;
++                        return true;
++                    }
++                    mIsMultiFingerGestureActive = false;
++                    mScroller.onTouchEvent(event);
++                    mTapDetector.onTouchEvent(event);
++                    mSwipePinchDetector.onTouchEvent(event);
++                    return true;
++                } else if (actionMasked == MotionEvent.ACTION_CANCEL) {
++                    if (mIsEmulatingStylusStroke) {
++                        sendEmulatedStylusRelease();
++                        mIsEmulatingStylusStroke = false;
++                    }
++                    mIsMultiFingerGestureActive = false;
++                    mScroller.onTouchEvent(event);
++                    mTapDetector.onTouchEvent(event);
++                    mSwipePinchDetector.onTouchEvent(event);
++                    return true;
++                }
++
++                if (mIsEmulatingStylusStroke) {
++                    return true;
++                }
++            }
++
+             // Give the underlying input strategy a chance to observe the current motion event before
+             // passing it to the gesture detectors.  This allows the input strategy to react to the
+             // event or save the payload for use in recreating the gesture remotely.
+@@ -511,7 +636,7 @@ public class TouchInputHandler {
+         mRenderData.screenWidth = screenWidth;
+         mRenderData.screenHeight = screenHeight;
+         mRenderData.setInputTransform(inputTransform);
+-        mActivity.getRealMetrics(mMetrics);
++        MainActivity.getRealMetrics(mActivity, mMetrics);
+ 
+         if (mTouchpadHandler != null)
+             mTouchpadHandler.handleInputTransformChanged(screenWidth, screenHeight, inputTransform);
+@@ -590,7 +715,7 @@ public class TouchInputHandler {
+                 capturedPointerTransformation = CapturedPointerTransformation.NONE;
+         }
+ 
+-        mActivity.getRealMetrics(mMetrics);
++        MainActivity.getRealMetrics(mActivity, mMetrics);
+ 
+         if (!p.pointerCapture.get() && getLorieView() != null && hasPointerCapture(getLorieView()))
+             getLorieView().releasePointerCapture();
+@@ -851,7 +976,11 @@ public class TouchInputHandler {
+                 return false;
+             }
+ 
+-            LorieView view = mActivity.getLorieView();
++            LorieView view = getLorieView();
++            if (view == null) {
++                mPinchTracking = false;
++                return false;
++            }
+             Rect viewport = view.getInputViewport();
+             float focusX = detector.getFocusX(), focusY = detector.getFocusY();
+             float fracX = viewport.width() > 0 ? (focusX - viewport.left) / (float) viewport.width() : 0.5f;
+@@ -906,7 +1035,8 @@ public class TouchInputHandler {
+                 return;
+             }
+ 
+-            LorieView view = mActivity.getLorieView();
++            LorieView view = getLorieView();
++            if (view == null) return;
+             RectF shown = view.getInputSourceRect();
+             float marginX = shown.width() * PAN_EDGE_FRACTION;
+             float marginY = shown.height() * PAN_EDGE_FRACTION;
+@@ -1051,8 +1181,9 @@ public class TouchInputHandler {
+ 
+         int k = e.getKeyCode();
+ 
+-        if (!mActivity.getLorieView().connected()) {
+-            if (e.getKeyCode() == KEYCODE_BACK)
++        LorieView lv = getLorieView();
++        if (lv == null || !lv.connected()) {
++            if (e.getKeyCode() == KEYCODE_BACK && mActivity != null)
+                 mActivity.finish();
+ 
+             return false;
+@@ -1191,8 +1322,13 @@ public class TouchInputHandler {
+         }
+ 
+         private int extractButtons(MotionEvent e) {
++            int action = e.getActionMasked();
++            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)
++                return 0;
++            boolean isFinger = e.getToolType(e.getActionIndex()) == MotionEvent.TOOL_TYPE_FINGER;
++            boolean isContact = isFinger || e.getPressure(e.getActionIndex()) > 0 || action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE;
+             if (mInjector.stylusButtonContactModifierMode) {
+-                if (e.getPressure() > 0) {
++                if (isContact) {
+                     if (hasButton(e, MotionEvent.BUTTON_STYLUS_SECONDARY))
+                         return (1 << 1);
+                     if (hasButton(e, MotionEvent.BUTTON_STYLUS_PRIMARY))
+@@ -1202,7 +1338,7 @@ public class TouchInputHandler {
+                 } else return 0;
+             } else {
+                 int buttons = 0;
+-                if (e.getPressure() > 0)
++                if (isContact)
+                     buttons = mStylusInputHelperMode;
+                 if (hasButton(e, MotionEvent.BUTTON_STYLUS_SECONDARY))
+                     buttons |= (1 << 1);
+@@ -1215,7 +1351,7 @@ public class TouchInputHandler {
+ 
+         @SuppressLint("ClickableViewAccessibility")
+         boolean onTouch(MotionEvent e) {
+-            int action = e.getAction();
++            int action = e.getActionMasked();
+             int tiltX = 0, tiltY = 0;
+             int newButtons = extractButtons(e);
+             float newX = e.getX(e.getActionIndex()), newY = e.getY(e.getActionIndex());
+@@ -1234,6 +1370,7 @@ public class TouchInputHandler {
+             mRenderData.mapScreenPoint(newX, newY, mappedPoint);
+             newX = mappedPoint[0];
+             newY = mappedPoint[1];
++            mRenderData.setCursorPosition(newX, newY);
+ 
+             int orientationDegrees = convertOrientation(orientation);
+             if (hasTilt && hasOrientation) {
+@@ -1247,18 +1384,50 @@ public class TouchInputHandler {
+             StylusState state = new StylusState();
+             x = newX;
+             y = newY;
+-            pressure = e.getPressure();
+-            buttons = newButtons;
+-            state.x = x;
+-            state.y = y;
+-            state.pressure = (int) (pressure * 65535);
+-            state.tiltX = tiltX;
+-            state.tiltY = tiltY;
+-            state.orientation = orientationDegrees;
+-            state.buttons = newButtons;
+-            state.eraser = e.getToolType(e.getActionIndex()) == MotionEvent.TOOL_TYPE_ERASER;
+-            state.mouse = mInjector.stylusIsMouse;
+-            sendStylusState(state);
++            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
++                float contactPressure = (pressure > 0) ? pressure : 1.0f;
++                state.x = x;
++                state.y = y;
++                state.pressure = (int) (contactPressure * 65535);
++                state.tiltX = tiltX;
++                state.tiltY = tiltY;
++                state.orientation = orientationDegrees;
++                state.buttons = 0;
++                state.eraser = e.getToolType(e.getActionIndex()) == MotionEvent.TOOL_TYPE_ERASER;
++                state.mouse = mInjector.stylusIsMouse;
++                sendStylusState(state);
++
++                pressure = 0;
++                buttons = 0;
++                StylusState hoverState = state.copy();
++                hoverState.pressure = 0;
++                sendStylusState(hoverState);
++            } else {
++                float rawPressure = e.getPressure(e.getActionIndex());
++                if (e.getToolType(e.getActionIndex()) == MotionEvent.TOOL_TYPE_FINGER) {
++                    pressure = rawPressure > 0 ? rawPressure : 1.0f;
++                } else {
++                    pressure = rawPressure > 0 ? rawPressure : ((action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE) ? 0.5f : 0.0f);
++                }
++                buttons = newButtons;
++                state.x = x;
++                state.y = y;
++                state.pressure = (int) (pressure * 65535);
++                state.tiltX = tiltX;
++                state.tiltY = tiltY;
++                state.orientation = orientationDegrees;
++                state.buttons = buttons;
++                state.eraser = e.getToolType(e.getActionIndex()) == MotionEvent.TOOL_TYPE_ERASER;
++                state.mouse = mInjector.stylusIsMouse;
++                sendStylusState(state);
++
++                if (action == MotionEvent.ACTION_DOWN && buttons != 0) {
++                    StylusState dotStep = state.copy();
++                    dotStep.x += 0.01f;
++                    dotStep.y += 0.01f;
++                    sendStylusState(dotStep);
++                }
++            }
+ 
+             return true;
+         }
+-- 
+2.55.0
+

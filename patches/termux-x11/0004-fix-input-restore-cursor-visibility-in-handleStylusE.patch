@@ -1,7 +1,7 @@
-From d2f3bf28b8cc08e5ceec5e0f1475717dd3fd4d93 Mon Sep 17 00:00:00 2001
+From 5441d8e777059f50c0d5e6b0b038daa27043b055 Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Tue, 25 Aug 2026 01:23:42 +0530
-Subject: [PATCH 4/6] fix(input): restore cursor visibility in
+Subject: [PATCH 4/8] fix(input): restore cursor visibility in
  handleStylusEvent
 
 ---
@@ -9,10 +9,10 @@ Subject: [PATCH 4/6] fix(input): restore cursor visibility in
  1 file changed, 1 insertion(+)
 
 diff --git a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
-index d111f41..14c3b6a 100644
+index c435d52..6ead422 100644
 --- a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
 +++ b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
-@@ -252,6 +252,7 @@ static Bool handleStylusEvent(__unused ClientPtr pClient, void *closure) {
+@@ -265,6 +265,7 @@ static Bool handleStylusEvent(__unused ClientPtr pClient, void *closure) {
          free(e);
          return TRUE;
      }
