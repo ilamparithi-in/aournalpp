@@ -43,6 +43,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -254,6 +256,7 @@ http://www.apache.org/licenses/
 fun LicensesScreen(onBack: (() -> Unit)? = null) {
     val context = LocalContext.current
     var selectedLibraryForDialog by remember { mutableStateOf<OpenSourceLibrary?>(null) }
+    val listState = rememberLazyListState()
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -285,6 +288,7 @@ fun LicensesScreen(onBack: (() -> Unit)? = null) {
         }
     ) { padding ->
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)

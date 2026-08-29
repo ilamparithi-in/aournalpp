@@ -38,13 +38,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -269,33 +274,82 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+enum class AppTab(
+    val title: String,
+    val filledIcon: ImageVector,
+    val outlinedIcon: ImageVector
+) {
+    HOME("Home", Icons.Filled.Home, Icons.Outlined.Home),
+    FILES("Files", Icons.Filled.FolderCopy, Icons.Outlined.FolderCopy),
+    SETTINGS("Settings", Icons.Filled.Settings, Icons.Outlined.Settings),
+    ABOUT("About", Icons.Filled.Info, Icons.Outlined.Info);
+
+    val id: Int get() = ordinal
+}
+
 @Composable
 fun MainResponsiveAppShell() {
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(AppTab.HOME.id) }
+    val saveableStateHolder = rememberSaveableStateHolder()
+    var tabGenerations by rememberSaveable { mutableStateOf(mapOf<Int, Int>()) }
 
-    BackHandler(enabled = selectedTab != 0) {
-        selectedTab = 0
+    var lastClickTime by remember { mutableLongStateOf(0L) }
+    var lastClickedTab by remember { mutableIntStateOf(-1) }
+
+    val onTabSelect: (Int) -> Unit = { tabId ->
+        val currentTime = System.currentTimeMillis()
+        val isDoubleTap = (lastClickedTab == tabId) && (currentTime - lastClickTime < 400L)
+
+        if (selectedTab != tabId) {
+            selectedTab = tabId
+        }
+
+        if (isDoubleTap) {
+            val oldGen = tabGenerations[tabId] ?: 0
+            val newGen = oldGen + 1
+            tabGenerations = tabGenerations + (tabId to newGen)
+            saveableStateHolder.removeState("tab_${tabId}_$oldGen")
+            lastClickTime = 0L
+        } else {
+            lastClickTime = currentTime
+            lastClickedTab = tabId
+        }
+    }
+
+    BackHandler(enabled = selectedTab != AppTab.HOME.id) {
+        selectedTab = AppTab.HOME.id
     }
 
     @Composable
     fun RenderTabContent(tab: Int) {
         when (tab) {
-            0 -> HomeScreen(
-                onNavigateToFiles = { selectedTab = 1 },
-                onNavigateToSettings = { selectedTab = 2 },
-                onNavigateToAbout = { selectedTab = 3 }
+            AppTab.HOME.id -> HomeScreen(
+                onNavigateToFiles = { selectedTab = AppTab.FILES.id },
+                onNavigateToSettings = { selectedTab = AppTab.SETTINGS.id },
+                onNavigateToAbout = { selectedTab = AppTab.ABOUT.id }
             )
-            1 -> DocumentHubScreen(
-                onNavigateToSettings = { selectedTab = 2 },
-                onNavigateToLicenses = { selectedTab = 3 }
+            AppTab.FILES.id -> DocumentHubScreen(
+                onNavigateToSettings = { selectedTab = AppTab.SETTINGS.id },
+                onNavigateToLicenses = { selectedTab = AppTab.ABOUT.id }
             )
-            2 -> SettingsScreen(onBack = { selectedTab = 0 })
-            3 -> LicensesScreen(onBack = { selectedTab = 0 })
+            AppTab.SETTINGS.id -> SettingsScreen(onBack = { selectedTab = AppTab.HOME.id })
+            AppTab.ABOUT.id -> LicensesScreen(onBack = { selectedTab = AppTab.HOME.id })
             else -> HomeScreen(
-                onNavigateToFiles = { selectedTab = 1 },
-                onNavigateToSettings = { selectedTab = 2 },
-                onNavigateToAbout = { selectedTab = 3 }
+                onNavigateToFiles = { selectedTab = AppTab.FILES.id },
+                onNavigateToSettings = { selectedTab = AppTab.SETTINGS.id },
+                onNavigateToAbout = { selectedTab = AppTab.ABOUT.id }
             )
+        }
+    }
+
+    @Composable
+    fun TabHost(tabId: Int) {
+        val gen = tabGenerations[tabId] ?: 0
+        val pageKey = "tab_${tabId}_$gen"
+        saveableStateHolder.SaveableStateProvider(key = pageKey) {
+            key(pageKey) {
+                RenderTabContent(tabId)
+            }
         }
     }
 
@@ -318,53 +372,19 @@ fun MainResponsiveAppShell() {
                         )
                     }
                 ) {
-                    NavigationRailItem(
-                        selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
-                        icon = {
-                            Icon(
-                                imageVector = if (selectedTab == 0) Icons.Filled.Home else Icons.Outlined.Home,
-                                contentDescription = "Home"
-                            )
-                        },
-                        label = { Text("Home", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal) }
-                    )
-
-                    NavigationRailItem(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        icon = {
-                            Icon(
-                                imageVector = if (selectedTab == 1) Icons.Filled.FolderCopy else Icons.Outlined.FolderCopy,
-                                contentDescription = "Files"
-                            )
-                        },
-                        label = { Text("Files", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal) }
-                    )
-
-                    NavigationRailItem(
-                        selected = selectedTab == 2,
-                        onClick = { selectedTab = 2 },
-                        icon = {
-                            Icon(
-                                imageVector = if (selectedTab == 2) Icons.Filled.Settings else Icons.Outlined.Settings,
-                                contentDescription = "Settings"
-                            )
-                        },
-                        label = { Text("Settings", fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal) }
-                    )
-
-                    NavigationRailItem(
-                        selected = selectedTab == 3,
-                        onClick = { selectedTab = 3 },
-                        icon = {
-                            Icon(
-                                imageVector = if (selectedTab == 3) Icons.Filled.Info else Icons.Outlined.Info,
-                                contentDescription = "About"
-                            )
-                        },
-                        label = { Text("About", fontWeight = if (selectedTab == 3) FontWeight.Bold else FontWeight.Normal) }
-                    )
+                    AppTab.entries.forEach { tab ->
+                        NavigationRailItem(
+                            selected = selectedTab == tab.id,
+                            onClick = { onTabSelect(tab.id) },
+                            icon = {
+                                Icon(
+                                    imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
+                                    contentDescription = tab.title
+                                )
+                            },
+                            label = { Text(tab.title, fontWeight = if (selectedTab == tab.id) FontWeight.Bold else FontWeight.Normal) }
+                        )
+                    }
                 }
 
                 Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
@@ -389,15 +409,15 @@ fun MainResponsiveAppShell() {
                                 ) + fadeIn(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f)))
                                     .togetherWith(
                                         slideOutHorizontally(
-                                            animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
-                                            targetOffsetX = { it / 3 }
+                                             animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
+                                             targetOffsetX = { it / 3 }
                                          ) + fadeOut(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f))
                                     )
                             }
                         },
                         label = "railTabTransition"
-                    ) { tab ->
-                        RenderTabContent(tab)
+                    ) { tabId ->
+                        TabHost(tabId)
                     }
                 }
             }
@@ -409,53 +429,19 @@ fun MainResponsiveAppShell() {
                     NavigationBar(
                         containerColor = MaterialTheme.colorScheme.surface
                     ) {
-                        NavigationBarItem(
-                            selected = selectedTab == 0,
-                            onClick = { selectedTab = 0 },
-                            icon = {
-                                Icon(
-                                    imageVector = if (selectedTab == 0) Icons.Filled.Home else Icons.Outlined.Home,
-                                    contentDescription = "Home"
-                                )
-                            },
-                            label = { Text("Home") }
-                        )
-
-                        NavigationBarItem(
-                            selected = selectedTab == 1,
-                            onClick = { selectedTab = 1 },
-                            icon = {
-                                Icon(
-                                    imageVector = if (selectedTab == 1) Icons.Filled.FolderCopy else Icons.Outlined.FolderCopy,
-                                    contentDescription = "Files"
-                                )
-                            },
-                            label = { Text("Files") }
-                        )
-
-                        NavigationBarItem(
-                            selected = selectedTab == 2,
-                            onClick = { selectedTab = 2 },
-                            icon = {
-                                Icon(
-                                    imageVector = if (selectedTab == 2) Icons.Filled.Settings else Icons.Outlined.Settings,
-                                    contentDescription = "Settings"
-                                )
-                            },
-                            label = { Text("Settings") }
-                        )
-
-                        NavigationBarItem(
-                            selected = selectedTab == 3,
-                            onClick = { selectedTab = 3 },
-                            icon = {
-                                Icon(
-                                    imageVector = if (selectedTab == 3) Icons.Filled.Info else Icons.Outlined.Info,
-                                    contentDescription = "About"
-                                )
-                            },
-                            label = { Text("About") }
-                        )
+                        AppTab.entries.forEach { tab ->
+                            NavigationBarItem(
+                                selected = selectedTab == tab.id,
+                                onClick = { onTabSelect(tab.id) },
+                                icon = {
+                                    Icon(
+                                        imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
+                                        contentDescription = tab.title
+                                    )
+                                },
+                                label = { Text(tab.title) }
+                            )
+                        }
                     }
                 }
             ) { padding ->
@@ -470,9 +456,9 @@ fun MainResponsiveAppShell() {
                                 ) + fadeIn(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f)))
                                     .togetherWith(
                                         slideOutHorizontally(
-                                            animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
-                                            targetOffsetX = { -it / 3 }
-                                        ) + fadeOut(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f))
+                                             animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
+                                             targetOffsetX = { -it / 3 }
+                                         ) + fadeOut(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f))
                                     )
                             } else {
                                 (slideInHorizontally(
@@ -481,15 +467,15 @@ fun MainResponsiveAppShell() {
                                 ) + fadeIn(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f)))
                                     .togetherWith(
                                         slideOutHorizontally(
-                                            animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
-                                            targetOffsetX = { it / 3 }
-                                        ) + fadeOut(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f))
+                                             animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
+                                             targetOffsetX = { it / 3 }
+                                         ) + fadeOut(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f))
                                     )
                             }
                         },
                         label = "bottomTabTransition"
-                    ) { tab ->
-                        RenderTabContent(tab)
+                    ) { tabId ->
+                        TabHost(tabId)
                     }
                 }
             }

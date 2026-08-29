@@ -163,7 +163,8 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import kotlinx.coroutines.delay
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -285,6 +286,16 @@ private fun getGreeting(): String {
 
 private const val SEARCH_DEBOUNCE_MS = 250L
 
+private val FileSaver = Saver<File, String>(
+    save = { it.absolutePath },
+    restore = { File(it) }
+)
+
+private val StringSetSaver = listSaver<Set<String>, String>(
+    save = { it.toList() },
+    restore = { it.toSet() }
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DocumentHubScreen(
@@ -305,19 +316,21 @@ fun DocumentHubScreen(
 
     var hasPermission by remember { mutableStateOf(hasStoragePermission(context)) }
     var showPermissionDialog by remember { mutableStateOf(!hasPermission) }
-    var showHiddenFiles by remember { mutableStateOf(prefs.getBoolean("pref_show_hidden_files", false)) }
-    var isGridView by remember { mutableStateOf(prefs.getBoolean("pref_is_grid_view", true)) }
-    var searchQuery by remember { mutableStateOf("") }
-    var isSearchActive by remember { mutableStateOf(false) }
+    var showHiddenFiles by rememberSaveable { mutableStateOf(prefs.getBoolean("pref_show_hidden_files", false)) }
+    var isGridView by rememberSaveable { mutableStateOf(prefs.getBoolean("pref_is_grid_view", true)) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var isSearchActive by rememberSaveable { mutableStateOf(false) }
 
     val initialCached = remember {
         repository.getCachedDirectory(repository.getRootNotesDirectory(), "", false)
     }
-    var currentDirectory by remember { mutableStateOf(repository.getRootNotesDirectory()) }
+    var currentDirectory by rememberSaveable(stateSaver = FileSaver) {
+        mutableStateOf(repository.getRootNotesDirectory())
+    }
     var folders by remember { mutableStateOf<List<FolderItem>>(initialCached?.first ?: emptyList()) }
     var notes by remember { mutableStateOf<List<NoteDocument>>(initialCached?.second ?: emptyList()) }
     var trashedNotes by remember { mutableStateOf<List<NoteDocument>>(emptyList()) }
-    var isViewingTrash by remember { mutableStateOf(false) }
+    var isViewingTrash by rememberSaveable { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
     val pullRefreshState = rememberPullToRefreshState()
     var recentNotes by remember {
@@ -325,10 +338,12 @@ fun DocumentHubScreen(
     }
 
     // Multi-Selection State & Drag Selection Tracker
-    var isSelectionMode by remember { mutableStateOf(false) }
+    var isSelectionMode by rememberSaveable { mutableStateOf(false) }
     var isDragSelecting by remember { mutableStateOf(false) }
     var isInitialEntryDrag by remember { mutableStateOf(false) }
-    var selectedNotePaths by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var selectedNotePaths by rememberSaveable(stateSaver = StringSetSaver) {
+        mutableStateOf(emptySet<String>())
+    }
     var lastSelectedNotePath by remember { mutableStateOf<String?>(null) }
     val gridState = rememberLazyGridState()
     var autoScrollSpeed by remember { mutableStateOf(0f) }
@@ -546,6 +561,10 @@ fun DocumentHubScreen(
     }
 
     LaunchedEffect(hasPermission, showHiddenFiles, searchQuery, currentDirectory, isViewingTrash) {
+        if (!repository.isWithinRootDirectory(currentDirectory) || !currentDirectory.exists()) {
+            currentDirectory = repository.getRootNotesDirectory()
+            return@LaunchedEffect
+        }
         // Debounce search input.
         if (searchQuery.isNotEmpty()) delay(SEARCH_DEBOUNCE_MS)
         loadContentNow()
