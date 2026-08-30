@@ -148,6 +148,7 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            isPseudoLocalesEnabled = true
         }
         create("beta") {
             initWith(getByName("release"))

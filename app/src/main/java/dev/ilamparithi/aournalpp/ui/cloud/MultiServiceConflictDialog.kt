@@ -65,10 +65,8 @@ import dev.ilamparithi.aournalpp.backup.model.FileConflictGroup
 import dev.ilamparithi.aournalpp.backup.model.FileConflictResolution
 import dev.ilamparithi.aournalpp.backup.model.FileVersionItem
 import dev.ilamparithi.aournalpp.backup.model.FileVersionSource
+import dev.ilamparithi.aournalpp.utils.FormatUtils
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -421,8 +419,8 @@ private fun MultiSelectionVersionRow(
     onToggle: () -> Unit
 ) {
     val isLocal = version.source is FileVersionSource.LOCAL
-    val formattedDate = SimpleDateFormat("MMM dd, yyyy HH:mm:ss", Locale.getDefault()).format(Date(version.lastModifiedEpochMs))
-    val formattedSize = formatFileSize(version.sizeBytes)
+    val formattedDate = FormatUtils.formatDateTimeMedium(version.lastModifiedEpochMs)
+    val formattedSize = FormatUtils.formatFileSize(version.sizeBytes)
 
     val backgroundColor = when {
         isPrimary -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
@@ -550,11 +548,4 @@ private fun MultiSelectionVersionRow(
             )
         }
     }
-}
-
-private fun formatFileSize(bytes: Long): String {
-    if (bytes <= 0) return "0 B"
-    val units = arrayOf("B", "KB", "MB", "GB")
-    val digitGroups = (Math.log10(bytes.toDouble()) / Math.log10(1024.0)).toInt().coerceIn(0, units.size - 1)
-    return String.format(Locale.getDefault(), "%.1f %s", bytes / Math.pow(1024.0, digitGroups.toDouble()), units[digitGroups])
 }

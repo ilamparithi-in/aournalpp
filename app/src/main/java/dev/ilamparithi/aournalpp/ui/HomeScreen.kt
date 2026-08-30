@@ -151,6 +151,7 @@ import dev.ilamparithi.aournalpp.ui.theme.ScallopShape
 import dev.ilamparithi.aournalpp.ui.theme.SunnyShape
 import dev.ilamparithi.aournalpp.utils.ExternalFileHandler
 import dev.ilamparithi.aournalpp.ui.preview.floatingPreviewLongPress
+import dev.ilamparithi.aournalpp.utils.FormatUtils
 import dev.ilamparithi.aournalpp.utils.ThumbnailManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -925,7 +926,7 @@ fun HomeScreen(
     // Emergency Recovery Launch Dialog
     if (showEmergencyDialog && quarantinedEmergencySave != null) {
         val file = quarantinedEmergencySave!!
-        val dateStr = SimpleDateFormat("MMM dd, yyyy · HH:mm", Locale.getDefault()).format(Date(file.lastModified()))
+        val dateStr = FormatUtils.formatDateTimeMedium(file.lastModified())
 
         AlertDialog(
             onDismissRequest = { showEmergencyDialog = false },
@@ -947,7 +948,7 @@ fun HomeScreen(
                 Row {
                     TextButton(onClick = {
                         showEmergencyDialog = false
-                        val defaultName = "Recovered_Note_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date(file.lastModified()))
+                        val defaultName = "Recovered_Note_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date(file.lastModified()))
                         emergencySaveNameInput = defaultName
                         emergencySaveTargetFolder = repository.getRootNotesDirectory()
                         showEmergencySaveNameDialog = true

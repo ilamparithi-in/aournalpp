@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.sp
 import dev.ilamparithi.aournalpp.ui.theme.ExpressiveSprings
 import dev.ilamparithi.aournalpp.ui.theme.ScallopShape
 import dev.ilamparithi.aournalpp.ui.theme.SunnyShape
+import dev.ilamparithi.aournalpp.utils.FormatUtils
 import kotlinx.coroutines.delay
 
 import android.content.Context
@@ -394,7 +395,7 @@ fun BootstrapScreen(
                         ) {
                             if (progress != null) {
                                 Text(
-                                    text = "${String.format("%.1f", progress.percentage)}%",
+                                    text = FormatUtils.formatPercentage(progress.percentage),
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary

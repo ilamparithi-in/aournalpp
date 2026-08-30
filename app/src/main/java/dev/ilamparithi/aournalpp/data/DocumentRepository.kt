@@ -10,6 +10,7 @@ import dev.ilamparithi.aournalpp.model.FolderItem
 import dev.ilamparithi.aournalpp.model.NoteDocument
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
+import dev.ilamparithi.aournalpp.utils.FormatUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -284,10 +285,6 @@ class DocumentRepository(private val context: Context) {
             }
         }
 
-        val dateFormat: SimpleDateFormat by lazy {
-            SimpleDateFormat("MMM dd, yyyy · HH:mm", Locale.getDefault())
-        }
-
         private val rootCanonical: String by lazy { canonicalOf(getRootNotesDirectory()) }
         private val folderMetas = HashMap<String, FolderMetaData>()
 
@@ -394,8 +391,8 @@ class DocumentRepository(private val context: Context) {
                     path = file.absolutePath,
                     lastModifiedMs = file.lastModified(),
                     sizeBytes = file.length(),
-                    lastModifiedFormatted = cache.dateFormat.format(Date(file.lastModified())),
-                    sizeFormatted = "${sizeKb} KB",
+                    lastModifiedFormatted = FormatUtils.formatDateTimeMedium(file.lastModified()),
+                    sizeFormatted = FormatUtils.formatFileSize(file.length()),
                     autosaveInfo = autosaveInfo,
                     isHidden = false,
                     isPinned = cache.pinnedPaths.contains(file.absolutePath),
@@ -431,8 +428,8 @@ class DocumentRepository(private val context: Context) {
                         path = path,
                         lastModifiedMs = file.lastModified(),
                         sizeBytes = file.length(),
-                        lastModifiedFormatted = cache.dateFormat.format(Date(file.lastModified())),
-                        sizeFormatted = "${sizeKb} KB",
+                        lastModifiedFormatted = FormatUtils.formatDateTimeMedium(file.lastModified()),
+                        sizeFormatted = FormatUtils.formatFileSize(file.length()),
                         autosaveInfo = null,
                         isHidden = true,
                         folder = targetDir.name,
@@ -931,19 +928,16 @@ class DocumentRepository(private val context: Context) {
     suspend fun scanTrash(): List<NoteDocument> = withContext(Dispatchers.IO) {
         val trashDir = getTrashDirectory()
         val allFiles = trashDir.listFiles() ?: return@withContext emptyList()
-        val dateFormat = SimpleDateFormat("MMM dd, yyyy · HH:mm", Locale.getDefault())
-
         allFiles.filter { it.isFile && isOpenableFile(it) }
             .map { file ->
-                val sizeKb = (file.length() + 1023) / 1024
                 NoteDocument(
                     file = file,
                     title = file.name.substringAfter("_"),
                     path = file.absolutePath,
                     lastModifiedMs = file.lastModified(),
                     sizeBytes = file.length(),
-                    lastModifiedFormatted = dateFormat.format(Date(file.lastModified())),
-                    sizeFormatted = "${sizeKb} KB",
+                    lastModifiedFormatted = FormatUtils.formatDateTimeMedium(file.lastModified()),
+                    sizeFormatted = FormatUtils.formatFileSize(file.length()),
                     folder = "Trash"
                 )
             }.sortedByDescending { it.lastModifiedMs }
@@ -1321,7 +1315,7 @@ class DocumentRepository(private val context: Context) {
     fun keepBoth(note: NoteDocument): File {
         val autoInfo = note.autosaveInfo ?: return note.file
         try {
-            val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+            val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
             val timestamp = sdf.format(Date(autoInfo.autosaveLastModifiedMs))
             val backupFile = File(note.file.parentFile, "${note.file.nameWithoutExtension}_autosave_$timestamp.${note.file.extension}")
             autoInfo.autosaveFile.copyTo(backupFile, overwrite = true)
@@ -1346,7 +1340,7 @@ class DocumentRepository(private val context: Context) {
         }
         val cleanBase = rawBase.trim().replace(Regex("[/\\\\:*?\"<>|]"), "_")
         val effectiveName = if (cleanBase.isBlank()) {
-            val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+            val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
             "Autosave_${sdf.format(Date(autoInfo.autosaveLastModifiedMs))}.xopp"
         } else {
             "$cleanBase.xopp"
@@ -1374,7 +1368,7 @@ class DocumentRepository(private val context: Context) {
         recoveryFile: File,
         targetFolder: File = env.getEmergencySavesDirectory()
     ): File {
-        val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+        val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
         val defaultName = "Recovered_Session_${sdf.format(Date(recoveryFile.lastModified()))}.xopp"
         return saveEmergencyRecoveryToNotes(recoveryFile, defaultName, targetFolder)
     }
@@ -1393,7 +1387,7 @@ class DocumentRepository(private val context: Context) {
         }
         val cleanBase = rawBase.trim().replace(Regex("[/\\\\:*?\"<>|]"), "_")
         val effectiveName = if (cleanBase.isBlank()) {
-            val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+            val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
             "Recovered_Session_${sdf.format(Date(recoveryFile.lastModified()))}.xopp"
         } else {
             "$cleanBase.xopp"
@@ -1477,8 +1471,8 @@ class DocumentRepository(private val context: Context) {
             path = file.absolutePath,
             lastModifiedMs = file.lastModified(),
             sizeBytes = file.length(),
-            lastModifiedFormatted = cache.dateFormat.format(Date(file.lastModified())),
-            sizeFormatted = "${sizeKb} KB",
+            lastModifiedFormatted = FormatUtils.formatDateTimeMedium(file.lastModified()),
+            sizeFormatted = FormatUtils.formatFileSize(file.length()),
             autosaveInfo = autosaveInfo,
             isHidden = file.name.startsWith("."),
             isPinned = cache.pinnedPaths.contains(file.absolutePath),

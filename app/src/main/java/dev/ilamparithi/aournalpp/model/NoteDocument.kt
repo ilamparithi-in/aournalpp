@@ -1,9 +1,8 @@
 package dev.ilamparithi.aournalpp.model
 
+import dev.ilamparithi.aournalpp.utils.FormatUtils
 import java.io.File
-import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
 import kotlin.math.abs
 
 enum class NoteFileType(val extension: String, val displayName: String) {
@@ -77,17 +76,11 @@ data class AutosaveInfo(
         }
 
     private fun formatDate(ms: Long): String {
-        val sdf = SimpleDateFormat("MMM dd, yyyy · HH:mm", Locale.getDefault())
-        return sdf.format(Date(ms))
+        return FormatUtils.formatDateTimeMedium(ms)
     }
 
     private fun formatSize(bytes: Long): String {
-        val sizeKb = (bytes + 1023) / 1024
-        return if (sizeKb >= 1024) {
-            String.format(Locale.getDefault(), "%.1f MB", sizeKb / 1024.0)
-        } else {
-            "$sizeKb KB"
-        }
+        return FormatUtils.formatFileSize(bytes)
     }
 }
 
@@ -161,7 +154,7 @@ data class NoteDocument(
 
     val fullFormattedDateTime: String
         get() = try {
-            java.text.SimpleDateFormat("MMM d, yyyy • h:mm a", java.util.Locale.getDefault()).format(java.util.Date(lastModifiedMs))
+            FormatUtils.formatDateTimeMedium(lastModifiedMs)
         } catch (e: Exception) {
             lastModifiedFormatted
         }
@@ -170,7 +163,7 @@ data class NoteDocument(
         get() {
             val opened = lastOpenedMs ?: return null
             return try {
-                java.text.SimpleDateFormat("MMM d, yyyy • h:mm a", java.util.Locale.getDefault()).format(java.util.Date(opened))
+                FormatUtils.formatDateTimeMedium(opened)
             } catch (e: Exception) {
                 null
             }

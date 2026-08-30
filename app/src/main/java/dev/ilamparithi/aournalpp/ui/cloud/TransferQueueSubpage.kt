@@ -59,6 +59,7 @@ import dev.ilamparithi.aournalpp.backup.model.TransferDirection
 import dev.ilamparithi.aournalpp.backup.model.TransferItem
 import dev.ilamparithi.aournalpp.backup.model.TransferStatus
 import dev.ilamparithi.aournalpp.backup.queue.FileTransferQueueManager
+import dev.ilamparithi.aournalpp.utils.FormatUtils
 
 enum class QueueFilter {
     ALL,
@@ -438,18 +439,10 @@ private fun QueueItemCard(item: TransferItem) {
 }
 
 private fun formatByteSize(bytes: Long): String {
-    if (bytes <= 0) return "0 B"
-    val units = arrayOf("B", "KB", "MB", "GB")
-    var value = bytes.toDouble()
-    var unitIndex = 0
-    while (value >= 1024.0 && unitIndex < units.size - 1) {
-        value /= 1024.0
-        unitIndex++
-    }
-    return String.format(java.util.Locale.US, "%.1f %s", value, units[unitIndex])
+    return FormatUtils.formatFileSize(bytes)
 }
 
 private fun formatSpeedRate(bytesPerSec: Long): String {
     if (bytesPerSec <= 0) return "0 KB/s"
-    return "${formatByteSize(bytesPerSec)}/s"
+    return "${FormatUtils.formatFileSize(bytesPerSec)}/s"
 }

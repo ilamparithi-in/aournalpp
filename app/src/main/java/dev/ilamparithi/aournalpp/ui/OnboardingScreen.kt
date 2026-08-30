@@ -58,6 +58,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Create
+import dev.ilamparithi.aournalpp.utils.FormatUtils
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
@@ -1468,7 +1469,7 @@ private fun OnboardingExtractionBottomPill(
                                 isError -> androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.pill_env_issue)
                                 progress != null -> androidx.compose.ui.res.stringResource(
                                     dev.ilamparithi.aournalpp.R.string.pill_setting_up,
-                                    String.format("%.0f", progress.percentage)
+                                    FormatUtils.formatNumber(progress.percentage, maxDecimals = 0)
                                 )
                                 else -> androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.pill_preparing)
                             },

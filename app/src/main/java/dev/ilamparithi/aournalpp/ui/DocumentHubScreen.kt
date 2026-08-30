@@ -219,6 +219,7 @@ import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
 import dev.ilamparithi.aournalpp.utils.ExternalFileHandler
 import dev.ilamparithi.aournalpp.ui.preview.floatingPreviewLongPress
 import dev.ilamparithi.aournalpp.utils.ThumbnailManager
+import dev.ilamparithi.aournalpp.utils.FormatUtils
 import dev.ilamparithi.aournalpp.utils.NoteOpenAction
 import dev.ilamparithi.aournalpp.utils.NoteOpenManager
 import dev.ilamparithi.aournalpp.ui.NoteOpenActionDialog
@@ -1635,7 +1636,7 @@ fun DocumentHubScreen(
         // 8. Emergency Recovery Launch Dialog
         if (showEmergencyDialog && quarantinedEmergencySave != null) {
             val file = quarantinedEmergencySave!!
-            val dateStr = SimpleDateFormat("MMM dd, yyyy · HH:mm", Locale.getDefault()).format(Date(file.lastModified()))
+            val dateStr = FormatUtils.formatDateTimeMedium(file.lastModified())
 
             AlertDialog(
                 onDismissRequest = { showEmergencyDialog = false },
@@ -1657,7 +1658,7 @@ fun DocumentHubScreen(
                     Row {
                         TextButton(onClick = {
                             showEmergencyDialog = false
-                            val defaultName = "Recovered_Note_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date(file.lastModified()))
+                            val defaultName = "Recovered_Note_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date(file.lastModified()))
                             emergencySaveNameInput = defaultName
                             emergencySaveTargetFolder = currentDirectory
                             showEmergencySaveNameDialog = true

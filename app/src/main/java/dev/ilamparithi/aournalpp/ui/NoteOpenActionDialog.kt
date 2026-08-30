@@ -50,13 +50,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.ilamparithi.aournalpp.utils.FormatUtils
 import dev.ilamparithi.aournalpp.utils.NoteOpenAction
 import dev.ilamparithi.aournalpp.utils.NoteOpenManager
 import java.io.File
-import java.text.DecimalFormat
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * Material 3 standard prompt dialog displayed when a note is opened and default action is set to "Ask every time".
@@ -73,11 +70,10 @@ fun NoteOpenActionDialog(
     var dontAskAgain by remember { mutableStateOf(false) }
 
     val formattedSize = remember(file.length()) {
-        formatFileSize(file.length())
+        FormatUtils.formatFileSize(file.length())
     }
     val formattedDate = remember(file.lastModified()) {
-        val sdf = SimpleDateFormat("MMM d, yyyy · HH:mm", Locale.getDefault())
-        sdf.format(Date(file.lastModified()))
+        FormatUtils.formatDateTimeMedium(file.lastModified())
     }
     val fileExt = remember(file.name) {
         file.extension.uppercase().ifEmpty { "NOTE" }
@@ -353,13 +349,4 @@ private fun ActionOptionCard(
             )
         }
     }
-}
-
-private fun formatFileSize(bytes: Long): String {
-    if (bytes <= 0) return "0 B"
-    val units = arrayOf("B", "KB", "MB", "GB")
-    val digitGroups = (Math.log10(bytes.toDouble()) / Math.log10(1024.0)).toInt()
-    val clampedGroup = digitGroups.coerceIn(0, units.size - 1)
-    val value = bytes / Math.pow(1024.0, clampedGroup.toDouble())
-    return DecimalFormat("#,##0.#").format(value) + " " + units[clampedGroup]
 }

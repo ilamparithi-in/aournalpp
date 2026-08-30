@@ -129,12 +129,10 @@ import dev.ilamparithi.aournalpp.backup.worker.BackupPreferences
 import dev.ilamparithi.aournalpp.backup.worker.BackupScheduler
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.ui.SpeedDialActionItem
+import dev.ilamparithi.aournalpp.utils.FormatUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 enum class CloudSubpage {
     OVERVIEW,
@@ -746,9 +744,10 @@ fun OverviewCard(
 ) {
     val enabledCount = services.count { it.isEnabled }
     val lastSyncEpoch = services.map { it.lastSyncedAtEpochMs }.maxOrNull() ?: 0L
+    val neverSyncedText = stringResource(R.string.cloud_never_synced)
     val lastSyncFormatted = if (lastSyncEpoch > 0) {
-        SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()).format(Date(lastSyncEpoch))
-    } else "Never"
+        FormatUtils.formatDateTimeMedium(lastSyncEpoch)
+    } else neverSyncedText
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1183,7 +1182,7 @@ fun AutomationCard(
     concurrency: Int,
     onConcurrencyChange: (Int) -> Unit
 ) {
-    val timeFormatted = String.format(Locale.getDefault(), "%02d:%02d", dailyHour, dailyMinute)
+    val timeFormatted = FormatUtils.formatTime(dailyHour, dailyMinute)
     var isFrequencyDropdownExpanded by remember { mutableStateOf(false) }
 
     val intervalOptions = listOf(

@@ -66,7 +66,9 @@ object AppLocaleHelper {
         "he" to ("עברית" to "Hebrew"),
         "da" to ("Dansk" to "Danish"),
         "fi" to ("Suomi" to "Finnish"),
-        "nb" to ("Norsk bokmål" to "Norwegian Bokmål")
+        "nb" to ("Norsk bokmål" to "Norwegian Bokmål"),
+        "en-XA" to ("English (Pseudolocale [en-XA])" to "English (Pseudolocale [en-XA])"),
+        "ar-XB" to ("العربية (Pseudobidi [ar-XB])" to "Arabic (Pseudobidi [ar-XB])")
     )
 
     /**

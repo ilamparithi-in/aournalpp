@@ -33,4 +33,6 @@
    <locale android:name="da"/>
    <locale android:name="fi"/>
    <locale android:name="nb"/>
+   <locale android:name="en-XA"/>
+   <locale android:name="ar-XB"/>
 </locale-config>

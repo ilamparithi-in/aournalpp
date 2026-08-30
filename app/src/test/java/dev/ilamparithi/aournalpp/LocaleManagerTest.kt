@@ -26,6 +26,11 @@ class LocaleManagerTest {
         assertTrue("Should include Spanish", tags.contains("es"))
         assertTrue("Should include Japanese", tags.contains("ja"))
         assertTrue("Should include Simplified Chinese", tags.contains("zh-CN"))
+        assertTrue("Should include Arabic (RTL)", tags.contains("ar"))
+        assertTrue("Should include Persian (RTL)", tags.contains("fa"))
+        assertTrue("Should include Hebrew (RTL)", tags.contains("he"))
+        assertTrue("Should include en-XA pseudolocale", tags.contains("en-XA"))
+        assertTrue("Should include ar-XB pseudolocale", tags.contains("ar-XB"))
     }
 
     @Test
