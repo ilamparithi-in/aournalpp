@@ -81,6 +81,119 @@ class DebExtractor:
         raise RuntimeError("No data.tar payload found inside .deb package")
 
 
+def provision_xournalpp_translations(staging_usr: str, cache_dir: str):
+    """Downloads official Xournal++ source .po translations and compiles .mo catalogs into share/locale/"""
+    print("[*] Provisioning Xournal++ gettext translations (share/locale)...")
+    locale_base = os.path.join(staging_usr, "share", "locale")
+    os.makedirs(locale_base, exist_ok=True)
+
+    src_tar = os.path.join(cache_dir, "xournalpp-1.3.7-src.tar.gz")
+    if not os.path.exists(src_tar):
+        src_url = "https://github.com/xournalpp/xournalpp/archive/refs/tags/v1.3.7.tar.gz"
+        print(f"[*] Downloading Xournal++ source translation catalog from {src_url}...")
+        try:
+            req = urllib.request.Request(src_url, headers={"User-Agent": "xopp-builder"})
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                with open(src_tar, "wb") as f:
+                    f.write(resp.read())
+        except Exception as e:
+            print(f"[!] Warning: Could not download xournalpp source translations: {e}")
+            return
+
+    try:
+        with tarfile.open(src_tar, "r:gz") as tar:
+            for member in tar.getmembers():
+                if "/po/" in member.name and member.name.endswith(".po"):
+                    po_name = os.path.basename(member.name)
+                    lang = po_name[:-3]
+                    extracted_po = tar.extractfile(member)
+                    if extracted_po:
+                        po_content = extracted_po.read()
+                        target_langs = [lang]
+                        if "_" not in lang:
+                            target_langs.append(f"{lang}_{lang.upper()}")
+                        elif lang == "zh_CN":
+                            target_langs.append("zh")
+                        elif lang == "no":
+                            target_langs.extend(["nb_NO", "nn_NO"])
+                        elif lang == "uk_UA":
+                            target_langs.append("uk")
+
+                        for tlang in target_langs:
+                            mo_dir = os.path.join(locale_base, tlang, "LC_MESSAGES")
+                            os.makedirs(mo_dir, exist_ok=True)
+                            mo_path = os.path.join(mo_dir, "xournalpp.mo")
+
+                            compiled = False
+                            if shutil.which("msgfmt"):
+                                temp_po = os.path.join(mo_dir, "temp.po")
+                                with open(temp_po, "wb") as f:
+                                    f.write(po_content)
+                                res = os.system(f"msgfmt -o '{mo_path}' '{temp_po}' 2>/dev/null")
+                                if os.path.exists(temp_po):
+                                    os.remove(temp_po)
+                                if res == 0 and os.path.exists(mo_path) and os.path.getsize(mo_path) > 0:
+                                    compiled = True
+
+                            if not compiled:
+                                try:
+                                    lines = po_content.decode("utf-8", errors="ignore").splitlines()
+                                    entries = {}
+                                    msgid = ""
+                                    msgstr = ""
+                                    state = None
+                                    for l in lines:
+                                        l_str = l.strip()
+                                        if l_str.startswith("msgid "):
+                                            if state == "msgstr" and msgid:
+                                                entries[msgid] = msgstr
+                                            msgid = l_str[6:].strip('"')
+                                            msgstr = ""
+                                            state = "msgid"
+                                        elif l_str.startswith("msgstr "):
+                                            msgstr = l_str[7:].strip('"')
+                                            state = "msgstr"
+                                        elif l_str.startswith('"') and l_str.endswith('"'):
+                                            val = l_str[1:-1]
+                                            if state == "msgid":
+                                                msgid += val
+                                            elif state == "msgstr":
+                                                msgstr += val
+                                    if state == "msgstr" and msgid:
+                                        entries[msgid] = msgstr
+
+                                    import struct
+                                    keys = sorted(entries.keys())
+                                    offsets = []
+                                    ids = b""
+                                    strs = b""
+                                    for k in keys:
+                                        v = entries[k]
+                                        kb = k.encode("utf-8") + b"\x00"
+                                        vb = v.encode("utf-8") + b"\x00"
+                                        offsets.append((len(kb) - 1, len(ids), len(vb) - 1, len(strs)))
+                                        ids += kb
+                                        strs += vb
+                                    keystart = 7 * 4 + 16 * len(keys)
+                                    valuestart = keystart + len(ids)
+                                    koffsets = [(l1, o1 + keystart) for l1, o1, _, _ in offsets]
+                                    voffsets = [(l2, o2 + valuestart) for _, _, l2, o2 in offsets]
+                                    with open(mo_path, "wb") as f:
+                                        f.write(struct.pack("Iiiiiii", 0x950412de, 0, len(keys), 7 * 4, 7 * 4 + 8 * len(keys), 0, 0))
+                                        for l, o in koffsets:
+                                            f.write(struct.pack("ii", l, o))
+                                        for l, o in voffsets:
+                                            f.write(struct.pack("ii", l, o))
+                                        f.write(ids)
+                                        f.write(strs)
+                                except Exception:
+                                    pass
+
+        print("[*] Successfully provisioned Xournal++ translations in share/locale/")
+    except Exception as e:
+        print(f"[!] Warning: Failed extracting/compiling translations: {e}")
+
+
 class RepositoryIndex:
     def __init__(self, repo_bases: Dict[str, str]):
         self.repo_bases = repo_bases
@@ -375,6 +488,9 @@ def main():
             menu_data = menu_data.replace(target_block, replacement_block)
             with open(menu_path, "w", encoding="utf-8") as f:
                 f.write(menu_data)
+
+    # Provision Xournal++ official gettext translation catalogs (share/locale)
+    provision_xournalpp_translations(staging_usr, cache_dir)
 
     if args.jnilibs_dir:
         target_abi_dir = os.path.join(args.jnilibs_dir, abi_name)

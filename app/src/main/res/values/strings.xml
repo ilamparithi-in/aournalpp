@@ -752,6 +752,20 @@
     <string name="pref_reset_defaults">Reset All Settings</string>
 
     <!-- ======================================================================= -->
+    <!-- Language & Localization                                                 -->
+    <!-- ======================================================================= -->
+    <string name="pref_cat_language">Language &amp; Localization</string>
+    <string name="pref_app_language_title">App Interface Language</string>
+    <string name="pref_app_language_desc">Language used across the Android app menus and hub</string>
+    <string name="pref_linux_language_title">Xournal++ Editor Language</string>
+    <string name="pref_linux_language_desc">Language used inside the Xournal++ canvas and Linux runtime</string>
+    <string name="pref_linux_language_dialog_title">Select Xournal++ Language</string>
+    <string name="pref_app_language_dialog_title">Select App Language</string>
+    <string name="pref_language_search_placeholder">Search languages…</string>
+    <string name="pref_language_footnote">Xournal++ runs in an isolated Linux environment and can be localized independently from your Android device language.</string>
+    <string name="msg_linux_language_updated">Xournal++ language set to %1$s. Takes effect on next editor start.</string>
+
+    <!-- ======================================================================= -->
     <!-- Open Source Licenses & Credits                                          -->
     <!-- ======================================================================= -->
     <!-- Licenses screen title -->

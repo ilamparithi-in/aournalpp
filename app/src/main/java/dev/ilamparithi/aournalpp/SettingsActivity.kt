@@ -131,6 +131,19 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import android.app.Activity
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.ui.res.stringResource
+import dev.ilamparithi.aournalpp.runtime.LinuxLocaleManager
+import dev.ilamparithi.aournalpp.runtime.LinuxLocaleInfo
+import dev.ilamparithi.aournalpp.util.AppLocaleHelper
+import dev.ilamparithi.aournalpp.util.AppLanguageInfo
 import dev.ilamparithi.aournalpp.data.X11Preferences
 import dev.ilamparithi.aournalpp.runtime.ConfigFileType
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
@@ -913,7 +926,163 @@ fun MainSettingsScreen(
                 }
             }
 
-            // 3. Xournal++ Preferences & Configuration Backup
+            // 3.5 Language & Localization (App UI & Linux Environment)
+            var showAppLanguageDialog by remember { mutableStateOf(false) }
+            var showLinuxLanguageDialog by remember { mutableStateOf(false) }
+            var currentLinuxLocaleTag by remember { mutableStateOf(LinuxLocaleManager.getSavedLocale(context)) }
+            var appLanguageDisplayName by remember { mutableStateOf(AppLocaleHelper.getCurrentAppLanguageDisplayName()) }
+
+            androidx.compose.runtime.DisposableEffect(Unit) {
+                val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                    if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                        currentLinuxLocaleTag = LinuxLocaleManager.getSavedLocale(context)
+                        appLanguageDisplayName = AppLocaleHelper.getCurrentAppLanguageDisplayName()
+                    }
+                }
+                val lifecycle = (context as? androidx.lifecycle.LifecycleOwner)?.lifecycle
+                lifecycle?.addObserver(observer)
+                onDispose {
+                    lifecycle?.removeObserver(observer)
+                }
+            }
+
+            if (showAppLanguageDialog) {
+                AppLanguagePickerDialog(
+                    onDismissRequest = { showAppLanguageDialog = false },
+                    onLanguageSelected = { tag ->
+                        AppLocaleHelper.setAppLanguage(tag)
+                        appLanguageDisplayName = AppLocaleHelper.getCurrentAppLanguageDisplayName()
+                        showAppLanguageDialog = false
+                    }
+                )
+            }
+
+            if (showLinuxLanguageDialog) {
+                XournalppLanguagePickerDialog(
+                    context = context,
+                    onDismissRequest = { showLinuxLanguageDialog = false },
+                    onLanguageSelected = { info ->
+                        LinuxLocaleManager.setSavedLocale(context, info.tag)
+                        currentLinuxLocaleTag = info.tag
+                        env.ensureXournalppSettings()
+                        showLinuxLanguageDialog = false
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.msg_linux_language_updated, info.displayName),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                )
+            }
+
+            Text(
+                text = stringResource(R.string.pref_cat_language),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // App Language
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable {
+                                (context as? Activity)?.let { act ->
+                                    AppLocaleHelper.openAppLanguageSettings(act) {
+                                        showAppLanguageDialog = true
+                                    }
+                                } ?: run { showAppLanguageDialog = true }
+                            }
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Language,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.pref_app_language_title),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = appLanguageDisplayName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = stringResource(R.string.pref_app_language_desc),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    HorizontalDivider()
+
+                    // Xournal++ Linux Locale
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { showLinuxLanguageDialog = true }
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Translate,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.pref_linux_language_title),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = LinuxLocaleManager.getLocaleDisplayName(context, currentLinuxLocaleTag),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = stringResource(R.string.pref_linux_language_desc),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
+            // 4. Xournal++ Preferences & Configuration Backup
             var showConfigViewerDialog by remember { mutableStateOf(false) }
             var showAdvancedExportDialog by remember { mutableStateOf(false) }
             var exportTargetType by remember { mutableStateOf(ConfigFileType.SETTINGS_XML) }
@@ -3469,4 +3638,239 @@ private fun FileNameTemplateSettingsCard(
             }
         }
     }
+}
+
+@Composable
+fun AppLanguagePickerDialog(
+    onDismissRequest: () -> Unit,
+    onLanguageSelected: (String) -> Unit
+) {
+    val languages = remember { AppLocaleHelper.getSupportedAppLanguages() }
+    var searchQuery by remember { mutableStateOf("") }
+    val currentTag = remember { AppLocaleHelper.getCurrentLanguageTag() }
+
+    val filtered = remember(searchQuery, languages) {
+        if (searchQuery.isBlank()) languages
+        else {
+            val q = searchQuery.trim().lowercase()
+            languages.filter {
+                it.displayName.lowercase().contains(q) ||
+                it.nativeName.lowercase().contains(q) ||
+                it.englishName.lowercase().contains(q) ||
+                it.tag.lowercase().contains(q)
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        icon = { Icon(Icons.Default.Language, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+        title = {
+            Text(
+                text = stringResource(R.string.pref_app_language_dialog_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text(stringResource(R.string.pref_language_search_placeholder)) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear search")
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                LazyColumn(
+                    modifier = Modifier.weight(1f, fill = false),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(filtered, key = { it.tag }) { item ->
+                        val isSelected = currentTag.equals(item.tag, ignoreCase = true)
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { onLanguageSelected(item.tag) },
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = item.nativeName,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                    )
+                                    if (!item.isSystemDefault && !item.nativeName.equals(item.englishName, ignoreCase = true)) {
+                                        Text(
+                                            text = item.englishName,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
+}
+
+@Composable
+fun XournalppLanguagePickerDialog(
+    context: Context,
+    onDismissRequest: () -> Unit,
+    onLanguageSelected: (LinuxLocaleInfo) -> Unit
+) {
+    val supportedLocales = remember { LinuxLocaleManager.getSupportedLocales(context) }
+    var searchQuery by remember { mutableStateOf("") }
+    val currentSavedTag = remember { LinuxLocaleManager.getSavedLocale(context) }
+
+    val filtered = remember(searchQuery, supportedLocales) {
+        if (searchQuery.isBlank()) supportedLocales
+        else {
+            val q = searchQuery.trim().lowercase()
+            supportedLocales.filter {
+                it.displayName.lowercase().contains(q) ||
+                it.nativeName.lowercase().contains(q) ||
+                it.englishName.lowercase().contains(q) ||
+                it.tag.lowercase().contains(q)
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        icon = { Icon(Icons.Default.Translate, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+        title = {
+            Text(
+                text = stringResource(R.string.pref_linux_language_dialog_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 440.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.pref_language_footnote),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text(stringResource(R.string.pref_language_search_placeholder)) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear search")
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                LazyColumn(
+                    modifier = Modifier.weight(1f, fill = false),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(filtered, key = { it.tag }) { item ->
+                        val isSelected = currentSavedTag.equals(item.tag, ignoreCase = true)
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { onLanguageSelected(item) },
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = item.nativeName,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                    )
+                                    if (!item.isSystemDefault && !item.nativeName.equals(item.englishName, ignoreCase = true)) {
+                                        Text(
+                                            text = "${item.englishName} (${item.tag})",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
 }

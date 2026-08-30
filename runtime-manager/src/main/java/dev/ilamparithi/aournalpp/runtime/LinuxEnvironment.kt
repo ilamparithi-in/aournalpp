@@ -4,7 +4,10 @@ import android.content.Context
 import android.os.Environment
 import android.system.Os
 import android.util.Log
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
+import org.tukaani.xz.XZInputStream
 import java.io.File
+import java.io.FileOutputStream
 import java.nio.file.Files
 
 class LinuxEnvironment(private val context: Context) {
@@ -271,6 +274,29 @@ class LinuxEnvironment(private val context: Context) {
             }
         }
 
+        // Self-heal: Extract missing gettext translation catalogs if share/locale is absent or empty
+        ensureLocaleCatalogs()
+
+        // Symlink share/locale into homeDir for runtime and gettext discovery
+        val localeShareDir = File(shareDir, "locale")
+        val homeLocaleLink = File(homeDir, "locale")
+        if (localeShareDir.exists() && !homeLocaleLink.exists()) {
+            try {
+                java.nio.file.Files.createSymbolicLink(homeLocaleLink.toPath(), localeShareDir.toPath())
+            } catch (e: Exception) {
+                // ignore
+            }
+        }
+        val homeShareLocale = File(homeDir, "share/locale")
+        if (localeShareDir.exists() && !homeShareLocale.exists()) {
+            try {
+                homeShareLocale.parentFile?.mkdirs()
+                java.nio.file.Files.createSymbolicLink(homeShareLocale.toPath(), localeShareDir.toPath())
+            } catch (e: Exception) {
+                // ignore
+            }
+        }
+
         // Self-heal: Compile GLib GSettings schemas if gschemas.compiled is missing
         val schemasDir = File(shareDir, "glib-2.0/schemas")
         val compileSchemasBin = resolveExecutable("glib-compile-schemas")
@@ -367,6 +393,39 @@ class LinuxEnvironment(private val context: Context) {
         ensureMenuBarShortcuts()
         checkAndQuarantineEmergencySave()
         NotesHomeConfigManager.sync(context, this)
+    }
+
+    fun ensureLocaleCatalogs() {
+        val localeDir = File(shareDir, "locale")
+        if (localeDir.exists() && !localeDir.listFiles().isNullOrEmpty()) {
+            return
+        }
+        try {
+            context.assets.open(BootstrapInstaller.ASSET_NAME).use { assetStream ->
+                XZInputStream(assetStream).use { xzIn ->
+                    TarArchiveInputStream(xzIn).use { tarIn ->
+                        var entry = tarIn.nextTarEntry
+                        while (entry != null) {
+                            if (entry.name.startsWith("usr/share/locale/")) {
+                                val destFile = File(rootDir, entry.name)
+                                if (entry.isDirectory) {
+                                    destFile.mkdirs()
+                                } else {
+                                    destFile.parentFile?.mkdirs()
+                                    FileOutputStream(destFile).use { out ->
+                                        tarIn.copyTo(out)
+                                    }
+                                }
+                            }
+                            entry = tarIn.nextTarEntry
+                        }
+                    }
+                }
+            }
+            Log.i(TAG, "Extracted and self-healed missing share/locale translation catalogs")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed extracting locale catalogs", e)
+        }
     }
 
     val quarantineRecoveryDir: File by lazy {
@@ -835,13 +894,41 @@ class LinuxEnvironment(private val context: Context) {
                     modified = true
                 }
 
+                // Sync preferredLocale bidirectionally between Xournal++ and Android preferences
+                val xmlMatch = Regex("<property\\s+name=\"preferredLocale\"\\s+value=\"([^\"]*)\"/>").find(content)
+                val prefLocaleValue = if (xmlMatch != null) {
+                    val xmlLocale = xmlMatch.groupValues[1].trim()
+                    val mappedTag = if (xmlLocale.isEmpty() || xmlLocale.equals("default", ignoreCase = true) || xmlLocale.equals("system", ignoreCase = true)) {
+                        LinuxLocaleManager.SYSTEM_DEFAULT_TAG
+                    } else if (!xmlLocale.endsWith(".UTF-8")) {
+                        "${xmlLocale}.UTF-8"
+                    } else {
+                        xmlLocale
+                    }
+                    val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+                    val currentPref = prefs.getString(LinuxLocaleManager.PREF_KEY_LINUX_LOCALE, LinuxLocaleManager.SYSTEM_DEFAULT_TAG)
+                    if (mappedTag != currentPref) {
+                        prefs.edit().putString(LinuxLocaleManager.PREF_KEY_LINUX_LOCALE, mappedTag).apply()
+                        Log.i(TAG, "Preserved and synced preferredLocale from Xournal++: $mappedTag")
+                    }
+                    xmlLocale
+                } else {
+                    val savedLocale = LinuxLocaleManager.getSavedLocale(context)
+                    if (savedLocale == LinuxLocaleManager.SYSTEM_DEFAULT_TAG) "default" else savedLocale.removeSuffix(".UTF-8")
+                }
+
+                if (!content.contains("preferredLocale") && content.contains("</settings>")) {
+                    content = content.replace("</settings>", "  <property name=\"preferredLocale\" value=\"$prefLocaleValue\"/>\n</settings>")
+                    modified = true
+                }
+
                 if (overridden) {
                     setPendingAutoloadOverrideNotification(true)
                 }
 
                 if (modified) {
                     settingsFile.writeText(content)
-                    Log.i(TAG, "Updated existing settings.xml with defaultSaveDir=$defaultNotesPath, autosaveTimeout=1, and autoloadMostRecent=false")
+                    Log.i(TAG, "Updated existing settings.xml with defaultSaveDir=$defaultNotesPath, autosaveTimeout=1, autoloadMostRecent=false, preferredLocale=$prefLocaleValue")
                 }
             }
         } catch (e: Exception) {
@@ -897,7 +984,8 @@ class LinuxEnvironment(private val context: Context) {
             "LD_LIBRARY_PATH" to "${nativeLibDir.absolutePath}:${libDir.absolutePath}:$systemLibDir",
             "XOPP_FAKE_EXE" to "${binDir.absolutePath}/xournalpp",
             "XDG_CONFIG_HOME" to configDir.absolutePath,
-            "XDG_DATA_DIRS" to "${shareDir.absolutePath}:/usr/share",
+            "XDG_DATA_DIRS" to "${shareDir.absolutePath}:/usr/share:${homeDir.absolutePath}/share",
+            "TEXTDOMAINDIR" to "${shareDir.absolutePath}/locale",
             "GSETTINGS_SCHEMA_DIR" to "${shareDir.absolutePath}/glib-2.0/schemas",
             "GDK_PIXBUF_MODULE_FILE" to "${libDir.absolutePath}/gdk-pixbuf-2.0/2.10.0/loaders.cache",
             "GDK_PIXBUF_MODULEDIR" to "${libDir.absolutePath}/gdk-pixbuf-2.0/2.10.0/loaders",
@@ -909,13 +997,18 @@ class LinuxEnvironment(private val context: Context) {
             "GDK_SCALE" to gdkScale,
             "GDK_DPI_SCALE" to gdkDpiScale,
             "DISPLAY" to ":0",
-            "LANG" to "en_US.UTF-8",
             "GTK_THEME" to gtkThemeEnv,
             // CRITICAL: Disable desktop portal lookup to prevent D-Bus freeze
             "GTK_USE_PORTAL" to "0",
             "GIO_USE_VFS" to "local",
             "GTK_PATH" to "${nativeLibDir.absolutePath}:${libDir.absolutePath}/gtk-3.0"
         )
+
+        val (effectiveLang, effectiveLanguage, effectiveLcAll) = LinuxLocaleManager.getEffectiveLocaleEnv(context)
+        envMap["LANG"] = effectiveLang
+        envMap["LANGUAGE"] = effectiveLanguage
+        envMap["LC_ALL"] = effectiveLcAll
+        envMap["LC_MESSAGES"] = effectiveLang
 
         if (shimModule.exists()) {
             envMap["LD_PRELOAD"] = shimModule.absolutePath
