@@ -509,7 +509,10 @@ fun CloudScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.35f))
-                .clickable { isFabExpanded = false }
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { isFabExpanded = false }
         )
     }
 
@@ -519,12 +522,23 @@ fun CloudScreen(
             .padding(24.dp),
         contentAlignment = Alignment.BottomEnd
     ) {
+        val mappingItemSpring by animateFloatAsState(
+            targetValue = if (isFabExpanded) 1f else 0f,
+            animationSpec = if (reduceAnimations) snap() else spring(dampingRatio = 0.78f, stiffness = 340f),
+            label = "mappingItemSpring"
+        )
+        val serviceItemSpring by animateFloatAsState(
+            targetValue = if (isFabExpanded) 1f else 0f,
+            animationSpec = if (reduceAnimations) snap() else spring(dampingRatio = 0.78f, stiffness = 360f),
+            label = "serviceItemSpring"
+        )
+
         Column(
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             SpeedDialActionItem(
-                progress = 1f,
+                progress = mappingItemSpring,
                 icon = Icons.Default.CreateNewFolder,
                 label = stringResource(R.string.action_add_custom_mapping),
                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -539,7 +553,7 @@ fun CloudScreen(
             )
 
             SpeedDialActionItem(
-                progress = 1f,
+                progress = serviceItemSpring,
                 icon = Icons.Default.Add,
                 label = stringResource(R.string.action_add_cloud_service),
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
