@@ -1,3 +1,775 @@
 <resources>
-    <string name="app_name">Aournal++</string>
+    <!-- ======================================================================= -->
+    <!-- Application Brand & Identity                                            -->
+    <!-- ======================================================================= -->
+    <string name="app_name" translatable="false">Aournal++</string>
+    <string name="app_tagline">The most powerful notetaking app, now on Android with an enhanced experience.</string>
+
+    <!-- ======================================================================= -->
+    <!-- Common Actions & General UI Verbs                                       -->
+    <!-- ======================================================================= -->
+    <!-- Generic confirmation action -->
+    <string name="action_confirm">Confirm</string>
+    <!-- Generic cancellation action -->
+    <string name="action_cancel">Cancel</string>
+    <!-- Generic dismissal action -->
+    <string name="action_close">Close</string>
+    <!-- Generic completion action -->
+    <string name="action_done">Done</string>
+    <!-- Generic save action -->
+    <string name="action_save">Save</string>
+    <!-- Generic delete action -->
+    <string name="action_delete">Delete</string>
+    <!-- Generic retry action -->
+    <string name="action_retry">Retry</string>
+    <!-- Generic continue action -->
+    <string name="action_continue">Continue</string>
+    <!-- Action to continue despite a warning or missing permission -->
+    <string name="action_continue_anyway">Continue anyway</string>
+    <!-- Action to get started on the first onboarding screen -->
+    <string name="action_get_started">Get started</string>
+    <!-- Action to learn more / open documentation -->
+    <string name="action_learn_more">Learn more</string>
+    <!-- Action to show more details or logs -->
+    <string name="action_details">Details</string>
+    <!-- Action to hide details -->
+    <string name="action_hide">Hide</string>
+    <!-- Action to apply changes or configurations -->
+    <string name="action_apply">Apply</string>
+    <!-- Action to reset values to default -->
+    <string name="action_reset">Reset</string>
+    <!-- Action to clear entries or logs -->
+    <string name="action_clear">Clear</string>
+    <!-- Action to rename a file or folder -->
+    <string name="action_rename">Rename</string>
+    <!-- Action to export a note -->
+    <string name="action_export">Export</string>
+    <!-- Action to share a file or link -->
+    <string name="action_share">Share</string>
+    <!-- Action to edit a note or configuration -->
+    <string name="action_edit">Edit</string>
+    <!-- Action to view a document or file -->
+    <string name="action_view">View</string>
+    <!-- Action to refresh a list or check for updates -->
+    <string name="action_refresh">Refresh</string>
+    <!-- Action to open a document or folder -->
+    <string name="action_open">Open</string>
+    <!-- Action to browse filesystem or remote directories -->
+    <string name="action_browse">Browse</string>
+    <!-- Action to go back -->
+    <string name="action_back">Back</string>
+    <!-- Action to discard unneeded items or changes -->
+    <string name="action_discard">Discard</string>
+
+    <!-- ======================================================================= -->
+    <!-- Main App Navigation Tabs                                                -->
+    <!-- ======================================================================= -->
+    <!-- Primary bottom/rail navigation tab: Home dashboard -->
+    <string name="tab_home">Home</string>
+    <!-- Primary bottom/rail navigation tab: File manager and note browser -->
+    <string name="tab_files">Files</string>
+    <!-- Primary bottom/rail navigation tab: Cloud backup and sync subsystem -->
+    <string name="tab_cloud">Cloud</string>
+    <!-- Primary bottom/rail navigation tab: Application and runtime settings -->
+    <string name="tab_settings">Settings</string>
+    <!-- Primary bottom/rail navigation tab: Open source licenses and credits -->
+    <string name="tab_about">About</string>
+
+    <!-- ======================================================================= -->
+    <!-- Bootstrap Screen (Linux Runtime Extraction & First Run)                -->
+    <!-- ======================================================================= -->
+    <!-- Title displayed during Linux runtime bootstrap installation -->
+    <string name="bootstrap_title_setup">Setting Up Linux Runtime</string>
+    <!-- Title displayed when runtime bootstrap extraction fails -->
+    <string name="bootstrap_title_failed">Initialization Failed</string>
+    <!-- Subtitle explaining that Xournal++ tools are being unpacked -->
+    <string name="bootstrap_desc_extracting">Extracting Xournal++ desktop environment and native tools…</string>
+    <!-- Subtitle explaining an error during initialization -->
+    <string name="bootstrap_desc_error">An error occurred while preparing application components.</string>
+    <!-- Initial progress message before archive metrics are computed -->
+    <string name="bootstrap_preparing_archive">Preparing archive…</string>
+    <!-- Progress display showing extracted volume in megabytes. %1$d is megabytes -->
+    <string name="bootstrap_extracted_mb">%1$d MB extracted</string>
+    <!-- Fallback progress message when extracting libraries -->
+    <string name="bootstrap_unpacking_libraries">Unpacking system libraries…</string>
+    <!-- Fallback progress message when initializing environment -->
+    <string name="bootstrap_initializing_env">Initializing environment…</string>
+    <!-- Button to retry runtime extraction after failure -->
+    <string name="bootstrap_retry_btn">Retry Installation</string>
+    <!-- Rotating feature tip 1 -->
+    <string name="bootstrap_tip_1">Direct Touch mode provides ultra-low latency stylus handwriting.</string>
+    <!-- Rotating feature tip 2 -->
+    <string name="bootstrap_tip_2">Intelligent Session Recovery automatically safeguards your notes.</string>
+    <!-- Rotating feature tip 3 -->
+    <string name="bootstrap_tip_3">Organize your workspace with custom folder colors and emojis.</string>
+    <!-- Rotating feature tip 4 -->
+    <string name="bootstrap_tip_4">Fullscreen Canvas hides UI elements for distraction-free sketching.</string>
+    <!-- Rotating feature tip 5 -->
+    <string name="bootstrap_tip_5">Export high-quality vector PDFs directly to device storage.</string>
+
+    <!-- ======================================================================= -->
+    <!-- Environment Update Dialog                                               -->
+    <!-- ======================================================================= -->
+    <!-- Dialog title when an updated Linux runtime asset is detected -->
+    <string name="update_title">Runtime Update Available</string>
+    <!-- Dialog body text explaining an update is ready -->
+    <string name="update_desc">A newer version of the Linux runtime environment is ready to install.</string>
+    <!-- Second unit label in circular countdown timer -->
+    <string name="update_sec_unit">sec</string>
+    <!-- Action to skip update countdown and launch immediately -->
+    <string name="action_launch_now">Launch Now</string>
+    <!-- Action to start runtime environment update immediately -->
+    <string name="action_update_now">Update Now</string>
+
+    <!-- ======================================================================= -->
+    <!-- Onboarding Experience                                                   -->
+    <!-- ======================================================================= -->
+    <!-- Step 1 Welcome title -->
+    <string name="onboarding_welcome_title" translatable="false">Aournal++</string>
+    <!-- Step 1 Welcome description -->
+    <string name="onboarding_welcome_desc">The most powerful notetaking app now on Android with an enhanced experience.</string>
+    <!-- Step 2 Storage permission title -->
+    <string name="onboarding_storage_title">Storage Permission</string>
+    <!-- Step 2 Storage permission description -->
+    <string name="onboarding_storage_desc">Aournal++ needs a home folder to store notes and config to. All files permission is required due to limitations with android.</string>
+    <!-- Storage permission wiki link label -->
+    <string name="onboarding_storage_learn_link">Learn more about Android storage limitations</string>
+    <!-- Storage permission explanation dialog title -->
+    <string name="onboarding_storage_dialog_title">Why All Files Permission?</string>
+    <!-- Storage permission explanation dialog paragraph 1 -->
+    <string name="onboarding_storage_dialog_p1">Aournal++ runs the desktop Xournal++ engine inside an isolated Linux userland. Standard Android Scoped Storage restricts direct file path access for native C++ POSIX operations and autosaves.</string>
+    <!-- Storage permission explanation dialog paragraph 2 -->
+    <string name="onboarding_storage_dialog_p2">Granting All Files Access allows you to store notes and configs anywhere on device storage without sandbox restrictions.</string>
+    <!-- Button to open wiki in browser -->
+    <string name="action_read_wiki">Read Wiki</string>
+    <!-- Status card title when storage permission is granted -->
+    <string name="onboarding_storage_granted_title">All Files Access Granted</string>
+    <!-- Status card description when storage permission is granted -->
+    <string name="onboarding_storage_granted_desc">Notes and configs will save directly to device storage.</string>
+    <!-- Status card title when storage permission is required -->
+    <string name="onboarding_storage_required_title">Permission Required</string>
+    <!-- Status card description when storage permission is required -->
+    <string name="onboarding_storage_required_desc">Grant access in Android Settings to continue.</string>
+    <!-- Action button to grant storage permission -->
+    <string name="action_grant_storage_permission">Grant Storage Permission</string>
+    <!-- Step 3 Choose folder title -->
+    <string name="onboarding_folder_title">Notes Storage Folder</string>
+    <!-- Step 3 Choose folder description -->
+    <string name="onboarding_folder_desc">Choose where your notebooks, documents, and configuration will be saved.</string>
+    <!-- Active notes folder card title -->
+    <string name="onboarding_folder_active_title">Active Notes Folder</string>
+    <!-- Button to open Android SAF tree folder picker -->
+    <string name="action_browse_other_folder">Browse Other Folder</string>
+    <!-- Header for folder presets -->
+    <string name="onboarding_folder_preset_header">Standard presets:</string>
+    <!-- Preset chip for Documents/Notes -->
+    <string name="onboarding_folder_preset_default">Documents/Notes (Default)</string>
+    <!-- Preset chip for Documents/Xournal -->
+    <string name="onboarding_folder_preset_xournal">Documents/Xournal</string>
+    <!-- Preset chip for Download -->
+    <string name="onboarding_folder_preset_download">Download</string>
+    <!-- Toast message when notes directory path changes. %1$s is absolute path -->
+    <string name="msg_notes_folder_set">Notes folder set to: %1$s</string>
+    <!-- Step 4 Quick settings title -->
+    <string name="onboarding_settings_title">Quick Settings</string>
+    <!-- Step 4 Quick settings description -->
+    <string name="onboarding_settings_desc">Some settings you may want to change before getting started:</string>
+    <!-- Intelligent session recovery title -->
+    <string name="pref_session_recovery_title">Intelligent Session Recovery</string>
+    <!-- Intelligent session recovery description -->
+    <string name="pref_session_recovery_desc">Auto-quarantine and safely restore unsaved crash sessions on relaunch.</string>
+    <!-- Fullscreen canvas title -->
+    <string name="pref_fullscreen_title">Fullscreen Canvas</string>
+    <!-- Fullscreen canvas description -->
+    <string name="pref_fullscreen_desc">Hide system navigation and status bars for maximum handwriting area.</string>
+    <!-- Screen idle timeout title -->
+    <string name="pref_idle_timeout_title">Screen Idle Timeout</string>
+    <!-- Screen idle timeout description -->
+    <string name="pref_idle_timeout_desc">Prevent device screen from turning off while writing.</string>
+    <!-- Reduce animations title -->
+    <string name="pref_reduce_anim_title">Reduce Animations</string>
+    <!-- Reduce animations description -->
+    <string name="pref_reduce_anim_desc">Disable expressive motion effects to optimize performance on lower-end devices.</string>
+    <!-- Bottom note in quick settings pointing to full settings page -->
+    <string name="onboarding_more_settings_note">More settings are available in the settings page.</string>
+    <!-- Timeout option: system default -->
+    <string name="timeout_system">System default</string>
+    <!-- Timeout option: never keep screen on -->
+    <string name="timeout_never">Never (Keep screen on)</string>
+    <!-- Timeout option: 1 minute -->
+    <string name="timeout_1m">1 minute</string>
+    <!-- Timeout option: 5 minutes -->
+    <string name="timeout_5m">5 minutes</string>
+    <!-- Timeout option: 15 minutes -->
+    <string name="timeout_15m">15 minutes</string>
+    <!-- Step 5 Completion title -->
+    <string name="onboarding_completion_title">You\'re all set!</string>
+    <!-- Step 5 Completion description -->
+    <string name="onboarding_completion_desc">Your digital notebook workspace is ready. Jump in and start creating.</string>
+    <!-- Button to trigger interactive app tour -->
+    <string name="action_quick_tour">Quick tour</string>
+    <!-- Button to finish onboarding and enter main application -->
+    <string name="action_let_me_in">Let me in!</string>
+    <!-- Toast message for future quick tour feature -->
+    <string name="msg_quick_tour_future">Quick tour will be available in a future update!</string>
+    <!-- Bottom Extraction Pill: Ready status -->
+    <string name="pill_env_ready">Linux environment ready</string>
+    <!-- Bottom Extraction Pill: Error status -->
+    <string name="pill_env_issue">Initialization issue (tap for details)</string>
+    <!-- Bottom Extraction Pill: Progress status. %1$s is percentage -->
+    <string name="pill_setting_up">Setting up Linux runtime • %1$s%%</string>
+    <!-- Bottom Extraction Pill: Preparing status -->
+    <string name="pill_preparing">Preparing background environment…</string>
+    <!-- Bottom Extraction Pill: Extracted size label -->
+    <string name="pill_extracted_size">Extracted Size:</string>
+    <!-- Bottom Extraction Pill: Current file label. %1$s is filename -->
+    <string name="pill_current_file">Current file: %1$s</string>
+    <!-- Bottom Extraction Pill: Ready description -->
+    <string name="pill_ready_desc">The Linux runtime has finished extracting successfully and is awaiting app launch.</string>
+    <!-- Bottom Extraction Pill: Error label. %1$s is error message -->
+    <string name="pill_error_prefix">Error: %1$s</string>
+    <!-- Bottom Extraction Pill: Unpacking description -->
+    <string name="pill_unpacking_desc">Decompressing and setting executable permissions on system libraries…</string>
+    <!-- Bottom Extraction Pill: Tap to collapse hint -->
+    <string name="pill_tap_collapse">Tap bar to collapse</string>
+
+    <!-- ======================================================================= -->
+    <!-- Home Dashboard Screen                                                   -->
+    <!-- ======================================================================= -->
+    <!-- Morning greeting -->
+    <string name="greeting_morning">Good Morning</string>
+    <!-- Afternoon greeting -->
+    <string name="greeting_afternoon">Good Afternoon</string>
+    <!-- Evening greeting -->
+    <string name="greeting_evening">Good Evening</string>
+    <!-- Night greeting -->
+    <string name="greeting_night">Good Night</string>
+    <!-- Default greeting -->
+    <string name="greeting_welcome_back">Welcome Back</string>
+    <!-- Subtitle under greeting: Ready to write? -->
+    <string name="greeting_subtitle_ready">Ready to write?</string>
+    <!-- Subtitle under greeting: Pick up where you left off -->
+    <string name="greeting_subtitle_continue">Pick up where you left off</string>
+    <!-- Subtitle under greeting: Recent notes overview -->
+    <string name="greeting_subtitle_recent">Your recent creative notes</string>
+    <!-- Header for recent notes section -->
+    <string name="home_title_recent_notes">Recent Notes</string>
+    <!-- Header for continue note section -->
+    <string name="home_title_jump_back_in">Jump Back In</string>
+    <!-- Header for all notes section -->
+    <string name="home_title_all_notes">All Notes</string>
+    <!-- Empty state title on home dashboard -->
+    <string name="home_empty_title">No Recent Notes</string>
+    <!-- Empty state subtitle on home dashboard -->
+    <string name="home_empty_subtitle">Create your first note to start sketching and taking notes.</string>
+    <!-- Action button to create first note from home empty state -->
+    <string name="home_create_first_note">Create a Note</string>
+    <!-- Total notes counter chip. %1$d is count -->
+    <plurals name="home_stat_notes_count">
+        <item quantity="one">%1$d Note</item>
+        <item quantity="other">%1$d Notes</item>
+    </plurals>
+    <!-- Total folders counter chip. %1$d is count -->
+    <plurals name="home_stat_folders_count">
+        <item quantity="one">%1$d Folder</item>
+        <item quantity="other">%1$d Folders</item>
+    </plurals>
+    <!-- Emergency crash recovery dialog title -->
+    <string name="emergency_dialog_title">Crash Session Recovered</string>
+    <!-- Emergency crash recovery dialog description -->
+    <string name="emergency_dialog_desc">Aournal++ detected an unsaved session from an unexpected shutdown. You can safely save this note or discard it.</string>
+    <!-- Emergency save and open action -->
+    <string name="action_save_and_open">Save &amp; Open</string>
+    <!-- Dialog title to name recovered crash session -->
+    <string name="emergency_save_name_dialog_title">Name Recovered Note</string>
+    <!-- Hint for note filename input -->
+    <string name="emergency_save_name_hint">Note name</string>
+    <!-- Autosave recovery dialog title -->
+    <string name="autosave_dialog_title">Unsaved Changes Found</string>
+    <!-- Autosave recovery dialog body text -->
+    <!-- Home Hero Header -->
+    <string name="home_hero_continue_header">CONTINUE WHERE YOU LEFT OFF</string>
+    <!-- Home Hero Resume Button -->
+    <string name="home_hero_resume_action">Resume Note</string>
+    <!-- Home Sections -->
+    <string name="home_section_pinned">Pinned Notes</string>
+    <string name="home_section_recent">Recent Notes</string>
+    <!-- Quick Pin/Unpin actions -->
+    <string name="action_pin">Pin</string>
+    <string name="action_unpin">Unpin</string>
+    <!-- Cloud Customize Button -->
+    <string name="cloud_customize_button">Customize</string>
+
+    <!-- ======================================================================= -->
+    <!-- Document Hub (Files Browser)                                            -->
+    <!-- ======================================================================= -->
+    <!-- Search bar placeholder in Document Hub -->
+    <string name="hub_search_placeholder">Search notes and folders…</string>
+    <!-- Action to clear search query -->
+    <string name="hub_search_clear">Clear search</string>
+    <!-- Breadcrumb label for root storage folder -->
+    <string name="hub_root_folder_name">Notes</string>
+    <!-- Empty folder state title -->
+    <string name="hub_empty_folder">This folder is empty</string>
+    <string name="hub_trash_empty_title">Trash is empty</string>
+    <string name="hub_empty_state_title">No notes in this folder</string>
+    <string name="hub_trash_empty_subtitle">Deleted notes will appear here until permanently removed</string>
+    <string name="hub_empty_state_subtitle">Tap the + button below to create your first note or folder</string>
+    <!-- Restore actions -->
+    <string name="action_restore">Restore</string>
+    <string name="action_restore_autosave">Restore Autosave</string>
+    <!-- Empty search results title -->
+    <string name="hub_empty_search">No matching notes found</string>
+    <!-- Empty search results description -->
+    <string name="hub_empty_search_desc">Try searching with different keywords or check spelling.</string>
+    <!-- Action to create a new note in Document Hub -->
+    <string name="hub_create_note">New Note</string>
+    <!-- Action to create a new folder in Document Hub -->
+    <string name="hub_create_folder">New Folder</string>
+    <!-- Sort option: Name ascending -->
+    <string name="hub_sort_name_asc">Name (A to Z)</string>
+    <!-- Sort option: Name descending -->
+    <string name="hub_sort_name_desc">Name (Z to A)</string>
+    <!-- Sort option: Modification date newest first -->
+    <string name="hub_sort_date_desc">Date modified (Newest)</string>
+    <!-- Sort option: Modification date oldest first -->
+    <string name="hub_sort_date_asc">Date modified (Oldest)</string>
+    <!-- Sort option: File size largest first -->
+    <string name="hub_sort_size_desc">Size (Largest)</string>
+    <!-- Sort option: File size smallest first -->
+    <string name="hub_sort_size_asc">Size (Smallest)</string>
+    <!-- View mode: Grid -->
+    <string name="hub_view_grid">Grid View</string>
+    <!-- View mode: List -->
+    <string name="hub_view_list">List View</string>
+    <!-- Selected items count in selection mode -->
+    <plurals name="hub_selected_items_count">
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
+    <plurals name="hub_selected_count">
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
+    <!-- Action to select all items in current folder -->
+    <string name="action_select_all">Select All</string>
+    <!-- Action to deselect all items -->
+    <string name="action_deselect_all">Deselect All</string>
+    <!-- Action to invert selection -->
+    <string name="action_invert_selection">Invert Selection</string>
+    <!-- Search hint in Document Hub -->
+    <string name="hub_search_hint">Search notes and folders…</string>
+    <!-- Search action -->
+    <string name="action_search">Search</string>
+    <!-- Hub menu: Trash -->
+    <string name="hub_menu_trash">Trash</string>
+    <!-- View modes -->
+    <string name="home_view_mode_grid">Grid View</string>
+    <string name="home_view_mode_collage">Collage View</string>
+    <!-- Hub top menu items -->
+    <string name="hub_menu_select_notes">Select notes</string>
+    <string name="hub_menu_new_folder">New folder</string>
+    <string name="hub_menu_hide_hidden">Hide hidden files</string>
+    <string name="hub_menu_show_hidden">Show hidden files</string>
+    <string name="hub_menu_empty_trash">Empty Trash</string>
+    <string name="pref_category_licenses">Open Source Licenses</string>
+    <string name="dialog_new_note_subtitle">Create a new Xournal++ note in this folder</string>
+    <string name="action_create_and_open">Create &amp; Open</string>
+    <string name="action_export_pdf_subtitle">Export document as a standard PDF file</string>
+    <string name="action_export_button">Export</string>
+    <string name="action_share_pdf_title">Share as PDF</string>
+    <string name="action_share_pdf_subtitle">Render to PDF and send via other apps</string>
+    <string name="action_share_note_title">Share Native Note</string>
+    <string name="action_share_note_subtitle">Send .xopp file directly</string>
+    <string name="onboarding_storage_grant_action">Grant Permission</string>
+    <string name="onboarding_storage_skip_action">Continue without storage</string>
+    <string name="title_processing_document">Processing Document</string>
+    <string name="dialog_create_button">Create</string>
+    <string name="dialog_rename_folder_title">Rename Folder</string>
+    <string name="dialog_move_notes_title">Move Notes</string>
+    <string name="dialog_move_destination_header">Select destination folder:</string>
+    <string name="action_create_and_move">Create &amp; Move</string>
+    <string name="dialog_delete_permanent_title">Delete Permanently?</string>
+    <string name="action_delete_permanent">Delete Permanently</string>
+    <string name="dialog_empty_trash_title">Empty Trash?</string>
+    <string name="dialog_empty_trash_body">All items in Trash will be permanently deleted. This action cannot be undone.</string>
+    <string name="dialog_emergency_recovery_title">Emergency Session Found</string>
+    <string name="dialog_emergency_recovery_body">An unsaved session was recovered from a crash. Do you want to open and save it now?</string>
+    <string name="action_open_now">Open Now</string>
+    <string name="action_save_as_note">Save as Note</string>
+    <string name="dialog_autoload_override_title">Startup Autoload Cleared</string>
+    <string name="dialog_autoload_override_body">Xournal++ startup autoload was cleared to preserve \'Continue where you left off\'.</string>
+    <string name="action_got_it">Got it</string>
+    <string name="dialog_save_recovered_title">Save Recovered Note</string>
+    <string name="dialog_save_recovered_subtitle">Enter a title for this recovered session:</string>
+    <!-- Action to move selected items -->
+    <string name="action_move">Move</string>
+    <!-- Action to delete selected items -->
+    <string name="action_delete_selected">Delete Selected</string>
+    <!-- Note context menu action: Pin note to top -->
+    <string name="action_pin_note">Pin to top</string>
+    <!-- Note context menu action: Unpin note -->
+    <string name="action_unpin_note">Unpin note</string>
+    <!-- Note context menu action: Export note to PDF -->
+    <string name="action_export_pdf">Export as PDF</string>
+    <!-- Note context menu action: Rename note -->
+    <string name="action_rename_note">Rename note</string>
+    <!-- Note context menu action: Delete note -->
+    <string name="action_delete_note">Delete note</string>
+    <!-- Note context menu action: Share note -->
+    <string name="action_share_note">Share note</string>
+    <!-- Note context menu action: Edit in Canvas -->
+    <string name="action_open_in_canvas">Edit in Xournal++</string>
+    <!-- Note context menu action: View as PDF -->
+    <string name="action_view_as_pdf">View as PDF</string>
+    <!-- Folder context menu action: Rename folder -->
+    <string name="action_rename_folder">Rename folder</string>
+    <!-- Folder context menu action: Delete folder -->
+    <string name="action_delete_folder">Delete folder</string>
+    <!-- Folder context menu action: Change folder color -->
+    <string name="action_change_color">Change Color</string>
+    <!-- Folder context menu action: Change folder emoji -->
+    <string name="action_change_emoji">Change Emoji</string>
+    <!-- Folder context menu action: Map folder to cloud -->
+    <string name="action_map_to_cloud">Map to Cloud</string>
+    <!-- Delete single note confirmation dialog title -->
+    <string name="dialog_delete_note_title">Delete Note?</string>
+    <!-- Delete single note confirmation body text. %1$s is note name -->
+    <string name="dialog_delete_note_body">Are you sure you want to permanently delete \"%1$s\"? This action cannot be undone.</string>
+    <!-- Delete single folder confirmation dialog title -->
+    <string name="dialog_delete_folder_title">Delete Folder?</string>
+    <!-- Delete single folder confirmation body text. %1$s is folder name -->
+    <string name="dialog_delete_folder_body">Are you sure you want to delete \"%1$s\" and all its contents? This action cannot be undone.</string>
+    <!-- Delete multiple items confirmation dialog title -->
+    <string name="dialog_delete_multi_title">Delete Selected Items?</string>
+    <!-- Delete multiple items confirmation body text. %1$d is count -->
+    <plurals name="dialog_delete_multi_body">
+        <item quantity="one">Are you sure you want to permanently delete %1$d selected item?</item>
+        <item quantity="other">Are you sure you want to permanently delete %1$d selected items?</item>
+    </plurals>
+    <!-- Rename dialog title -->
+    <string name="dialog_rename_title">Rename</string>
+    <!-- Create new folder dialog title -->
+    <string name="dialog_new_folder_title">New Folder</string>
+    <!-- Folder name input field label -->
+    <string name="dialog_folder_name_hint">Folder name</string>
+    <!-- Create note dialog title -->
+    <string name="dialog_new_note_title">Create New Note</string>
+    <!-- Note name input field label -->
+    <string name="dialog_note_name_hint">Note name</string>
+    <!-- Toast message when note is exported to PDF. %1$s is destination path -->
+    <string name="msg_pdf_exported">PDF exported to: %1$s</string>
+    <!-- Toast message when note deletion succeeds -->
+    <string name="msg_note_deleted">Note deleted</string>
+    <!-- Toast message when folder deletion succeeds -->
+    <string name="msg_folder_deleted">Folder deleted</string>
+
+    <!-- ======================================================================= -->
+    <!-- Note Open Action Prompt Dialog                                          -->
+    <!-- ======================================================================= -->
+    <!-- Title of the note opening action prompt dialog -->
+    <string name="note_open_title">Open Note</string>
+    <!-- Prompt asking user how to open the note -->
+    <string name="note_open_prompt">Choose how to open this note:</string>
+    <!-- Option title for viewing note as PDF -->
+    <string name="note_open_view_pdf_title">View as PDF</string>
+    <!-- Option subtitle for viewing note as PDF -->
+    <string name="note_open_view_pdf_subtitle">Render and view as read-only PDF document</string>
+    <!-- Option title for editing note in Xournal++ canvas -->
+    <string name="note_open_edit_canvas_title">Edit in Xournal++</string>
+    <!-- Option subtitle for editing note in Xournal++ canvas -->
+    <string name="note_open_edit_canvas_subtitle">Launch full canvas editor to write, draw, and modify</string>
+    <!-- Checkbox label to set selected action as default -->
+    <string name="note_open_dont_ask_again">Don\'t ask again (set as default)</string>
+    <!-- Toast message when default action is set to View as PDF -->
+    <string name="msg_default_action_set_view">Default action set to View as PDF. You can change this in Settings.</string>
+    <!-- Toast message when default action is set to Edit in Xournal++ -->
+    <string name="msg_default_action_set_edit">Default action set to Edit in Xournal++. You can change this in Settings.</string>
+
+    <!-- ======================================================================= -->
+    <!-- Cloud Backup & Sync Subsystem                                           -->
+    <!-- ======================================================================= -->
+    <!-- Top app bar title for Cloud screen -->
+    <string name="cloud_title">Cloud Backup &amp; Sync</string>
+    <!-- Subpage tab: Overview of services and mappings -->
+    <string name="cloud_tab_overview">Overview</string>
+    <!-- Subpage tab: Live transfer queue and speed stats -->
+    <string name="cloud_tab_queue">Transfer Queue</string>
+    <!-- Speed dial FAB action: Add cloud service -->
+    <string name="action_add_cloud_service">Add Cloud Service</string>
+    <!-- Speed dial FAB action: Add custom folder mapping -->
+    <string name="action_add_custom_mapping">Add Custom Folder Mapping</string>
+    <!-- Quick sync button tooltip / label -->
+    <string name="cloud_sync_now">Sync Now</string>
+    <!-- Status badge when sync is actively executing -->
+    <string name="cloud_syncing">Syncing…</string>
+    <!-- Last synced timestamp display. %1$s is formatted date/time -->
+    <string name="cloud_last_synced">Last synced: %1$s</string>
+    <!-- Last synced status when never synced before -->
+    <string name="cloud_never_synced">Never synced</string>
+    <!-- Cloud Sync Hub Overview Card Title -->
+    <string name="cloud_sync_hub_title">Cloud Sync Hub</string>
+    <!-- Cloud Overview Card Subtitle. %1$d is active count, %2$d is total count, %3$s is last sync string -->
+    <string name="cloud_services_active_summary">%1$d of %2$d services active • Last sync: %3$s</string>
+    <!-- Button to open conflicts dialog -->
+    <string name="cloud_conflicts_button">Conflicts</string>
+    <!-- Button to open transfer queue subpage -->
+    <string name="cloud_queue_button">Queue</string>
+    <!-- Button to trigger sync across all clouds -->
+    <string name="cloud_sync_all_button">Sync All Active Cloud Services</string>
+    <!-- Sync in progress label -->
+    <string name="cloud_syncing_progress">Synchronizing Across Active Clouds…</string>
+    <!-- Banner when conflicts are detected. %1$d is conflict count -->
+    <string name="cloud_conflicts_detected">%1$d File Conflicts Detected</string>
+    <!-- Banner description for detected conflicts -->
+    <string name="cloud_conflicts_desc">Tap to review differing versions across cloud endpoints</string>
+    <!-- Section header: Configured Cloud Endpoints -->
+    <string name="cloud_services_header">Configured Cloud Services</string>
+    <!-- Empty state title for cloud services -->
+    <string name="cloud_empty_services_title">No Cloud Storage Configured</string>
+    <!-- Empty state description for cloud services -->
+    <string name="cloud_empty_services_desc">Connect Nextcloud, Google Drive, SFTP, SMB3, or FTP/WebDAV to automatically backup your notes.</string>
+    <!-- Button to add first cloud service in empty state -->
+    <string name="cloud_add_first_service">Add First Cloud Service</string>
+    <!-- Service context menu: Edit configuration -->
+    <string name="cloud_menu_edit_config">Edit Configuration</string>
+    <!-- Service context menu: Add folder mapping -->
+    <string name="cloud_menu_add_folder_mapping">Add Folder Mapping</string>
+    <!-- Service context menu: Delete service -->
+    <string name="cloud_menu_delete_service">Delete Service</string>
+    <!-- Chip label for complete mirror sync scope -->
+    <string name="cloud_complete_mirror_chip">Complete Mirror (~/Notes &amp; ~/.config)</string>
+    <!-- Chip label for custom mappings sync scope. %1$d is mapping count -->
+    <string name="cloud_custom_mappings_chip">%1$d Custom Mapping(s)</string>
+    <!-- Restore button label -->
+    <string name="cloud_restore_button">Restore</string>
+    <!-- Restore confirmation dialog title. %1$s is service name -->
+    <string name="cloud_restore_dialog_title">Restore from %1$s?</string>
+    <!-- Restore confirmation dialog description. %1$s is service name -->
+    <string name="cloud_restore_dialog_desc">This will download files from %1$s to your local storage.</string>
+    <!-- Restore confirmation dialog policy summary. %1$s is policy name -->
+    <string name="cloud_restore_dialog_policy">Conflict Policy: %1$s</string>
+    <!-- Restore confirmation button -->
+    <string name="cloud_restore_now_button">Restore Now</string>
+    <!-- Restore conflict policy card title -->
+    <string name="cloud_policy_card_title">Restore Conflict Policy</string>
+    <!-- Restore conflict policy card description -->
+    <string name="cloud_policy_card_desc">Controls how incoming cloud files resolve collisions with existing local files.</string>
+    <!-- Exclusion filters card title -->
+    <string name="cloud_exclusion_card_title">Exclusion Filters</string>
+    <!-- Exclusion filters card summary. %1$s is transient status, %2$d is regex count, %3$d is extension count -->
+    <string name="cloud_exclusion_card_summary">%1$s%2$d regex pattern(s) • %3$d excluded extension(s)</string>
+    <!-- Automation card title -->
+    <string name="cloud_automation_card_title">Automation &amp; Performance</string>
+    <!-- Check on launch title -->
+    <string name="cloud_check_launch_title">Check for Cloud Changes on Launch</string>
+    <!-- Check on launch description -->
+    <string name="cloud_check_launch_desc">Scans remote clouds on app open to notify if notes have upstream updates</string>
+    <!-- Sync frequency title -->
+    <string name="cloud_sync_freq_title">Sync Frequency</string>
+    <!-- Sync frequency description -->
+    <string name="cloud_sync_freq_desc">Automatically synchronizes notes at periodic intervals</string>
+    <!-- Sync frequency options -->
+    <string name="pref_sync_freq_manual">Manual only</string>
+    <string name="pref_sync_freq_5m">Every 5 minutes (Active App)</string>
+    <string name="pref_sync_freq_15m">Every 15 minutes</string>
+    <string name="pref_sync_freq_30m">Every 30 minutes</string>
+    <string name="pref_sync_freq_1h">Every hour</string>
+    <string name="pref_sync_freq_daily">Daily</string>
+    <!-- Action skip -->
+    <string name="action_skip">Skipped</string>
+    <!-- Auto backup on app exit title -->
+    <string name="cloud_auto_backup_exit_title">Auto-backup on App Exit</string>
+    <!-- Auto backup on app exit description -->
+    <string name="cloud_auto_backup_exit_desc">Automatically synchronizes changed documents when closing the app</string>
+    <!-- Daily scheduled sync title -->
+    <string name="cloud_daily_sync_title">Daily Scheduled Sync</string>
+    <!-- Daily scheduled sync description. %1$s is time formatted -->
+    <string name="cloud_daily_sync_desc">Runs background sync daily at %1$s</string>
+    <!-- Wi-Fi only title -->
+    <string name="cloud_wifi_only_title">Transfer on Wi-Fi Only</string>
+    <!-- Wi-Fi only description -->
+    <string name="cloud_wifi_only_desc">Prevent automated transfers over metered cellular connections</string>
+    <!-- Concurrency title -->
+    <string name="cloud_concurrency_title">Concurrent Transfer Streams</string>
+    <!-- Concurrency description -->
+    <string name="cloud_concurrency_desc">Accelerates differential uploads and downloads on high-bandwidth connections</string>
+    <!-- Concurrency workers count. %1$d is count -->
+    <string name="cloud_concurrency_workers_label">%1$d parallel worker(s)</string>
+    <!-- Service status: Connected -->
+    <string name="cloud_service_status_connected">Connected</string>
+    <!-- Service status: Disconnected -->
+    <string name="cloud_service_status_disconnected">Disconnected</string>
+    <!-- Service status: Error -->
+    <string name="cloud_service_status_error">Connection Error</string>
+    <!-- Section header: Custom Folder Mappings -->
+    <string name="cloud_mappings_header">Custom Folder Mappings</string>
+    <!-- Empty state description for custom folder mappings -->
+    <string name="cloud_empty_mappings_desc">Map individual local folders directly to remote directories on your servers.</string>
+    <!-- Local path label in custom mapping card. %1$s is path -->
+    <string name="cloud_mapping_local_path">Local: %1$s</string>
+    <!-- Remote path label in custom mapping card. %1$s is path -->
+    <string name="cloud_mapping_remote_path">Remote: %1$s</string>
+    <!-- Section header: Synchronization Automation -->
+    <string name="cloud_automation_header">Automation &amp; Sync Triggers</string>
+    <!-- Periodic sync interval preference title -->
+    <string name="pref_sync_periodic_title">Periodic Sync Interval</string>
+    <!-- Periodic sync interval preference description -->
+    <string name="pref_sync_periodic_desc">Automatically trigger background synchronization at configured intervals.</string>
+    <!-- Wi-Fi only sync preference title -->
+    <string name="pref_sync_wifi_only_title">Sync on Wi-Fi Only</string>
+    <!-- Wi-Fi only sync preference description -->
+    <string name="pref_sync_wifi_only_desc">Avoid transferring notes and large PDFs over cellular data.</string>
+    <!-- Sync on app exit preference title -->
+    <string name="pref_sync_on_exit_title">Sync on App Exit</string>
+    <!-- Sync on app exit preference description -->
+    <string name="pref_sync_on_exit_desc">Queue a quick background backup whenever you leave the application.</string>
+    <!-- Sync on app launch preference title -->
+    <string name="pref_sync_on_start_title">Check Changes on Launch</string>
+    <!-- Sync on app launch preference description -->
+    <string name="pref_sync_on_start_desc">Poll remote endpoints for new changes when opening Aournal++.</string>
+    <!-- Transfer concurrency preference title -->
+    <string name="pref_sync_concurrency_title">Parallel Transfer Concurrency</string>
+    <!-- Transfer concurrency preference description. %1$d is worker count -->
+    <string name="pref_sync_concurrency_desc">%1$d concurrent file transfer workers.</string>
+    <!-- Service Config Dialog: Add title -->
+    <string name="dialog_add_service_title">Add Cloud Storage</string>
+    <!-- Service Config Dialog: Edit title -->
+    <string name="dialog_edit_service_title">Edit Cloud Storage</string>
+    <!-- Form field: Service Type -->
+    <string name="label_service_type">Storage Provider</string>
+    <!-- Form field: Account / Display Name -->
+    <string name="label_account_name">Account Name</string>
+    <!-- Form field: Server URL / Host -->
+    <string name="label_server_url">Server Address / Host</string>
+    <!-- Form field: Port -->
+    <string name="label_port">Port</string>
+    <!-- Form field: Username -->
+    <string name="label_username">Username</string>
+    <!-- Form field: Password / App Token -->
+    <string name="label_password">Password / Token</string>
+    <!-- Form field: Remote Base Path -->
+    <string name="label_remote_base_path">Remote Directory Root</string>
+    <!-- Form field: Use SSH Private Key Auth -->
+    <string name="label_sftp_key_auth">Use Private Key Authentication</string>
+    <!-- Form field: Private Key Text / File -->
+    <string name="label_private_key">SSH Private Key (OpenSSH/PEM)</string>
+    <!-- Form field: Key Passphrase -->
+    <string name="label_passphrase">Key Passphrase (Optional)</string>
+    <!-- Form field: FTP TLS Mode -->
+    <string name="label_ftp_tls_mode">Security Protocol</string>
+    <!-- Button to scan Nextcloud QR code -->
+    <string name="action_scan_nextcloud_qr">Scan Nextcloud Login QR</string>
+    <!-- Button to authenticate with Google OAuth2 -->
+    <string name="action_google_auth">Sign in with Google</string>
+    <!-- Button to test cloud endpoint connection -->
+    <string name="action_test_connection">Test Connection</string>
+    <!-- Toast message when connection test succeeds -->
+    <string name="msg_connection_success">Connection successful!</string>
+    <!-- Toast message when connection test fails. %1$s is error -->
+    <string name="msg_connection_failed">Connection failed: %1$s</string>
+    <!-- Exclusion Filters Dialog Title -->
+    <string name="dialog_exclusion_filters_title">Exclusion Filters</string>
+    <!-- Form field: Excluded file extensions -->
+    <string name="label_excluded_extensions">Excluded File Extensions (comma separated)</string>
+    <!-- Form field: Excluded regex filename patterns -->
+    <string name="label_excluded_regex">Filename Regex Exclusions</string>
+    <!-- Form field: Excluded folder paths -->
+    <string name="label_excluded_folders">Excluded Folder Paths</string>
+    <!-- Action button to reset filters to defaults -->
+    <string name="action_reset_filters">Reset to Defaults</string>
+    <!-- Toast message when filters are reset -->
+    <string name="msg_filters_reset">Filters reset to recommended defaults</string>
+    <!-- Live Transfer Queue title -->
+    <string name="queue_title">Active Transfers</string>
+    <!-- Live Transfer Queue empty state title -->
+    <string name="queue_empty_title">Transfer Queue Idle</string>
+    <!-- Live Transfer Queue empty state description -->
+    <string name="queue_empty_desc">No active or queued file uploads or downloads.</string>
+    <!-- Section header: Active transfers -->
+    <string name="queue_active_transfers">In Progress</string>
+    <!-- Section header: Queued transfers -->
+    <string name="queue_queued_transfers">Queued</string>
+    <!-- Section header: Completed transfers -->
+    <string name="queue_completed_transfers">Completed</string>
+    <!-- Section header: Failed transfers -->
+    <string name="queue_failed_transfers">Failed</string>
+    <!-- Speed indicator label. %1$s is speed string -->
+    <string name="label_transfer_speed">%1$s/s</string>
+    <!-- Action button to clear completed transfer items -->
+    <string name="action_clear_completed">Clear Completed</string>
+    <!-- Action button to cancel all transfers -->
+    <string name="action_cancel_all">Cancel All</string>
+    <!-- QR scanner dialog title -->
+    <string name="dialog_qr_scanner_title">Scan Login QR Code</string>
+    <!-- QR scanner dialog hint -->
+    <string name="dialog_qr_scanner_hint">Point your camera at the Nextcloud App Password QR code generated on your server.</string>
+    <!-- Conflict resolution dialog title -->
+    <string name="dialog_conflict_title">File Sync Conflict</string>
+    <!-- Conflict resolution dialog description. %1$s is file name -->
+    <string name="dialog_conflict_desc">\"%1$s\" has been modified both locally and on the remote cloud storage. Choose how to resolve this collision:</string>
+    <!-- Action to keep local copy -->
+    <string name="action_keep_local">Keep Local Version</string>
+    <!-- Action to keep remote cloud copy -->
+    <string name="action_keep_remote">Keep Cloud Version</string>
+    <!-- Action to keep both copies by renaming local -->
+    <string name="action_keep_both">Keep Both (Duplicate)</string>
+
+    <!-- ======================================================================= -->
+    <!-- Settings & Customization                                                -->
+    <!-- ======================================================================= -->
+    <!-- Settings screen title -->
+    <string name="settings_title">Settings</string>
+    <!-- Settings category: General -->
+    <string name="pref_cat_general">General</string>
+    <!-- Settings category: Rendering & Display -->
+    <string name="pref_cat_rendering">Rendering &amp; Display</string>
+    <!-- Settings category: Input & Stylus -->
+    <string name="pref_cat_input">Input &amp; Stylus</string>
+    <!-- Settings category: Storage & Backup -->
+    <string name="pref_cat_backup">Storage &amp; Backup</string>
+    <!-- Settings category: Advanced & Troubleshooting -->
+    <string name="pref_cat_advanced">Advanced</string>
+    <!-- Settings category: About & Licenses -->
+    <string name="pref_cat_about">About</string>
+    <!-- Preference: UI Theme / Dark Mode -->
+    <string name="pref_dark_theme">Dark Theme</string>
+    <!-- Preference: Display cutout / camera notch compensation -->
+    <string name="pref_cutout_compensation">Cutout &amp; Safe Area</string>
+    <!-- Preference: Display cutout description -->
+    <string name="pref_cutout_compensation_desc">Adjust canvas boundaries to avoid camera notches and rounded screen corners.</string>
+    <!-- Preference: Direct Touch / Low Latency Stylus -->
+    <string name="pref_direct_touch">Direct Touch Low Latency</string>
+    <!-- Preference: Direct Touch description -->
+    <string name="pref_direct_touch_desc">Bypasses X11 event queues to provide hardware-accelerated stylus response.</string>
+    <!-- Preference: Touchscreen Pressure Emulation -->
+    <string name="pref_pressure_emulation">Stylus Pressure Sensitivity</string>
+    <!-- Preference: PDF Export DPI Quality -->
+    <string name="pref_pdf_dpi">PDF Export Resolution (DPI)</string>
+    <!-- Preference: Floating Toolbar Position -->
+    <string name="pref_toolbar_position">Floating Toolbar Position</string>
+    <!-- Preference: Reset all settings to factory default -->
+    <string name="pref_reset_defaults">Reset All Settings</string>
+
+    <!-- ======================================================================= -->
+    <!-- Open Source Licenses & Credits                                          -->
+    <!-- ======================================================================= -->
+    <!-- Licenses screen title -->
+    <string name="licenses_title">Open Source Licenses</string>
+    <!-- Licenses screen description -->
+    <string name="licenses_desc">Aournal++ is built with free and open-source software. We gratefully acknowledge the following upstream projects and libraries:</string>
+    <!-- Licenses Screen Compliance Banner -->
+    <string name="licenses_compliance_banner">Aournal is built on top of incredible open-source projects. In compliance with free software licensing, all component licenses and sources are provided below.</string>
+    <!-- Button to open source repository in browser -->
+    <string name="licenses_source_code">Source Code</string>
+    <!-- Button to view license dialog -->
+    <string name="licenses_view_license">View License</string>
+    <!-- License dialog title. %1$s is library name -->
+    <string name="licenses_dialog_title">%1$s License</string>
+    <!-- License type tag. %1$s is license name -->
+    <string name="license_type_label">License: %1$s</string>
+    <!-- Button to view full license text -->
+    <string name="action_view_license">View Full License</string>
+    <!-- Button to open GitHub repository -->
+    <string name="action_open_repo">Source Repository</string>
 </resources>

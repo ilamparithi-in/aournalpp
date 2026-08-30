@@ -98,7 +98,11 @@ fun TransferQueueSubpage(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Transfer Queue", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text(
+                            androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.queue_title),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
                         Text(
                             text = "${items.size} total items • ${formatSpeedRate(totalActiveSpeed)}",
                             style = MaterialTheme.typography.labelSmall,
@@ -108,7 +112,10 @@ fun TransferQueueSubpage(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to Cloud")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_back)
+                        )
                     }
                 },
                 actions = {
@@ -116,7 +123,7 @@ fun TransferQueueSubpage(
                         TextButton(onClick = { FileTransferQueueManager.clearCompleted() }) {
                             Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Clear Finished")
+                            Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_clear))
                         }
                     }
                 },
@@ -140,7 +147,7 @@ fun TransferQueueSubpage(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 StatCard(
-                    title = "Active",
+                    title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.queue_active_transfers),
                     value = "$activeCount",
                     icon = Icons.Default.Sync,
                     color = MaterialTheme.colorScheme.primary,
@@ -154,7 +161,7 @@ fun TransferQueueSubpage(
                     modifier = Modifier.weight(1f)
                 )
                 StatCard(
-                    title = "Done",
+                    title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.queue_completed_transfers),
                     value = "$completedCount",
                     icon = Icons.Default.CheckCircle,
                     color = MaterialTheme.colorScheme.tertiary,
@@ -162,7 +169,7 @@ fun TransferQueueSubpage(
                 )
                 if (failedCount > 0) {
                     StatCard(
-                        title = "Failed",
+                        title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.queue_failed_transfers),
                         value = "$failedCount",
                         icon = Icons.Default.Error,
                         color = MaterialTheme.colorScheme.error,
@@ -187,21 +194,21 @@ fun TransferQueueSubpage(
                     FilterChip(
                         selected = selectedFilter == QueueFilter.ACTIVE,
                         onClick = { selectedFilter = QueueFilter.ACTIVE },
-                        label = { Text("Active ($activeCount)") }
+                        label = { Text("${androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.queue_active_transfers)} ($activeCount)") }
                     )
                 }
                 item {
                     FilterChip(
                         selected = selectedFilter == QueueFilter.QUEUED,
                         onClick = { selectedFilter = QueueFilter.QUEUED },
-                        label = { Text("Queued ($queuedCount)") }
+                        label = { Text("${androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.queue_queued_transfers)} ($queuedCount)") }
                     )
                 }
                 item {
                     FilterChip(
                         selected = selectedFilter == QueueFilter.COMPLETED,
                         onClick = { selectedFilter = QueueFilter.COMPLETED },
-                        label = { Text("Completed ($completedCount)") }
+                        label = { Text("${androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.queue_completed_transfers)} ($completedCount)") }
                     )
                 }
                 if (failedCount > 0) {
@@ -209,7 +216,7 @@ fun TransferQueueSubpage(
                         FilterChip(
                             selected = selectedFilter == QueueFilter.FAILED,
                             onClick = { selectedFilter = QueueFilter.FAILED },
-                            label = { Text("Failed ($failedCount)") }
+                            label = { Text("${androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.queue_failed_transfers)} ($failedCount)") }
                         )
                     }
                 }
@@ -234,7 +241,7 @@ fun TransferQueueSubpage(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "No transfers in this view",
+                            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.queue_empty_desc),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -346,7 +353,7 @@ private fun QueueItemCard(item: TransferItem) {
                         ) {
                             Icon(
                                 imageVector = Icons.Default.StopCircle,
-                                contentDescription = "Cancel",
+                                contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel),
                                 tint = MaterialTheme.colorScheme.error
                             )
                         }
@@ -354,7 +361,7 @@ private fun QueueItemCard(item: TransferItem) {
                     TransferStatus.COMPLETED -> {
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "Completed",
+                            contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.queue_completed_transfers),
                             tint = MaterialTheme.colorScheme.tertiary,
                             modifier = Modifier.size(20.dp)
                         )
@@ -362,21 +369,21 @@ private fun QueueItemCard(item: TransferItem) {
                     TransferStatus.FAILED -> {
                         Icon(
                             imageVector = Icons.Default.Error,
-                            contentDescription = "Failed",
+                            contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.queue_failed_transfers),
                             tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(20.dp)
                         )
                     }
                     TransferStatus.SKIPPED -> {
                         Text(
-                            text = "Skipped",
+                            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_skip),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.outline
                         )
                     }
                     TransferStatus.CANCELLED -> {
                         Text(
-                            text = "Cancelled",
+                            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.outline
                         )

@@ -411,10 +411,10 @@ fun HomeScreen(
     val greeting = remember {
         val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         when (hour) {
-            in 5..11 -> "Good morning"
-            in 12..16 -> "Good afternoon"
-            in 17..21 -> "Good evening"
-            else -> "Welcome back"
+            in 5..11 -> context.getString(dev.ilamparithi.aournalpp.R.string.greeting_morning)
+            in 12..16 -> context.getString(dev.ilamparithi.aournalpp.R.string.greeting_afternoon)
+            in 17..21 -> context.getString(dev.ilamparithi.aournalpp.R.string.greeting_evening)
+            else -> context.getString(dev.ilamparithi.aournalpp.R.string.greeting_welcome_back)
         }
     }
 
@@ -580,7 +580,11 @@ fun HomeScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        "$totalNotesCount notes",
+                                        androidx.compose.ui.res.pluralStringResource(
+                                            dev.ilamparithi.aournalpp.R.plurals.home_stat_notes_count,
+                                            totalNotesCount,
+                                            totalNotesCount
+                                        ),
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -603,7 +607,11 @@ fun HomeScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        "$totalFoldersCount folders",
+                                        androidx.compose.ui.res.pluralStringResource(
+                                            dev.ilamparithi.aournalpp.R.plurals.home_stat_folders_count,
+                                            totalFoldersCount,
+                                            totalFoldersCount
+                                        ),
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -644,7 +652,7 @@ fun HomeScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    "Studio Notes",
+                                    androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_title_recent_notes),
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Black
                                 )
@@ -652,7 +660,7 @@ fun HomeScreen(
 
                             TextButton(onClick = onNavigateToFiles) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("Files Hub", fontWeight = FontWeight.Bold)
+                                    Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.tab_files), fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
                                 }
@@ -680,13 +688,13 @@ fun HomeScreen(
                                     ) {
                                         Icon(
                                             Icons.Default.AutoAwesome,
-                                            contentDescription = "Expressive Collage",
+                                            contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_view_mode_collage),
                                             tint = if (viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.size(14.dp)
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
-                                            "Collage",
+                                            androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_view_mode_collage),
                                             style = MaterialTheme.typography.labelMedium,
                                             fontWeight = FontWeight.Bold,
                                             color = if (viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
@@ -708,13 +716,13 @@ fun HomeScreen(
                                     ) {
                                         Icon(
                                             Icons.Default.GridView,
-                                            contentDescription = "Normal Gallery",
+                                            contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_view_mode_grid),
                                             tint = if (viewMode == "NORMAL") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.size(14.dp)
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
-                                            "Gallery",
+                                            androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_view_mode_grid),
                                             style = MaterialTheme.typography.labelMedium,
                                             fontWeight = FontWeight.Bold,
                                             color = if (viewMode == "NORMAL") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
@@ -821,7 +829,7 @@ fun HomeScreen(
                 SpeedDialActionItem(
                     progress = folderItemSpring,
                     icon = Icons.Default.CreateNewFolder,
-                    label = "New Folder",
+                    label = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_create_folder),
                     containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                     contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                     onClick = {
@@ -834,7 +842,7 @@ fun HomeScreen(
                 SpeedDialActionItem(
                     progress = pdfItemSpring,
                     icon = Icons.Default.FileOpen,
-                    label = "Import File",
+                    label = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_open),
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                     onClick = {
@@ -846,7 +854,7 @@ fun HomeScreen(
                 SpeedDialActionItem(
                     progress = noteItemSpring,
                     icon = Icons.Default.Edit,
-                    label = "New Note",
+                    label = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_create_note),
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     onClick = {
@@ -877,7 +885,7 @@ fun HomeScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
-                        contentDescription = "Expand Actions",
+                        contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_details),
                         modifier = Modifier
                             .size(32.dp)
                             .rotate(fabRotation)
@@ -890,8 +898,8 @@ fun HomeScreen(
     // Create Folder Dialog
     if (showCreateFolderDialog) {
         CreateFolderDialog(
-            title = "Create New Folder",
-            confirmButtonLabel = "Create",
+            title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_new_folder_title),
+            confirmButtonLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_create_button),
             onDismiss = { showCreateFolderDialog = false },
             onCreate = { name, colorHex, iconEmoji, iconType ->
                 showCreateFolderDialog = false
@@ -922,9 +930,9 @@ fun HomeScreen(
         AlertDialog(
             onDismissRequest = { showEmergencyDialog = false },
             icon = { Icon(Icons.Default.Restore, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp)) },
-            title = { Text("Unsaved Session Recovered", fontWeight = FontWeight.Bold) },
+            title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.emergency_dialog_title), fontWeight = FontWeight.Bold) },
             text = {
-                Text("Xournal++ closed unexpectedly during a previous session. An emergency recovery copy from $dateStr was saved.")
+                Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.emergency_dialog_desc, dateStr))
             },
             confirmButton = {
                 Button(onClick = {
@@ -933,7 +941,7 @@ fun HomeScreen(
                     quarantinedEmergencySave = null
                     loadHomeData()
                     openNote(staged)
-                }) { Text("Open Now") }
+                }) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_open_now)) }
             },
             dismissButton = {
                 Row {
@@ -943,13 +951,13 @@ fun HomeScreen(
                         emergencySaveNameInput = defaultName
                         emergencySaveTargetFolder = repository.getRootNotesDirectory()
                         showEmergencySaveNameDialog = true
-                    }) { Text("Save as Note") }
+                    }) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_save_as_note)) }
                     TextButton(onClick = {
                         showEmergencyDialog = false
                         repository.discardEmergencyRecovery()
                         quarantinedEmergencySave = null
                         loadHomeData()
-                    }) { Text("Discard", color = MaterialTheme.colorScheme.error) }
+                    }) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_discard), color = MaterialTheme.colorScheme.error) }
                 }
             }
         )
@@ -1212,7 +1220,7 @@ fun HomeScreen(
         AlertDialog(
             onDismissRequest = {},
             icon = { CircularProgressIndicator(modifier = Modifier.size(36.dp), strokeWidth = 3.dp) },
-            title = { Text("Processing Document", fontWeight = FontWeight.Bold) },
+            title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.title_processing_document), fontWeight = FontWeight.Bold) },
             text = {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -1232,13 +1240,13 @@ fun HomeScreen(
         AlertDialog(
             onDismissRequest = { noteToRename = null },
             icon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp)) },
-            title = { Text("Rename Note", fontWeight = FontWeight.Bold) },
+            title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_rename_title), fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = renameInputText,
                         onValueChange = { renameInputText = it },
-                        label = { Text("Note Name") },
+                        label = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_note_name_hint)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1260,12 +1268,12 @@ fun HomeScreen(
                         }
                     }
                 }) {
-                    Text("Rename")
+                    Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_rename))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { noteToRename = null }) {
-                    Text("Cancel")
+                    Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel))
                 }
             }
         )
@@ -1276,9 +1284,9 @@ fun HomeScreen(
         AlertDialog(
             onDismissRequest = { noteToDelete = null },
             icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(32.dp)) },
-            title = { Text("Move to Trash?", fontWeight = FontWeight.Bold) },
+            title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_delete_note_title), fontWeight = FontWeight.Bold) },
             text = {
-                Text("Are you sure you want to move \"${note.title}\" to Trash? You can restore it later from Files Hub.")
+                Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_delete_note_body, note.title))
             },
             confirmButton = {
                 Button(
@@ -1308,12 +1316,12 @@ fun HomeScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Move to Trash")
+                    Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_delete))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { noteToDelete = null }) {
-                    Text("Cancel")
+                    Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel))
                 }
             }
         )
@@ -1329,25 +1337,25 @@ fun HomeScreen(
 
         when (prompt.actionType) {
             FileActionPromptType.EXPORT_PDF -> {
-                title = "Export as PDF"
-                subtitle = "Enter a file name for the exported PDF in Exports/."
+                title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_export_pdf)
+                subtitle = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_export_pdf_subtitle)
                 ext = ".pdf"
                 icon = Icons.Default.FileDownload
-                btnText = "Export"
+                btnText = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_export_button)
             }
             FileActionPromptType.SHARE_PDF -> {
-                title = "Share as PDF"
-                subtitle = "Enter a file name for the rendered PDF before sharing."
+                title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_pdf_title)
+                subtitle = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_pdf_subtitle)
                 ext = ".pdf"
                 icon = Icons.Default.PictureAsPdf
-                btnText = "Share"
+                btnText = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share)
             }
             FileActionPromptType.SHARE_XOPP -> {
-                title = "Share Note"
-                subtitle = "Enter a file name for the shared notebook file."
+                title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_note_title)
+                subtitle = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_note_subtitle)
                 ext = ".xopp"
                 icon = Icons.Default.Share
-                btnText = "Share"
+                btnText = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share)
             }
         }
 
@@ -1515,7 +1523,7 @@ private fun EnlargedContinueHeroSection(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    text = "CONTINUE WHERE YOU LEFT OFF",
+                    text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_hero_continue_header),
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = heroFolderAccent,
@@ -1597,7 +1605,7 @@ private fun EnlargedContinueHeroSection(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp), tint = resumeBtnTextColor)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Resume Editing", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = resumeBtnTextColor)
+                        Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_hero_resume_action), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = resumeBtnTextColor)
                     }
                 }
             }
@@ -1642,7 +1650,7 @@ private fun NormalHomeGalleryView(
                         modifier = Modifier.size(18.dp)
                     )
                     Text(
-                        "Pinned Notes",
+                        androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_section_pinned),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -1689,7 +1697,7 @@ private fun NormalHomeGalleryView(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (pinnedNotes.isNotEmpty()) {
                     Text(
-                        "Recent Notes",
+                        androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_section_recent),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

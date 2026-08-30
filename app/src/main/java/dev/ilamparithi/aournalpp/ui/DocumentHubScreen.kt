@@ -536,11 +536,32 @@ fun DocumentHubScreen(
         }
     }
 
-    // Handle Back Press in Subfolders, Selection Mode, or Expanded FAB
-    BackHandler(enabled = isFabExpanded || isSelectionMode || isViewingTrash || currentDirectory.canonicalPath != repository.getRootNotesDirectory().canonicalPath) {
-        if (isFabExpanded) {
-            isFabExpanded = false
-        } else if (isSelectionMode) {
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasPermission = hasStoragePermission(context)
+                if (hasPermission) {
+                    showPermissionDialog = false
+                    loadContent()
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(currentDirectory, showHiddenFiles, isViewingTrash, searchQuery) {
+        if (!hasPermission) {
+            hasPermission = hasStoragePermission(context)
+            if (!hasPermission) return@LaunchedEffect
+        }
+        // Debounce search input.
+        if (searchQuery.isNotEmpty()) delay(SEARCH_DEBOUNCE_MS)
+        loadContentNow()
+    }
+
+    BackHandler(enabled = isSelectionMode || isViewingTrash || currentDirectory.canonicalPath != repository.getRootNotesDirectory().canonicalPath) {
+        if (isSelectionMode) {
             isSelectionMode = false
             selectedNotePaths = emptySet()
         } else if (isViewingTrash) {
@@ -548,29 +569,6 @@ fun DocumentHubScreen(
         } else if (currentDirectory.canonicalPath != repository.getRootNotesDirectory().canonicalPath) {
             currentDirectory = currentDirectory.parentFile ?: repository.getRootNotesDirectory()
         }
-    }
-
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                hasPermission = hasStoragePermission(context)
-                loadContent()
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
-
-    LaunchedEffect(hasPermission, showHiddenFiles, searchQuery, currentDirectory, isViewingTrash) {
-        if (!repository.isWithinRootDirectory(currentDirectory) || !currentDirectory.exists()) {
-            currentDirectory = repository.getRootNotesDirectory()
-            return@LaunchedEffect
-        }
-        // Debounce search input.
-        if (searchQuery.isNotEmpty()) delay(SEARCH_DEBOUNCE_MS)
-        loadContentNow()
     }
 
     Scaffold(
@@ -584,7 +582,11 @@ fun DocumentHubScreen(
                     title = {
                         Column {
                             Text(
-                                text = "${selectedNotePaths.size} selected",
+                                text = androidx.compose.ui.res.pluralStringResource(
+                                    dev.ilamparithi.aournalpp.R.plurals.hub_selected_count,
+                                    selectedNotePaths.size,
+                                    selectedNotePaths.size
+                                ),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -611,7 +613,10 @@ fun DocumentHubScreen(
                             selectedNotePaths = emptySet()
                             lastSelectedNotePath = null
                         }) {
-                            Icon(imageVector = Icons.Default.Close, contentDescription = "Exit Selection")
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel)
+                            )
                         }
                     },
                     actions = {
@@ -625,14 +630,18 @@ fun DocumentHubScreen(
                         }) {
                             Icon(
                                 imageVector = if (allSelected) Icons.Default.Deselect else Icons.Default.SelectAll,
-                                contentDescription = if (allSelected) "Deselect All" else "Select All"
+                                contentDescription = if (allSelected) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_deselect_all)
+                                else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_select_all)
                             )
                         }
                         IconButton(onClick = {
                             val allPaths = currentDisplayNotes.map { it.path }.toSet()
                             selectedNotePaths = allPaths.minus(selectedNotePaths)
                         }) {
-                            Icon(imageVector = Icons.AutoMirrored.Filled.CompareArrows, contentDescription = "Invert Selection")
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.CompareArrows,
+                                contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_invert_selection)
+                            )
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -648,7 +657,7 @@ fun DocumentHubScreen(
                         TextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            placeholder = { Text("Search notes and folders...") },
+                            placeholder = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_search_hint)) },
                             singleLine = true,
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = Color.Transparent,
@@ -665,13 +674,19 @@ fun DocumentHubScreen(
                             isSearchActive = false
                             searchQuery = ""
                         }) {
-                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close Search")
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_back)
+                            )
                         }
                     },
                     actions = {
                         if (searchQuery.isNotEmpty()) {
                             IconButton(onClick = { searchQuery = "" }) {
-                                Icon(imageVector = Icons.Default.Clear, contentDescription = "Clear")
+                                Icon(
+                                    imageVector = Icons.Default.Clear,
+                                    contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_clear)
+                                )
                             }
                         }
                     },
@@ -685,7 +700,7 @@ fun DocumentHubScreen(
                     title = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = if (isViewingTrash) "Trash Bin" else "Aournal",
+                                text = if (isViewingTrash) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_menu_trash) else "Aournal",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold
                             )
@@ -697,21 +712,30 @@ fun DocumentHubScreen(
                                 isViewingTrash = false
                                 loadContent()
                             }) {
-                                Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to Notes")
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_back)
+                                )
                             }
                         } else if (currentDirectory.canonicalPath != repository.getRootNotesDirectory().canonicalPath) {
                             IconButton(onClick = {
                                 currentDirectory = currentDirectory.parentFile ?: repository.getRootNotesDirectory()
                                 loadContent()
                             }) {
-                                Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Up Directory")
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_back)
+                                )
                             }
                         }
                     },
                     actions = {
                         if (!isViewingTrash) {
                             IconButton(onClick = { isSearchActive = true }) {
-                                Icon(imageVector = Icons.Default.Search, contentDescription = "Search")
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_search)
+                                )
                             }
 
                             IconButton(onClick = {
@@ -721,7 +745,8 @@ fun DocumentHubScreen(
                             }) {
                                 Icon(
                                     imageVector = if (isGridView) Icons.Default.ViewAgenda else Icons.Default.GridView,
-                                    contentDescription = "Switch View"
+                                    contentDescription = if (isGridView) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_view_mode_grid)
+                                    else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_view_mode_collage)
                                 )
                             }
                         }
@@ -733,7 +758,10 @@ fun DocumentHubScreen(
                         )
 
                         IconButton(onClick = { showTopMenu = true }) {
-                            Icon(imageVector = Icons.Default.MoreVert, contentDescription = "Menu")
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_details)
+                            )
                         }
 
                         DropdownMenu(
@@ -742,7 +770,7 @@ fun DocumentHubScreen(
                         ) {
                             if (!isViewingTrash) {
                                 DropdownMenuItem(
-                                    text = { Text("Select Notes") },
+                                    text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_menu_select_notes)) },
                                     leadingIcon = { Icon(Icons.Default.SelectAll, contentDescription = null) },
                                     onClick = {
                                         showTopMenu = false
@@ -750,7 +778,7 @@ fun DocumentHubScreen(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("New Folder") },
+                                    text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_menu_new_folder)) },
                                     leadingIcon = { Icon(Icons.Default.CreateNewFolder, contentDescription = null) },
                                     onClick = {
                                         showTopMenu = false
@@ -759,7 +787,12 @@ fun DocumentHubScreen(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text(if (showHiddenFiles) "Hide Hidden & Backup Files" else "Show Hidden Files") },
+                                    text = {
+                                        Text(
+                                            if (showHiddenFiles) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_menu_hide_hidden)
+                                            else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_menu_show_hidden)
+                                        )
+                                    },
                                     leadingIcon = {
                                         Icon(
                                             imageVector = if (showHiddenFiles) Icons.Default.VisibilityOff else Icons.Default.Visibility,
@@ -775,7 +808,7 @@ fun DocumentHubScreen(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Trash Bin") },
+                                    text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_menu_trash)) },
                                     leadingIcon = { Icon(Icons.Default.DeleteSweep, contentDescription = null) },
                                     onClick = {
                                         showTopMenu = false
@@ -787,7 +820,7 @@ fun DocumentHubScreen(
                             } else {
                                 if (trashedNotes.isNotEmpty()) {
                                     DropdownMenuItem(
-                                        text = { Text("Select Notes") },
+                                        text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_menu_select_notes)) },
                                         leadingIcon = { Icon(Icons.Default.SelectAll, contentDescription = null) },
                                         onClick = {
                                             showTopMenu = false
@@ -796,7 +829,7 @@ fun DocumentHubScreen(
                                     )
                                 }
                                 DropdownMenuItem(
-                                    text = { Text("Empty Trash", color = MaterialTheme.colorScheme.error) },
+                                    text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_menu_empty_trash), color = MaterialTheme.colorScheme.error) },
                                     leadingIcon = { Icon(Icons.Default.DeleteSweep, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                                     onClick = {
                                         showTopMenu = false
@@ -807,7 +840,7 @@ fun DocumentHubScreen(
                             }
 
                             DropdownMenuItem(
-                                text = { Text("Open Source Licenses") },
+                                text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.pref_category_licenses)) },
                                 leadingIcon = { Icon(Icons.Default.Gavel, contentDescription = null) },
                                 onClick = {
                                     showTopMenu = false
@@ -819,7 +852,7 @@ fun DocumentHubScreen(
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Settings") },
+                                text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.tab_settings)) },
                                 leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
                                 onClick = {
                                     showTopMenu = false
@@ -865,7 +898,7 @@ fun DocumentHubScreen(
                     SpeedDialActionItem(
                         progress = folderItemSpring,
                         icon = Icons.Default.CreateNewFolder,
-                        label = "New Folder",
+                        label = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_create_folder),
                         containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                         contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                         onClick = {
@@ -878,7 +911,7 @@ fun DocumentHubScreen(
                     SpeedDialActionItem(
                         progress = pdfItemSpring,
                         icon = Icons.Default.FileOpen,
-                        label = "Import File",
+                        label = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_open),
                         containerColor = MaterialTheme.colorScheme.secondaryContainer,
                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                         onClick = {
@@ -890,7 +923,7 @@ fun DocumentHubScreen(
                     SpeedDialActionItem(
                         progress = noteItemSpring,
                         icon = Icons.Default.Edit,
-                        label = "New Note",
+                        label = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_create_note),
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                         onClick = {
@@ -934,7 +967,7 @@ fun DocumentHubScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = "Expand Actions",
+                            contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_details),
                             modifier = Modifier
                                 .size(32.dp)
                                 .rotate(fabRotation)
@@ -948,14 +981,14 @@ fun DocumentHubScreen(
         // 0. New Note Dialog
         if (showNewNoteDialog) {
             SaveAsNoteDialog(
-                title = "New Note",
-                subtitle = "Choose a name and destination folder for your new note.",
+                title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_new_note_title),
+                subtitle = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_new_note_subtitle),
                 icon = Icons.Default.Add,
                 initialName = newNoteDefaultName,
                 initialFolder = currentDirectory,
                 availableFolders = allFoldersForNewNote,
                 rootFolder = repository.getRootNotesDirectory(),
-                confirmButtonLabel = "Create & Open",
+                confirmButtonLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_create_and_open),
                 onDismiss = { showNewNoteDialog = false },
                 onSkip = {
                     showNewNoteDialog = false
@@ -1017,25 +1050,25 @@ fun DocumentHubScreen(
 
             when (prompt.actionType) {
                 FileActionPromptType.EXPORT_PDF -> {
-                    title = "Export as PDF"
-                    subtitle = "Enter a file name for the exported PDF."
+                    title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_export_pdf)
+                    subtitle = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_export_pdf_subtitle)
                     ext = ".pdf"
                     icon = Icons.Default.FileDownload
-                    btnText = "Export"
+                    btnText = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_export_button)
                 }
                 FileActionPromptType.SHARE_PDF -> {
-                    title = "Share as PDF"
-                    subtitle = "Enter a file name for the rendered PDF before sharing."
+                    title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_pdf_title)
+                    subtitle = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_pdf_subtitle)
                     ext = ".pdf"
                     icon = Icons.Default.PictureAsPdf
-                    btnText = "Share"
+                    btnText = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share)
                 }
                 FileActionPromptType.SHARE_XOPP -> {
-                    title = "Share Note"
-                    subtitle = "Enter a file name for the shared notebook file."
+                    title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_note_title)
+                    subtitle = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_note_subtitle)
                     ext = ".xopp"
                     icon = Icons.Default.Share
-                    btnText = "Share"
+                    btnText = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share)
                 }
             }
 
@@ -1088,9 +1121,9 @@ fun DocumentHubScreen(
                         modifier = Modifier.size(32.dp)
                     )
                 },
-                title = { Text("Storage Permission Required", fontWeight = FontWeight.Bold) },
+                title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_storage_title), fontWeight = FontWeight.Bold) },
                 text = {
-                    Text("Xournal++ saves notes and exports directly to your device storage (${env.getNotesDirectory().absolutePath}). Please grant All Files Access.")
+                    Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_storage_desc))
                 },
                 confirmButton = {
                     Button(onClick = {
@@ -1103,11 +1136,11 @@ fun DocumentHubScreen(
                             )
                         }
                     }) {
-                        Text("Grant Permission")
+                        Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_storage_grant_action))
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showPermissionDialog = false }) { Text("Later") }
+                    TextButton(onClick = { showPermissionDialog = false }) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_storage_skip_action)) }
                 }
             )
         }
@@ -1119,7 +1152,7 @@ fun DocumentHubScreen(
                 icon = {
                     CircularProgressIndicator(modifier = Modifier.size(36.dp), strokeWidth = 3.dp)
                 },
-                title = { Text("Processing Document", fontWeight = FontWeight.Bold) },
+                title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.title_processing_document), fontWeight = FontWeight.Bold) },
                 text = {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -1139,8 +1172,9 @@ fun DocumentHubScreen(
             val isRootFolder = currentDirectory.canonicalPath == repository.getRootNotesDirectory().canonicalPath
             CreateFolderDialog(
                 parentFolder = currentDirectory,
-                title = if (isRootFolder) "Create New Folder" else "New Folder in \"${currentDirectory.name}\"",
-                confirmButtonLabel = "Create",
+                title = if (isRootFolder) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_new_folder_title)
+                else "New Folder in \"${currentDirectory.name}\"",
+                confirmButtonLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_create_button),
                 initialColorHex = selectedFolderColor,
                 initialEmoji = selectedFolderEmoji,
                 initialIconType = selectedFolderIconType,
@@ -1169,7 +1203,7 @@ fun DocumentHubScreen(
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("Folder Icon / Emoji:", style = MaterialTheme.typography.labelMedium)
+                            Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_change_emoji), style = MaterialTheme.typography.labelMedium)
                             FolderIconPickerRow(
                                 selectedEmoji = editFolderSelectedEmoji,
                                 selectedIconType = editFolderSelectedIconType,
@@ -1182,7 +1216,7 @@ fun DocumentHubScreen(
                         }
 
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("Folder Color Accent:", style = MaterialTheme.typography.labelMedium)
+                            Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_change_color), style = MaterialTheme.typography.labelMedium)
                             FolderColorPickerRow(
                                 selectedColorHex = editFolderSelectedColor,
                                 onColorSelected = { editFolderSelectedColor = it }
@@ -1199,11 +1233,11 @@ fun DocumentHubScreen(
                             loadContent()
                         }
                     }) {
-                        Text("Save")
+                        Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_save))
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { folderToEdit = null }) { Text("Cancel") }
+                    TextButton(onClick = { folderToEdit = null }) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel)) }
                 }
             )
         }
@@ -1220,13 +1254,13 @@ fun DocumentHubScreen(
                         modifier = Modifier.size(32.dp)
                     )
                 },
-                title = { Text("Rename Folder", fontWeight = FontWeight.Bold) },
+                title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_rename_folder_title), fontWeight = FontWeight.Bold) },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(
                             value = renameFolderNameInput,
                             onValueChange = { renameFolderNameInput = it },
-                            label = { Text("Folder Name") },
+                            label = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_folder_name_hint)) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1248,12 +1282,12 @@ fun DocumentHubScreen(
                             }
                         }
                     }) {
-                        Text("Rename")
+                        Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_rename))
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { folderToRename = null }) {
-                        Text("Cancel")
+                        Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel))
                     }
                 }
             )
@@ -1292,16 +1326,16 @@ fun DocumentHubScreen(
             AlertDialog(
                 onDismissRequest = { showMoveToFolderDialog = false },
                 icon = { Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp)) },
-                title = { Text("Move ${selectedDocs.size} Note(s)", fontWeight = FontWeight.Bold) },
+                title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_move_notes_title, selectedDocs.size), fontWeight = FontWeight.Bold) },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                        Text("Select destination folder:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_move_destination_header), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
                         if (isCreatingInlineFolder) {
                             OutlinedTextField(
                                 value = inlineFolderName,
                                 onValueChange = { inlineFolderName = it },
-                                label = { Text("New Folder Name") },
+                                label = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_new_folder_title)) },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -1326,7 +1360,7 @@ fun DocumentHubScreen(
                                 }
                             }
                             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                                TextButton(onClick = { isCreatingInlineFolder = false }) { Text("Cancel") }
+                                TextButton(onClick = { isCreatingInlineFolder = false }) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel)) }
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Button(onClick = {
                                     if (inlineFolderName.isNotBlank()) {
@@ -1343,7 +1377,7 @@ fun DocumentHubScreen(
                                             }
                                         }
                                     }
-                                }) { Text("Create & Move") }
+                                }) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_create_and_move)) }
                             }
                         } else {
                             LazyColumn(
@@ -1373,7 +1407,7 @@ fun DocumentHubScreen(
                                         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                             Icon(Icons.Default.Home, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                                             Spacer(modifier = Modifier.width(10.dp))
-                                            Text("Notes Home", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                            Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_root_folder_name), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                                         }
                                     }
                                 }
@@ -1407,7 +1441,15 @@ fun DocumentHubScreen(
                                             }
                                             Spacer(modifier = Modifier.width(10.dp))
                                             Text(folder.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                                            Text("${folder.itemCount} notes", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(
+                                                androidx.compose.ui.res.pluralStringResource(
+                                                    dev.ilamparithi.aournalpp.R.plurals.home_stat_notes_count,
+                                                    folder.itemCount,
+                                                    folder.itemCount
+                                                ),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
                                         }
                                     }
                                 }
@@ -1420,7 +1462,7 @@ fun DocumentHubScreen(
                                     ) {
                                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Create New Folder")
+                                        Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_create_folder))
                                     }
                                 }
                             }
@@ -1429,7 +1471,7 @@ fun DocumentHubScreen(
                 },
                 confirmButton = {},
                 dismissButton = {
-                    TextButton(onClick = { showMoveToFolderDialog = false }) { Text("Cancel") }
+                    TextButton(onClick = { showMoveToFolderDialog = false }) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel)) }
                 }
             )
         }
@@ -1443,13 +1485,13 @@ fun DocumentHubScreen(
                 onDismissRequest = { noteToRename = null },
                 properties = DialogProperties(usePlatformDefaultWidth = isLandscape),
                 modifier = if (isLandscape) Modifier else Modifier.fillMaxWidth().padding(horizontal = 10.dp),
-                title = { Text("Rename Note", fontWeight = FontWeight.Bold) },
+                title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_rename_title), fontWeight = FontWeight.Bold) },
                 text = {
                     OutlinedTextField(
                         value = renameInputText,
                         onValueChange = { renameInputText = it },
                         singleLine = true,
-                        label = { Text("Title") },
+                        label = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_note_name_hint)) },
                         modifier = Modifier.fillMaxWidth()
                     )
                 },
@@ -1470,9 +1512,9 @@ fun DocumentHubScreen(
                                 }
                             }
                         }
-                    }) { Text("Rename") }
+                    }) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_rename)) }
                 },
-                dismissButton = { TextButton(onClick = { noteToRename = null }) { Text("Cancel") } }
+                dismissButton = { TextButton(onClick = { noteToRename = null }) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel)) } }
             )
         }
 
@@ -1483,13 +1525,19 @@ fun DocumentHubScreen(
                 properties = DialogProperties(usePlatformDefaultWidth = isLandscape),
                 modifier = if (isLandscape) Modifier else Modifier.fillMaxWidth().padding(horizontal = 10.dp),
                 icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                title = { Text(if (isViewingTrash) "Delete Permanently?" else "Move to Trash?", fontWeight = FontWeight.Bold) },
+                title = {
+                    Text(
+                        if (isViewingTrash) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_delete_permanent_title)
+                        else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_delete_note_title),
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 text = {
                     Text(
                         if (isViewingTrash)
                             "Permanently delete \"${doc.title}\"? This action cannot be undone."
                         else
-                            "Move \"${doc.title}\" to Trash? You can restore it later."
+                            androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_delete_note_body, doc.title)
                     )
                 },
                 confirmButton = {
@@ -1512,9 +1560,14 @@ fun DocumentHubScreen(
                                 }
                             }
                         }
-                    ) { Text(if (isViewingTrash) "Delete Permanently" else "Move to Trash") }
+                    ) {
+                        Text(
+                            if (isViewingTrash) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_delete_permanent)
+                            else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_delete)
+                        )
+                    }
                 },
-                dismissButton = { TextButton(onClick = { noteToDelete = null }) { Text("Cancel") } }
+                dismissButton = { TextButton(onClick = { noteToDelete = null }) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel)) } }
             )
         }
 
@@ -1526,7 +1579,7 @@ fun DocumentHubScreen(
             AlertDialog(
                 onDismissRequest = { showBatchDeletePermanentDialog = false },
                 icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                title = { Text("Delete Permanently?", fontWeight = FontWeight.Bold) },
+                title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_delete_permanent_title), fontWeight = FontWeight.Bold) },
                 text = {
                     Text("Permanently delete ${selectedDocs.size} item(s)? This action cannot be undone.")
                 },
@@ -1543,10 +1596,10 @@ fun DocumentHubScreen(
                                 snackbarHostState.showSnackbar("Permanently deleted $count item(s)")
                             }
                         }
-                    ) { Text("Delete Permanently") }
+                    ) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_delete_permanent)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showBatchDeletePermanentDialog = false }) { Text("Cancel") }
+                    TextButton(onClick = { showBatchDeletePermanentDialog = false }) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel)) }
                 }
             )
         }
@@ -1556,9 +1609,9 @@ fun DocumentHubScreen(
             AlertDialog(
                 onDismissRequest = { showEmptyTrashConfirmDialog = false },
                 icon = { Icon(Icons.Default.DeleteSweep, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                title = { Text("Empty Trash?", fontWeight = FontWeight.Bold) },
+                title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_empty_trash_title), fontWeight = FontWeight.Bold) },
                 text = {
-                    Text("All items in Trash will be permanently deleted. This action cannot be undone.")
+                    Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_empty_trash_body))
                 },
                 confirmButton = {
                     Button(
@@ -1571,10 +1624,10 @@ fun DocumentHubScreen(
                                 snackbarHostState.showSnackbar("Emptied Trash")
                             }
                         }
-                    ) { Text("Empty Trash") }
+                    ) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_menu_empty_trash)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showEmptyTrashConfirmDialog = false }) { Text("Cancel") }
+                    TextButton(onClick = { showEmptyTrashConfirmDialog = false }) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel)) }
                 }
             )
         }
@@ -1587,9 +1640,9 @@ fun DocumentHubScreen(
             AlertDialog(
                 onDismissRequest = { showEmergencyDialog = false },
                 icon = { Icon(Icons.Default.Restore, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp)) },
-                title = { Text("Unsaved Session Recovered", fontWeight = FontWeight.Bold) },
+                title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_emergency_recovery_title), fontWeight = FontWeight.Bold) },
                 text = {
-                    Text("Xournal++ closed unexpectedly during a previous session. An emergency recovery copy from $dateStr was saved.")
+                    Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_emergency_recovery_body, dateStr))
                 },
                 confirmButton = {
                     Button(onClick = {
@@ -1598,7 +1651,7 @@ fun DocumentHubScreen(
                         quarantinedEmergencySave = null
                         loadContent()
                         openNoteInCanvas(staged)
-                    }) { Text("Open Now") }
+                    }) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_open_now)) }
                 },
                 dismissButton = {
                     Row {
@@ -1608,13 +1661,13 @@ fun DocumentHubScreen(
                             emergencySaveNameInput = defaultName
                             emergencySaveTargetFolder = currentDirectory
                             showEmergencySaveNameDialog = true
-                        }) { Text("Save as Note") }
+                        }) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_save_as_note)) }
                         TextButton(onClick = {
                             showEmergencyDialog = false
                             repository.discardEmergencyRecovery()
                             quarantinedEmergencySave = null
                             loadContent()
-                        }) { Text("Discard", color = MaterialTheme.colorScheme.error) }
+                        }) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_discard), color = MaterialTheme.colorScheme.error) }
                     }
                 }
             )
@@ -1636,13 +1689,10 @@ fun DocumentHubScreen(
                     )
                 },
                 title = {
-                    Text("Startup Preference Overridden", fontWeight = FontWeight.Bold)
+                    Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_autoload_override_title), fontWeight = FontWeight.Bold)
                 },
                 text = {
-                    Text(
-                        "In Xournal++ Preferences > Load/Save, \"Enable autoloading of most recent file on application startup\" was detected and has been cleared to \"false\".\n\n" +
-                        "This setting conflicts with Aournal++'s \"Continue where you left off\" workspace control. You can continue launching recent notes directly from your Home Screen."
-                    )
+                    Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_autoload_override_body))
                 },
                 confirmButton = {
                     Button(
@@ -1651,7 +1701,7 @@ fun DocumentHubScreen(
                             env.clearPendingAutoloadOverrideNotification()
                         }
                     ) {
-                        Text("Understood")
+                        Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_got_it))
                     }
                 }
             )
@@ -1665,8 +1715,8 @@ fun DocumentHubScreen(
             }
 
             SaveAsNoteDialog(
-                title = "Save Recovered Note",
-                subtitle = "Choose a name and destination folder for the recovered note.",
+                title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_save_recovered_title),
+                subtitle = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_save_recovered_subtitle),
                 icon = Icons.Default.Emergency,
                 initialName = emergencySaveNameInput,
                 initialFolder = emergencySaveTargetFolder,
@@ -2381,12 +2431,14 @@ fun DocumentHubScreen(
                                         tint = MaterialTheme.colorScheme.outline
                                     )
                                     Text(
-                                        text = if (isViewingTrash) "Trash is empty" else "No notes found",
+                                        text = if (isViewingTrash) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_trash_empty_title)
+                                        else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_empty_state_title),
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = if (isViewingTrash) "Deleted notes will appear here" else "Tap + to create your first note",
+                                        text = if (isViewingTrash) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_trash_empty_subtitle)
+                                        else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_empty_state_subtitle),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -2443,11 +2495,14 @@ fun DocumentHubScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Restore,
-                                    contentDescription = "Restore Selected",
+                                    contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_restore),
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Restore (${selectedDocs.size})", fontWeight = FontWeight.Bold)
+                                Text(
+                                    text = "${androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_restore)} (${selectedDocs.size})",
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
 
                             // 2. Delete Permanently Selected Action
@@ -2462,12 +2517,16 @@ fun DocumentHubScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Delete,
-                                    contentDescription = "Delete Permanently",
+                                    contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_delete_permanent),
                                     tint = MaterialTheme.colorScheme.error,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Delete", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                                Text(
+                                    text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_delete),
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.error
+                                )
                             }
                         }
                     } else {
@@ -2498,7 +2557,8 @@ fun DocumentHubScreen(
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Icon(
                                         Icons.Default.PushPin,
-                                        contentDescription = if (allSelectedPinned) "Unpin" else "Pin to Home",
+                                        contentDescription = if (allSelectedPinned) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_unpin)
+                                        else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_pin),
                                         tint = if (allSelectedPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
@@ -2507,7 +2567,11 @@ fun DocumentHubScreen(
                             // Move to Folder Action
                             IconButton(onClick = { showMoveToFolderDialog = true }) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = "Move to Folder", tint = MaterialTheme.colorScheme.primary)
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.DriveFileMove,
+                                        contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_move),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
                                 }
                             }
 
@@ -2524,7 +2588,10 @@ fun DocumentHubScreen(
                                 }
                             }) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.PictureAsPdf, contentDescription = "Share as PDF")
+                                    Icon(
+                                        Icons.Default.PictureAsPdf,
+                                        contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_export_pdf)
+                                    )
                                 }
                             }
 
@@ -2533,7 +2600,10 @@ fun DocumentHubScreen(
                                 repository.shareMultipleNotesAsXopp(context, selectedDocs)
                             }) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.Share, contentDescription = "Share Notes")
+                                    Icon(
+                                        Icons.Default.Share,
+                                        contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share)
+                                    )
                                 }
                             }
 
@@ -2548,7 +2618,11 @@ fun DocumentHubScreen(
                                 }
                             }) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Trash Selected", tint = MaterialTheme.colorScheme.error)
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_delete),
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
                                 }
                             }
                         }

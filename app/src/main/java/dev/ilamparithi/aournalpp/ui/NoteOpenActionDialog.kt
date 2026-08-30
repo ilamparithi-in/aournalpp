@@ -114,7 +114,7 @@ fun NoteOpenActionDialog(
         },
         title = {
             Text(
-                text = "Open Note",
+                text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_title),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
@@ -193,7 +193,7 @@ fun NoteOpenActionDialog(
                 }
 
                 Text(
-                    text = "Choose how to open this note:",
+                    text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_prompt),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -203,14 +203,14 @@ fun NoteOpenActionDialog(
                     icon = Icons.Default.PictureAsPdf,
                     iconContainerColor = MaterialTheme.colorScheme.errorContainer,
                     iconTint = MaterialTheme.colorScheme.onErrorContainer,
-                    title = "View as PDF",
-                    subtitle = "Render and view as read-only PDF document",
+                    title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_view_pdf_title),
+                    subtitle = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_view_pdf_subtitle),
                     onClick = {
                         if (dontAskAgain) {
                             NoteOpenManager.setDefaultAction(context, NoteOpenAction.VIEW)
                             Toast.makeText(
                                 context,
-                                "Default action set to View as PDF. You can change this in Settings.",
+                                context.getString(dev.ilamparithi.aournalpp.R.string.msg_default_action_set_view),
                                 Toast.LENGTH_LONG
                             ).show()
                         }
@@ -224,14 +224,14 @@ fun NoteOpenActionDialog(
                     icon = Icons.Default.Edit,
                     iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
                     iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    title = "Edit in Xournal++",
-                    subtitle = "Launch full canvas editor to write, draw, and modify",
+                    title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_edit_canvas_title),
+                    subtitle = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_edit_canvas_subtitle),
                     onClick = {
                         if (dontAskAgain) {
                             NoteOpenManager.setDefaultAction(context, NoteOpenAction.EDIT)
                             Toast.makeText(
                                 context,
-                                "Default action set to Edit in Xournal++. You can change this in Settings.",
+                                context.getString(dev.ilamparithi.aournalpp.R.string.msg_default_action_set_edit),
                                 Toast.LENGTH_LONG
                             ).show()
                         }
@@ -260,7 +260,7 @@ fun NoteOpenActionDialog(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Don't ask again (set as default)",
+                        text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_dont_ask_again),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface
@@ -275,7 +275,7 @@ fun NoteOpenActionDialog(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text(
-                    text = "Cancel",
+                    text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel),
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary
                 )

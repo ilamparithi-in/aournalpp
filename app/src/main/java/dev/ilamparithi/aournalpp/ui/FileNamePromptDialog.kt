@@ -130,7 +130,7 @@ fun FileNamePromptDialog(
                         .fillMaxWidth()
                         .focusRequester(focusRequester),
                     singleLine = true,
-                    label = { Text("File name") },
+                    label = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_note_name_hint)) },
                     suffix = {
                         Text(
                             text = extension,
@@ -144,7 +144,7 @@ fun FileNamePromptDialog(
                             IconButton(onClick = { textFieldValue = TextFieldValue("") }) {
                                 Icon(
                                     imageVector = Icons.Default.Clear,
-                                    contentDescription = "Clear",
+                                    contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_clear),
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -177,7 +177,7 @@ fun FileNamePromptDialog(
                 onClick = onDismiss,
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Cancel")
+                Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel))
             }
         }
     )

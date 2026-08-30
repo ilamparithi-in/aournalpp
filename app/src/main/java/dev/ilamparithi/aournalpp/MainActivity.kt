@@ -346,15 +346,15 @@ class MainActivity : ComponentActivity() {
 }
 
 enum class AppTab(
-    val title: String,
+    @androidx.annotation.StringRes val titleRes: Int,
     val filledIcon: ImageVector,
     val outlinedIcon: ImageVector
 ) {
-    HOME("Home", Icons.Filled.Home, Icons.Outlined.Home),
-    FILES("Files", Icons.Filled.FolderCopy, Icons.Outlined.FolderCopy),
-    CLOUD("Cloud", Icons.Filled.Cloud, Icons.Outlined.Cloud),
-    SETTINGS("Settings", Icons.Filled.Settings, Icons.Outlined.Settings),
-    ABOUT("About", Icons.Filled.Info, Icons.Outlined.Info);
+    HOME(R.string.tab_home, Icons.Filled.Home, Icons.Outlined.Home),
+    FILES(R.string.tab_files, Icons.Filled.FolderCopy, Icons.Outlined.FolderCopy),
+    CLOUD(R.string.tab_cloud, Icons.Filled.Cloud, Icons.Outlined.Cloud),
+    SETTINGS(R.string.tab_settings, Icons.Filled.Settings, Icons.Outlined.Settings),
+    ABOUT(R.string.tab_about, Icons.Filled.Info, Icons.Outlined.Info);
 
     val id: Int get() = ordinal
 }
@@ -448,16 +448,17 @@ fun MainResponsiveAppShell() {
                     }
                 ) {
                     AppTab.entries.forEach { tab ->
+                        val tabTitle = androidx.compose.ui.res.stringResource(tab.titleRes)
                         NavigationRailItem(
                             selected = selectedTab == tab.id,
                             onClick = { onTabSelect(tab.id) },
                             icon = {
                                 Icon(
                                     imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
-                                    contentDescription = tab.title
+                                    contentDescription = tabTitle
                                 )
                             },
-                            label = { Text(tab.title, fontWeight = if (selectedTab == tab.id) FontWeight.Bold else FontWeight.Normal) }
+                            label = { Text(tabTitle, fontWeight = if (selectedTab == tab.id) FontWeight.Bold else FontWeight.Normal) }
                         )
                     }
                 }
@@ -505,16 +506,17 @@ fun MainResponsiveAppShell() {
                         containerColor = MaterialTheme.colorScheme.surface
                     ) {
                         AppTab.entries.forEach { tab ->
+                            val tabTitle = androidx.compose.ui.res.stringResource(tab.titleRes)
                             NavigationBarItem(
                                 selected = selectedTab == tab.id,
                                 onClick = { onTabSelect(tab.id) },
                                 icon = {
                                     Icon(
                                         imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
-                                        contentDescription = tab.title
+                                        contentDescription = tabTitle
                                     )
                                 },
-                                label = { Text(tab.title) }
+                                label = { Text(tabTitle) }
                             )
                         }
                     }

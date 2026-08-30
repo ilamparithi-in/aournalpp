@@ -233,7 +233,7 @@ fun StandardNoteCard(
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Default.PushPin,
-                            contentDescription = "Pinned Note",
+                            contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_pin_note),
                             tint = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.size(15.dp)
                         )
@@ -257,7 +257,7 @@ fun StandardNoteCard(
                     if (isSelected) {
                         Icon(
                             imageVector = Icons.Default.Check,
-                            contentDescription = "Selected",
+                            contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_confirm),
                             tint = Color.White,
                             modifier = Modifier.padding(5.dp)
                         )
@@ -280,7 +280,7 @@ fun StandardNoteCard(
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Default.MoreVert,
-                                    contentDescription = "Options",
+                                    contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_details),
                                     tint = Color.White,
                                     modifier = Modifier.size(16.dp)
                                 )
@@ -314,7 +314,7 @@ fun StandardNoteCard(
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Default.Restore,
-                                contentDescription = "Restore",
+                                contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_restore_autosave),
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(16.dp)
                             )
@@ -371,8 +371,9 @@ fun FloatingDetailsPill(
             )
 
             // Bottom Row: Folder & Timestamp
-            val folderDisplayName = if (note.folder.isBlank()) "Notes Home" else note.folder
-            val isHome = note.folder.isBlank() || note.folder == "Notes Home"
+            val defaultHomeFolder = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_root_folder_name)
+            val folderDisplayName = if (note.folder.isBlank()) defaultHomeFolder else note.folder
+            val isHome = note.folder.isBlank() || note.folder == "Notes Home" || note.folder == defaultHomeFolder
             val isEmergency = note.folderIconType == "emergency" || note.folder.equals("Emergency Saves", ignoreCase = true)
 
             Row(
@@ -452,7 +453,12 @@ fun StandardNoteActionDropdown(
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         if (onTogglePin != null) {
             DropdownMenuItem(
-                text = { Text(if (isPinned) "Unpin from Home" else "Pin to Home") },
+                text = {
+                    Text(
+                        if (isPinned) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_unpin_note)
+                        else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_pin_note)
+                    )
+                },
                 leadingIcon = {
                     Icon(
                         imageVector = if (isPinned) Icons.Outlined.PushPin else Icons.Default.PushPin,
@@ -466,21 +472,21 @@ fun StandardNoteActionDropdown(
         }
         if (onExportPdf != null) {
             DropdownMenuItem(
-                text = { Text("Export to PDF") },
+                text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_export_pdf)) },
                 leadingIcon = { Icon(Icons.Default.FileDownload, contentDescription = null) },
                 onClick = { onDismiss(); onExportPdf() }
             )
         }
         if (onSharePdf != null) {
             DropdownMenuItem(
-                text = { Text("Share as PDF") },
+                text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share)) },
                 leadingIcon = { Icon(Icons.Default.PictureAsPdf, contentDescription = null) },
                 onClick = { onDismiss(); onSharePdf() }
             )
         }
         if (onShareXopp != null) {
             DropdownMenuItem(
-                text = { Text("Share as Note (.xopp)") },
+                text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_note)) },
                 leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
                 onClick = { onDismiss(); onShareXopp() }
             )
@@ -488,14 +494,14 @@ fun StandardNoteActionDropdown(
         if (onRename != null) {
             HorizontalDivider()
             DropdownMenuItem(
-                text = { Text("Rename") },
+                text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_rename)) },
                 leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null) },
                 onClick = { onDismiss(); onRename() }
             )
         }
         if (onDuplicate != null) {
             DropdownMenuItem(
-                text = { Text("Duplicate") },
+                text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_keep_both)) },
                 leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
                 onClick = { onDismiss(); onDuplicate() }
             )
@@ -503,7 +509,7 @@ fun StandardNoteActionDropdown(
         if (onDelete != null) {
             HorizontalDivider()
             DropdownMenuItem(
-                text = { Text("Move to Trash", color = MaterialTheme.colorScheme.error) },
+                text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_delete), color = MaterialTheme.colorScheme.error) },
                 leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                 onClick = { onDismiss(); onDelete() }
             )

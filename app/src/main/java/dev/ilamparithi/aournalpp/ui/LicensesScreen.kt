@@ -264,7 +264,7 @@ fun LicensesScreen(onBack: (() -> Unit)? = null) {
             TopAppBar(
                 title = {
                     Text(
-                        "Open Source Licenses",
+                        androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.licenses_title),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
@@ -274,7 +274,7 @@ fun LicensesScreen(onBack: (() -> Unit)? = null) {
                         IconButton(onClick = onBack) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back"
+                                contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_back)
                             )
                         }
                     }
@@ -313,7 +313,7 @@ fun LicensesScreen(onBack: (() -> Unit)? = null) {
                             modifier = Modifier.size(24.dp)
                         )
                         Text(
-                            text = "Aournal is built on top of incredible open-source projects. In compliance with free software licensing, all component licenses and sources are provided below.",
+                            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.licenses_compliance_banner),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -391,7 +391,7 @@ fun LicensesScreen(onBack: (() -> Unit)? = null) {
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Source Code")
+                                Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.licenses_source_code))
                             }
 
                             Spacer(modifier = Modifier.width(8.dp))
@@ -400,7 +400,7 @@ fun LicensesScreen(onBack: (() -> Unit)? = null) {
                                 onClick = { selectedLibraryForDialog = lib },
                                 shape = RoundedCornerShape(8.dp)
                             ) {
-                                Text("View License")
+                                Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.licenses_view_license))
                             }
                         }
                     }
@@ -417,7 +417,7 @@ fun LicensesScreen(onBack: (() -> Unit)? = null) {
                 onDismissRequest = { selectedLibraryForDialog = null },
                 title = {
                     Text(
-                        text = "${lib.name} License",
+                        text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.licenses_dialog_title, lib.name),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
@@ -453,7 +453,7 @@ fun LicensesScreen(onBack: (() -> Unit)? = null) {
                 },
                 confirmButton = {
                     Button(onClick = { selectedLibraryForDialog = null }) {
-                        Text("Close")
+                        Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel))
                     }
                 }
             )

@@ -90,11 +90,11 @@ import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import kotlin.math.hypot
 
 private val TIPS_LIST = listOf(
-    "Direct Touch mode provides ultra-low latency stylus handwriting.",
-    "Intelligent Session Recovery automatically safeguards your notes.",
-    "Organize your workspace with custom folder colors and emojis.",
-    "Fullscreen Canvas hides UI elements for distraction-free sketching.",
-    "Export high-quality vector PDFs directly to device storage."
+    dev.ilamparithi.aournalpp.R.string.bootstrap_tip_1,
+    dev.ilamparithi.aournalpp.R.string.bootstrap_tip_2,
+    dev.ilamparithi.aournalpp.R.string.bootstrap_tip_3,
+    dev.ilamparithi.aournalpp.R.string.bootstrap_tip_4,
+    dev.ilamparithi.aournalpp.R.string.bootstrap_tip_5
 )
 
 @Composable
@@ -332,7 +332,8 @@ fun BootstrapScreen(
 
                 // Title & Subtitle
                 Text(
-                    text = if (isError) "Initialization Failed" else "Setting Up Linux Runtime",
+                    text = if (isError) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.bootstrap_title_failed)
+                    else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.bootstrap_title_setup),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground,
@@ -342,8 +343,8 @@ fun BootstrapScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = if (isError) "An error occurred while preparing application components."
-                    else "Extracting Xournal++ desktop environment and native tools...",
+                    text = if (isError) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.bootstrap_desc_error)
+                    else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.bootstrap_desc_extracting),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -399,13 +400,16 @@ fun BootstrapScreen(
                                     color = MaterialTheme.colorScheme.primary
                                 )
                                 Text(
-                                    text = "${progress.extractedBytes / (1024 * 1024)} MB extracted",
+                                    text = androidx.compose.ui.res.stringResource(
+                                        dev.ilamparithi.aournalpp.R.string.bootstrap_extracted_mb,
+                                        progress.extractedBytes / (1024 * 1024)
+                                    ),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             } else {
                                 Text(
-                                    text = "Preparing archive...",
+                                    text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.bootstrap_preparing_archive),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -418,7 +422,9 @@ fun BootstrapScreen(
                         val currentFileText = if (progress != null && progress.currentFile.isNotBlank()) {
                             progress.currentFile.substringAfterLast('/')
                         } else {
-                            installingState?.message?.ifBlank { "Unpacking system libraries..." } ?: "Initializing environment..."
+                            val defaultUnpacking = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.bootstrap_unpacking_libraries)
+                            val defaultInit = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.bootstrap_initializing_env)
+                            installingState?.message?.ifBlank { defaultUnpacking } ?: defaultInit
                         }
 
                         Surface(
@@ -468,9 +474,9 @@ fun BootstrapScreen(
                                         )
                                 },
                                 label = "tipCarousel"
-                            ) { tip ->
+                            ) { tipRes ->
                                 Text(
-                                    text = tip,
+                                    text = androidx.compose.ui.res.stringResource(tipRes),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurface,
                                     maxLines = 2,
@@ -514,7 +520,7 @@ fun BootstrapScreen(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Retry Installation")
+                        Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.bootstrap_retry_btn))
                     }
                 }
             }

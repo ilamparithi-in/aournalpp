@@ -108,7 +108,7 @@ fun EnvironmentUpdateDialog(
                 Spacer(modifier = Modifier.height(18.dp))
 
                 Text(
-                    text = "Runtime Update Available",
+                    text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.update_title),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -118,7 +118,7 @@ fun EnvironmentUpdateDialog(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "A newer version of the Linux runtime environment is ready to install.",
+                    text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.update_desc),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -154,7 +154,7 @@ fun EnvironmentUpdateDialog(
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "sec",
+                            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.update_sec_unit),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -182,7 +182,7 @@ fun EnvironmentUpdateDialog(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Launch Now",
+                            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_launch_now),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -205,7 +205,7 @@ fun EnvironmentUpdateDialog(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Update Now",
+                            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_update_now),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold
                         )

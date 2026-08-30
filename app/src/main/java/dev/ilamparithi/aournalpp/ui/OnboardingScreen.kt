@@ -274,7 +274,7 @@ fun OnboardingScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
+                                contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_back),
                                 tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
@@ -474,7 +474,7 @@ private fun OnboardingWelcomePage(
         Spacer(modifier = Modifier.height(28.dp))
 
         Text(
-            text = "Aournal++",
+            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_welcome_title),
             style = MaterialTheme.typography.headlineLarge,
             fontWeight = FontWeight.Black,
             color = MaterialTheme.colorScheme.primary,
@@ -484,7 +484,7 @@ private fun OnboardingWelcomePage(
         Spacer(modifier = Modifier.height(14.dp))
 
         Text(
-            text = "The most powerful notetaking app now on Android with an enhanced experience.",
+            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_welcome_desc),
             style = MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp, lineHeight = 26.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -503,7 +503,7 @@ private fun OnboardingWelcomePage(
             )
         ) {
             Text(
-                text = "Get started",
+                text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_get_started),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -541,18 +541,18 @@ private fun OnboardingStoragePermissionPage(
             },
             title = {
                 Text(
-                    text = "Why All Files Permission?",
+                    text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_storage_dialog_title),
                     fontWeight = FontWeight.Bold
                 )
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "Aournal++ runs the desktop Xournal++ engine inside an isolated Linux userland. Standard Android Scoped Storage restricts direct file path access for native C++ POSIX operations and autosaves.",
+                        text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_storage_dialog_p1),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        text = "Granting All Files Access allows you to store notes and configs anywhere on device storage without sandbox restrictions.",
+                        text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_storage_dialog_p2),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -574,12 +574,12 @@ private fun OnboardingStoragePermissionPage(
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Read Wiki")
+                    Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_read_wiki))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showExplanationDialog = false }) {
-                    Text("Close")
+                    Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_close))
                 }
             }
         )
@@ -614,7 +614,7 @@ private fun OnboardingStoragePermissionPage(
         Spacer(modifier = Modifier.height(20.dp))
 
         Text(
-            text = "Storage Permission",
+            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_storage_title),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -624,7 +624,7 @@ private fun OnboardingStoragePermissionPage(
         Spacer(modifier = Modifier.height(10.dp))
 
         Text(
-            text = "Aournal++ needs a home folder to store notes and config to. All files permission is required due to limitations with android.",
+            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_storage_desc),
             style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -648,7 +648,7 @@ private fun OnboardingStoragePermissionPage(
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = "Learn more about Android storage limitations",
+                text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_storage_learn_link),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.primary,
@@ -681,14 +681,15 @@ private fun OnboardingStoragePermissionPage(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = if (isGranted) "All Files Access Granted" else "Permission Required",
+                        text = if (isGranted) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_storage_granted_title)
+                        else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_storage_required_title),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = if (isGranted) "Notes and configs will save directly to device storage."
-                        else "Grant access in Android Settings to continue.",
+                        text = if (isGranted) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_storage_granted_desc)
+                        else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_storage_required_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -721,7 +722,7 @@ private fun OnboardingStoragePermissionPage(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Grant Storage Permission",
+                        text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_grant_storage_permission),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -736,7 +737,8 @@ private fun OnboardingStoragePermissionPage(
                 shape = RoundedCornerShape(18.dp)
             ) {
                 Text(
-                    text = if (isGranted) "Continue" else "Continue anyway",
+                    text = if (isGranted) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_continue)
+                    else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_continue_anyway),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -776,7 +778,11 @@ private fun OnboardingChooseFolderPage(
             }
             env.setNotesDirectory(resolved)
             selectedPath = resolved
-            Toast.makeText(context, "Notes folder set to: $resolved", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                context,
+                context.getString(dev.ilamparithi.aournalpp.R.string.msg_notes_folder_set, resolved),
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
@@ -816,7 +822,7 @@ private fun OnboardingChooseFolderPage(
         Spacer(modifier = Modifier.height(18.dp))
 
         Text(
-            text = "Notes Storage Folder",
+            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_folder_title),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -826,7 +832,7 @@ private fun OnboardingChooseFolderPage(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Choose where your notebooks, documents, and configuration will be saved.",
+            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_folder_desc),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -857,7 +863,7 @@ private fun OnboardingChooseFolderPage(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Active Notes Folder",
+                        text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_folder_active_title),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -888,7 +894,7 @@ private fun OnboardingChooseFolderPage(
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Browse Other Folder")
+                    Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_browse_other_folder))
                 }
             }
         }
@@ -897,7 +903,7 @@ private fun OnboardingChooseFolderPage(
 
         // Preset Chips
         Text(
-            text = "Standard presets:",
+            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_folder_preset_header),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.align(Alignment.Start)
@@ -916,7 +922,7 @@ private fun OnboardingChooseFolderPage(
                     env.setNotesDirectory(defaultNotesPath)
                     selectedPath = defaultNotesPath
                 },
-                label = { Text("Documents/Notes (Default)") }
+                label = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_folder_preset_default)) }
             )
             FilterChip(
                 selected = selectedPath == defaultXournalPath,
@@ -924,7 +930,7 @@ private fun OnboardingChooseFolderPage(
                     env.setNotesDirectory(defaultXournalPath)
                     selectedPath = defaultXournalPath
                 },
-                label = { Text("Documents/Xournal") }
+                label = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_folder_preset_xournal)) }
             )
             FilterChip(
                 selected = selectedPath == defaultDownloadPath,
@@ -932,7 +938,7 @@ private fun OnboardingChooseFolderPage(
                     env.setNotesDirectory(defaultDownloadPath)
                     selectedPath = defaultDownloadPath
                 },
-                label = { Text("Download") }
+                label = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_folder_preset_download)) }
             )
         }
 
@@ -949,7 +955,7 @@ private fun OnboardingChooseFolderPage(
             )
         ) {
             Text(
-                text = "Continue",
+                text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_continue),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -996,11 +1002,11 @@ private fun OnboardingSettingsPage(
     var showTimeoutMenu by remember { mutableStateOf(false) }
 
     val timeoutOptions = listOf(
-        "system" to "System default",
-        "never" to "Never (Keep screen on)",
-        "1" to "1 minute",
-        "5" to "5 minutes",
-        "15" to "15 minutes"
+        "system" to androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.timeout_system),
+        "never" to androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.timeout_never),
+        "1" to androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.timeout_1m),
+        "5" to androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.timeout_5m),
+        "15" to androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.timeout_15m)
     )
 
     Column(
@@ -1012,7 +1018,7 @@ private fun OnboardingSettingsPage(
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "Quick Settings",
+            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_settings_title),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -1022,7 +1028,7 @@ private fun OnboardingSettingsPage(
         Spacer(modifier = Modifier.height(6.dp))
 
         Text(
-            text = "Some settings you may want to change before getting started:",
+            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_settings_desc),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -1049,10 +1055,13 @@ private fun OnboardingSettingsPage(
                         )
                     },
                     headlineContent = {
-                        Text("Intelligent Session Recovery", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.pref_session_recovery_title),
+                            fontWeight = FontWeight.SemiBold
+                        )
                     },
                     supportingContent = {
-                        Text("Auto-quarantine and safely restore unsaved crash sessions on relaunch.")
+                        Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.pref_session_recovery_desc))
                     },
                     trailingContent = {
                         Switch(
@@ -1077,10 +1086,13 @@ private fun OnboardingSettingsPage(
                         )
                     },
                     headlineContent = {
-                        Text("Fullscreen Canvas", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.pref_fullscreen_title),
+                            fontWeight = FontWeight.SemiBold
+                        )
                     },
                     supportingContent = {
-                        Text("Hide system navigation and status bars for maximum handwriting area.")
+                        Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.pref_fullscreen_desc))
                     },
                     trailingContent = {
                         Switch(
@@ -1106,20 +1118,24 @@ private fun OnboardingSettingsPage(
                         )
                     },
                     headlineContent = {
-                        Text("Screen Idle Timeout", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.pref_idle_timeout_title),
+                            fontWeight = FontWeight.SemiBold
+                        )
                     },
                     supportingContent = {
-                        Text("Prevent device screen from turning off while writing.")
+                        Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.pref_idle_timeout_desc))
                     },
                     trailingContent = {
                         Box {
+                            val defaultTimeoutLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.timeout_system)
                             OutlinedButton(
                                 onClick = { showTimeoutMenu = true },
                                 shape = RoundedCornerShape(12.dp)
                             ) {
                                 Text(
                                     text = timeoutOptions.firstOrNull { it.first == idleTimeout }?.second
-                                        ?: "System default",
+                                        ?: defaultTimeoutLabel,
                                     style = MaterialTheme.typography.labelMedium
                                 )
                                 Icon(
@@ -1160,10 +1176,13 @@ private fun OnboardingSettingsPage(
                         )
                     },
                     headlineContent = {
-                        Text("Reduce Animations", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.pref_reduce_anim_title),
+                            fontWeight = FontWeight.SemiBold
+                        )
                     },
                     supportingContent = {
-                        Text("Disable expressive motion effects to optimize performance on lower-end devices.")
+                        Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.pref_reduce_anim_desc))
                     },
                     trailingContent = {
                         Switch(
@@ -1191,7 +1210,7 @@ private fun OnboardingSettingsPage(
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-                text = "More settings are available in the settings page.",
+                text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_more_settings_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1210,7 +1229,7 @@ private fun OnboardingSettingsPage(
             )
         ) {
             Text(
-                text = "Continue",
+                text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_continue),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -1281,7 +1300,7 @@ private fun OnboardingCompletionPage(
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = "You're all set!",
+            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_completion_title),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Black,
             color = MaterialTheme.colorScheme.onSurface,
@@ -1291,7 +1310,7 @@ private fun OnboardingCompletionPage(
         Spacer(modifier = Modifier.height(10.dp))
 
         Text(
-            text = "Your digital notebook workspace is ready. Jump in and start creating.",
+            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_completion_desc),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -1308,7 +1327,7 @@ private fun OnboardingCompletionPage(
                 onClick = {
                     Toast.makeText(
                         context,
-                        "Quick tour will be available in a future update!",
+                        context.getString(dev.ilamparithi.aournalpp.R.string.msg_quick_tour_future),
                         Toast.LENGTH_SHORT
                     ).show()
                 },
@@ -1325,7 +1344,7 @@ private fun OnboardingCompletionPage(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Quick tour",
+                    text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_quick_tour),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -1343,7 +1362,7 @@ private fun OnboardingCompletionPage(
                 )
             ) {
                 Text(
-                    text = "Let me in!",
+                    text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_let_me_in),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -1445,10 +1464,13 @@ private fun OnboardingExtractionBottomPill(
 
                         Text(
                             text = when {
-                                isReady -> "Linux environment ready"
-                                isError -> "Initialization issue (tap for details)"
-                                progress != null -> "Setting up Linux runtime • ${String.format("%.0f", progress.percentage)}%"
-                                else -> "Preparing background environment..."
+                                isReady -> androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.pill_env_ready)
+                                isError -> androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.pill_env_issue)
+                                progress != null -> androidx.compose.ui.res.stringResource(
+                                    dev.ilamparithi.aournalpp.R.string.pill_setting_up,
+                                    String.format("%.0f", progress.percentage)
+                                )
+                                else -> androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.pill_preparing)
                             },
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
@@ -1459,7 +1481,8 @@ private fun OnboardingExtractionBottomPill(
                     }
 
                     Text(
-                        text = if (isExpanded) "Hide" else "Details",
+                        text = if (isExpanded) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_hide)
+                        else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_details),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold,
@@ -1512,7 +1535,7 @@ private fun OnboardingExtractionBottomPill(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "Extracted Size:",
+                                    text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.pill_extracted_size),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -1527,7 +1550,7 @@ private fun OnboardingExtractionBottomPill(
                             Spacer(modifier = Modifier.height(4.dp))
 
                             Text(
-                                text = "Current file: ${progress.currentFile}",
+                                text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.pill_current_file, progress.currentFile),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 2,
@@ -1535,20 +1558,23 @@ private fun OnboardingExtractionBottomPill(
                             )
                         } else if (isReady) {
                             Text(
-                                text = "The Linux runtime has finished extracting successfully and is awaiting app launch.",
+                                text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.pill_ready_desc),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         } else if (isError) {
                             val err = (state as BootstrapState.Error).throwable
                             Text(
-                                text = "Error: ${err.message ?: "Unknown extraction error"}",
+                                text = androidx.compose.ui.res.stringResource(
+                                    dev.ilamparithi.aournalpp.R.string.pill_error_prefix,
+                                    err.message ?: "Unknown extraction error"
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error
                             )
                         } else {
                             Text(
-                                text = "Decompressing and setting executable permissions on system libraries...",
+                                text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.pill_unpacking_desc),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1556,7 +1582,7 @@ private fun OnboardingExtractionBottomPill(
 
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Tap bar to collapse",
+                            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.pill_tap_collapse),
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                             textAlign = TextAlign.Center,

@@ -91,7 +91,7 @@ fun CreateFolderDialog(
                 OutlinedTextField(
                     value = newFolderName,
                     onValueChange = { newFolderName = it },
-                    label = { Text("Folder Name") },
+                    label = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_folder_name_hint)) },
                     placeholder = { Text("e.g. Physics, Sketches") },
                     singleLine = true,
                     enabled = !isCreating,
@@ -100,7 +100,7 @@ fun CreateFolderDialog(
                 )
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Folder Icon / Emoji", style = MaterialTheme.typography.labelMedium)
+                    Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_change_emoji), style = MaterialTheme.typography.labelMedium)
                     FolderIconPickerRow(
                         selectedEmoji = selectedFolderEmoji,
                         selectedIconType = selectedFolderIconType,
@@ -112,7 +112,7 @@ fun CreateFolderDialog(
                 }
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Folder Color Accent", style = MaterialTheme.typography.labelMedium)
+                    Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_change_color), style = MaterialTheme.typography.labelMedium)
                     FolderColorPickerRow(
                         selectedColorHex = selectedFolderColor,
                         onColorSelected = { selectedFolderColor = it }
@@ -128,7 +128,7 @@ fun CreateFolderDialog(
                         onClick = onDismiss,
                         enabled = !isCreating
                     ) {
-                        Text("Cancel")
+                        Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel))
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(

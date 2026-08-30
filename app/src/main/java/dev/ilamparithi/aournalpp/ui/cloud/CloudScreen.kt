@@ -1,6 +1,8 @@
 package dev.ilamparithi.aournalpp.ui.cloud
 
 import android.widget.TimePicker
+import androidx.compose.ui.res.stringResource
+import dev.ilamparithi.aournalpp.R
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
@@ -224,7 +226,7 @@ fun CloudScreen(
                 TopAppBar(
                     title = {
                         Text(
-                            text = "Cloud Backup & Sync",
+                            text = stringResource(R.string.cloud_title),
                             fontWeight = FontWeight.Bold
                         )
                     },
@@ -239,7 +241,7 @@ fun CloudScreen(
                             IconButton(onClick = { currentSubpage = CloudSubpage.TRANSFER_QUEUE }) {
                                 Icon(
                                     imageVector = Icons.Default.CloudSync,
-                                    contentDescription = "Transfer Queue"
+                                    contentDescription = stringResource(R.string.cloud_tab_queue)
                                 )
                             }
                         }
@@ -257,7 +259,6 @@ fun CloudScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-            // 1. Overview & Quick Sync Banner
             item {
                 OverviewCard(
                     services = services,
@@ -306,7 +307,6 @@ fun CloudScreen(
                 )
             }
 
-            // Conflict Alert Banner (if any conflicts detected)
             if (detectedConflicts.isNotEmpty()) {
                 item {
                     Card(
@@ -329,13 +329,13 @@ fun CloudScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "${detectedConflicts.size} File Conflicts Detected",
+                                    text = stringResource(R.string.cloud_conflicts_detected, detectedConflicts.size),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onErrorContainer
                                 )
                                 Text(
-                                    text = "Tap to review differing versions across cloud endpoints",
+                                    text = stringResource(R.string.cloud_conflicts_desc),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f)
                                 )
@@ -344,14 +344,13 @@ fun CloudScreen(
                                 onClick = { showConflictDialog = true },
                                 shape = RoundedCornerShape(10.dp)
                             ) {
-                                Text("Resolve")
+                                Text(stringResource(R.string.cloud_conflicts_button))
                             }
                         }
                     }
                 }
             }
 
-            // 2. Configured Cloud Services Header
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -359,14 +358,13 @@ fun CloudScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "Configured Services (${services.size})",
+                        text = "${stringResource(R.string.cloud_services_header)} (${services.size})",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
 
-            // 3. Service Cards or Empty State
             if (services.isEmpty()) {
                 item {
                     EmptyServicesCard(
@@ -438,7 +436,6 @@ fun CloudScreen(
                 }
             }
 
-            // 4. Restore Conflict Policy Selector
             item {
                 ConflictPolicyCard(
                     selectedPolicy = selectedConflictPolicy,
@@ -449,7 +446,6 @@ fun CloudScreen(
                 )
             }
 
-            // 5. Exclusion Filters Card
             item {
                 ExclusionFiltersCard(
                     filter = exclusionFilter,
@@ -457,44 +453,43 @@ fun CloudScreen(
                 )
             }
 
-            // 6. Automation & Performance Card
             item {
                 AutomationCard(
                     isAutoBackupOnExit = isAutoBackupOnExit,
-                    onAutoBackupOnExitChange = { enabled ->
-                        isAutoBackupOnExit = enabled
-                        backupPrefs.isAutoBackupOnExitEnabled = enabled
+                    onAutoBackupOnExitChange = { updated ->
+                        isAutoBackupOnExit = updated
+                        backupPrefs.isAutoBackupOnExitEnabled = updated
                     },
                     isCheckRemoteOnLaunch = isCheckRemoteOnLaunch,
-                    onCheckRemoteOnLaunchChange = { enabled ->
-                        isCheckRemoteOnLaunch = enabled
-                        backupPrefs.isCheckRemoteChangesOnLaunchEnabled = enabled
+                    onCheckRemoteOnLaunchChange = { updated ->
+                        isCheckRemoteOnLaunch = updated
+                        backupPrefs.isCheckRemoteChangesOnLaunchEnabled = updated
                     },
                     periodicIntervalMinutes = periodicIntervalMinutes,
-                    onPeriodicIntervalChange = { interval ->
-                        periodicIntervalMinutes = interval
-                        backupPrefs.periodicSyncIntervalMinutes = interval
+                    onPeriodicIntervalChange = { updated ->
+                        periodicIntervalMinutes = updated
+                        backupPrefs.periodicSyncIntervalMinutes = updated
                         BackupScheduler.updateSchedules(context)
                     },
                     isDailyScheduledSync = isDailyScheduledSync,
-                    onDailyScheduledSyncChange = { enabled ->
-                        isDailyScheduledSync = enabled
-                        backupPrefs.isDailyScheduledSyncEnabled = enabled
+                    onDailyScheduledSyncChange = { updated ->
+                        isDailyScheduledSync = updated
+                        backupPrefs.isDailyScheduledSyncEnabled = updated
                         BackupScheduler.updateSchedules(context)
                     },
                     dailyHour = dailyHour,
                     dailyMinute = dailyMinute,
                     onTimePickerClick = { showTimePickerDialog = true },
                     isWifiOnly = isWifiOnly,
-                    onWifiOnlyChange = { enabled ->
-                        isWifiOnly = enabled
-                        backupPrefs.isWifiOnlyEnabled = enabled
+                    onWifiOnlyChange = { updated ->
+                        isWifiOnly = updated
+                        backupPrefs.isWifiOnlyEnabled = updated
                         BackupScheduler.updateSchedules(context)
                     },
                     concurrency = concurrencyWorkers,
-                    onConcurrencyChange = { count ->
-                        concurrencyWorkers = count
-                        backupPrefs.concurrencyWorkers = count
+                    onConcurrencyChange = { updated ->
+                        concurrencyWorkers = updated
+                        backupPrefs.concurrencyWorkers = updated
                     }
                 )
             }
@@ -505,7 +500,6 @@ fun CloudScreen(
         }
     }
 
-    // Floating Dim Background Scrim when FAB expanded (identical to Home and Files screens)
     AnimatedVisibility(
         visible = isFabExpanded,
         enter = fadeIn(animationSpec = spring(stiffness = 400f)),
@@ -514,55 +508,40 @@ fun CloudScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.45f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { isFabExpanded = false }
+                .background(Color.Black.copy(alpha = 0.35f))
+                .clickable { isFabExpanded = false }
         )
     }
 
-    // Speed Dial Action Items + Main FAB
     Box(
         modifier = Modifier
-            .align(Alignment.BottomEnd)
-            .padding(24.dp)
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.BottomEnd
     ) {
-        val mappingItemSpring by animateFloatAsState(
-            targetValue = if (isFabExpanded) 1f else 0f,
-            animationSpec = spring(dampingRatio = 0.78f, stiffness = 320f),
-            label = "mappingItemSpring"
-        )
-        val serviceItemSpring by animateFloatAsState(
-            targetValue = if (isFabExpanded) 1f else 0f,
-            animationSpec = spring(dampingRatio = 0.78f, stiffness = 340f),
-            label = "serviceItemSpring"
-        )
-
         Column(
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Staggered Spring Action Items
             SpeedDialActionItem(
-                progress = mappingItemSpring,
+                progress = 1f,
                 icon = Icons.Default.CreateNewFolder,
-                label = "Add Custom Folder Mapping",
-                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                label = stringResource(R.string.action_add_custom_mapping),
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 onClick = {
                     isFabExpanded = false
                     editingMapping = null
-                    mappingTargetServiceId = null
                     initialMappingLocalPath = ""
+                    mappingTargetServiceId = null
                     showMappingDialog = true
                 }
             )
 
             SpeedDialActionItem(
-                progress = serviceItemSpring,
-                icon = Icons.Default.CloudQueue,
-                label = "Add Cloud Service",
+                progress = 1f,
+                icon = Icons.Default.Add,
+                label = stringResource(R.string.action_add_cloud_service),
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 onClick = {
@@ -572,7 +551,6 @@ fun CloudScreen(
                 }
             )
 
-            // Main Speed Dial FAB with spring physics on press & rotate
             val fabInteractionSource = remember { MutableInteractionSource() }
             val isFabPressed by fabInteractionSource.collectIsPressedAsState()
             val fabPressScale by animateFloatAsState(
@@ -602,9 +580,7 @@ fun CloudScreen(
             }
         }
     }
-}
 
-    // Dialogs
     if (showServiceDialog) {
         ServiceConfigDialog(
             initialService = editingService,
@@ -673,12 +649,12 @@ fun CloudScreen(
                 restoreTargetService = null
             },
             icon = { Icon(Icons.Default.CloudDownload, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-            title = { Text("Restore from ${srv.name}?") },
+            title = { Text(stringResource(R.string.cloud_restore_dialog_title, srv.name)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("This will download files from ${srv.name} to your local storage.")
+                    Text(stringResource(R.string.cloud_restore_dialog_desc, srv.name))
                     Text(
-                        "Conflict Policy: ${selectedConflictPolicy.displayName}",
+                        stringResource(R.string.cloud_restore_dialog_policy, selectedConflictPolicy.displayName),
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -711,7 +687,7 @@ fun CloudScreen(
                         }
                     }
                 ) {
-                    Text("Restore Now")
+                    Text(stringResource(R.string.cloud_restore_now_button))
                 }
             },
             dismissButton = {
@@ -719,7 +695,7 @@ fun CloudScreen(
                     showRestoreConfirmDialog = false
                     restoreTargetService = null
                 }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )
@@ -743,9 +719,10 @@ fun CloudScreen(
         )
     }
 }
+}
 
 @Composable
-private fun OverviewCard(
+fun OverviewCard(
     services: List<ServiceConfig>,
     isSyncRunning: Boolean,
     isCheckingConflicts: Boolean,
@@ -774,13 +751,13 @@ private fun OverviewCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Cloud Sync Hub",
+                        text = stringResource(R.string.cloud_sync_hub_title),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Text(
-                        text = "$enabledCount of ${services.size} services active • Last sync: $lastSyncFormatted",
+                        text = stringResource(R.string.cloud_services_active_summary, enabledCount, services.size, lastSyncFormatted),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                     )
@@ -789,36 +766,36 @@ private fun OverviewCard(
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilledTonalButton(
                         onClick = onCheckConflicts,
-                        enabled = !isCheckingConflicts && enabledCount > 0,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(10.dp),
+                        enabled = !isCheckingConflicts
                     ) {
                         if (isCheckingConflicts) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
                         } else {
-                            Icon(Icons.Default.ReportProblem, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Conflicts")
+                            Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
                         }
                     }
 
                     FilledTonalButton(
                         onClick = onOpenQueue,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(10.dp)
                     ) {
-                        Icon(Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Queue")
+                        Icon(Icons.Default.CloudQueue, contentDescription = null, modifier = Modifier.size(16.dp))
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Button(
                 onClick = onSyncAll,
-                enabled = !isSyncRunning && enabledCount > 0,
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth()
+                enabled = !isSyncRunning && enabledCount > 0
             ) {
                 if (isSyncRunning) {
                     CircularProgressIndicator(
@@ -827,11 +804,11 @@ private fun OverviewCard(
                         color = MaterialTheme.colorScheme.onPrimary
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Synchronizing Across Active Clouds...")
+                    Text(stringResource(R.string.cloud_syncing_progress))
                 } else {
                     Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Sync All Active Cloud Services")
+                    Text(stringResource(R.string.cloud_sync_all_button))
                 }
             }
         }
@@ -839,7 +816,7 @@ private fun OverviewCard(
 }
 
 @Composable
-private fun EmptyServicesCard(onAddService: () -> Unit) {
+fun EmptyServicesCard(onAddService: () -> Unit) {
     OutlinedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp)
@@ -858,12 +835,12 @@ private fun EmptyServicesCard(onAddService: () -> Unit) {
                 modifier = Modifier.size(48.dp)
             )
             Text(
-                text = "No Cloud Storage Configured",
+                text = stringResource(R.string.cloud_empty_services_title),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Connect Google Drive, Nextcloud, WebDAV, SFTP, SMB3, or FTP to synchronize notes and settings securely.",
+                text = stringResource(R.string.cloud_empty_services_desc),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -872,14 +849,14 @@ private fun EmptyServicesCard(onAddService: () -> Unit) {
             Button(onClick = onAddService) {
                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Add First Cloud Service")
+                Text(stringResource(R.string.cloud_add_first_service))
             }
         }
     }
 }
 
 @Composable
-private fun CloudServiceCard(
+fun CloudServiceCard(
     service: ServiceConfig,
     onEdit: () -> Unit,
     onToggleEnabled: (Boolean) -> Unit,
@@ -943,14 +920,14 @@ private fun CloudServiceCard(
 
                 Box {
                     IconButton(onClick = { showMenu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Service Options")
+                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.action_details))
                     }
                     DropdownMenu(
                         expanded = showMenu,
                         onDismissRequest = { showMenu = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Edit Configuration") },
+                            text = { Text(stringResource(R.string.cloud_menu_edit_config)) },
                             leadingIcon = { Icon(Icons.Default.Edit, null) },
                             onClick = {
                                 showMenu = false
@@ -958,7 +935,7 @@ private fun CloudServiceCard(
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Add Folder Mapping") },
+                            text = { Text(stringResource(R.string.cloud_menu_add_folder_mapping)) },
                             leadingIcon = { Icon(Icons.Default.CreateNewFolder, null) },
                             onClick = {
                                 showMenu = false
@@ -967,7 +944,7 @@ private fun CloudServiceCard(
                         )
                         HorizontalDivider()
                         DropdownMenuItem(
-                            text = { Text("Delete Service", color = MaterialTheme.colorScheme.error) },
+                            text = { Text(stringResource(R.string.cloud_menu_delete_service), color = MaterialTheme.colorScheme.error) },
                             leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
                             onClick = {
                                 showMenu = false
@@ -988,13 +965,13 @@ private fun CloudServiceCard(
                 if (service.isCompleteBackupEnabled) {
                     SuggestionChip(
                         onClick = {},
-                        label = { Text("Complete Mirror (~/Notes & ~/.config)", style = MaterialTheme.typography.labelSmall) }
+                        label = { Text(stringResource(R.string.cloud_complete_mirror_chip), style = MaterialTheme.typography.labelSmall) }
                     )
                 }
                 if (service.customMappings.isNotEmpty()) {
                     SuggestionChip(
                         onClick = {},
-                        label = { Text("${service.customMappings.size} Custom Mapping(s)", style = MaterialTheme.typography.labelSmall) }
+                        label = { Text(stringResource(R.string.cloud_custom_mappings_chip, service.customMappings.size), style = MaterialTheme.typography.labelSmall) }
                     )
                 }
             }
@@ -1024,7 +1001,7 @@ private fun CloudServiceCard(
                                 Text("→ ${mapping.remoteFolderPath}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             IconButton(onClick = { onDeleteMapping(mapping.id) }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete mapping", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
+                                Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.action_delete), modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
                             }
                         }
                     }
@@ -1045,7 +1022,7 @@ private fun CloudServiceCard(
                 ) {
                     Icon(Icons.Default.CloudUpload, null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Sync Now")
+                    Text(stringResource(R.string.cloud_sync_now))
                 }
 
                 OutlinedButton(
@@ -1055,7 +1032,7 @@ private fun CloudServiceCard(
                 ) {
                     Icon(Icons.Default.CloudDownload, null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Restore")
+                    Text(stringResource(R.string.cloud_restore_button))
                 }
             }
         }
@@ -1079,12 +1056,12 @@ fun ConflictPolicyCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "Restore Conflict Policy",
+                text = stringResource(R.string.cloud_policy_card_title),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Controls how incoming cloud files resolve collisions with existing local files.",
+                text = stringResource(R.string.cloud_policy_card_desc),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1151,20 +1128,21 @@ fun ExclusionFiltersCard(
                     Icon(Icons.Default.FilterList, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "Exclusion Filters",
+                        text = stringResource(R.string.cloud_exclusion_card_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
                 TextButton(onClick = onConfigure) {
-                    Text("Customize")
+                    Text(stringResource(R.string.cloud_customize_button))
                 }
             }
 
             Spacer(modifier = Modifier.height(4.dp))
+            val transientPrefix = if (filter.skipDefaultTransient) "Transient & lock files ignored • " else ""
             Text(
-                text = "${if (filter.skipDefaultTransient) "Transient & lock files ignored • " else ""}${filter.regexPatterns.size} regex pattern(s) • ${filter.excludedExtensions.size} excluded extension(s)",
+                text = stringResource(R.string.cloud_exclusion_card_summary, transientPrefix, filter.regexPatterns.size, filter.excludedExtensions.size),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1195,12 +1173,12 @@ fun AutomationCard(
     var isFrequencyDropdownExpanded by remember { mutableStateOf(false) }
 
     val intervalOptions = listOf(
-        0 to "Manual only",
-        5 to "Every 5 minutes (Active App)",
-        15 to "Every 15 minutes",
-        30 to "Every 30 minutes",
-        60 to "Every hour",
-        1440 to "Daily"
+        0 to stringResource(R.string.pref_sync_freq_manual),
+        5 to stringResource(R.string.pref_sync_freq_5m),
+        15 to stringResource(R.string.pref_sync_freq_15m),
+        30 to stringResource(R.string.pref_sync_freq_30m),
+        60 to stringResource(R.string.pref_sync_freq_1h),
+        1440 to stringResource(R.string.pref_sync_freq_daily)
     )
 
     Card(
@@ -1212,7 +1190,7 @@ fun AutomationCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "Automation & Performance",
+                text = stringResource(R.string.cloud_automation_card_title),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -1226,9 +1204,9 @@ fun AutomationCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Check for Cloud Changes on Launch", fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.cloud_check_launch_title), fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Scans remote clouds on app open to notify if notes have upstream updates",
+                        stringResource(R.string.cloud_check_launch_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1243,9 +1221,9 @@ fun AutomationCard(
 
             // Periodic Sync Interval (OneNote style)
             Column {
-                Text("Sync Frequency", fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.cloud_sync_freq_title), fontWeight = FontWeight.SemiBold)
                 Text(
-                    "Automatically synchronizes notes at periodic intervals",
+                    stringResource(R.string.cloud_sync_freq_desc),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1254,7 +1232,7 @@ fun AutomationCard(
                     expanded = isFrequencyDropdownExpanded,
                     onExpandedChange = { isFrequencyDropdownExpanded = !isFrequencyDropdownExpanded }
                 ) {
-                    val currentLabel = intervalOptions.firstOrNull { it.first == periodicIntervalMinutes }?.second ?: "Every 15 minutes"
+                    val currentLabel = intervalOptions.firstOrNull { it.first == periodicIntervalMinutes }?.second ?: stringResource(R.string.pref_sync_freq_15m)
                     OutlinedTextField(
                         value = currentLabel,
                         onValueChange = {},
@@ -1290,9 +1268,9 @@ fun AutomationCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Auto-backup on App Exit", fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.cloud_auto_backup_exit_title), fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Automatically synchronizes changed documents when closing the app",
+                        stringResource(R.string.cloud_auto_backup_exit_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1312,9 +1290,9 @@ fun AutomationCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Daily Scheduled Sync", fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.cloud_daily_sync_title), fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Runs background sync daily at $timeFormatted",
+                        stringResource(R.string.cloud_daily_sync_desc, timeFormatted),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1322,12 +1300,12 @@ fun AutomationCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (isDailyScheduledSync) {
                         IconButton(onClick = onTimePickerClick) {
-                            Icon(Icons.Default.Schedule, contentDescription = "Edit Time")
+                            Icon(Icons.Default.Schedule, contentDescription = stringResource(R.string.action_edit))
                         }
                     }
                     Switch(
                         checked = isDailyScheduledSync,
-                        onCheckedChange = onDailyScheduledSyncChange
+                        onDailyScheduledSyncChange
                     )
                 }
             }
@@ -1341,9 +1319,9 @@ fun AutomationCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Transfer on Wi-Fi Only", fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.cloud_wifi_only_title), fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Prevent automated transfers over metered cellular connections",
+                        stringResource(R.string.cloud_wifi_only_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1362,16 +1340,16 @@ fun AutomationCard(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Concurrent Transfer Streams", fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.cloud_concurrency_title), fontWeight = FontWeight.SemiBold)
                     Text(
-                        "$concurrency parallel worker(s)",
+                        stringResource(R.string.cloud_concurrency_workers_label, concurrency),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
                 Text(
-                    "Accelerates differential uploads and downloads on high-bandwidth connections",
+                    stringResource(R.string.cloud_concurrency_desc),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
