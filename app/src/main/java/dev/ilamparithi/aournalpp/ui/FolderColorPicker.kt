@@ -55,9 +55,17 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.ilamparithi.aournalpp.R
+import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
 import java.util.Locale
 
 val DEFAULT_PRESET_FOLDER_COLORS = listOf(
@@ -119,21 +127,35 @@ fun FolderColorPickerRow(
                 try { Color(AndroidColor.parseColor(colorHex)) } catch (e: Exception) { Color.Gray }
             }
             val isSelected = colorHex.equals(selectedColorHex, ignoreCase = true)
-            Surface(
-                shape = CircleShape,
-                color = color,
+            val stateSelected = stringResource(R.string.state_selected)
+            val stateNotSelected = stringResource(R.string.state_not_selected)
+
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(36.dp)
+                    .minTouchTarget()
+                    .semantics {
+                        role = Role.RadioButton
+                        stateDescription = if (isSelected) stateSelected else stateNotSelected
+                        this.contentDescription = colorHex
+                    }
                     .clickable { onColorSelected(colorHex) }
-                    .border(
-                        width = if (isSelected) 3.dp else 0.dp,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        shape = CircleShape
-                    )
             ) {
-                if (isSelected) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                Surface(
+                    shape = CircleShape,
+                    color = color,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .border(
+                            width = if (isSelected) 3.dp else 0.dp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            shape = CircleShape
+                        )
+                ) {
+                    if (isSelected) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
                     }
                 }
             }
@@ -146,20 +168,32 @@ fun FolderColorPickerRow(
                 val customColor = remember(selectedColorHex) {
                     try { Color(AndroidColor.parseColor(selectedColorHex)) } catch (e: Exception) { Color.Gray }
                 }
-                Surface(
-                    shape = CircleShape,
-                    color = customColor,
+                val stateSelected = stringResource(R.string.state_selected)
+                Box(
+                    contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .size(36.dp)
+                        .minTouchTarget()
+                        .semantics {
+                            role = Role.RadioButton
+                            stateDescription = stateSelected
+                            this.contentDescription = selectedColorHex
+                        }
                         .clickable { showCustomColorDialog = true }
-                        .border(
-                            width = 3.dp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            shape = CircleShape
-                        )
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    Surface(
+                        shape = CircleShape,
+                        color = customColor,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .border(
+                                width = 3.dp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                shape = CircleShape
+                            )
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
                     }
                 }
             }
@@ -170,26 +204,37 @@ fun FolderColorPickerRow(
             val rainbowBrush = Brush.sweepGradient(
                 listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)
             )
-            Surface(
-                shape = CircleShape,
+            val pickerTitle = stringResource(R.string.cd_visual_color_picker)
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(rainbowBrush)
+                    .minTouchTarget()
+                    .semantics {
+                        role = Role.Button
+                        this.contentDescription = pickerTitle
+                    }
                     .clickable { showCustomColorDialog = true }
             ) {
-                Box(
-                    contentAlignment = Alignment.Center,
+                Surface(
+                    shape = CircleShape,
                     modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.25f))
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(rainbowBrush)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Palette,
-                        contentDescription = "Visual Color Picker",
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.25f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Palette,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }

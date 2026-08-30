@@ -25,7 +25,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import dev.ilamparithi.aournalpp.R
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -376,7 +378,7 @@ fun ScreenSafeAreaEditorScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.DragHandle,
-                    contentDescription = "Drag Left Handle",
+                    contentDescription = stringResource(R.string.cd_drag_left_handle),
                     modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.onPrimaryContainer
                 )
@@ -424,7 +426,7 @@ fun ScreenSafeAreaEditorScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.DragHandle,
-                    contentDescription = "Drag Right Handle",
+                    contentDescription = stringResource(R.string.cd_drag_right_handle),
                     modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.onPrimaryContainer
                 )
@@ -472,7 +474,7 @@ fun ScreenSafeAreaEditorScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.DragHandle,
-                    contentDescription = "Drag Top Handle",
+                    contentDescription = stringResource(R.string.cd_drag_top_handle),
                     modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.onPrimaryContainer
                 )
@@ -520,7 +522,7 @@ fun ScreenSafeAreaEditorScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.DragHandle,
-                    contentDescription = "Drag Bottom Handle",
+                    contentDescription = stringResource(R.string.cd_drag_bottom_handle),
                     modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.onPrimaryContainer
                 )

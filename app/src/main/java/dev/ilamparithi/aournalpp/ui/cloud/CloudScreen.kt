@@ -1352,22 +1352,21 @@ fun AutomationCard(
 
             // Concurrency Slider
             Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(stringResource(R.string.cloud_concurrency_title), fontWeight = FontWeight.SemiBold)
-                    Text(
-                        stringResource(R.string.cloud_concurrency_workers_label, concurrency),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
                 Text(
-                    stringResource(R.string.cloud_concurrency_desc),
+                    text = stringResource(R.string.cloud_concurrency_title),
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = stringResource(R.string.cloud_concurrency_desc),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.cloud_concurrency_workers_label, concurrency),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
                 )
                 Slider(
                     value = concurrency.toFloat(),

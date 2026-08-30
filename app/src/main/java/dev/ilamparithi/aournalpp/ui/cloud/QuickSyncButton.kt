@@ -37,6 +37,11 @@ import dev.ilamparithi.aournalpp.backup.queue.FileTransferQueueManager
 import dev.ilamparithi.aournalpp.backup.security.CredentialsVault
 import kotlinx.coroutines.launch
 
+import androidx.compose.ui.res.stringResource
+import dev.ilamparithi.aournalpp.R
+import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
+import dev.ilamparithi.aournalpp.ui.util.AppTooltipBox
+
 @Composable
 fun QuickSyncButton(
     modifier: Modifier = Modifier,
@@ -67,55 +72,59 @@ fun QuickSyncButton(
         label = "quickSyncRotation"
     )
 
-    IconButton(
-        onClick = {
-            if (!isSyncing) {
-                try {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                } catch (_: Exception) {}
+    val syncTooltip = if (isSyncing) stringResource(R.string.cd_syncing) else stringResource(R.string.cd_quick_sync)
 
-                val services = vault.getAllServices().filter { it.isEnabled }
-                if (services.isEmpty()) {
-                    onSyncFinished?.invoke("No active cloud services configured")
-                    return@IconButton
-                }
-
-                isManualSyncActive = true
-                coroutineScope.launch {
+    AppTooltipBox(tooltipText = syncTooltip) {
+        IconButton(
+            onClick = {
+                if (!isSyncing) {
                     try {
-                        val results = engine.performMultiServiceBackup()
-                        val uploaded = results.sumOf { it.filesUploaded }
-                        val failed = results.sumOf { it.filesFailed }
-                        if (failed == 0) {
-                            onSyncFinished?.invoke("Synced: $uploaded files uploaded")
-                        } else {
-                            onSyncFinished?.invoke("Sync completed with $failed errors")
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    } catch (_: Exception) {}
+
+                    val services = vault.getAllServices().filter { it.isEnabled }
+                    if (services.isEmpty()) {
+                        onSyncFinished?.invoke("No active cloud services configured")
+                        return@IconButton
+                    }
+
+                    isManualSyncActive = true
+                    coroutineScope.launch {
+                        try {
+                            val results = engine.performMultiServiceBackup()
+                            val uploaded = results.sumOf { it.filesUploaded }
+                            val failed = results.sumOf { it.filesFailed }
+                            if (failed == 0) {
+                                onSyncFinished?.invoke("Synced: $uploaded files uploaded")
+                            } else {
+                                onSyncFinished?.invoke("Sync completed with $failed errors")
+                            }
+                        } catch (e: Exception) {
+                            onSyncFinished?.invoke("Sync failed: ${e.message}")
+                        } finally {
+                            isManualSyncActive = false
                         }
-                    } catch (e: Exception) {
-                        onSyncFinished?.invoke("Sync failed: ${e.message}")
-                    } finally {
-                        isManualSyncActive = false
                     }
                 }
-            }
-        },
-        modifier = modifier
-    ) {
-        BadgedBox(
-            badge = {
-                if (activeCount > 0) {
-                    Badge { Text(activeCount.toString()) }
-                }
-            }
+            },
+            modifier = modifier.minTouchTarget()
         ) {
-            Icon(
-                imageVector = if (isSyncing) Icons.Default.Sync else Icons.Default.CloudDone,
-                contentDescription = if (isSyncing) "Syncing..." else "Quick Sync",
-                tint = if (isSyncing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .size(24.dp)
-                    .then(if (isSyncing) Modifier.rotate(rotation) else Modifier)
-            )
+            BadgedBox(
+                badge = {
+                    if (activeCount > 0) {
+                        Badge { Text(activeCount.toString()) }
+                    }
+                }
+            ) {
+                Icon(
+                    imageVector = if (isSyncing) Icons.Default.Sync else Icons.Default.CloudDone,
+                    contentDescription = syncTooltip,
+                    tint = if (isSyncing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .then(if (isSyncing) Modifier.rotate(rotation) else Modifier)
+                )
+            }
         }
     }
 }

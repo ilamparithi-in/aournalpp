@@ -53,6 +53,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -458,7 +460,15 @@ fun MainResponsiveAppShell() {
                                     contentDescription = tabTitle
                                 )
                             },
-                            label = { Text(tabTitle, fontWeight = if (selectedTab == tab.id) FontWeight.Bold else FontWeight.Normal) }
+                            label = {
+                                Text(
+                                    text = tabTitle,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    fontWeight = if (selectedTab == tab.id) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
                         )
                     }
                 }
@@ -516,7 +526,15 @@ fun MainResponsiveAppShell() {
                                         contentDescription = tabTitle
                                     )
                                 },
-                                label = { Text(tabTitle) }
+                                label = {
+                                    Text(
+                                        text = tabTitle,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        fontWeight = if (selectedTab == tab.id) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
                             )
                         }
                     }

@@ -76,6 +76,17 @@ import dev.ilamparithi.aournalpp.runtime.PdfExportManager
 import dev.ilamparithi.aournalpp.ui.preview.floatingPreviewLongPress
 import dev.ilamparithi.aournalpp.utils.ThumbnailManager
 
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import dev.ilamparithi.aournalpp.ui.util.AccessibilityUtils
+import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
+import dev.ilamparithi.aournalpp.ui.util.AppTooltipBox
+
 /**
  * Standardized Note Card Composable.
  * Unifies the visual design across Collage, Gallery, Recents Carousel, and Files Hub Grid:
@@ -128,6 +139,56 @@ fun StandardNoteCard(
     val hasActions = onTogglePin != null || onExportPdf != null || onSharePdf != null ||
             onShareXopp != null || onRename != null || onDuplicate != null || onDelete != null
 
+    val openActionLabel = stringResource(dev.ilamparithi.aournalpp.R.string.action_open_note)
+    val pinActionLabel = if (note.isPinned) stringResource(dev.ilamparithi.aournalpp.R.string.action_unpin_note) else stringResource(dev.ilamparithi.aournalpp.R.string.action_pin_note)
+    val exportPdfActionLabel = stringResource(dev.ilamparithi.aournalpp.R.string.action_export_pdf)
+    val shareActionLabel = stringResource(dev.ilamparithi.aournalpp.R.string.action_share_note)
+    val renameActionLabel = stringResource(dev.ilamparithi.aournalpp.R.string.action_rename)
+    val duplicateActionLabel = stringResource(dev.ilamparithi.aournalpp.R.string.action_keep_both)
+    val deleteActionLabel = stringResource(dev.ilamparithi.aournalpp.R.string.action_delete)
+    val restoreActionLabel = stringResource(dev.ilamparithi.aournalpp.R.string.action_restore_note)
+
+    val customActionsList = remember(
+        note, isTrashMode, isSelectionMode,
+        onTogglePin, onExportPdf, onShareXopp, onRename, onDuplicate, onDelete, onRestore
+    ) {
+        buildList {
+            add(CustomAccessibilityAction(openActionLabel) { onClick(); true })
+            if (onTogglePin != null && !isSelectionMode) {
+                add(CustomAccessibilityAction(pinActionLabel) { onTogglePin(); true })
+            }
+            if (onExportPdf != null && !isSelectionMode) {
+                add(CustomAccessibilityAction(exportPdfActionLabel) { onExportPdf(); true })
+            }
+            if (onShareXopp != null && !isSelectionMode) {
+                add(CustomAccessibilityAction(shareActionLabel) { onShareXopp(); true })
+            }
+            if (onRename != null && !isSelectionMode) {
+                add(CustomAccessibilityAction(renameActionLabel) { onRename(); true })
+            }
+            if (onDuplicate != null && !isSelectionMode) {
+                add(CustomAccessibilityAction(duplicateActionLabel) { onDuplicate(); true })
+            }
+            if (onDelete != null && !isSelectionMode) {
+                add(CustomAccessibilityAction(deleteActionLabel) { onDelete(); true })
+            }
+            if (onRestore != null && isTrashMode) {
+                add(CustomAccessibilityAction(restoreActionLabel) { onRestore(); true })
+            }
+        }
+    }
+
+    val a11yDescription = remember(note, isSelected, isSelectionMode) {
+        AccessibilityUtils.buildNoteCardA11yDescription(
+            title = note.title,
+            fileType = note.fileType,
+            folderName = note.folder,
+            lastModified = note.fuzzyLastModified,
+            isPinned = note.isPinned,
+            isSelected = if (isSelectionMode) isSelected else null
+        )
+    }
+
     val baseModifier = modifier
         .shadow(elevation = 4.dp, shape = shape)
         .clip(shape)
@@ -137,6 +198,11 @@ fun StandardNoteCard(
             color = if (isSelected) MaterialTheme.colorScheme.primary else folderAccentColor.copy(alpha = 0.25f),
             shape = shape
         )
+        .semantics(mergeDescendants = true) {
+            role = Role.Button
+            this.contentDescription = a11yDescription
+            customActions = customActionsList
+        }
 
     var cardInteractionTimestamp by remember { mutableStateOf(0L) }
 
@@ -173,7 +239,7 @@ fun StandardNoteCard(
         if (thumbnailImage != null) {
             Image(
                 bitmap = thumbnailImage!!,
-                contentDescription = note.title,
+                contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
@@ -268,22 +334,25 @@ fun StandardNoteCard(
             // 3-dot Options Menu Button
             if (hasActions && !isSelectionMode && !isTrashMode) {
                 Box {
-                    IconButton(
-                        onClick = { showMenu = true },
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color.Black.copy(alpha = 0.45f),
-                            modifier = Modifier.size(28.dp)
+                    val moreOptionsLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_details)
+                    AppTooltipBox(tooltipText = moreOptionsLabel) {
+                        IconButton(
+                            onClick = { showMenu = true },
+                            modifier = Modifier.size(28.dp).minTouchTarget()
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.MoreVert,
-                                    contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_details),
-                                    tint = Color.White,
-                                    modifier = Modifier.size(16.dp)
-                                )
+                            Surface(
+                                shape = CircleShape,
+                                color = Color.Black.copy(alpha = 0.45f),
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.MoreVert,
+                                        contentDescription = moreOptionsLabel,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -304,7 +373,7 @@ fun StandardNoteCard(
             } else if (isTrashMode && onRestore != null) {
                 IconButton(
                     onClick = onRestore,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(28.dp).minTouchTarget()
                 ) {
                     Surface(
                         shape = CircleShape,

@@ -55,6 +55,10 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.ilamparithi.aournalpp.ui.AppDialogDefaults
 import dev.ilamparithi.aournalpp.ui.promptWidth
+import dev.ilamparithi.aournalpp.R
+import dev.ilamparithi.aournalpp.ui.util.a11yHeading
+import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
+import androidx.compose.ui.res.stringResource
 import dev.ilamparithi.aournalpp.backup.model.ServiceConfig
 import dev.ilamparithi.aournalpp.backup.provider.StorageProviderFactory
 import kotlinx.coroutines.Dispatchers
@@ -212,12 +216,16 @@ fun FolderBrowserDialog(
                         Text(
                             text = title,
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.a11yHeading()
                         )
                     }
 
-                    IconButton(onClick = onDismissRequest) {
-                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    IconButton(
+                        onClick = onDismissRequest,
+                        modifier = Modifier.minTouchTarget()
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_cancel))
                     }
                 }
 

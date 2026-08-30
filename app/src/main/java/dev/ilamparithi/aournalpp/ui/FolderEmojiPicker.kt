@@ -29,10 +29,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
+import dev.ilamparithi.aournalpp.R
+import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.FileDownload
@@ -86,25 +93,39 @@ fun FolderIconPickerRow(
                     if (effectiveRoleIcon == "emergency") BorderStroke(2.dp, MaterialTheme.colorScheme.error) else BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
                 } else null
 
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = roleContainerColor,
-                    border = roleBorder,
+                val roleIconTitle = stringResource(R.string.cd_role_folder_icon, effectiveRoleIcon)
+                val stateSelected = stringResource(R.string.state_selected)
+                val stateNotSelected = stringResource(R.string.state_not_selected)
+
+                Box(
+                    contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .size(40.dp)
+                        .minTouchTarget()
+                        .semantics {
+                            role = Role.RadioButton
+                            stateDescription = if (isRoleIconSelected) stateSelected else stateNotSelected
+                            this.contentDescription = roleIconTitle
+                        }
                         .clickable { onIconSelected(null, effectiveRoleIcon) }
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = roleVector,
-                            contentDescription = "Role Default Icon ($effectiveRoleIcon)",
-                            tint = if (isRoleIconSelected) {
-                                if (effectiveRoleIcon == "emergency") MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                            modifier = Modifier.size(20.dp)
-                        )
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = roleContainerColor,
+                        border = roleBorder,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = roleVector,
+                                contentDescription = null,
+                                tint = if (isRoleIconSelected) {
+                                    if (effectiveRoleIcon == "emergency") MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -112,21 +133,35 @@ fun FolderIconPickerRow(
 
         // 2. Standard Default Folder Icon Option
         item {
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = if (isDefaultFolderSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                border = if (isDefaultFolderSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+            val defaultFolderTitle = stringResource(R.string.cd_default_folder_icon)
+            val stateSelected = stringResource(R.string.state_selected)
+            val stateNotSelected = stringResource(R.string.state_not_selected)
+
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(40.dp)
+                    .minTouchTarget()
+                    .semantics {
+                        role = Role.RadioButton
+                        stateDescription = if (isDefaultFolderSelected) stateSelected else stateNotSelected
+                        this.contentDescription = defaultFolderTitle
+                    }
                     .clickable { onIconSelected(null, "folder") }
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Folder,
-                        contentDescription = "Default Folder Icon",
-                        tint = if (isDefaultFolderSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
-                    )
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isDefaultFolderSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = if (isDefaultFolderSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Folder,
+                            contentDescription = null,
+                            tint = if (isDefaultFolderSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         }
@@ -134,34 +169,57 @@ fun FolderIconPickerRow(
         // 3. Preset Emojis
         items(presetEmojis) { emoji ->
             val isSelected = emoji == selectedEmoji
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+            val stateSelected = stringResource(R.string.state_selected)
+            val stateNotSelected = stringResource(R.string.state_not_selected)
+
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(40.dp)
+                    .minTouchTarget()
+                    .semantics {
+                        role = Role.RadioButton
+                        stateDescription = if (isSelected) stateSelected else stateNotSelected
+                        this.contentDescription = emoji
+                    }
                     .clickable { onIconSelected(emoji, null) }
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(text = emoji, fontSize = 20.sp)
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(text = emoji, fontSize = 20.sp)
+                    }
                 }
             }
         }
 
-
         // 4. Custom Selected Emoji (if selected and not in preset list)
         if (!selectedEmoji.isNullOrBlank() && !presetEmojis.contains(selectedEmoji)) {
             item {
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
+                val stateSelected = stringResource(R.string.state_selected)
+                Box(
+                    contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .size(40.dp)
+                        .minTouchTarget()
+                        .semantics {
+                            role = Role.RadioButton
+                            stateDescription = stateSelected
+                            this.contentDescription = selectedEmoji
+                        }
                         .clickable { showCustomEmojiDialog = true }
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(text = selectedEmoji, fontSize = 20.sp)
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(text = selectedEmoji, fontSize = 20.sp)
+                        }
                     }
                 }
             }
@@ -169,20 +227,30 @@ fun FolderIconPickerRow(
 
         // 5. "+" Option to input/type any custom emoji
         item {
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            val customEmojiTitle = stringResource(R.string.cd_choose_custom_emoji)
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(40.dp)
+                    .minTouchTarget()
+                    .semantics {
+                        role = Role.Button
+                        this.contentDescription = customEmojiTitle
+                    }
                     .clickable { showCustomEmojiDialog = true }
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Choose Custom Emoji",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
-                    )
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         }

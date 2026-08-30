@@ -17,6 +17,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -265,10 +267,12 @@ fun BootstrapScreen(
                 .padding(24.dp),
             contentAlignment = Alignment.Center
         ) {
+            val scrollState = rememberScrollState()
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 16.dp, vertical = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
@@ -474,14 +478,13 @@ fun BootstrapScreen(
                                             slideOutVertically(animationSpec = spring(stiffness = 380f)) { -it / 2 } + fadeOut()
                                         )
                                 },
-                                label = "tipCarousel"
+                                label = "tipCarousel",
+                                modifier = Modifier.weight(1f)
                             ) { tipRes ->
                                 Text(
                                     text = androidx.compose.ui.res.stringResource(tipRes),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
                         }

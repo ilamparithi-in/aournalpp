@@ -113,7 +113,7 @@
     <!-- Dialog title when an updated Linux runtime asset is detected -->
     <string name="update_title">Runtime Update Available</string>
     <!-- Dialog body text explaining an update is ready -->
-    <string name="update_desc">A newer version of the Linux runtime environment is ready to install.</string>
+    <string name="update_desc">A newer version of the Linux runtime environment is ready to install. The update will be carried out automatically once the countdown finishes.</string>
     <!-- Second unit label in circular countdown timer -->
     <string name="update_sec_unit">sec</string>
     <!-- Action to skip update countdown and launch immediately -->
@@ -786,4 +786,170 @@
     <string name="action_view_license">View Full License</string>
     <!-- Button to open GitHub repository -->
     <string name="action_open_repo">Source Repository</string>
+
+    <!-- ======================================================================= -->
+    <!-- Accessibility (a11y) & TalkBack Semantic Strings                        -->
+    <!-- ======================================================================= -->
+    <!-- Accessibility content description: Exit current note canvas -->
+    <string name="cd_exit_note">Exit Note</string>
+    <!-- Accessibility content description: Expand floating toolbar -->
+    <string name="cd_expand_toolbar">Expand Toolbar</string>
+    <!-- Accessibility content description: Collapse floating toolbar -->
+    <string name="cd_collapse_toolbar">Collapse Toolbar</string>
+    <!-- Accessibility content description: Pin floating toolbar -->
+    <string name="cd_pin_toolbar">Pin Toolbar</string>
+    <!-- Accessibility content description: Unpin floating toolbar -->
+    <string name="cd_unpin_toolbar">Unpin Toolbar</string>
+    <!-- Accessibility content description: Drag floating toolbar handle -->
+    <string name="cd_drag_toolbar_handle">Drag to Move Toolbar</string>
+    <!-- Accessibility content description: Reset floating toolbar position -->
+    <string name="cd_reset_toolbar_position">Reset Toolbar Position</string>
+    <!-- Accessibility content description: Finger as stylus enabled -->
+    <string name="cd_finger_as_stylus_enabled">Finger as Stylus (Enabled)</string>
+    <!-- Accessibility content description: Finger as stylus disabled -->
+    <string name="cd_finger_as_stylus_disabled">Finger as Stylus (Disabled)</string>
+    <!-- Accessibility content description: Cut shortcut button -->
+    <string name="cd_shortcut_cut">Cut (Ctrl+X)</string>
+    <!-- Accessibility content description: Copy shortcut button -->
+    <string name="cd_shortcut_copy">Copy (Ctrl+C)</string>
+    <!-- Accessibility content description: Paste shortcut button -->
+    <string name="cd_shortcut_paste">Paste (Ctrl+V)</string>
+    <!-- Accessibility content description: Insert image shortcut button -->
+    <string name="cd_insert_image">Insert Image (Camera, Gallery, Files)</string>
+    <!-- Accessibility content description: Show virtual keyboard -->
+    <string name="cd_toggle_keyboard_show">Show Keyboard</string>
+    <!-- Accessibility content description: Hide virtual keyboard -->
+    <string name="cd_toggle_keyboard_hide">Hide Keyboard</string>
+    <!-- Accessibility content description: Stylus click override left button -->
+    <string name="cd_stylus_mode_left">Stylus Primary Click</string>
+    <!-- Accessibility content description: Stylus click override middle button -->
+    <string name="cd_stylus_mode_middle">Stylus Middle Click</string>
+    <!-- Accessibility content description: Stylus click override right button -->
+    <string name="cd_stylus_mode_right">Stylus Secondary Click</string>
+
+    <!-- Accessibility content description: Clear text input -->
+    <string name="cd_clear_text">Clear text</string>
+    <!-- Accessibility content description: Visual color picker rainbow palette -->
+    <string name="cd_visual_color_picker">Visual Color Picker</string>
+    <!-- Accessibility content description: Choose custom emoji -->
+    <string name="cd_choose_custom_emoji">Choose Custom Emoji</string>
+    <!-- Accessibility content description: Default folder icon -->
+    <string name="cd_default_folder_icon">Default Folder Icon</string>
+    <!-- Accessibility content description: Role folder icon. %1$s is role name -->
+    <string name="cd_role_folder_icon">Role Default Icon (%1$s)</string>
+    <!-- Accessibility content description: Toggle camera torch / flashlight -->
+    <string name="cd_toggle_torch">Toggle Flashlight</string>
+    <!-- Accessibility content description: Add exclusion pattern -->
+    <string name="cd_add_pattern">Add Pattern</string>
+    <!-- Accessibility content description: Remove exclusion pattern -->
+    <string name="cd_remove_filter">Remove Filter</string>
+    <!-- Accessibility content description: Add file extension filter -->
+    <string name="cd_add_extension">Add File Extension</string>
+    <!-- Accessibility content description: Add folder filter -->
+    <string name="cd_add_folder">Add Folder</string>
+    <!-- Accessibility content description: Browse local directory -->
+    <string name="cd_browse_local_folder">Browse Local Folder</string>
+    <!-- Accessibility content description: Browse remote directory -->
+    <string name="cd_browse_remote_folder">Browse Remote Folder</string>
+    <!-- Accessibility content description: Toggle password text visibility -->
+    <string name="cd_toggle_password_visibility">Toggle password visibility</string>
+    <!-- Accessibility content description: Clear completed queue transfers -->
+    <string name="cd_clear_completed_transfers">Clear completed transfers</string>
+    <!-- Accessibility content description: Cancel file transfer -->
+    <string name="cd_cancel_transfer">Cancel transfer</string>
+    <!-- Accessibility content description: Drag left safe area handle -->
+    <string name="cd_drag_left_handle">Drag Left Handle</string>
+    <!-- Accessibility content description: Drag right safe area handle -->
+    <string name="cd_drag_right_handle">Drag Right Handle</string>
+    <!-- Accessibility content description: Drag top safe area handle -->
+    <string name="cd_drag_top_handle">Drag Top Handle</string>
+    <!-- Accessibility content description: Drag bottom safe area handle -->
+    <string name="cd_drag_bottom_handle">Drag Bottom Handle</string>
+    <!-- Accessibility content description: Decrease value -->
+    <string name="cd_decrease">Decrease</string>
+    <!-- Accessibility content description: Increase value -->
+    <string name="cd_increase">Increase</string>
+    <!-- Accessibility content description: Select destination folder -->
+    <string name="cd_select_folder">Select Folder</string>
+    <!-- Accessibility content description: Emergency saves folder indicator -->
+    <string name="cd_folder_emergency">Emergency Saves Folder</string>
+    <!-- Accessibility content description: Imported folder indicator -->
+    <string name="cd_folder_imported">Imported Folder</string>
+    <!-- Accessibility content description: Audio folder indicator -->
+    <string name="cd_folder_audio">Audio Folder</string>
+    <!-- Accessibility content description: Pinned folder indicator -->
+    <string name="cd_folder_pinned">Pinned Folder</string>
+    <!-- Accessibility content description: Folder excluded from recents indicator -->
+    <string name="cd_folder_excluded_recents">Excluded from Recents</string>
+    <!-- Accessibility content description: Pinned note badge -->
+    <string name="cd_note_pinned">Pinned Note</string>
+    <!-- Accessibility content description: Selected note checkbox badge -->
+    <string name="cd_note_selected">Selected Note</string>
+    <!-- Accessibility content description: Expand cloud speed dial actions -->
+    <string name="cd_expand_cloud_actions">Expand Cloud Actions</string>
+    <!-- Accessibility content description: Expand document speed dial actions -->
+    <string name="cd_expand_doc_actions">Expand Document Actions</string>
+    <!-- Accessibility content description: Reset pattern button -->
+    <string name="cd_reset_pattern">Reset pattern</string>
+    <!-- Accessibility content description: Quick sync trigger -->
+    <string name="cd_quick_sync">Quick Sync</string>
+    <!-- Accessibility content description: Syncing in progress -->
+    <string name="cd_syncing">Syncing…</string>
+
+    <!-- Custom accessibility actions -->
+    <!-- Semantic action: Open note -->
+    <string name="action_open_note">Open Note</string>
+    <!-- Semantic action: Open folder -->
+    <string name="action_open_folder">Open Folder</string>
+    <!-- Semantic action: Pin folder -->
+    <string name="action_pin_folder">Pin Folder</string>
+    <!-- Semantic action: Unpin folder -->
+    <string name="action_unpin_folder">Unpin Folder</string>
+    <!-- Semantic action: Customize folder appearance -->
+    <string name="action_customize_folder">Customize Folder</string>
+    <!-- Semantic action: Toggle pinned state -->
+    <string name="action_toggle_pin">Toggle Pin</string>
+    <!-- Semantic action: Duplicate note -->
+    <string name="action_duplicate_note">Duplicate Note</string>
+    <!-- Semantic action: Restore note from autosave or trash -->
+    <string name="action_restore_note">Restore Note</string>
+    <!-- Semantic action: Select all most recent conflict copies -->
+    <string name="action_select_all_recent">Select All Most Recent</string>
+    <!-- Semantic action: Select all conflict copies to keep alongside -->
+    <string name="action_select_all_alongside">Select All (Keep Alongside)</string>
+    <!-- Semantic action: Select all local conflict copies -->
+    <string name="action_select_all_local">Select All Local</string>
+    <!-- Dynamic message while applying conflict resolutions -->
+    <string name="msg_applying_resolutions">Applying Resolutions…</string>
+    <!-- Button action applying conflict resolution count. %1$d is count -->
+    <string name="action_apply_resolution_count">Apply Resolution (%1$d)</string>
+
+    <!-- Semantic states for screen readers -->
+    <!-- Semantic state: Selected -->
+    <string name="state_selected">Selected</string>
+    <!-- Semantic state: Not selected -->
+    <string name="state_not_selected">Not selected</string>
+    <!-- Semantic state: Enabled -->
+    <string name="state_enabled">Enabled</string>
+    <!-- Semantic state: Disabled -->
+    <string name="state_disabled">Disabled</string>
+    <!-- Semantic state: Linked in safe area editor -->
+    <string name="state_linked">Linked</string>
+    <!-- Semantic state: Individual in safe area editor -->
+    <string name="state_individual">Individual</string>
+    <!-- Semantic state: Expanded -->
+    <string name="state_expanded">Expanded</string>
+    <!-- Semantic state: Collapsed -->
+    <string name="state_collapsed">Collapsed</string>
+
+    <!-- Plural string for subfolders section header. %1$d is folder count -->
+    <plurals name="hub_section_folders_count">
+        <item quantity="one">%1$d Folder</item>
+        <item quantity="other">%1$d Folders</item>
+    </plurals>
+    <!-- Plural string for documents section header. %1$d is note count -->
+    <plurals name="hub_section_notes_count">
+        <item quantity="one">%1$d Document</item>
+        <item quantity="other">%1$d Documents</item>
+    </plurals>
 </resources>

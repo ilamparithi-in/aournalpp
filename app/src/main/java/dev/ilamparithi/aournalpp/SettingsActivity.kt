@@ -37,9 +37,11 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.res.stringResource
+import dev.ilamparithi.aournalpp.ui.util.a11yHeading
+import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.Icons
@@ -356,16 +358,17 @@ fun MainSettingsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Settings",
+                        stringResource(R.string.settings_title),
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.a11yHeading()
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = onBack, modifier = Modifier.minTouchTarget()) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = stringResource(R.string.action_back)
                         )
                     }
                 },
@@ -1540,10 +1543,10 @@ fun ToolbarSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Floating Toolbar", fontWeight = FontWeight.Bold) },
+                title = { Text("Floating Toolbar", fontWeight = FontWeight.Bold, modifier = Modifier.a11yHeading()) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    IconButton(onClick = onBack, modifier = Modifier.minTouchTarget()) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
                 }
             )
@@ -2265,10 +2268,10 @@ fun InputSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Stylus & Touch Input", fontWeight = FontWeight.Bold) },
+                title = { Text("Stylus & Input", fontWeight = FontWeight.Bold, modifier = Modifier.a11yHeading()) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    IconButton(onClick = onBack, modifier = Modifier.minTouchTarget()) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
                 }
             )

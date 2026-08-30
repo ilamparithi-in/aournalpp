@@ -26,6 +26,16 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import dev.ilamparithi.aournalpp.ui.util.a11yHeading
+import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
+import dev.ilamparithi.aournalpp.ui.util.AccessibilityUtils
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.utils.FileNameTemplateEngine
 import androidx.compose.foundation.layout.Arrangement
@@ -549,7 +559,8 @@ fun HomeScreen(
                             style = MaterialTheme.typography.headlineLarge,
                             fontWeight = FontWeight.Black,
                             color = MaterialTheme.colorScheme.onSurface,
-                            letterSpacing = (-0.5).sp
+                            letterSpacing = (-0.5).sp,
+                            modifier = Modifier.a11yHeading()
                         )
 
                         Spacer(modifier = Modifier.height(4.dp))
@@ -718,7 +729,10 @@ fun HomeScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.a11yHeading()
+                                ) {
                                     Icon(
                                         Icons.Default.History,
                                         contentDescription = null,
@@ -935,7 +949,7 @@ fun HomeScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
-                        contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_details),
+                        contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.cd_expand_doc_actions),
                         modifier = Modifier
                             .size(32.dp)
                             .rotate(fabRotation)
@@ -1514,10 +1528,31 @@ private fun EnlargedContinueHeroSection(
         try { Color(android.graphics.Color.parseColor(it)) } catch (e: Exception) { null }
     } ?: MaterialTheme.colorScheme.primary
 
+    val resumeActionLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_hero_resume_action)
+    val a11yHeroDescription = remember(note) {
+        AccessibilityUtils.buildNoteCardA11yDescription(
+            title = note.title,
+            fileType = note.fileType,
+            folderName = note.folder,
+            lastModified = note.fuzzyLastModified,
+            isPinned = note.isPinned
+        )
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .scale(cardScale)
+            .semantics(mergeDescendants = true) {
+                role = Role.Button
+                this.contentDescription = a11yHeroDescription
+                customActions = listOf(
+                    CustomAccessibilityAction(resumeActionLabel) {
+                        onResume()
+                        true
+                    }
+                )
+            }
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -1704,7 +1739,8 @@ private fun NormalHomeGalleryView(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.a11yHeading()
                 ) {
                     Icon(
                         Icons.Default.PushPin,

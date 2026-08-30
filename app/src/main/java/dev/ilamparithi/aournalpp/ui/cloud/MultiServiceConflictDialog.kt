@@ -53,11 +53,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import dev.ilamparithi.aournalpp.R
+import dev.ilamparithi.aournalpp.ui.util.AccessibilityUtils
+import dev.ilamparithi.aournalpp.ui.util.a11yHeading
+import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
 import dev.ilamparithi.aournalpp.backup.engine.BackupEngine
 import dev.ilamparithi.aournalpp.backup.model.ConflictResolutionAction
 import dev.ilamparithi.aournalpp.backup.model.ConflictResolutionReport
@@ -126,9 +136,10 @@ fun MultiServiceConflictDialog(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "Resolve File Conflicts",
+                                text = "File Sync Conflict",
                                 style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.a11yHeading()
                             )
                             Text(
                                 text = "${conflictGroups.size} notes have conflicting versions across storage endpoints",
@@ -139,8 +150,11 @@ fun MultiServiceConflictDialog(
                     }
 
                     if (!isResolving) {
-                        IconButton(onClick = onDismissRequest) {
-                            Icon(Icons.Default.Close, contentDescription = "Close")
+                        IconButton(
+                            onClick = onDismissRequest,
+                            modifier = Modifier.minTouchTarget()
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_cancel))
                         }
                     }
                 }
@@ -161,8 +175,9 @@ fun MultiServiceConflictDialog(
                                 selectedVersionsMap[group.id] = if (newest != null) setOf(newest) else emptySet()
                             }
                         },
-                        label = { Text("Select All Most Recent") },
-                        leadingIcon = { Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                        label = { Text(stringResource(R.string.action_select_all_recent)) },
+                        leadingIcon = { Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                        modifier = Modifier.minTouchTarget()
                     )
 
                     FilterChip(
@@ -172,8 +187,9 @@ fun MultiServiceConflictDialog(
                                 selectedVersionsMap[group.id] = group.allVersions.toSet()
                             }
                         },
-                        label = { Text("Select All (Keep Alongside)") },
-                        leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                        label = { Text(stringResource(R.string.action_select_all_alongside)) },
+                        leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                        modifier = Modifier.minTouchTarget()
                     )
 
                     FilterChip(
@@ -184,8 +200,9 @@ fun MultiServiceConflictDialog(
                                 selectedVersionsMap[group.id] = if (local != null) setOf(local) else emptySet()
                             }
                         },
-                        label = { Text("Select All Local") },
-                        leadingIcon = { Icon(Icons.Default.Devices, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                        label = { Text(stringResource(R.string.action_select_all_local)) },
+                        leadingIcon = { Icon(Icons.Default.Devices, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                        modifier = Modifier.minTouchTarget()
                     )
                 }
 
@@ -259,11 +276,11 @@ fun MultiServiceConflictDialog(
                                 strokeWidth = 2.dp
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Applying Resolutions...")
+                            Text(stringResource(R.string.msg_applying_resolutions))
                         } else {
                             Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Apply Resolution (${conflictGroups.size})")
+                            Text(stringResource(R.string.action_apply_resolution_count, conflictGroups.size))
                         }
                     }
                 }
@@ -434,6 +451,16 @@ private fun MultiSelectionVersionRow(
         else -> MaterialTheme.colorScheme.surfaceContainer
     }
 
+    val a11yVersionDesc = remember(version, isPrimary, isAlongside) {
+        AccessibilityUtils.buildConflictVersionA11yDescription(
+            sourceName = version.source.displayName,
+            dateFormatted = formattedDate,
+            sizeFormatted = formattedSize,
+            isPrimary = isPrimary,
+            isAlongside = isAlongside
+        )
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -444,6 +471,12 @@ private fun MultiSelectionVersionRow(
                 color = borderColor,
                 shape = RoundedCornerShape(12.dp)
             )
+            .minTouchTarget()
+            .semantics(mergeDescendants = true) {
+                role = Role.Checkbox
+                stateDescription = if (isChecked) "Selected" else "Not selected"
+                this.contentDescription = a11yVersionDesc
+            }
             .clickable(onClick = onToggle)
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically

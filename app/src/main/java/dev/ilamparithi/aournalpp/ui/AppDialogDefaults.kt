@@ -37,8 +37,8 @@ object AppDialogDefaults {
 
 /**
  * Standard prompt width modifier:
- * - Portrait: fillMaxWidth with 10dp horizontal padding.
- * - Landscape: widened to 75% width (min 420dp, max 860dp) with 16dp horizontal padding.
+ * - Portrait: fillMaxWidth with 8dp horizontal padding.
+ * - Landscape: widened to 80% width (min 440dp, max 920dp) with 16dp horizontal padding.
  */
 @Composable
 fun Modifier.promptWidth(): Modifier {
@@ -48,13 +48,13 @@ fun Modifier.promptWidth(): Modifier {
     return this.then(
         if (isLandscape) {
             Modifier
-                .widthIn(min = 420.dp, max = 860.dp)
-                .fillMaxWidth(0.75f)
+                .widthIn(min = 440.dp, max = 920.dp)
+                .fillMaxWidth(0.80f)
                 .padding(horizontal = 16.dp)
         } else {
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp)
+                .padding(horizontal = 8.dp)
         }
     )
 }

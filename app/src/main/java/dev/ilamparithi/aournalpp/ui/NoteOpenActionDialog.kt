@@ -55,6 +55,13 @@ import dev.ilamparithi.aournalpp.utils.NoteOpenAction
 import dev.ilamparithi.aournalpp.utils.NoteOpenManager
 import java.io.File
 
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import dev.ilamparithi.aournalpp.ui.util.a11yHeading
+import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
+
 /**
  * Material 3 standard prompt dialog displayed when a note is opened and default action is set to "Ask every time".
  * Allows selecting "View as PDF" or "Edit in Xournal++", with a "Don't ask again" preference checkbox.
@@ -110,7 +117,8 @@ fun NoteOpenActionDialog(
                 text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_title),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.a11yHeading()
             )
         },
         text = {
@@ -236,10 +244,17 @@ fun NoteOpenActionDialog(
                 Spacer(modifier = Modifier.height(2.dp))
 
                 // "Don't ask again" checkbox row
+                val stateSelected = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.state_selected)
+                val stateNotSelected = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.state_not_selected)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
+                        .minTouchTarget()
+                        .semantics(mergeDescendants = true) {
+                            role = Role.Checkbox
+                            stateDescription = if (dontAskAgain) stateSelected else stateNotSelected
+                        }
                         .clickable { dontAskAgain = !dontAskAgain }
                         .padding(vertical = 4.dp, horizontal = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -293,7 +308,11 @@ private fun ActionOptionCard(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
         ),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = true) {
+                role = Role.Button
+            }
     ) {
         Row(
             modifier = Modifier

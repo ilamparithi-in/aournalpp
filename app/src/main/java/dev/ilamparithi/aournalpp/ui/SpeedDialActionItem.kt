@@ -28,6 +28,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+
 /**
  * Expressive Speed Dial Action Item with Spring Motion Physics.
  */
@@ -56,6 +60,9 @@ fun SpeedDialActionItem(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
+            .semantics(mergeDescendants = true) {
+                role = Role.Button
+            }
             .graphicsLayer {
                 val effectiveScale = (progress * pressScale).coerceAtLeast(0f)
                 scaleX = effectiveScale
@@ -92,7 +99,8 @@ fun SpeedDialActionItem(
             elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
             modifier = Modifier.size(52.dp)
         ) {
-            Icon(imageVector = icon, contentDescription = label, modifier = Modifier.size(24.dp))
+            Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(24.dp))
         }
     }
 }
+

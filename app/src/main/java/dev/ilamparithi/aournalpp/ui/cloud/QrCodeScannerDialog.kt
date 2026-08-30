@@ -59,6 +59,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -70,6 +76,9 @@ import com.google.zxing.BinaryBitmap
 import com.google.zxing.MultiFormatReader
 import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.common.HybridBinarizer
+import dev.ilamparithi.aournalpp.R
+import dev.ilamparithi.aournalpp.ui.util.a11yHeading
+import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
 import java.util.concurrent.Executors
 
 @Composable
@@ -136,10 +145,15 @@ fun QrCodeScannerDialog(
                         text = title,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .a11yHeading()
                     )
-                    IconButton(onClick = onDismissRequest) {
-                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    IconButton(
+                        onClick = onDismissRequest,
+                        modifier = Modifier.minTouchTarget()
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_cancel))
                     }
                 }
 
@@ -204,6 +218,9 @@ fun QrCodeScannerDialog(
                     }
 
                     // Torch Button
+                    val torchTitle = stringResource(R.string.cd_toggle_torch)
+                    val stateEnabled = stringResource(R.string.state_enabled)
+                    val stateDisabled = stringResource(R.string.state_disabled)
                     Surface(
                         shape = CircleShape,
                         color = Color.Black.copy(alpha = 0.6f),
@@ -215,12 +232,20 @@ fun QrCodeScannerDialog(
                             onClick = {
                                 isTorchOn = !isTorchOn
                                 cameraInstance?.cameraControl?.enableTorch(isTorchOn)
-                            }
+                            },
+                            modifier = Modifier
+                                .minTouchTarget()
+                                .semantics {
+                                    role = Role.Switch
+                                    stateDescription = if (isTorchOn) stateEnabled else stateDisabled
+                                    this.contentDescription = torchTitle
+                                }
                         ) {
                             Icon(
                                 imageVector = if (isTorchOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
-                                contentDescription = "Toggle Torch",
-                                tint = if (isTorchOn) Color.Yellow else Color.White
+                                contentDescription = null,
+                                tint = if (isTorchOn) MaterialTheme.colorScheme.primary else Color.White,
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                     }

@@ -39,9 +39,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
+import dev.ilamparithi.aournalpp.R
+import dev.ilamparithi.aournalpp.ui.util.a11yHeading
+import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
 import dev.ilamparithi.aournalpp.backup.model.ExclusionFilterConfig
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -70,7 +75,8 @@ fun ExclusionFilterDialog(
             Text(
                 text = "Configure Exclusion Filters",
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.a11yHeading()
             )
         },
         text = {
@@ -120,9 +126,10 @@ fun ExclusionFilterDialog(
                                 regexList = regexList + newRegexInput.trim()
                                 newRegexInput = ""
                             }
-                        }
+                        },
+                        modifier = Modifier.minTouchTarget()
                     ) {
-                        Icon(imageVector = Icons.Default.Add, contentDescription = "Add pattern")
+                        Icon(imageVector = Icons.Default.Add, contentDescription = stringResource(R.string.cd_add_pattern))
                     }
                 }
 
@@ -138,10 +145,11 @@ fun ExclusionFilterDialog(
                                 trailingIcon = {
                                     Icon(
                                         imageVector = Icons.Default.Close,
-                                        contentDescription = "Remove",
+                                        contentDescription = stringResource(R.string.cd_remove_filter),
                                         modifier = Modifier.size(16.dp)
                                     )
-                                }
+                                },
+                                modifier = Modifier.minTouchTarget()
                             )
                         }
                     }
@@ -168,9 +176,10 @@ fun ExclusionFilterDialog(
                                 excludedExtSet = excludedExtSet + clean
                                 newExtInput = ""
                             }
-                        }
+                        },
+                        modifier = Modifier.minTouchTarget()
                     ) {
-                        Icon(imageVector = Icons.Default.Add, contentDescription = "Add extension")
+                        Icon(imageVector = Icons.Default.Add, contentDescription = stringResource(R.string.cd_add_extension))
                     }
                 }
 
@@ -186,10 +195,11 @@ fun ExclusionFilterDialog(
                                 trailingIcon = {
                                     Icon(
                                         imageVector = Icons.Default.Close,
-                                        contentDescription = "Remove",
+                                        contentDescription = stringResource(R.string.cd_remove_filter),
                                         modifier = Modifier.size(16.dp)
                                     )
-                                }
+                                },
+                                modifier = Modifier.minTouchTarget()
                             )
                         }
                     }
@@ -215,9 +225,10 @@ fun ExclusionFilterDialog(
                                 excludedFolderSet = excludedFolderSet + newFolderInput.trim()
                                 newFolderInput = ""
                             }
-                        }
+                        },
+                        modifier = Modifier.minTouchTarget()
                     ) {
-                        Icon(imageVector = Icons.Default.Add, contentDescription = "Add folder")
+                        Icon(imageVector = Icons.Default.Add, contentDescription = stringResource(R.string.cd_add_folder))
                     }
                 }
 
@@ -233,10 +244,11 @@ fun ExclusionFilterDialog(
                                 trailingIcon = {
                                     Icon(
                                         imageVector = Icons.Default.Close,
-                                        contentDescription = "Remove",
+                                        contentDescription = stringResource(R.string.cd_remove_filter),
                                         modifier = Modifier.size(16.dp)
                                     )
-                                }
+                                },
+                                modifier = Modifier.minTouchTarget()
                             )
                         }
                     }

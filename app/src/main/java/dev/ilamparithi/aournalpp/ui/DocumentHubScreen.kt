@@ -67,6 +67,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import dev.ilamparithi.aournalpp.ui.util.AccessibilityUtils
+import dev.ilamparithi.aournalpp.ui.util.a11yHeading
+import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
+import dev.ilamparithi.aournalpp.ui.util.AppIconButton
+import dev.ilamparithi.aournalpp.ui.util.AppTooltipBox
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -610,39 +622,53 @@ fun DocumentHubScreen(
                         }
                     },
                     navigationIcon = {
-                        IconButton(onClick = {
-                            isSelectionMode = false
-                            selectedNotePaths = emptySet()
-                            lastSelectedNotePath = null
-                        }) {
+                        val cancelLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel)
+                        AppIconButton(
+                            onClick = {
+                                isSelectionMode = false
+                                selectedNotePaths = emptySet()
+                                lastSelectedNotePath = null
+                            },
+                            tooltip = cancelLabel
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel)
+                                contentDescription = cancelLabel
                             )
                         }
                     },
                     actions = {
                         val allSelected = selectedNotePaths.size == currentDisplayNotes.size && currentDisplayNotes.isNotEmpty()
-                        IconButton(onClick = {
-                            if (allSelected) {
-                                selectedNotePaths = emptySet()
-                            } else {
-                                selectedNotePaths = currentDisplayNotes.map { it.path }.toSet()
-                            }
-                        }) {
+                        val selectAllLabel = if (allSelected) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_deselect_all)
+                        else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_select_all)
+
+                        AppIconButton(
+                            onClick = {
+                                if (allSelected) {
+                                    selectedNotePaths = emptySet()
+                                } else {
+                                    selectedNotePaths = currentDisplayNotes.map { it.path }.toSet()
+                                }
+                            },
+                            tooltip = selectAllLabel
+                        ) {
                             Icon(
                                 imageVector = if (allSelected) Icons.Default.Deselect else Icons.Default.SelectAll,
-                                contentDescription = if (allSelected) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_deselect_all)
-                                else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_select_all)
+                                contentDescription = selectAllLabel
                             )
                         }
-                        IconButton(onClick = {
-                            val allPaths = currentDisplayNotes.map { it.path }.toSet()
-                            selectedNotePaths = allPaths.minus(selectedNotePaths)
-                        }) {
+
+                        val invertLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_invert_selection)
+                        AppIconButton(
+                            onClick = {
+                                val allPaths = currentDisplayNotes.map { it.path }.toSet()
+                                selectedNotePaths = allPaths.minus(selectedNotePaths)
+                            },
+                            tooltip = invertLabel
+                        ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.CompareArrows,
-                                contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_invert_selection)
+                                contentDescription = invertLabel
                             )
                         }
                     },
@@ -672,22 +698,30 @@ fun DocumentHubScreen(
                         )
                     },
                     navigationIcon = {
-                        IconButton(onClick = {
-                            isSearchActive = false
-                            searchQuery = ""
-                        }) {
+                        val backLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_back)
+                        AppIconButton(
+                            onClick = {
+                                isSearchActive = false
+                                searchQuery = ""
+                            },
+                            tooltip = backLabel
+                        ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_back)
+                                contentDescription = backLabel
                             )
                         }
                     },
                     actions = {
                         if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { searchQuery = "" }) {
+                            val clearLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_clear)
+                            AppIconButton(
+                                onClick = { searchQuery = "" },
+                                tooltip = clearLabel
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.Clear,
-                                    contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_clear)
+                                    contentDescription = clearLabel
                                 )
                             }
                         }
@@ -709,46 +743,61 @@ fun DocumentHubScreen(
                         }
                     },
                     navigationIcon = {
+                        val backLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_back)
                         if (isViewingTrash) {
-                            IconButton(onClick = {
-                                isViewingTrash = false
-                                loadContent()
-                            }) {
+                            AppIconButton(
+                                onClick = {
+                                    isViewingTrash = false
+                                    loadContent()
+                                },
+                                tooltip = backLabel
+                            ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_back)
+                                    contentDescription = backLabel
                                 )
                             }
                         } else if (currentDirectory.canonicalPath != repository.getRootNotesDirectory().canonicalPath) {
-                            IconButton(onClick = {
-                                currentDirectory = currentDirectory.parentFile ?: repository.getRootNotesDirectory()
-                                loadContent()
-                            }) {
+                            AppIconButton(
+                                onClick = {
+                                    currentDirectory = currentDirectory.parentFile ?: repository.getRootNotesDirectory()
+                                    loadContent()
+                                },
+                                tooltip = backLabel
+                            ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_back)
+                                    contentDescription = backLabel
                                 )
                             }
                         }
                     },
                     actions = {
                         if (!isViewingTrash) {
-                            IconButton(onClick = { isSearchActive = true }) {
+                            val searchLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_search)
+                            AppIconButton(
+                                onClick = { isSearchActive = true },
+                                tooltip = searchLabel
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.Search,
-                                    contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_search)
+                                    contentDescription = searchLabel
                                 )
                             }
 
-                            IconButton(onClick = {
-                                val updated = !isGridView
-                                isGridView = updated
-                                prefs.edit().putBoolean("pref_is_grid_view", updated).apply()
-                            }) {
+                            val viewModeLabel = if (isGridView) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_view_mode_grid)
+                            else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_view_mode_collage)
+                            AppIconButton(
+                                onClick = {
+                                    val updated = !isGridView
+                                    isGridView = updated
+                                    prefs.edit().putBoolean("pref_is_grid_view", updated).apply()
+                                },
+                                tooltip = viewModeLabel
+                            ) {
                                 Icon(
                                     imageVector = if (isGridView) Icons.Default.ViewAgenda else Icons.Default.GridView,
-                                    contentDescription = if (isGridView) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_view_mode_grid)
-                                    else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_view_mode_collage)
+                                    contentDescription = viewModeLabel
                                 )
                             }
                         }
@@ -759,10 +808,14 @@ fun DocumentHubScreen(
                             }
                         )
 
-                        IconButton(onClick = { showTopMenu = true }) {
+                        val detailsLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_details)
+                        AppIconButton(
+                            onClick = { showTopMenu = true },
+                            tooltip = detailsLabel
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
-                                contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_details)
+                                contentDescription = detailsLabel
                             )
                         }
 
@@ -969,7 +1022,7 @@ fun DocumentHubScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_details),
+                            contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.cd_expand_doc_actions),
                             modifier = Modifier
                                 .size(32.dp)
                                 .rotate(fabRotation)
@@ -2108,10 +2161,11 @@ fun DocumentHubScreen(
                     if (displayFolders.isNotEmpty() && !targetIsTrash) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             Text(
-                                text = "Folders (${displayFolders.size})",
+                                text = pluralStringResource(dev.ilamparithi.aournalpp.R.plurals.hub_section_folders_count, displayFolders.size, displayFolders.size),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.a11yHeading()
                             )
                         }
 
@@ -2121,6 +2175,27 @@ fun DocumentHubScreen(
                             val accentColor = folder.colorHex?.let {
                                 try { Color(android.graphics.Color.parseColor(it)) } catch (e: Exception) { null }
                             } ?: MaterialTheme.colorScheme.primary
+
+                            val a11yFolderDescription = remember(folder) {
+                                AccessibilityUtils.buildFolderCardA11yDescription(
+                                    folderName = folder.name,
+                                    noteCount = folder.itemCount,
+                                    isPinned = folder.isPinned || folder.isVirtuallyPinned,
+                                    isExcludedFromRecents = folder.isExcludedFromRecents,
+                                    role = folder.role ?: folder.iconType
+                                )
+                            }
+
+                            val openFolderActionLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_open_folder)
+                            val isPinnedOrVirtual = folder.isPinned || folder.isVirtuallyPinned
+                            val pinFolderActionLabel = if (isPinnedOrVirtual) {
+                                androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_unpin_folder)
+                            } else {
+                                androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_pin_folder)
+                            }
+                            val renameFolderActionLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_rename_folder)
+                            val customizeFolderActionLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_customize_folder)
+                            val deleteFolderActionLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_delete_folder)
 
                             Card(
                                 modifier = Modifier
@@ -2135,6 +2210,46 @@ fun DocumentHubScreen(
                                                 }
                                             }
                                         }
+                                    }
+                                    .semantics(mergeDescendants = true) {
+                                        role = Role.Button
+                                        this.contentDescription = a11yFolderDescription
+                                        customActions = listOf(
+                                            CustomAccessibilityAction(openFolderActionLabel) {
+                                                currentDirectory = folder.file
+                                                true
+                                            },
+                                            CustomAccessibilityAction(pinFolderActionLabel) {
+                                                val nowPinned = repository.togglePinFolder(folder)
+                                                loadContent()
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar(
+                                                        if (nowPinned) "Pinned \"${folder.name}\"" else "Unpinned \"${folder.name}\""
+                                                    )
+                                                }
+                                                true
+                                            },
+                                            CustomAccessibilityAction(renameFolderActionLabel) {
+                                                renameFolderNameInput = folder.name
+                                                folderToRename = folder
+                                                true
+                                            },
+                                            CustomAccessibilityAction(customizeFolderActionLabel) {
+                                                editFolderSelectedColor = folder.colorHex ?: (if (folder.isEmergencyFolder) DocumentRepository.EMERGENCY_SAVES_DEFAULT_COLOR else PRESET_FOLDER_COLORS.first())
+                                                editFolderSelectedEmoji = folder.iconEmoji
+                                                editFolderSelectedIconType = folder.iconType ?: (if (folder.isEmergencyFolder) "emergency" else (folder.role ?: "folder"))
+                                                folderToEdit = folder
+                                                true
+                                            },
+                                            CustomAccessibilityAction(deleteFolderActionLabel) {
+                                                scope.launch {
+                                                    repository.moveFolderToTrash(folder.file)
+                                                    loadContentNow()
+                                                    snackbarHostState.showSnackbar("Moved folder \"${folder.name}\" to Trash")
+                                                }
+                                                true
+                                            }
+                                        )
                                     }
                                     .clickable {
                                         currentDirectory = folder.file
@@ -2222,8 +2337,13 @@ fun DocumentHubScreen(
                                     }
 
                                     Box {
-                                        IconButton(onClick = { showFolderMenu = true }, modifier = Modifier.size(28.dp)) {
-                                            Icon(Icons.Default.MoreVert, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        val folderOptionsLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_customize_folder)
+                                        AppIconButton(
+                                            onClick = { showFolderMenu = true },
+                                            tooltip = folderOptionsLabel,
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(Icons.Default.MoreVert, contentDescription = folderOptionsLabel, modifier = Modifier.size(18.dp))
                                         }
                                         androidx.compose.material3.DropdownMenu(
                                             expanded = showFolderMenu,
@@ -2323,10 +2443,11 @@ fun DocumentHubScreen(
                         if (displayFolders.isNotEmpty() && !targetIsTrash) {
                             item(span = { GridItemSpan(maxLineSpan) }) {
                                 Text(
-                                    text = if (targetIsTrash) "Trashed Notes (${displayNotes.size})" else "Notes (${displayNotes.size})",
+                                    text = if (targetIsTrash) "Trashed Notes (${displayNotes.size})" else pluralStringResource(dev.ilamparithi.aournalpp.R.plurals.hub_section_notes_count, displayNotes.size, displayNotes.size),
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.a11yHeading()
                                 )
                             }
                         }
@@ -2558,86 +2679,106 @@ fun DocumentHubScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             // Pin / Unpin Selected Action
-                            IconButton(onClick = {
-                                selectedDocs.forEach { doc ->
-                                    if (allSelectedPinned) {
-                                        repository.unpinNote(doc.file.absolutePath)
-                                    } else {
-                                        repository.pinNote(doc.file.absolutePath)
+                            val pinActionLabel = if (allSelectedPinned) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_unpin)
+                            else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_pin)
+                            AppIconButton(
+                                onClick = {
+                                    selectedDocs.forEach { doc ->
+                                        if (allSelectedPinned) {
+                                            repository.unpinNote(doc.file.absolutePath)
+                                        } else {
+                                            repository.pinNote(doc.file.absolutePath)
+                                        }
                                     }
-                                }
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(if (allSelectedPinned) "Unpinned selected notes from Home" else "Pinned selected notes to Home")
-                                }
-                                loadContent()
-                            }) {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar(if (allSelectedPinned) "Unpinned selected notes from Home" else "Pinned selected notes to Home")
+                                    }
+                                    loadContent()
+                                },
+                                tooltip = pinActionLabel
+                            ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Icon(
                                         Icons.Default.PushPin,
-                                        contentDescription = if (allSelectedPinned) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_unpin)
-                                        else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_pin),
+                                        contentDescription = pinActionLabel,
                                         tint = if (allSelectedPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
 
                             // Move to Folder Action
-                            IconButton(onClick = { showMoveToFolderDialog = true }) {
+                            val moveActionLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_move)
+                            AppIconButton(
+                                onClick = { showMoveToFolderDialog = true },
+                                tooltip = moveActionLabel
+                            ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Icon(
                                         Icons.AutoMirrored.Filled.DriveFileMove,
-                                        contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_move),
+                                        contentDescription = moveActionLabel,
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 }
                             }
 
                             // Share as PDF Action
-                            IconButton(onClick = {
-                                isPdfConverting = true
-                                convertingMessage = "Rendering ${selectedDocs.size} PDFs..."
-                                scope.launch {
-                                    val result = repository.shareMultipleNotesAsPdf(context, selectedDocs, pdfExportManager)
-                                    isPdfConverting = false
-                                    if (result.isFailure) {
-                                        snackbarHostState.showSnackbar("Batch share failed: ${result.exceptionOrNull()?.message}")
+                            val exportPdfLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_export_pdf)
+                            AppIconButton(
+                                onClick = {
+                                    isPdfConverting = true
+                                    convertingMessage = "Rendering ${selectedDocs.size} PDFs..."
+                                    scope.launch {
+                                        val result = repository.shareMultipleNotesAsPdf(context, selectedDocs, pdfExportManager)
+                                        isPdfConverting = false
+                                        if (result.isFailure) {
+                                            snackbarHostState.showSnackbar("Batch share failed: ${result.exceptionOrNull()?.message}")
+                                        }
                                     }
-                                }
-                            }) {
+                                },
+                                tooltip = exportPdfLabel
+                            ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Icon(
                                         Icons.Default.PictureAsPdf,
-                                        contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_export_pdf)
+                                        contentDescription = exportPdfLabel
                                     )
                                 }
                             }
 
                             // Share as Notes Action
-                            IconButton(onClick = {
-                                repository.shareMultipleNotesAsXopp(context, selectedDocs)
-                            }) {
+                            val shareLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share)
+                            AppIconButton(
+                                onClick = {
+                                    repository.shareMultipleNotesAsXopp(context, selectedDocs)
+                                },
+                                tooltip = shareLabel
+                            ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Icon(
                                         Icons.Default.Share,
-                                        contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share)
+                                        contentDescription = shareLabel
                                     )
                                 }
                             }
 
                             // Move to Trash Action
-                            IconButton(onClick = {
-                                scope.launch {
-                                    val count = repository.moveToTrash(selectedDocs).getOrDefault(0)
-                                    isSelectionMode = false
-                                    selectedNotePaths = emptySet()
-                                    loadContentNow()
-                                    snackbarHostState.showSnackbar("Moved $count note(s) to Trash")
-                                }
-                            }) {
+                            val deleteLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_delete)
+                            AppIconButton(
+                                onClick = {
+                                    scope.launch {
+                                        val count = repository.moveToTrash(selectedDocs).getOrDefault(0)
+                                        isSelectionMode = false
+                                        selectedNotePaths = emptySet()
+                                        loadContentNow()
+                                        snackbarHostState.showSnackbar("Moved $count note(s) to Trash")
+                                    }
+                                },
+                                tooltip = deleteLabel
+                            ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Icon(
                                         Icons.Default.Delete,
-                                        contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_delete),
+                                        contentDescription = deleteLabel,
                                         tint = MaterialTheme.colorScheme.error
                                     )
                                 }
@@ -2706,6 +2847,43 @@ fun ExpressiveNoteCard(
 
     var cardInteractionTimestamp by remember { mutableStateOf(0L) }
 
+    val openActionLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_open_note)
+    val pinActionLabel = if (note.isPinned) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_unpin_note) else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_pin_note)
+    val exportPdfActionLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_export_pdf)
+    val shareActionLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_note)
+    val renameActionLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_rename)
+    val duplicateActionLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_keep_both)
+    val deleteActionLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_delete)
+    val restoreActionLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_restore_note)
+
+    val customActionsList = remember(note, isTrashMode, isSelectionMode) {
+        buildList {
+            add(CustomAccessibilityAction(openActionLabel) { onClick(); true })
+            if (!isSelectionMode) {
+                add(CustomAccessibilityAction(pinActionLabel) { onTogglePin(); true })
+                add(CustomAccessibilityAction(exportPdfActionLabel) { onExportPdf(); true })
+                add(CustomAccessibilityAction(shareActionLabel) { onShareXopp(); true })
+                add(CustomAccessibilityAction(renameActionLabel) { onRename(); true })
+                add(CustomAccessibilityAction(duplicateActionLabel) { onDuplicate(); true })
+                add(CustomAccessibilityAction(deleteActionLabel) { onDelete(); true })
+            }
+            if (isTrashMode) {
+                add(CustomAccessibilityAction(restoreActionLabel) { onRestore(); true })
+            }
+        }
+    }
+
+    val a11yNoteDescription = remember(note, isSelected, isSelectionMode) {
+        AccessibilityUtils.buildNoteCardA11yDescription(
+            title = note.title,
+            fileType = note.fileType,
+            folderName = note.folder,
+            lastModified = note.fuzzyLastModified,
+            isPinned = note.isPinned,
+            isSelected = if (isSelectionMode) isSelected else null
+        )
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -2720,6 +2898,11 @@ fun ExpressiveNoteCard(
                         }
                     }
                 }
+            }
+            .semantics(mergeDescendants = true) {
+                role = Role.Button
+                this.contentDescription = a11yNoteDescription
+                customActions = customActionsList
             }
             .combinedClickable(
                 onClick = onClick,
@@ -2867,8 +3050,13 @@ fun ExpressiveNoteCard(
 
                         if (!isSelectionMode && !isTrashMode) {
                             Box {
-                                IconButton(onClick = { showMenu = true }, modifier = Modifier.size(24.dp)) {
-                                    Icon(Icons.Default.MoreVert, contentDescription = null, modifier = Modifier.size(18.dp))
+                                val moreOptionsLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_details)
+                                AppIconButton(
+                                    onClick = { showMenu = true },
+                                    tooltip = moreOptionsLabel,
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(Icons.Default.MoreVert, contentDescription = moreOptionsLabel, modifier = Modifier.size(18.dp))
                                 }
                                 StandardNoteActionDropdown(
                                     expanded = showMenu,
@@ -2884,8 +3072,13 @@ fun ExpressiveNoteCard(
                                 )
                             }
                         } else if (isTrashMode && onRestore != null) {
-                            IconButton(onClick = onRestore, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Default.Restore, contentDescription = "Restore", tint = MaterialTheme.colorScheme.primary)
+                            val restoreLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_restore)
+                            AppIconButton(
+                                onClick = onRestore,
+                                tooltip = restoreLabel,
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(Icons.Default.Restore, contentDescription = restoreLabel, tint = MaterialTheme.colorScheme.primary)
                             }
                         }
                     }
@@ -2988,8 +3181,12 @@ fun ExpressiveNoteCard(
 
                 if (!isSelectionMode && !isTrashMode) {
                     Box {
-                        IconButton(onClick = { showMenu = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = null)
+                        val moreOptionsLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_details)
+                        AppIconButton(
+                            onClick = { showMenu = true },
+                            tooltip = moreOptionsLabel
+                        ) {
+                            Icon(Icons.Default.MoreVert, contentDescription = moreOptionsLabel)
                         }
                         StandardNoteActionDropdown(
                             expanded = showMenu,
@@ -3005,8 +3202,12 @@ fun ExpressiveNoteCard(
                         )
                     }
                 } else if (isTrashMode && onRestore != null) {
-                    IconButton(onClick = onRestore) {
-                        Icon(Icons.Default.Restore, contentDescription = "Restore", tint = MaterialTheme.colorScheme.primary)
+                    val restoreLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_restore)
+                    AppIconButton(
+                        onClick = onRestore,
+                        tooltip = restoreLabel
+                    ) {
+                        Icon(Icons.Default.Restore, contentDescription = restoreLabel, tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
@@ -3420,7 +3621,10 @@ fun DynamicRecentsCarousel(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.a11yHeading()
+            ) {
                 Icon(
                     Icons.Default.History,
                     contentDescription = null,
@@ -3429,7 +3633,7 @@ fun DynamicRecentsCarousel(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    "Recent Files",
+                    androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_title_recent_notes),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
