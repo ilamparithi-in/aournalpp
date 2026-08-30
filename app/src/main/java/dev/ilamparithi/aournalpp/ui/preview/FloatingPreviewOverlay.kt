@@ -19,6 +19,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -679,27 +680,29 @@ private fun FloatingPreviewOverlay(
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Black,
                         color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.fillMaxWidth()
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth().basicMarquee()
                     )
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         val folderDisplayName = if (data.note.folder.isBlank()) "Notes Home" else data.note.folder
                         val isHome = data.note.folder.isBlank() || data.note.folder == "Notes Home"
                         val isEmergency = data.note.folderIconType == "emergency" || data.note.folder.equals("Emergency Saves", ignoreCase = true)
 
                         Box(
-                            modifier = Modifier.size(15.dp),
+                            modifier = Modifier.size(14.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             if (!data.note.folderIconEmoji.isNullOrBlank()) {
                                 Text(
                                     text = data.note.folderIconEmoji,
-                                    fontSize = 11.sp,
-                                    lineHeight = 11.sp
+                                    fontSize = 10.sp,
+                                    lineHeight = 10.sp
                                 )
                             } else {
                                 Icon(
@@ -710,7 +713,7 @@ private fun FloatingPreviewOverlay(
                                     },
                                     contentDescription = null,
                                     tint = data.folderColor,
-                                    modifier = Modifier.size(13.dp)
+                                    modifier = Modifier.size(12.dp)
                                 )
                             }
                         }
@@ -719,21 +722,10 @@ private fun FloatingPreviewOverlay(
                             text = folderDisplayName,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
-                            color = data.folderColor
+                            color = data.folderColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-
-                        if (data.note.fuzzyLastOpened != null) {
-                            Text(
-                                text = "•",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.outline
-                            )
-                            Text(
-                                text = "Opened ${data.note.fuzzyLastOpened}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = data.folderColor
-                            )
-                        }
 
                         Text(
                             text = "•",
@@ -741,10 +733,19 @@ private fun FloatingPreviewOverlay(
                             color = MaterialTheme.colorScheme.outline
                         )
 
+                        val timeText = if (data.note.fuzzyLastOpened != null) {
+                            "Opened ${data.note.fuzzyLastOpened}"
+                        } else {
+                            "Modified ${data.note.fuzzyLastModified}"
+                        }
+
                         Text(
-                            text = "Modified ${data.note.fuzzyLastModified}",
+                            text = timeText,
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false).basicMarquee()
                         )
 
                         Text(
@@ -756,7 +757,8 @@ private fun FloatingPreviewOverlay(
                         Text(
                             text = data.note.sizeFormatted,
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
                         )
                     }
                 }

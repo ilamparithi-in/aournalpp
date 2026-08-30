@@ -238,6 +238,8 @@ fun CustomEmojiInputDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = AppDialogDefaults.Properties,
+        modifier = Modifier.promptWidth(),
         title = { Text("Choose Any Emoji", fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

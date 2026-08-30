@@ -56,8 +56,9 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
+import dev.ilamparithi.aournalpp.ui.AppDialogDefaults
+import dev.ilamparithi.aournalpp.ui.promptWidth
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
@@ -660,6 +661,8 @@ fun CloudScreen(
                 showRestoreConfirmDialog = false
                 restoreTargetService = null
             },
+            properties = AppDialogDefaults.Properties,
+            modifier = Modifier.promptWidth(),
             icon = { Icon(Icons.Default.CloudDownload, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
             title = { Text(stringResource(R.string.cloud_restore_dialog_title, srv.name)) },
             text = {

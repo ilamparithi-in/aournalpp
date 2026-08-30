@@ -533,6 +533,8 @@ private fun OnboardingStoragePermissionPage(
     if (showExplanationDialog) {
         AlertDialog(
             onDismissRequest = { showExplanationDialog = false },
+            properties = AppDialogDefaults.Properties,
+            modifier = Modifier.promptWidth(),
             icon = {
                 Icon(
                     imageVector = Icons.Default.Security,

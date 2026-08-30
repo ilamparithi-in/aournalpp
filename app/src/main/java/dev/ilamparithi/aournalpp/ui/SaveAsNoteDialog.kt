@@ -118,13 +118,10 @@ fun SaveAsNoteDialog(
         else -> selectedFolder.name
     }
 
-    val configuration = LocalConfiguration.current
-    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-
     AlertDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = isLandscape),
-        modifier = if (isLandscape) Modifier else Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+        properties = AppDialogDefaults.Properties,
+        modifier = Modifier.promptWidth(),
         icon = {
             Icon(
                 imageVector = icon,

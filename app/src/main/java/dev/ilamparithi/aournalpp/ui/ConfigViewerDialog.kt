@@ -80,9 +80,8 @@ fun ConfigViewerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 16.dp),
+        properties = AppDialogDefaults.Properties,
+        modifier = Modifier.promptWidth(),
         title = {
             Row(
                 modifier = Modifier.fillMaxWidth(),

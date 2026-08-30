@@ -53,6 +53,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import dev.ilamparithi.aournalpp.ui.AppDialogDefaults
+import dev.ilamparithi.aournalpp.ui.promptWidth
 import dev.ilamparithi.aournalpp.backup.model.ServiceConfig
 import dev.ilamparithi.aournalpp.backup.provider.StorageProviderFactory
 import kotlinx.coroutines.Dispatchers
@@ -393,6 +395,8 @@ fun FolderBrowserDialog(
     if (showNewFolderDialog) {
         AlertDialog(
             onDismissRequest = { showNewFolderDialog = false },
+            properties = AppDialogDefaults.Properties,
+            modifier = Modifier.promptWidth(),
             title = { Text("Create New Folder") },
             text = {
                 OutlinedTextField(

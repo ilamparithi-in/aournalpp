@@ -79,13 +79,10 @@ fun NoteOpenActionDialog(
         file.extension.uppercase().ifEmpty { "NOTE" }
     }
 
-    val configuration = LocalConfiguration.current
-    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-
     AlertDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = isLandscape),
-        modifier = if (isLandscape) Modifier else Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+        properties = AppDialogDefaults.Properties,
+        modifier = Modifier.promptWidth(),
         shape = RoundedCornerShape(28.dp),
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         icon = {

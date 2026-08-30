@@ -185,6 +185,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -1114,6 +1115,8 @@ fun DocumentHubScreen(
 
             AlertDialog(
                 onDismissRequest = { showPermissionDialog = false },
+                properties = AppDialogDefaults.Properties,
+                modifier = Modifier.promptWidth(),
                 icon = {
                     Icon(
                         imageVector = Icons.Default.FolderShared,
@@ -1150,6 +1153,8 @@ fun DocumentHubScreen(
         if (isPdfConverting) {
             AlertDialog(
                 onDismissRequest = {},
+                properties = AppDialogDefaults.Properties,
+                modifier = Modifier.promptWidth(),
                 icon = {
                     CircularProgressIndicator(modifier = Modifier.size(36.dp), strokeWidth = 3.dp)
                 },
@@ -1199,6 +1204,8 @@ fun DocumentHubScreen(
         folderToEdit?.let { folder ->
             AlertDialog(
                 onDismissRequest = { folderToEdit = null },
+                properties = AppDialogDefaults.Properties,
+                modifier = Modifier.promptWidth(),
                 icon = { Icon(Icons.Default.ColorLens, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                 title = { Text("Customize \"${folder.name}\"", fontWeight = FontWeight.Bold) },
                 text = {
@@ -1247,6 +1254,8 @@ fun DocumentHubScreen(
         folderToRename?.let { folder ->
             AlertDialog(
                 onDismissRequest = { folderToRename = null },
+                properties = AppDialogDefaults.Properties,
+                modifier = Modifier.promptWidth(),
                 icon = {
                     Icon(
                         imageVector = Icons.Default.DriveFileRenameOutline,
@@ -1326,6 +1335,8 @@ fun DocumentHubScreen(
 
             AlertDialog(
                 onDismissRequest = { showMoveToFolderDialog = false },
+                properties = AppDialogDefaults.Properties,
+                modifier = Modifier.promptWidth(),
                 icon = { Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp)) },
                 title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_move_notes_title, selectedDocs.size), fontWeight = FontWeight.Bold) },
                 text = {
@@ -1477,15 +1488,12 @@ fun DocumentHubScreen(
             )
         }
 
-        val configuration = LocalConfiguration.current
-        val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-
         // 6. Rename Dialog
         noteToRename?.let { doc ->
             AlertDialog(
                 onDismissRequest = { noteToRename = null },
-                properties = DialogProperties(usePlatformDefaultWidth = isLandscape),
-                modifier = if (isLandscape) Modifier else Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                properties = AppDialogDefaults.Properties,
+                modifier = Modifier.promptWidth(),
                 title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_rename_title), fontWeight = FontWeight.Bold) },
                 text = {
                     OutlinedTextField(
@@ -1523,8 +1531,8 @@ fun DocumentHubScreen(
         noteToDelete?.let { doc ->
             AlertDialog(
                 onDismissRequest = { noteToDelete = null },
-                properties = DialogProperties(usePlatformDefaultWidth = isLandscape),
-                modifier = if (isLandscape) Modifier else Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                properties = AppDialogDefaults.Properties,
+                modifier = Modifier.promptWidth(),
                 icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                 title = {
                     Text(
@@ -1579,6 +1587,8 @@ fun DocumentHubScreen(
 
             AlertDialog(
                 onDismissRequest = { showBatchDeletePermanentDialog = false },
+                properties = AppDialogDefaults.Properties,
+                modifier = Modifier.promptWidth(),
                 icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                 title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_delete_permanent_title), fontWeight = FontWeight.Bold) },
                 text = {
@@ -1609,6 +1619,8 @@ fun DocumentHubScreen(
         if (showEmptyTrashConfirmDialog) {
             AlertDialog(
                 onDismissRequest = { showEmptyTrashConfirmDialog = false },
+                properties = AppDialogDefaults.Properties,
+                modifier = Modifier.promptWidth(),
                 icon = { Icon(Icons.Default.DeleteSweep, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                 title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_empty_trash_title), fontWeight = FontWeight.Bold) },
                 text = {
@@ -1640,6 +1652,8 @@ fun DocumentHubScreen(
 
             AlertDialog(
                 onDismissRequest = { showEmergencyDialog = false },
+                properties = AppDialogDefaults.Properties,
+                modifier = Modifier.promptWidth(),
                 icon = { Icon(Icons.Default.Restore, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp)) },
                 title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_emergency_recovery_title), fontWeight = FontWeight.Bold) },
                 text = {
@@ -1681,6 +1695,8 @@ fun DocumentHubScreen(
                     showAutoloadOverrideDialog = false
                     env.clearPendingAutoloadOverrideNotification()
                 },
+                properties = AppDialogDefaults.Properties,
+                modifier = Modifier.promptWidth(),
                 icon = {
                     Icon(
                         Icons.Default.Tune,
@@ -2717,7 +2733,9 @@ fun ExpressiveNoteCard(
         shape = cardShape,
         colors = CardDefaults.cardColors(
             containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                .compositeOver(MaterialTheme.colorScheme.surface)
             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                .compositeOver(MaterialTheme.colorScheme.surface)
         )
     ) {
         if (isGridView) {
@@ -3067,13 +3085,11 @@ fun AutosaveResolutionDialog(
     onKeepExisting: () -> Unit
 ) {
     val isNewer = autosaveInfo.isAutosaveNewer
-    val configuration = LocalConfiguration.current
-    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = isLandscape),
-        modifier = if (isLandscape) Modifier else Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+        properties = AppDialogDefaults.Properties,
+        modifier = Modifier.promptWidth(),
         icon = {
             Icon(
                 imageVector = Icons.Default.History,

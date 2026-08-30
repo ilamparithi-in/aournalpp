@@ -194,6 +194,8 @@ fun ScreenSafeAreaEditorScreen(
     if (showDiscardConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showDiscardConfirmDialog = false },
+            properties = AppDialogDefaults.Properties,
+            modifier = Modifier.promptWidth(),
             icon = {
                 Icon(
                     imageVector = Icons.Default.Warning,

@@ -52,6 +52,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -327,6 +328,7 @@ fun LicensesScreen(onBack: (() -> Unit)? = null) {
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                            .compositeOver(MaterialTheme.colorScheme.surface)
                     )
                 ) {
                     Column(
@@ -415,6 +417,8 @@ fun LicensesScreen(onBack: (() -> Unit)? = null) {
         selectedLibraryForDialog?.let { lib ->
             AlertDialog(
                 onDismissRequest = { selectedLibraryForDialog = null },
+                properties = AppDialogDefaults.Properties,
+                modifier = Modifier.promptWidth(),
                 title = {
                     Text(
                         text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.licenses_dialog_title, lib.name),

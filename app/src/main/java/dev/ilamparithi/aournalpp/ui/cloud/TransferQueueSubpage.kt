@@ -51,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -272,7 +273,9 @@ private fun StatCard(
 ) {
     Card(
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.12f)),
+        colors = CardDefaults.cardColors(
+            containerColor = color.copy(alpha = 0.12f).compositeOver(MaterialTheme.colorScheme.surface)
+        ),
         modifier = modifier
     ) {
         Column(modifier = Modifier.padding(10.dp)) {

@@ -2,7 +2,9 @@ package dev.ilamparithi.aournalpp.ui
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -111,6 +113,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -637,100 +640,146 @@ fun HomeScreen(
                     }
 
                     // 3. M3 Expressive Studio Notes (Collage vs Gallery)
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        // Header Row 1: Studio Notes Title + Files Hub button
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Default.History,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_title_recent_notes),
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Black
-                                )
-                            }
+                    val configuration = LocalConfiguration.current
+                    val isWideOrLandscape = configuration.screenWidthDp >= 600 || configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-                            TextButton(onClick = onNavigateToFiles) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.tab_files), fontWeight = FontWeight.Bold)
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        @Composable
+                        fun ViewModeToggle(modifier: Modifier = Modifier) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                modifier = modifier
+                            ) {
+                                Row(modifier = Modifier.padding(3.dp)) {
+                                    Surface(
+                                        shape = RoundedCornerShape(9.dp),
+                                        color = if (viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.primary else Color.Transparent,
+                                        modifier = Modifier.clickable {
+                                            viewMode = "EXPRESSIVE"
+                                            prefs.edit().putString("pref_home_view_mode", "EXPRESSIVE").apply()
+                                        }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                Icons.Default.AutoAwesome,
+                                                contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_view_mode_collage),
+                                                tint = if (viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_view_mode_collage),
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+
+                                    Surface(
+                                        shape = RoundedCornerShape(9.dp),
+                                        color = if (viewMode == "NORMAL") MaterialTheme.colorScheme.primary else Color.Transparent,
+                                        modifier = Modifier.clickable {
+                                            viewMode = "NORMAL"
+                                            prefs.edit().putString("pref_home_view_mode", "NORMAL").apply()
+                                        }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                Icons.Default.GridView,
+                                                contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_view_mode_grid),
+                                                tint = if (viewMode == "NORMAL") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_view_mode_grid),
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (viewMode == "NORMAL") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
 
-                        // Header Row 2: Segmented Collage / Gallery toggle
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-                            modifier = Modifier.align(Alignment.Start)
-                        ) {
-                            Row(modifier = Modifier.padding(3.dp)) {
-                                Surface(
-                                    shape = RoundedCornerShape(9.dp),
-                                    color = if (viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.primary else Color.Transparent,
-                                    modifier = Modifier.clickable {
-                                        viewMode = "EXPRESSIVE"
-                                        prefs.edit().putString("pref_home_view_mode", "EXPRESSIVE").apply()
-                                    }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            Icons.Default.AutoAwesome,
-                                            contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_view_mode_collage),
-                                            tint = if (viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_view_mode_collage),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
+                        if (isWideOrLandscape) {
+                            // Tablet or Landscape: Single Row with Title on Left, ViewModeToggle + Files Hub Button on Right
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.History,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_title_recent_notes),
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Black
+                                    )
                                 }
 
-                                Surface(
-                                    shape = RoundedCornerShape(9.dp),
-                                    color = if (viewMode == "NORMAL") MaterialTheme.colorScheme.primary else Color.Transparent,
-                                    modifier = Modifier.clickable {
-                                        viewMode = "NORMAL"
-                                        prefs.edit().putString("pref_home_view_mode", "NORMAL").apply()
-                                    }
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            Icons.Default.GridView,
-                                            contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_view_mode_grid),
-                                            tint = if (viewMode == "NORMAL") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_view_mode_grid),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (viewMode == "NORMAL") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+                                    ViewModeToggle()
+
+                                    TextButton(onClick = onNavigateToFiles) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.tab_files), fontWeight = FontWeight.Bold)
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        }
                                     }
                                 }
                             }
+                        } else {
+                            // Mobile / Portrait: Row 1 has Title + Files Hub Button, Row 2 has ViewModeToggle
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.History,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_title_recent_notes),
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                }
+
+                                TextButton(onClick = onNavigateToFiles) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.tab_files), fontWeight = FontWeight.Bold)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            }
+
+                            ViewModeToggle(modifier = Modifier.align(Alignment.Start))
                         }
 
                         if (recentNotes.isEmpty()) {
@@ -930,6 +979,8 @@ fun HomeScreen(
 
         AlertDialog(
             onDismissRequest = { showEmergencyDialog = false },
+            properties = AppDialogDefaults.Properties,
+            modifier = Modifier.promptWidth(),
             icon = { Icon(Icons.Default.Restore, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp)) },
             title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.emergency_dialog_title), fontWeight = FontWeight.Bold) },
             text = {
@@ -1034,6 +1085,8 @@ fun HomeScreen(
                 showAutoloadOverrideDialog = false
                 env.clearPendingAutoloadOverrideNotification()
             },
+            properties = AppDialogDefaults.Properties,
+            modifier = Modifier.promptWidth(),
             icon = {
                 Icon(
                     Icons.Default.Tune,
@@ -1220,6 +1273,8 @@ fun HomeScreen(
     if (isPdfConverting) {
         AlertDialog(
             onDismissRequest = {},
+            properties = AppDialogDefaults.Properties,
+            modifier = Modifier.promptWidth(),
             icon = { CircularProgressIndicator(modifier = Modifier.size(36.dp), strokeWidth = 3.dp) },
             title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.title_processing_document), fontWeight = FontWeight.Bold) },
             text = {
@@ -1240,6 +1295,8 @@ fun HomeScreen(
     noteToRename?.let { note ->
         AlertDialog(
             onDismissRequest = { noteToRename = null },
+            properties = AppDialogDefaults.Properties,
+            modifier = Modifier.promptWidth(),
             icon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp)) },
             title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_rename_title), fontWeight = FontWeight.Bold) },
             text = {
@@ -1284,6 +1341,8 @@ fun HomeScreen(
     noteToDelete?.let { note ->
         AlertDialog(
             onDismissRequest = { noteToDelete = null },
+            properties = AppDialogDefaults.Properties,
+            modifier = Modifier.promptWidth(),
             icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(32.dp)) },
             title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_delete_note_title), fontWeight = FontWeight.Bold) },
             text = {
@@ -1467,6 +1526,7 @@ private fun EnlargedContinueHeroSection(
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = heroFolderAccent.copy(alpha = 0.14f)
+                .compositeOver(MaterialTheme.colorScheme.surface)
         ),
         border = BorderStroke(1.dp, heroFolderAccent.copy(alpha = 0.35f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)

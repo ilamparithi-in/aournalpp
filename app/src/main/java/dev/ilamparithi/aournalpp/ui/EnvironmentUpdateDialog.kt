@@ -71,12 +71,10 @@ fun EnvironmentUpdateDialog(
 
     BasicAlertDialog(
         onDismissRequest = { /* Non-dismissible by tapping outside */ },
-        properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = false)
+        properties = AppDialogDefaults.properties(dismissOnClickOutside = false, dismissOnBackPress = false)
     ) {
         Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.promptWidth(),
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp,

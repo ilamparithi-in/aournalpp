@@ -150,6 +150,8 @@ import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.runtime.NotesHomeConfigManager
 import dev.ilamparithi.aournalpp.runtime.WallpaperHelper
 import dev.ilamparithi.aournalpp.runtime.XournalConfigManager
+import dev.ilamparithi.aournalpp.ui.AppDialogDefaults
+import dev.ilamparithi.aournalpp.ui.promptWidth
 import dev.ilamparithi.aournalpp.ui.ConfigViewerDialog
 import dev.ilamparithi.aournalpp.ui.ScreenSafeAreaEditorScreen
 import dev.ilamparithi.aournalpp.ui.theme.AournalTheme
@@ -409,6 +411,8 @@ fun MainSettingsScreen(
             if (showCustomPathDialog) {
                 AlertDialog(
                     onDismissRequest = { showCustomPathDialog = false },
+                    properties = AppDialogDefaults.Properties,
+                    modifier = Modifier.promptWidth(),
                     title = {
                         Text(
                             text = "Set Custom Notes Folder",
@@ -458,6 +462,8 @@ fun MainSettingsScreen(
             pendingPresetChange?.let { (label, path) ->
                 AlertDialog(
                     onDismissRequest = { pendingPresetChange = null },
+                    properties = AppDialogDefaults.Properties,
+                    modifier = Modifier.promptWidth(),
                     icon = {
                         Icon(
                             imageVector = Icons.Default.Folder,
@@ -1154,6 +1160,8 @@ fun MainSettingsScreen(
             if (showAdvancedExportDialog) {
                 AlertDialog(
                     onDismissRequest = { showAdvancedExportDialog = false },
+                    properties = AppDialogDefaults.Properties,
+                    modifier = Modifier.promptWidth(),
                     title = {
                         Text(
                             text = "Export Specific Config File",
@@ -3664,6 +3672,8 @@ fun AppLanguagePickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
+        properties = AppDialogDefaults.Properties,
+        modifier = Modifier.promptWidth(),
         icon = { Icon(Icons.Default.Language, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
         title = {
             Text(
@@ -3779,6 +3789,8 @@ fun XournalppLanguagePickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
+        properties = AppDialogDefaults.Properties,
+        modifier = Modifier.promptWidth(),
         icon = { Icon(Icons.Default.Translate, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
         title = {
             Text(

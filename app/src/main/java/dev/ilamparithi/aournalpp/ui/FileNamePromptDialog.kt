@@ -76,13 +76,10 @@ fun FileNamePromptDialog(
     val sanitized = FileNameTemplateEngine.sanitizeFileName(textFieldValue.text)
     val isError = textFieldValue.text.isNotBlank() && sanitized.isEmpty()
 
-    val configuration = LocalConfiguration.current
-    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-
     AlertDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = isLandscape),
-        modifier = if (isLandscape) Modifier else Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+        properties = AppDialogDefaults.Properties,
+        modifier = Modifier.promptWidth(),
         icon = {
             Surface(
                 shape = RoundedCornerShape(12.dp),

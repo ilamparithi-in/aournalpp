@@ -133,6 +133,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
+import dev.ilamparithi.aournalpp.ui.AppDialogDefaults
+import dev.ilamparithi.aournalpp.ui.promptWidth
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -677,10 +679,11 @@ class CanvasActivity : ComponentActivity() {
                         if (showEmergencyForceCloseDialog) {
                             AlertDialog(
                                 onDismissRequest = { /* Non-dismissible on tap outside or back press */ },
-                                properties = DialogProperties(
+                                properties = AppDialogDefaults.properties(
                                     dismissOnBackPress = false,
                                     dismissOnClickOutside = false
                                 ),
+                                modifier = Modifier.promptWidth(),
                                 icon = {
                                     Icon(
                                         imageVector = Icons.Default.Warning,

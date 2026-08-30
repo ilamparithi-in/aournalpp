@@ -59,14 +59,15 @@ fun CreateFolderDialog(
     var selectedFolderEmoji by remember { mutableStateOf(initialEmoji) }
     var selectedFolderIconType by remember { mutableStateOf(initialIconType) }
 
-    Dialog(onDismissRequest = { if (!isCreating) onDismiss() }) {
+    Dialog(
+        onDismissRequest = { if (!isCreating) onDismiss() },
+        properties = AppDialogDefaults.Properties
+    ) {
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
+            modifier = Modifier.promptWidth()
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
