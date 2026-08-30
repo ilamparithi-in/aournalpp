@@ -2875,10 +2875,17 @@ fun ExpressiveNoteCard(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Row(
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(note.lastModifiedFormatted, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        InteractiveMarqueeText(
+                            text = note.lastModifiedFormatted,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            externalTrigger = cardInteractionTimestamp,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
                         Text("•", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                         Text(note.sizeFormatted, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -2944,7 +2951,21 @@ fun ExpressiveNoteCard(
                             Icon(Icons.Default.PushPin, contentDescription = "Pinned", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(15.dp))
                         }
                     }
-                    Text("${note.lastModifiedFormatted} · ${note.sizeFormatted}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        InteractiveMarqueeText(
+                            text = note.lastModifiedFormatted,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            externalTrigger = cardInteractionTimestamp,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Text("·", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                        Text(note.sizeFormatted, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
 
                 if (!isSelectionMode && !isTrashMode) {

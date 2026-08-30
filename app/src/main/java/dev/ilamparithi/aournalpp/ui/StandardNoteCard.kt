@@ -407,13 +407,13 @@ fun FloatingDetailsPill(
                     }
                 }
 
-                Text(
+                InteractiveMarqueeText(
                     text = folderDisplayName,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = folderColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    externalTrigger = externalTrigger,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
 
                 Text(
@@ -422,12 +422,12 @@ fun FloatingDetailsPill(
                     color = MaterialTheme.colorScheme.outline
                 )
 
-                Text(
+                InteractiveMarqueeText(
                     text = note.fuzzyLastModified,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    externalTrigger = externalTrigger,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
             }
         }

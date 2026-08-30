@@ -1582,7 +1582,9 @@ private fun EnlargedContinueHeroSection(
                     Text(
                         text = metadataSubtitle,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        modifier = Modifier.basicMarquee()
                     )
                 }
 
