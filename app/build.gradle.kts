@@ -181,6 +181,9 @@ android {
         abortOnError = true
         checkReleaseBuilds = true
     }
+    androidResources {
+        noCompress += listOf("xz", "tar.xz")
+    }
     buildFeatures {
         compose = true
     }

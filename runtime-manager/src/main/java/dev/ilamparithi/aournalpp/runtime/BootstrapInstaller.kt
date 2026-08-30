@@ -4,16 +4,17 @@ import android.content.Context
 import android.system.Os
 import android.util.Log
 import androidx.core.content.pm.PackageInfoCompat
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.tukaani.xz.XZInputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 data class InstallProgress(
     val currentFile: String,
@@ -27,6 +28,40 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
         const val ASSET_NAME = "bootstrap.tar.xz"
         const val VERSION_FLAG = "bootstrap_installed.ver"
         private val installMutex = Mutex()
+    }
+
+    private fun purgeStaleDirectoriesAsync() {
+        try {
+            val staleDirs = env.rootDir.listFiles { file ->
+                file.isDirectory && file.name.startsWith("usr_stale_")
+            } ?: emptyArray()
+
+            for (staleDir in staleDirs) {
+                try {
+                    staleDir.deleteRecursively()
+                    Log.i(TAG, "Successfully purged stale directory: ${staleDir.name}")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed purging stale directory: ${staleDir.name}", e)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error scanning for stale directories", e)
+        }
+    }
+
+    private fun retireUsrDirForAsyncPurge() {
+        if (env.usrDir.exists()) {
+            val staleDir = File(env.rootDir, "usr_stale_${System.currentTimeMillis()}")
+            if (env.usrDir.renameTo(staleDir)) {
+                Log.i(TAG, "Atomically moved ${env.usrDir.name} to ${staleDir.name} for background purge")
+            } else {
+                Log.w(TAG, "Atomic rename failed, falling back to deleteRecursively()")
+                env.usrDir.deleteRecursively()
+            }
+        }
+        CoroutineScope(Dispatchers.IO).launch {
+            purgeStaleDirectoriesAsync()
+        }
     }
 
     fun isExtractionInProgress(): Boolean = installMutex.isLocked
@@ -81,9 +116,7 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
             if (versionFile.exists()) {
                 versionFile.delete()
             }
-            if (env.usrDir.exists()) {
-                env.usrDir.deleteRecursively()
-            }
+            retireUsrDirForAsyncPurge()
         } catch (e: Exception) {
             Log.w(TAG, "Failed during clearInstallation", e)
         }
@@ -104,10 +137,7 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
         try {
             // Safely purge system-only userland (/files/usr) to eliminate stale/mismatched binaries
             // User data (/files/home and /files/home/.config) remains untouched
-            if (env.usrDir.exists()) {
-                Log.i(TAG, "Purging ${env.usrDir.absolutePath} for isolated upgrade...")
-                env.usrDir.deleteRecursively()
-            }
+            retireUsrDirForAsyncPurge()
 
             env.ensureDirectoryTree()
             val assetManager = context.assets

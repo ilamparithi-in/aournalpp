@@ -4,10 +4,7 @@ import android.content.Context
 import android.os.Environment
 import android.system.Os
 import android.util.Log
-import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
-import org.tukaani.xz.XZInputStream
 import java.io.File
-import java.io.FileOutputStream
 import java.nio.file.Files
 
 class LinuxEnvironment(private val context: Context) {
@@ -274,9 +271,6 @@ class LinuxEnvironment(private val context: Context) {
             }
         }
 
-        // Self-heal: Extract missing gettext translation catalogs if share/locale is absent or empty
-        ensureLocaleCatalogs()
-
         // Symlink share/locale into homeDir for runtime and gettext discovery
         val localeShareDir = File(shareDir, "locale")
         val homeLocaleLink = File(homeDir, "locale")
@@ -393,39 +387,6 @@ class LinuxEnvironment(private val context: Context) {
         ensureMenuBarShortcuts()
         checkAndQuarantineEmergencySave()
         NotesHomeConfigManager.sync(context, this)
-    }
-
-    fun ensureLocaleCatalogs() {
-        val localeDir = File(shareDir, "locale")
-        if (localeDir.exists() && !localeDir.listFiles().isNullOrEmpty()) {
-            return
-        }
-        try {
-            context.assets.open(BootstrapInstaller.ASSET_NAME).use { assetStream ->
-                XZInputStream(assetStream).use { xzIn ->
-                    TarArchiveInputStream(xzIn).use { tarIn ->
-                        var entry = tarIn.nextTarEntry
-                        while (entry != null) {
-                            if (entry.name.startsWith("usr/share/locale/")) {
-                                val destFile = File(rootDir, entry.name)
-                                if (entry.isDirectory) {
-                                    destFile.mkdirs()
-                                } else {
-                                    destFile.parentFile?.mkdirs()
-                                    FileOutputStream(destFile).use { out ->
-                                        tarIn.copyTo(out)
-                                    }
-                                }
-                            }
-                            entry = tarIn.nextTarEntry
-                        }
-                    }
-                }
-            }
-            Log.i(TAG, "Extracted and self-healed missing share/locale translation catalogs")
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed extracting locale catalogs", e)
-        }
     }
 
     val quarantineRecoveryDir: File by lazy {
