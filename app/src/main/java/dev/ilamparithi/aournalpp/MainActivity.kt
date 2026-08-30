@@ -134,6 +134,34 @@ class MainActivity : ComponentActivity() {
                         LaunchedEffect(Unit) {
                             withContext(Dispatchers.IO) {
                                 LinuxEnvironment(this@MainActivity).ensureDirectoryTree()
+                                val backupPrefs = dev.ilamparithi.aournalpp.backup.worker.BackupPreferences(this@MainActivity)
+                                if (backupPrefs.isCheckRemoteChangesOnLaunchEnabled) {
+                                    val engine = dev.ilamparithi.aournalpp.backup.engine.BackupEngine(this@MainActivity)
+                                    val remoteChanges = engine.checkAllServicesForRemoteChanges()
+                                    if (remoteChanges.isNotEmpty()) {
+                                        val serviceNames = remoteChanges.keys.joinToString(", ")
+                                        Log.i("MainActivity", "Remote changes detected in cloud service(s): $serviceNames")
+                                    }
+                                }
+                            }
+                        }
+
+                        // Fast In-App Periodic Sync (e.g. 5 min intervals while app is actively running)
+                        LaunchedEffect(Unit) {
+                            val backupPrefs = dev.ilamparithi.aournalpp.backup.worker.BackupPreferences(this@MainActivity)
+                            val intervalMins = backupPrefs.periodicSyncIntervalMinutes
+                            if (intervalMins in 1..14) {
+                                while (true) {
+                                    kotlinx.coroutines.delay(intervalMins * 60 * 1000L)
+                                    withContext(Dispatchers.IO) {
+                                        try {
+                                            val engine = dev.ilamparithi.aournalpp.backup.engine.BackupEngine(this@MainActivity)
+                                            engine.performMultiServiceBackup()
+                                        } catch (e: Exception) {
+                                            Log.w("MainActivity", "In-app periodic sync failed", e)
+                                        }
+                                    }
+                                }
                             }
                         }
                         val env = remember { LinuxEnvironment(this@MainActivity) }
@@ -249,6 +277,38 @@ class MainActivity : ComponentActivity() {
     private fun handleExternalIntent(intent: Intent?) {
         val uri = intent?.data ?: return
         val action = intent.action
+
+        // 1. Google OAuth2 Redirect Handler
+        if (uri.scheme == "dev.ilamparithi.aournalpp" && uri.host == "oauth2redirect") {
+            lifecycleScope.launch {
+                try {
+                    val result = dev.ilamparithi.aournalpp.backup.security.GoogleOAuthManager.handleRedirectUri(uri)
+                    if (result.isSuccess) {
+                        val tokenResponse = result.getOrThrow()
+                        val vault = dev.ilamparithi.aournalpp.backup.security.CredentialsVault(this@MainActivity)
+                        val existingGdrive = vault.getAllServices().firstOrNull { it.providerType == dev.ilamparithi.aournalpp.backup.model.StorageProviderType.GOOGLE_DRIVE }
+                        val serviceToSave = (existingGdrive ?: dev.ilamparithi.aournalpp.backup.model.ServiceConfig(
+                            id = java.util.UUID.randomUUID().toString(),
+                            name = "Google Drive",
+                            providerType = dev.ilamparithi.aournalpp.backup.model.StorageProviderType.GOOGLE_DRIVE
+                        )).copy(
+                            authToken = tokenResponse.accessToken,
+                            refreshToken = tokenResponse.refreshToken ?: existingGdrive?.refreshToken ?: "",
+                            accountIdentifier = tokenResponse.userEmail ?: existingGdrive?.accountIdentifier ?: "Google Account",
+                            isEnabled = true
+                        )
+                        vault.saveService(serviceToSave)
+                        Log.i(TAG, "Successfully authenticated Google Drive for ${tokenResponse.userEmail}")
+                    } else {
+                        Log.e(TAG, "Google OAuth token exchange failed: ${result.exceptionOrNull()?.message}")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error handling Google OAuth redirect", e)
+                }
+            }
+            return
+        }
+
         if (action != Intent.ACTION_VIEW && action != Intent.ACTION_EDIT) return
 
         lifecycleScope.launch {

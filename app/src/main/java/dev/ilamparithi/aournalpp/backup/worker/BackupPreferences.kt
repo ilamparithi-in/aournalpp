@@ -12,6 +12,8 @@ class BackupPreferences(context: Context) {
     companion object {
         private const val PREFS_NAME = "aournal_cloud_backup_prefs"
         private const val KEY_AUTO_BACKUP_ON_EXIT = "auto_backup_on_exit"
+        private const val KEY_CHECK_REMOTE_CHANGES_ON_LAUNCH = "check_remote_changes_on_launch"
+        private const val KEY_PERIODIC_SYNC_INTERVAL_MINUTES = "periodic_sync_interval_minutes"
         private const val KEY_DAILY_SCHEDULED_SYNC = "daily_scheduled_sync"
         private const val KEY_DAILY_SCHEDULED_HOUR = "daily_scheduled_hour"
         private const val KEY_DAILY_SCHEDULED_MINUTE = "daily_scheduled_minute"
@@ -25,6 +27,14 @@ class BackupPreferences(context: Context) {
     var isAutoBackupOnExitEnabled: Boolean
         get() = prefs.getBoolean(KEY_AUTO_BACKUP_ON_EXIT, false)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_BACKUP_ON_EXIT, value).apply()
+
+    var isCheckRemoteChangesOnLaunchEnabled: Boolean
+        get() = prefs.getBoolean(KEY_CHECK_REMOTE_CHANGES_ON_LAUNCH, true)
+        set(value) = prefs.edit().putBoolean(KEY_CHECK_REMOTE_CHANGES_ON_LAUNCH, value).apply()
+
+    var periodicSyncIntervalMinutes: Int
+        get() = prefs.getInt(KEY_PERIODIC_SYNC_INTERVAL_MINUTES, 15) // 0 = Manual, 5, 15, 30, 60, 1440
+        set(value) = prefs.edit().putInt(KEY_PERIODIC_SYNC_INTERVAL_MINUTES, value).apply()
 
     var isDailyScheduledSyncEnabled: Boolean
         get() = prefs.getBoolean(KEY_DAILY_SCHEDULED_SYNC, false)

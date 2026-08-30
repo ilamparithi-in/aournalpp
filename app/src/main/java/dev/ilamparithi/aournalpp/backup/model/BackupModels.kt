@@ -2,23 +2,38 @@ package dev.ilamparithi.aournalpp.backup.model
 
 /**
  * Supported remote storage providers and protocols.
+ * Ordered with dedicated services first (alphabetically), then standard protocols (alphabetically).
  */
 enum class StorageProviderType(
     val id: String,
     val displayName: String,
+    val isDedicatedService: Boolean,
     val defaultPort: Int? = null,
     val defaultScheme: String = "https"
 ) {
-    NEXTCLOUD("nextcloud", "Nextcloud", 443, "https"),
-    WEBDAV("webdav", "Generic WebDAV", 443, "https"),
-    GOOGLE_DRIVE("gdrive", "Google Drive", null, "https"),
-    SFTP("sftp", "Generic SFTP", 22, "sftp"),
-    SMB3("smb3", "Generic SMB3 / Samba", 445, "smb"),
-    FTP("ftp", "Generic FTP / FTPS", 21, "ftp");
+    // Dedicated Cloud Services (Alphabetical)
+    GOOGLE_DRIVE("gdrive", "Google Drive", isDedicatedService = true, defaultPort = null, defaultScheme = "https"),
+    NEXTCLOUD("nextcloud", "Nextcloud", isDedicatedService = true, defaultPort = 443, defaultScheme = "https"),
+
+    // Standard Protocols (Alphabetical)
+    FTP("ftp", "FTP / FTPS", isDedicatedService = false, defaultPort = 21, defaultScheme = "ftp"),
+    SFTP("sftp", "SFTP", isDedicatedService = false, defaultPort = 22, defaultScheme = "sftp"),
+    SMB3("smb3", "SMB3 / Samba", isDedicatedService = false, defaultPort = 445, defaultScheme = "smb"),
+    WEBDAV("webdav", "WebDAV", isDedicatedService = false, defaultPort = 443, defaultScheme = "https");
 
     companion object {
         fun fromId(id: String): StorageProviderType {
             return entries.firstOrNull { it.id.equals(id, ignoreCase = true) } ?: WEBDAV
+        }
+
+        /**
+         * Returns all provider types ordered with dedicated services alphabetically first,
+         * followed by standard protocols alphabetically.
+         */
+        fun getOrderedTypes(): List<StorageProviderType> {
+            val services = entries.filter { it.isDedicatedService }.sortedBy { it.displayName }
+            val protocols = entries.filter { !it.isDedicatedService }.sortedBy { it.displayName }
+            return services + protocols
         }
     }
 }
@@ -120,6 +135,9 @@ data class ServiceConfig(
     val privateKey: String = "",
     val privateKeyPassphrase: String = "",
     val authToken: String = "",
+    val refreshToken: String = "",
+    val tokenExpiryEpochMs: Long = 0L,
+    val accountIdentifier: String = "", // e.g. email or username for uniqueness checks
     val shareName: String = "",
     val domain: String = "",
     val remoteBasePath: String = "",
@@ -130,7 +148,38 @@ data class ServiceConfig(
     val lastSyncedAtEpochMs: Long = 0L,
     val lastSyncStatus: String? = null,
     val customMappings: List<CustomFolderMapping> = emptyList()
-)
+) {
+    /**
+     * Generates a deterministic unique key identifying the account/endpoint.
+     * Prevents multiple configurations from targeting the exact same account on the same server.
+     */
+    fun getAccountKey(): String {
+        return when (providerType) {
+            StorageProviderType.GOOGLE_DRIVE -> {
+                val acc = accountIdentifier.ifBlank { username }.ifBlank { name }.trim().lowercase()
+                "gdrive::$acc"
+            }
+            StorageProviderType.NEXTCLOUD,
+            StorageProviderType.WEBDAV -> {
+                val cleanUrl = serverUrl.trim().trimEnd('/').lowercase()
+                val user = username.trim().lowercase()
+                "${providerType.id}::$cleanUrl::$user"
+            }
+            StorageProviderType.SFTP,
+            StorageProviderType.FTP -> {
+                val h = host.trim().lowercase()
+                val user = username.trim().lowercase()
+                "${providerType.id}::$h:$port::$user"
+            }
+            StorageProviderType.SMB3 -> {
+                val h = host.trim().lowercase()
+                val share = shareName.trim().lowercase()
+                val user = username.trim().lowercase()
+                "smb3::$h:$port/$share::$user"
+            }
+        }
+    }
+}
 
 /**
  * Summary result of a completed or partial backup operation.
@@ -165,3 +214,109 @@ data class RestoreResult(
 ) {
     val isSuccess: Boolean get() = filesFailed == 0 && errors.isEmpty()
 }
+
+/**
+ * Origin source for a file version.
+ */
+sealed class FileVersionSource {
+    data object LOCAL : FileVersionSource()
+    data class REMOTE(
+        val serviceId: String,
+        val serviceName: String,
+        val providerType: StorageProviderType,
+        val mappingId: String? = null,
+        val mappingRemotePath: String? = null
+    ) : FileVersionSource()
+
+    val displayName: String
+        get() = when (this) {
+            is LOCAL -> "This Device (Local)"
+            is REMOTE -> {
+                val cleanMapping = mappingRemotePath?.trim()?.trim('/')
+                if (!cleanMapping.isNullOrEmpty()) {
+                    "$serviceName ($cleanMapping)"
+                } else {
+                    serviceName
+                }
+            }
+        }
+
+    val sanitizedFileSuffix: String
+        get() = when (this) {
+            is LOCAL -> "Local"
+            is REMOTE -> {
+                val cleanMapping = mappingRemotePath?.trim()?.trim('/')?.replace('/', '_')
+                if (!cleanMapping.isNullOrEmpty()) {
+                    "$serviceName - $cleanMapping"
+                } else {
+                    serviceName
+                }
+            }
+        }
+}
+
+/**
+ * Representation of a specific version of a file (local or on a cloud service).
+ */
+data class FileVersionItem(
+    val source: FileVersionSource,
+    val fileName: String,
+    val relativePath: String,
+    val localFilePath: String,
+    val sizeBytes: Long,
+    val lastModifiedEpochMs: Long,
+    val contentHash: String? = null,
+    val remotePath: String? = null
+)
+
+/**
+ * Group of conflicting versions for a specific relative file path.
+ */
+data class FileConflictGroup(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val relativePath: String,
+    val localVersion: FileVersionItem?,
+    val remoteVersions: List<FileVersionItem>
+) {
+    val allVersions: List<FileVersionItem>
+        get() = listOfNotNull(localVersion) + remoteVersions
+
+    val fileName: String
+        get() = allVersions.firstOrNull()?.fileName ?: java.io.File(relativePath).name
+}
+
+/**
+ * Action chosen by the user to resolve a file conflict.
+ */
+sealed class ConflictResolutionAction {
+    data class ChoosePrimary(val chosenVersion: FileVersionItem) : ConflictResolutionAction()
+    data class KeepAlongside(val versionsToKeep: List<FileVersionItem>) : ConflictResolutionAction()
+    data class ResolveSelection(
+        val primaryVersion: FileVersionItem,
+        val alongsideVersions: List<FileVersionItem>
+    ) : ConflictResolutionAction()
+    data object KeepBoth : ConflictResolutionAction()
+    data object Skip : ConflictResolutionAction()
+}
+
+/**
+ * Resolution instruction for a conflict group.
+ */
+data class FileConflictResolution(
+    val conflictGroupId: String,
+    val relativePath: String,
+    val action: ConflictResolutionAction
+)
+
+/**
+ * Result report after executing conflict resolutions.
+ */
+data class ConflictResolutionReport(
+    val filesUpdated: Int,
+    val filesSavedAlongside: Int,
+    val filesSkipped: Int,
+    val errors: List<String> = emptyList()
+) {
+    val isSuccess: Boolean get() = errors.isEmpty()
+}
+

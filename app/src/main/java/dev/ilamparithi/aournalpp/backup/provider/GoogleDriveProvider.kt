@@ -4,6 +4,7 @@ import android.util.Log
 import dev.ilamparithi.aournalpp.backup.model.RemoteFileMetadata
 import dev.ilamparithi.aournalpp.backup.model.ServiceConfig
 import dev.ilamparithi.aournalpp.backup.model.StorageProviderType
+import dev.ilamparithi.aournalpp.backup.security.GoogleOAuthManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -46,20 +47,28 @@ class GoogleDriveProvider(
     // Cache of remotePath -> folderId
     private val folderIdCache = ConcurrentHashMap<String, String>()
 
-    private val token: String
-        get() = config.authToken.ifBlank { config.passwordOrSecret }.trim()
+    private var currentAccessToken: String = config.authToken.ifBlank { config.passwordOrSecret }.trim()
+
+    private suspend fun ensureValidToken() {
+        if (currentAccessToken.isBlank() && config.refreshToken.isNotBlank()) {
+            val refreshResult = GoogleOAuthManager.refreshAccessToken(config.refreshToken)
+            if (refreshResult.isSuccess) {
+                currentAccessToken = refreshResult.getOrNull()?.accessToken ?: ""
+            }
+        }
+    }
 
     private fun addAuth(builder: Request.Builder): Request.Builder {
-        val t = token
-        if (t.isNotEmpty()) {
-            builder.header("Authorization", "Bearer $t")
+        if (currentAccessToken.isNotEmpty()) {
+            builder.header("Authorization", "Bearer $currentAccessToken")
         }
         return builder
     }
 
     override suspend fun testConnection(): Result<Boolean> = withContext(Dispatchers.IO) {
         runCatching {
-            if (token.isEmpty()) {
+            ensureValidToken()
+            if (currentAccessToken.isEmpty()) {
                 error("Google Drive OAuth2 Access Token is missing. Please authorize or configure token.")
             }
             val request = addAuth(

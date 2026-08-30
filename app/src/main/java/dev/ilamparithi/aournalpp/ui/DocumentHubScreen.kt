@@ -78,6 +78,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.History
@@ -382,6 +384,7 @@ fun DocumentHubScreen(
     var showMoveToFolderDialog by remember { mutableStateOf(false) }
     var showEmptyTrashConfirmDialog by remember { mutableStateOf(false) }
     var showBatchDeletePermanentDialog by remember { mutableStateOf(false) }
+    var folderToMapToCloud by remember { mutableStateOf<FolderItem?>(null) }
 
     // Emergency recovery
     var quarantinedEmergencySave by remember { mutableStateOf<File?>(null) }
@@ -722,6 +725,12 @@ fun DocumentHubScreen(
                                 )
                             }
                         }
+
+                        dev.ilamparithi.aournalpp.ui.cloud.QuickSyncButton(
+                            onSyncFinished = { message ->
+                                scope.launch { snackbarHostState.showSnackbar(message) }
+                            }
+                        )
 
                         IconButton(onClick = { showTopMenu = true }) {
                             Icon(imageVector = Icons.Default.MoreVert, contentDescription = "Menu")
@@ -1246,6 +1255,28 @@ fun DocumentHubScreen(
                     TextButton(onClick = { folderToRename = null }) {
                         Text("Cancel")
                     }
+                }
+            )
+        }
+
+        // Folder Cloud Mapping Dialog
+        folderToMapToCloud?.let { folder ->
+            val vault = remember { dev.ilamparithi.aournalpp.backup.security.CredentialsVault(context) }
+            val services = remember { vault.getAllServices() }
+            dev.ilamparithi.aournalpp.ui.cloud.CustomMappingDialog(
+                services = services,
+                initialLocalPath = folder.file.absolutePath,
+                onDismissRequest = { folderToMapToCloud = null },
+                onSaveMapping = { targetServiceId, mapping ->
+                    val srv = services.firstOrNull { it.id == targetServiceId }
+                    if (srv != null) {
+                        val updatedMappings = srv.customMappings.filterNot { it.id == mapping.id } + mapping
+                        vault.saveService(srv.copy(customMappings = updatedMappings))
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Mapped \"${folder.name}\" to \"${mapping.remoteFolderPath}\" on ${srv.name}")
+                        }
+                    }
+                    folderToMapToCloud = null
                 }
             )
         }
@@ -2183,16 +2214,24 @@ fun DocumentHubScreen(
                                                 }
                                             )
                                             androidx.compose.material3.DropdownMenuItem(
-                                                text = { Text("Customize Icon & Color") },
-                                                leadingIcon = { Icon(Icons.Default.ColorLens, contentDescription = null) },
-                                                onClick = {
-                                                    showFolderMenu = false
-                                                    editFolderSelectedColor = folder.colorHex ?: (if (folder.isEmergencyFolder) DocumentRepository.EMERGENCY_SAVES_DEFAULT_COLOR else PRESET_FOLDER_COLORS.first())
-                                                    editFolderSelectedEmoji = folder.iconEmoji
-                                                    editFolderSelectedIconType = folder.iconType ?: (if (folder.isEmergencyFolder) "emergency" else (folder.role ?: "folder"))
-                                                    folderToEdit = folder
-                                                }
-                                            )
+                                                 text = { Text("Map to Cloud...") },
+                                                 leadingIcon = { Icon(Icons.Default.CloudSync, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                                 onClick = {
+                                                     showFolderMenu = false
+                                                     folderToMapToCloud = folder
+                                                 }
+                                             )
+                                             androidx.compose.material3.DropdownMenuItem(
+                                                 text = { Text("Customize Icon & Color") },
+                                                 leadingIcon = { Icon(Icons.Default.ColorLens, contentDescription = null) },
+                                                 onClick = {
+                                                     showFolderMenu = false
+                                                     editFolderSelectedColor = folder.colorHex ?: (if (folder.isEmergencyFolder) DocumentRepository.EMERGENCY_SAVES_DEFAULT_COLOR else PRESET_FOLDER_COLORS.first())
+                                                     editFolderSelectedEmoji = folder.iconEmoji
+                                                     editFolderSelectedIconType = folder.iconType ?: (if (folder.isEmergencyFolder) "emergency" else (folder.role ?: "folder"))
+                                                     folderToEdit = folder
+                                                 }
+                                             )
                                             androidx.compose.material3.DropdownMenuItem(
                                                 text = { Text("Delete Folder", color = MaterialTheme.colorScheme.error) },
                                                 leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },

@@ -32,6 +32,9 @@ sshj = "0.40.0"
 smbj = "0.15.0"
 commonsNet = "3.13.0"
 slf4j = "1.7.36"
+camerax = "1.4.1"
+zxing = "3.5.4"
+browser = "1.8.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -70,6 +73,11 @@ sshj = { group = "com.hierynomus", name = "sshj", version.ref = "sshj" }
 smbj = { group = "com.hierynomus", name = "smbj", version.ref = "smbj" }
 commons-net = { group = "commons-net", name = "commons-net", version.ref = "commonsNet" }
 slf4j-android = { group = "org.slf4j", name = "slf4j-android", version.ref = "slf4j" }
+camera-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "camerax" }
+camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camerax" }
+camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
+zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
+androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

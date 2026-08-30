@@ -493,6 +493,13 @@ fun HomeScreen(
                             }
                         }
                     },
+                    actions = {
+                        dev.ilamparithi.aournalpp.ui.cloud.QuickSyncButton(
+                            onSyncFinished = { message ->
+                                scope.launch { snackbarHostState.showSnackbar(message) }
+                            }
+                        )
+                    },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surface
                     )

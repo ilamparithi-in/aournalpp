@@ -13,12 +13,15 @@ import java.util.concurrent.TimeUnit
 
 object BackupScheduler {
 
-    private const val PERIODIC_WORK_NAME = "aournal_daily_cloud_sync"
+    private const val PERIODIC_DAILY_WORK_NAME = "aournal_daily_cloud_sync"
+    private const val PERIODIC_INTERVAL_WORK_NAME = "aournal_interval_cloud_sync"
     private const val ONE_TIME_WORK_NAME = "aournal_on_demand_cloud_sync"
     private const val EXIT_WORK_NAME = "aournal_on_exit_cloud_sync"
 
     fun updateSchedules(context: Context) {
         val prefs = BackupPreferences(context)
+
+        // 1. Daily scheduled sync
         if (prefs.isDailyScheduledSyncEnabled) {
             scheduleDailySync(
                 context = context,
@@ -29,6 +32,36 @@ object BackupScheduler {
         } else {
             cancelDailySync(context)
         }
+
+        // 2. Interval-based periodic sync (e.g. every 15m, 30m, 60m)
+        val intervalMinutes = prefs.periodicSyncIntervalMinutes
+        if (intervalMinutes in 15..1439) {
+            scheduleIntervalSync(context, intervalMinutes.toLong(), prefs.isWifiOnlyEnabled)
+        } else {
+            cancelIntervalSync(context)
+        }
+    }
+
+    fun scheduleIntervalSync(context: Context, intervalMinutes: Long, wifiOnly: Boolean) {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
+            .setRequiresBatteryNotLow(true)
+            .build()
+
+        val periodicRequest = PeriodicWorkRequestBuilder<BackupWorker>(intervalMinutes, TimeUnit.MINUTES)
+            .setConstraints(constraints)
+            .addTag(BackupWorker.TAG)
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            PERIODIC_INTERVAL_WORK_NAME,
+            ExistingPeriodicWorkPolicy.UPDATE,
+            periodicRequest
+        )
+    }
+
+    fun cancelIntervalSync(context: Context) {
+        WorkManager.getInstance(context).cancelUniqueWork(PERIODIC_INTERVAL_WORK_NAME)
     }
 
     fun scheduleDailySync(context: Context, hour: Int, minute: Int, wifiOnly: Boolean) {
@@ -58,14 +91,14 @@ object BackupScheduler {
             .build()
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            PERIODIC_WORK_NAME,
+            PERIODIC_DAILY_WORK_NAME,
             ExistingPeriodicWorkPolicy.UPDATE,
             periodicRequest
         )
     }
 
     fun cancelDailySync(context: Context) {
-        WorkManager.getInstance(context).cancelUniqueWork(PERIODIC_WORK_NAME)
+        WorkManager.getInstance(context).cancelUniqueWork(PERIODIC_DAILY_WORK_NAME)
     }
 
     fun triggerImmediateSync(context: Context, wifiOnly: Boolean = false) {

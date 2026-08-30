@@ -249,6 +249,13 @@ dependencies {
     implementation(libs.smbj)
     implementation(libs.commons.net)
     implementation(libs.slf4j.android)
+    implementation(libs.androidx.browser)
+
+    // CameraX & QR Code Scanner
+    implementation(libs.camera.camera2)
+    implementation(libs.camera.lifecycle)
+    implementation(libs.camera.view)
+    implementation(libs.zxing.core)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

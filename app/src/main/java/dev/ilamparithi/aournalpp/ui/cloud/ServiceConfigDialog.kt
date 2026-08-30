@@ -13,8 +13,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -24,6 +27,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +36,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,6 +49,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -53,6 +59,8 @@ import androidx.compose.ui.window.DialogProperties
 import dev.ilamparithi.aournalpp.backup.model.ServiceConfig
 import dev.ilamparithi.aournalpp.backup.model.StorageProviderType
 import dev.ilamparithi.aournalpp.backup.provider.StorageProviderFactory
+import dev.ilamparithi.aournalpp.backup.security.GoogleOAuthManager
+import dev.ilamparithi.aournalpp.backup.security.NextcloudQrParser
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -60,9 +68,11 @@ import java.util.UUID
 @Composable
 fun ServiceConfigDialog(
     initialService: ServiceConfig? = null,
+    existingServices: List<ServiceConfig> = emptyList(),
     onDismissRequest: () -> Unit,
     onSaveService: (ServiceConfig) -> Unit
 ) {
+    val context = LocalContext.current
     var name by remember { mutableStateOf(initialService?.name ?: "") }
     var selectedType by remember { mutableStateOf(initialService?.providerType ?: StorageProviderType.NEXTCLOUD) }
     var serverUrl by remember { mutableStateOf(initialService?.serverUrl ?: "") }
@@ -73,6 +83,8 @@ fun ServiceConfigDialog(
     var privateKey by remember { mutableStateOf(initialService?.privateKey ?: "") }
     var privateKeyPassphrase by remember { mutableStateOf(initialService?.privateKeyPassphrase ?: "") }
     var authToken by remember { mutableStateOf(initialService?.authToken ?: "") }
+    var refreshToken by remember { mutableStateOf(initialService?.refreshToken ?: "") }
+    var accountIdentifier by remember { mutableStateOf(initialService?.accountIdentifier ?: "") }
     var shareName by remember { mutableStateOf(initialService?.shareName ?: "") }
     var domain by remember { mutableStateOf(initialService?.domain ?: "") }
     var remoteBasePath by remember { mutableStateOf(initialService?.remoteBasePath ?: "") }
@@ -87,8 +99,10 @@ fun ServiceConfigDialog(
     var isTestingConnection by remember { mutableStateOf(false) }
     var testResultSuccess by remember { mutableStateOf<Boolean?>(null) }
     var testResultMessage by remember { mutableStateOf<String?>(null) }
+    var uniquenessErrorMessage by remember { mutableStateOf<String?>(null) }
 
     var isTypeDropdownExpanded by remember { mutableStateOf(false) }
+    var showQrScannerDialog by remember { mutableStateOf(false) }
 
     val coroutineScope = rememberCoroutineScope()
 
@@ -107,6 +121,8 @@ fun ServiceConfigDialog(
             privateKey = if (sftpAuthMode == 1) privateKey.trim() else "",
             privateKeyPassphrase = if (sftpAuthMode == 1) privateKeyPassphrase else "",
             authToken = authToken.trim(),
+            refreshToken = refreshToken.trim(),
+            accountIdentifier = accountIdentifier.trim(),
             shareName = shareName.trim(),
             domain = domain.trim(),
             remoteBasePath = remoteBasePath.trim(),
@@ -138,7 +154,7 @@ fun ServiceConfigDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Provider Type Selector
+                // Provider Type Selector with clean ordering (Services first, then Protocols)
                 ExposedDropdownMenuBox(
                     expanded = isTypeDropdownExpanded,
                     onExpandedChange = { isTypeDropdownExpanded = !isTypeDropdownExpanded }
@@ -157,7 +173,20 @@ fun ServiceConfigDialog(
                         expanded = isTypeDropdownExpanded,
                         onDismissRequest = { isTypeDropdownExpanded = false }
                     ) {
-                        StorageProviderType.entries.forEach { type ->
+                        val orderedTypes = StorageProviderType.getOrderedTypes()
+                        var hasRenderedProtocolHeader = false
+
+                        orderedTypes.forEach { type ->
+                            if (!type.isDedicatedService && !hasRenderedProtocolHeader) {
+                                hasRenderedProtocolHeader = true
+                                Text(
+                                    text = "Standard Storage Protocols",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text(type.displayName) },
                                 onClick = {
@@ -186,6 +215,31 @@ fun ServiceConfigDialog(
                 // Provider specific form fields
                 when (selectedType) {
                     StorageProviderType.NEXTCLOUD -> {
+                        // QR Code Scanner Action Card
+                        Surface(
+                            shape = MaterialTheme.shapes.medium,
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("App Password QR Code", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                    Text("Scan Nextcloud Security settings QR to auto-fill credentials", style = MaterialTheme.typography.bodySmall)
+                                }
+                                FilledTonalButton(onClick = { showQrScannerDialog = true }) {
+                                    Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Scan QR")
+                                }
+                            }
+                        }
+
                         OutlinedTextField(
                             value = serverUrl,
                             onValueChange = { serverUrl = it },
@@ -261,15 +315,50 @@ fun ServiceConfigDialog(
                     }
 
                     StorageProviderType.GOOGLE_DRIVE -> {
+                        Surface(
+                            shape = MaterialTheme.shapes.medium,
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.AccountCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Google OAuth2 Sign-In", fontWeight = FontWeight.Bold)
+                                    }
+                                    FilledTonalButton(
+                                        onClick = { GoogleOAuthManager.startOAuthFlow(context) }
+                                    ) {
+                                        Text("Sign in with Google")
+                                    }
+                                }
+
+                                if (accountIdentifier.isNotBlank() || authToken.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "Authorized Account: ${accountIdentifier.ifBlank { "Google User" }}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+
                         OutlinedTextField(
                             value = authToken.ifBlank { passwordOrSecret },
                             onValueChange = {
                                 authToken = it
                                 passwordOrSecret = it
                             },
-                            label = { Text("OAuth2 Access Token") },
+                            label = { Text("Access Token / Token String") },
                             placeholder = { Text("ya29.a0...") },
-                            supportingText = { Text("Paste your Google Drive OAuth2 Bearer token") },
+                            supportingText = { Text("Sign in above or paste an OAuth token") },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -561,6 +650,28 @@ fun ServiceConfigDialog(
                     )
                 }
 
+                // Uniqueness Collision Error
+                if (uniquenessErrorMessage != null) {
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = uniquenessErrorMessage!!,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                }
+
                 // Connection Test Feedback
                 if (testResultSuccess != null) {
                     Row(
@@ -587,8 +698,16 @@ fun ServiceConfigDialog(
             Button(
                 onClick = {
                     val config = buildCurrentConfig()
-                    onSaveService(config)
-                    onDismissRequest()
+                    val key = config.getAccountKey()
+                    val collision = existingServices.firstOrNull { it.id != config.id && it.getAccountKey() == key }
+
+                    if (collision != null) {
+                        uniquenessErrorMessage = "An account for this server and user is already configured as '${collision.name}'. Each service must target a unique account."
+                    } else {
+                        uniquenessErrorMessage = null
+                        onSaveService(config)
+                        onDismissRequest()
+                    }
                 }
             ) {
                 Text("Save Service")
@@ -637,4 +756,23 @@ fun ServiceConfigDialog(
             }
         }
     )
+
+    // QR Code Scanner Dialog
+    if (showQrScannerDialog) {
+        QrCodeScannerDialog(
+            title = "Scan Nextcloud QR Code",
+            onQrCodeScanned = { rawQrText ->
+                val creds = NextcloudQrParser.parse(rawQrText)
+                if (creds != null) {
+                    if (creds.serverUrl.isNotBlank()) serverUrl = creds.serverUrl
+                    if (creds.username.isNotBlank()) username = creds.username
+                    if (creds.appPassword.isNotBlank()) passwordOrSecret = creds.appPassword
+                } else if (rawQrText.isNotBlank()) {
+                    passwordOrSecret = rawQrText.trim()
+                }
+                showQrScannerDialog = false
+            },
+            onDismissRequest = { showQrScannerDialog = false }
+        )
+    }
 }

@@ -42,7 +42,7 @@ class WebDavStorageProvider(
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    private val baseUrl: String = buildBaseUrl()
+    internal val baseUrl: String = buildBaseUrl()
 
     private fun buildBaseUrl(): String {
         var url = config.serverUrl.trim()
@@ -268,7 +268,70 @@ class WebDavStorageProvider(
 
     private fun resolveUrl(relativePath: String): String {
         val cleanPath = relativePath.trim().trim('/').replace('\\', '/')
-        return if (cleanPath.isEmpty()) baseUrl else "$baseUrl$cleanPath"
+        if (cleanPath.isEmpty()) return baseUrl
+        val encodedSegments = cleanPath.split('/').map { segment ->
+            try {
+                java.net.URLEncoder.encode(segment, java.nio.charset.StandardCharsets.UTF_8.name())
+                    .replace("+", "%20")
+            } catch (_: Exception) {
+                segment
+            }
+        }
+        return "$baseUrl${encodedSegments.joinToString("/")}"
+    }
+
+    private fun extractRelativePath(href: String, baseUrl: String): String {
+        val decodedHref = try {
+            java.net.URLDecoder.decode(href, java.nio.charset.StandardCharsets.UTF_8.name())
+        } catch (_: Exception) {
+            href
+        }
+        val decodedBase = try {
+            java.net.URLDecoder.decode(baseUrl, java.nio.charset.StandardCharsets.UTF_8.name())
+        } catch (_: Exception) {
+            baseUrl
+        }
+
+        // 1. Extract path component of baseUrl (e.g. "/remote.php/dav/files/ilam")
+        val basePath = try {
+            val uri = java.net.URI(decodedBase)
+            uri.path?.trimEnd('/') ?: ""
+        } catch (_: Exception) {
+            decodedBase.substringAfter("://").substringAfter('/', "").let { if (it.isNotEmpty()) "/$it" else "" }.trimEnd('/')
+        }
+
+        // 2. Extract path component of href (e.g. "/remote.php/dav/files/ilam/Notes")
+        val hrefPath = try {
+            if (decodedHref.startsWith("http://", ignoreCase = true) || decodedHref.startsWith("https://", ignoreCase = true)) {
+                java.net.URI(decodedHref).path?.trimEnd('/') ?: ""
+            } else {
+                decodedHref.trimEnd('/')
+            }
+        } catch (_: Exception) {
+            decodedHref.removePrefix("http://").removePrefix("https://").substringAfter('/', "").let { if (it.isNotEmpty()) "/$it" else "" }.trimEnd('/')
+        }
+
+        // 3. Strip basePath prefix from hrefPath
+        return if (basePath.isNotEmpty() && hrefPath.startsWith(basePath)) {
+            hrefPath.removePrefix(basePath).trim('/')
+        } else {
+            val fallbackIndex = hrefPath.indexOf("/remote.php/")
+            if (fallbackIndex != -1) {
+                val afterRemote = hrefPath.substring(fallbackIndex)
+                if (basePath.isNotEmpty() && afterRemote.startsWith(basePath)) {
+                    afterRemote.removePrefix(basePath).trim('/')
+                } else {
+                    val userFilesPrefix = basePath.ifEmpty { "/remote.php/dav/files/${config.username.trim()}" }
+                    if (afterRemote.startsWith(userFilesPrefix)) {
+                        afterRemote.removePrefix(userFilesPrefix).trim('/')
+                    } else {
+                        hrefPath.trim('/')
+                    }
+                }
+            } else {
+                hrefPath.trim('/')
+            }
+        }
     }
 
     private fun parseWebDavMultiStatus(xmlContent: String, requestUrl: String): List<RemoteFileMetadata> {
@@ -290,6 +353,8 @@ class WebDavStorageProvider(
             val dateFormat = SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US).apply {
                 timeZone = TimeZone.getTimeZone("GMT")
             }
+
+            val reqRelative = extractRelativePath(requestUrl, baseUrl)
 
             while (eventType != XmlPullParser.END_DOCUMENT) {
                 val tag = parser.name?.lowercase() ?: ""
@@ -320,12 +385,8 @@ class WebDavStorageProvider(
                         if (tag == "response" && inResponse) {
                             inResponse = false
                             if (currentHref.isNotEmpty()) {
-                                val cleanHref = currentHref.removePrefix("http://").removePrefix("https://")
-                                val pathSegment = currentHref.substringAfter(baseUrl.substringAfter("://").trimEnd('/'), currentHref)
-                                    .trim('/')
-
-                                val reqPath = requestUrl.substringAfter("://").trimEnd('/')
-                                val isSelf = cleanHref.trimEnd('/') == reqPath || pathSegment.isEmpty()
+                                val pathSegment = extractRelativePath(currentHref, baseUrl)
+                                val isSelf = pathSegment.isEmpty() || pathSegment.equals(reqRelative, ignoreCase = true)
 
                                 if (!isSelf) {
                                     results.add(
