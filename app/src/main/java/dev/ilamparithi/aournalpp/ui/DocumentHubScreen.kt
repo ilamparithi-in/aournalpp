@@ -736,7 +736,7 @@ fun DocumentHubScreen(
                     title = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = if (isViewingTrash) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_menu_trash) else "Aournal",
+                                text = if (isViewingTrash) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_menu_trash) else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.app_name),
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold
                             )

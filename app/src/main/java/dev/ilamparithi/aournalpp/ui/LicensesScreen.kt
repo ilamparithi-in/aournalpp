@@ -70,7 +70,7 @@ data class OpenSourceLibrary(
 
 val BUNDLED_LIBRARIES = listOf(
     OpenSourceLibrary(
-        name = "Aournal (Xournal++ Android Port)",
+        name = "Aournal++ (Xournal++ Android Wrapper)",
         copyright = "Copyright (c) 2026 Ilamparithi and Contributors",
         licenseType = "GPL-3.0-or-later",
         description = "Material 3 interface, headless background conversion, X11 runtime orchestration, and storage bridge.",
@@ -421,7 +421,10 @@ fun LicensesScreen(onBack: (() -> Unit)? = null) {
                 modifier = Modifier.promptWidth(),
                 title = {
                     Text(
-                        text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.licenses_dialog_title, lib.name),
+                        text = androidx.compose.ui.res.stringResource(
+                            dev.ilamparithi.aournalpp.R.string.licenses_dialog_title,
+                            lib.name
+                        ),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )

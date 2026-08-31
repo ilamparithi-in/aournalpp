@@ -440,6 +440,9 @@ fun HomeScreen(
         label = "fabRotation"
     )
 
+    val configuration = LocalConfiguration.current
+    val isWideOrLandscape = configuration.screenWidthDp >= 600 || configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -453,23 +456,16 @@ fun HomeScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Text(
-                                            "A",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Black,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                                        )
-                                    }
+                                // Suppress the "A" logo badge in landscape/wide mode (where the navigation rail is on the left)
+                                if (!isWideOrLandscape) {
+                                    AppLogoBadge(
+                                        size = 36.dp,
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
                                 }
-                                Spacer(modifier = Modifier.width(12.dp))
                                 Text(
-                                    "Aournal",
+                                    text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.app_name),
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -641,9 +637,6 @@ fun HomeScreen(
                     }
 
                     // 3. M3 Expressive Studio Notes (Collage vs Gallery)
-                    val configuration = LocalConfiguration.current
-                    val isWideOrLandscape = configuration.screenWidthDp >= 600 || configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         @Composable
                         fun ViewModeToggle(modifier: Modifier = Modifier) {

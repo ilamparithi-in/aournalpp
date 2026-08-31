@@ -484,12 +484,9 @@ fun MainResponsiveAppShell() {
                     modifier = Modifier.fillMaxHeight(),
                     containerColor = MaterialTheme.colorScheme.surface,
                     header = {
-                        Text(
-                            text = "A",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(vertical = 16.dp)
+                        dev.ilamparithi.aournalpp.ui.AppLogoBadge(
+                            modifier = Modifier.padding(top = 16.dp, bottom = 12.dp),
+                            size = 38.dp
                         )
                     }
                 ) {

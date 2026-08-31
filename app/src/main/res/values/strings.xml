@@ -773,7 +773,7 @@
     <!-- Licenses screen description -->
     <string name="licenses_desc">Aournal++ is built with free and open-source software. We gratefully acknowledge the following upstream projects and libraries:</string>
     <!-- Licenses Screen Compliance Banner -->
-    <string name="licenses_compliance_banner">Aournal is built on top of incredible open-source projects. In compliance with free software licensing, all component licenses and sources are provided below.</string>
+    <string name="licenses_compliance_banner">Aournal++ is built on top of incredible open-source projects. In compliance with free software licensing, all component licenses and sources are provided below.</string>
     <!-- Button to open source repository in browser -->
     <string name="licenses_source_code">Source Code</string>
     <!-- Button to view license dialog -->
