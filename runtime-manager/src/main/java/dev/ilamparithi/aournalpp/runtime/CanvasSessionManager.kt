@@ -167,23 +167,26 @@ class CanvasSessionManager(
                 )
                 if (code == 0 && out.isNotBlank()) {
                     val windowIds = out.trim().lines().map { it.trim() }.filter { it.isNotEmpty() }
-                    for (wid in windowIds) {
-                        val (nameCode, nameOut) = supervisor.runBinary(
-                            listOf(xdotoolBin.absolutePath, "getwindowname", wid)
-                        )
-                        if (nameCode == 0 && nameOut.contains("Preferences", ignoreCase = true)) {
-                            return true
+                    if (windowIds.size > 1) {
+                        for (wid in windowIds) {
+                            val (nameCode, nameOut) = supervisor.runBinary(
+                                listOf(xdotoolBin.absolutePath, "getwindowname", wid)
+                            )
+                            if (nameCode == 0 && (nameOut.contains("Preferences", ignoreCase = true) || nameOut.contains("Settings", ignoreCase = true))) {
+                                return true
+                            }
                         }
                     }
                 }
                 return false
             }
 
-            // Phase 1: Wait for Xournal++ and inject Preferences shortcut
-            delay(800)
+            // Phase 1: Wait for Xournal++ main window, then inject shortcut once
+            delay(500)
             var attempts = 0
-            val maxAttempts = 20
+            val maxAttempts = 10
             var preferencesOpened = false
+            var shortcutInjected = false
 
             while (isSessionRunning && attempts < maxAttempts) {
                 attempts++
@@ -194,18 +197,21 @@ class CanvasSessionManager(
                         break
                     }
 
-                    // Check if main Xournal++ window is visible
-                    val (winCode, winOut) = supervisor.runBinary(
-                        listOf(xdotoolBin.absolutePath, "search", "--onlyvisible", "--class", "xournalpp")
-                    )
+                    if (!shortcutInjected) {
+                        // Check if main Xournal++ window is visible
+                        val (winCode, winOut) = supervisor.runBinary(
+                            listOf(xdotoolBin.absolutePath, "search", "--onlyvisible", "--class", "xournalpp")
+                        )
 
-                    if (winCode == 0 && winOut.trim().isNotEmpty()) {
-                        val winId = winOut.lines().firstOrNull { it.isNotBlank() }?.trim()
-                        if (winId != null) {
-                            Log.i(TAG, "Xournal++ window visible (attempt $attempts). Injecting Ctrl+Comma shortcut...")
-                            supervisor.runBinary(
-                                listOf(xdotoolBin.absolutePath, "windowactivate", "--sync", winId, "key", "--clearmodifiers", "ctrl+comma")
-                            )
+                        if (winCode == 0 && winOut.trim().isNotEmpty()) {
+                            val winId = winOut.lines().firstOrNull { it.isNotBlank() }?.trim()
+                            if (winId != null) {
+                                Log.i(TAG, "Xournal++ window visible. Injecting Ctrl+Comma shortcut...")
+                                supervisor.runBinary(
+                                    listOf(xdotoolBin.absolutePath, "windowactivate", "--sync", winId, "key", "--clearmodifiers", "ctrl+comma")
+                                )
+                                shortcutInjected = true
+                            }
                         }
                     }
                 } catch (e: Exception) {
@@ -215,7 +221,7 @@ class CanvasSessionManager(
             }
 
             if (!preferencesOpened) {
-                delay(1000)
+                delay(800)
                 preferencesOpened = isPreferencesWindowOpen()
             }
 
@@ -223,7 +229,7 @@ class CanvasSessionManager(
             if (preferencesOpened) {
                 Log.i(TAG, "Monitoring Preferences dialog for OK / Cancel dismissal...")
                 while (isSessionRunning) {
-                    delay(350)
+                    delay(800)
                     if (!isPreferencesWindowOpen()) {
                         Log.i(TAG, "Preferences dialog dismissed by user.")
                         env.checkAndOverrideAutoloadPreference()

@@ -172,6 +172,9 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
     }
 
     companion object {
+        private val APP_SUFFIX_REGEX = Regex("\\s*-\\s*Xournal\\+\\+.*$", RegexOption.IGNORE_CASE)
+        private val AUTOSAVED_REGEX = Regex("\\[autosaved\\]", RegexOption.IGNORE_CASE)
+
         val ignoredWindowTitles = setOf(
             "Openbox",
             "com.github.xournalpp.xournalpp",
@@ -271,8 +274,8 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
                 return ""
             }
 
-            val withoutAppSuffix = raw.replace(Regex("\\s*-\\s*Xournal\\+\\+.*$", RegexOption.IGNORE_CASE), "")
-                .replace(Regex("\\[autosaved\\]", RegexOption.IGNORE_CASE), "")
+            val withoutAppSuffix = raw.replace(APP_SUFFIX_REGEX, "")
+                .replace(AUTOSAVED_REGEX, "")
                 .trim()
 
             val isDirty = raw.trim().startsWith("*") ||
@@ -383,21 +386,28 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
     }
 
     fun terminateAll() {
-        for (process in activeProcesses) {
-            try {
-                process.destroy()
-                if (process.isAlive) {
-                    Thread.sleep(100)
-                    if (process.isAlive) {
-                        process.destroyForcibly()
-                    }
-                }
-            } catch (e: Exception) {
-                // Ignore exceptions during teardown
-            }
-        }
+        val processesToKill = activeProcesses.toList()
         activeProcesses.clear()
         _documentTitle.value = null
+
+        for (process in processesToKill) {
+            try {
+                process.destroy()
+            } catch (e: Exception) {
+                // Ignore exceptions during initial SIGTERM
+            }
+        }
+
+        // Force kill any remaining alive processes without blocking threads
+        for (process in processesToKill) {
+            try {
+                if (process.isAlive) {
+                    process.destroyForcibly()
+                }
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
     }
 }
 

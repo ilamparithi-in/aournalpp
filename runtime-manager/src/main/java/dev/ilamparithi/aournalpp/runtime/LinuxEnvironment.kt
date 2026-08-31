@@ -331,53 +331,78 @@ class LinuxEnvironment(private val context: Context) {
             }
         }
 
-        // Provision xopp-title-watcher binary from assets if available
         val titleWatcherBin = File(binDir, "xopp-title-watcher")
-        try {
-            context.assets.open("bin/xopp-title-watcher").use { input ->
-                titleWatcherBin.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-            titleWatcherBin.setExecutable(true, false)
-            Log.i(TAG, "Provisioned latest xopp-title-watcher binary")
-        } catch (e: Exception) {
-            if (titleWatcherBin.exists()) {
-                titleWatcherBin.setExecutable(true, false)
-            }
-        }
-
-        // Provision libgtk-android-ime.so GTK focus bridge module
         val gtkModulesDir = File(libDir, "gtk-3.0/modules")
-        gtkModulesDir.mkdirs()
-        val imeModuleLib = File(libDir, "libgtk-android-ime.so")
         val imeModuleInGtkDir = File(gtkModulesDir, "libgtk-android-ime.so")
-        try {
-            context.assets.open("lib/libgtk-android-ime.so").use { input ->
-                imeModuleLib.outputStream().use { output ->
-                    input.copyTo(output)
-                }
+        val wallpaperBin = File(binDir, "xopp-wallpaper")
+
+        val currentVersionCode = try {
+            val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                pInfo.longVersionCode
+            } else {
+                @Suppress("DEPRECATION")
+                pInfo.versionCode.toLong()
             }
-            imeModuleLib.copyTo(imeModuleInGtkDir, overwrite = true)
-            Log.i(TAG, "Provisioned latest libgtk-android-ime.so GTK focus bridge module")
-        } catch (e: Exception) {
-            // Ignore if in bootstrap
+        } catch (_: Exception) {
+            1L
         }
 
-        // Provision xopp-wallpaper binary from assets if available
-        val wallpaperBin = File(binDir, "xopp-wallpaper")
-        try {
-            context.assets.open("bin/xopp-wallpaper").use { input ->
-                wallpaperBin.outputStream().use { output ->
-                    input.copyTo(output)
+        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        val lastProvisionedVersion = prefs.getLong("pref_last_provisioned_asset_version", -1L)
+
+        val needsAssetExtraction = lastProvisionedVersion != currentVersionCode ||
+                !titleWatcherBin.exists() ||
+                !imeModuleInGtkDir.exists() ||
+                !wallpaperBin.exists()
+
+        if (needsAssetExtraction) {
+            // Provision xopp-title-watcher binary from assets if available
+            try {
+                context.assets.open("bin/xopp-title-watcher").use { input ->
+                    titleWatcherBin.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                titleWatcherBin.setExecutable(true, false)
+                Log.i(TAG, "Provisioned latest xopp-title-watcher binary")
+            } catch (e: Exception) {
+                if (titleWatcherBin.exists()) {
+                    titleWatcherBin.setExecutable(true, false)
                 }
             }
-            wallpaperBin.setExecutable(true, false)
-            Log.i(TAG, "Provisioned latest xopp-wallpaper binary")
-        } catch (e: Exception) {
-            if (wallpaperBin.exists()) {
-                wallpaperBin.setExecutable(true, false)
+
+            // Provision libgtk-android-ime.so GTK focus bridge module
+            gtkModulesDir.mkdirs()
+            val imeModuleLib = File(libDir, "libgtk-android-ime.so")
+            try {
+                context.assets.open("lib/libgtk-android-ime.so").use { input ->
+                    imeModuleLib.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                imeModuleLib.copyTo(imeModuleInGtkDir, overwrite = true)
+                Log.i(TAG, "Provisioned latest libgtk-android-ime.so GTK focus bridge module")
+            } catch (e: Exception) {
+                // Ignore if in bootstrap
             }
+
+            // Provision xopp-wallpaper binary from assets if available
+            try {
+                context.assets.open("bin/xopp-wallpaper").use { input ->
+                    wallpaperBin.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                wallpaperBin.setExecutable(true, false)
+                Log.i(TAG, "Provisioned latest xopp-wallpaper binary")
+            } catch (e: Exception) {
+                if (wallpaperBin.exists()) {
+                    wallpaperBin.setExecutable(true, false)
+                }
+            }
+
+            prefs.edit().putLong("pref_last_provisioned_asset_version", currentVersionCode).apply()
         }
 
         setupStorageSymlinks()
