@@ -32,6 +32,13 @@ class WebDavStorageProvider(
 
     companion object {
         private const val TAG = "WebDavStorageProvider"
+        private val HTTP_DATE_FORMAT = object : ThreadLocal<SimpleDateFormat>() {
+            override fun initialValue(): SimpleDateFormat {
+                return SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US).apply {
+                    timeZone = TimeZone.getTimeZone("GMT")
+                }
+            }
+        }
     }
 
     override val providerType: StorageProviderType = config.providerType
@@ -121,8 +128,8 @@ class WebDavStorageProvider(
                 if (!response.isSuccessful && response.code != 207) {
                     error("PROPFIND failed with HTTP ${response.code}: ${response.message}")
                 }
-                val bodyString = response.body?.string() ?: ""
-                parseWebDavMultiStatus(bodyString, targetUrl)
+                val stream = response.body?.byteStream() ?: return@runCatching emptyList()
+                parseWebDavMultiStatus(stream, targetUrl)
             }
         }
     }
@@ -334,13 +341,16 @@ class WebDavStorageProvider(
         }
     }
 
-    private fun parseWebDavMultiStatus(xmlContent: String, requestUrl: String): List<RemoteFileMetadata> {
-        val results = mutableListOf<RemoteFileMetadata>()
-        if (xmlContent.isBlank()) return results
+    internal fun parseWebDavMultiStatus(xmlContent: String, requestUrl: String): List<RemoteFileMetadata> {
+        if (xmlContent.isBlank()) return emptyList()
+        return parseWebDavMultiStatus(xmlContent.byteInputStream(Charsets.UTF_8), requestUrl)
+    }
 
+    private fun parseWebDavMultiStatus(inputStream: java.io.InputStream, requestUrl: String): List<RemoteFileMetadata> {
+        val results = mutableListOf<RemoteFileMetadata>()
         try {
             val parser = Xml.newPullParser()
-            parser.setInput(StringReader(xmlContent))
+            parser.setInput(inputStream, "UTF-8")
 
             var eventType = parser.eventType
             var inResponse = false
@@ -350,7 +360,7 @@ class WebDavStorageProvider(
             var isDirectory = false
             var etag: String? = null
 
-            val dateFormat = SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US).apply {
+            val dateFormat = HTTP_DATE_FORMAT.get() ?: SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US).apply {
                 timeZone = TimeZone.getTimeZone("GMT")
             }
 

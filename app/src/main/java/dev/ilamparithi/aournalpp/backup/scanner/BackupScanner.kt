@@ -1,6 +1,7 @@
 package dev.ilamparithi.aournalpp.backup.scanner
 
 import android.util.Log
+import dev.ilamparithi.aournalpp.backup.db.SyncMetadataEntity
 import dev.ilamparithi.aournalpp.backup.model.BackupScope
 import dev.ilamparithi.aournalpp.backup.model.CustomFolderMapping
 import dev.ilamparithi.aournalpp.backup.model.ExclusionFilterConfig
@@ -44,7 +45,7 @@ class BackupScanner(
     /**
      * Scans complete backup domains: Notes (including in-situ Emergency Saves) and .config.
      */
-    fun scanCompleteBackup(): List<ScannedLocalFile> {
+    fun scanCompleteBackup(cachedMetadata: Map<String, SyncMetadataEntity>? = null): List<ScannedLocalFile> {
         val environment = env ?: return emptyList()
         val results = mutableListOf<ScannedLocalFile>()
 
@@ -56,7 +57,8 @@ class BackupScanner(
                 prefix = "Notes",
                 scope = BackupScope.NOTES.id,
                 allowedExtensions = exclusionFilter.includedExtensions ?: DEFAULT_NOTES_EXTENSIONS,
-                results = results
+                results = results,
+                cachedMetadata = cachedMetadata
             )
         }
 
@@ -68,7 +70,8 @@ class BackupScanner(
                 prefix = ".config/xournalpp",
                 scope = BackupScope.CONFIG.id,
                 allowedExtensions = exclusionFilter.includedExtensions ?: DEFAULT_CONFIG_EXTENSIONS,
-                results = results
+                results = results,
+                cachedMetadata = cachedMetadata
             )
         }
 
@@ -78,7 +81,10 @@ class BackupScanner(
     /**
      * Scans a custom mapped local folder.
      */
-    fun scanCustomMapping(mapping: CustomFolderMapping): List<ScannedLocalFile> {
+    fun scanCustomMapping(
+        mapping: CustomFolderMapping,
+        cachedMetadata: Map<String, SyncMetadataEntity>? = null
+    ): List<ScannedLocalFile> {
         val results = mutableListOf<ScannedLocalFile>()
         val localDir = File(mapping.localFolderPath)
         if (localDir.exists() && localDir.isDirectory) {
@@ -87,7 +93,8 @@ class BackupScanner(
                 prefix = "",
                 scope = "custom_${mapping.id}",
                 allowedExtensions = exclusionFilter.includedExtensions, // null means allow all valid non-excluded
-                results = results
+                results = results,
+                cachedMetadata = cachedMetadata
             )
         }
         return results
@@ -98,7 +105,8 @@ class BackupScanner(
         prefix: String,
         scope: String,
         allowedExtensions: Set<String>?,
-        results: MutableList<ScannedLocalFile>
+        results: MutableList<ScannedLocalFile>,
+        cachedMetadata: Map<String, SyncMetadataEntity>? = null
     ) {
         val files = rootDir.walkTopDown().filter { it.isFile }.toList()
         for (file in files) {
@@ -113,16 +121,24 @@ class BackupScanner(
 
             val relFromRoot = file.relativeTo(rootDir).path.replace('\\', '/')
             val relativePath = if (prefix.isNotEmpty()) "$prefix/$relFromRoot" else relFromRoot
+            val size = file.length()
+            val lastModified = file.lastModified()
 
-            val hash = calculateSha256(file)
+            val cached = cachedMetadata?.get(relativePath)
+            val hash = if (cached != null && cached.sizeBytes == size && cached.localLastModified == lastModified && cached.localSha256.isNotEmpty()) {
+                cached.localSha256
+            } else {
+                calculateSha256(file)
+            }
+
             if (hash.isNotEmpty()) {
                 results.add(
                     ScannedLocalFile(
                         file = file,
                         scope = scope,
                         relativePath = relativePath,
-                        sizeBytes = file.length(),
-                        lastModified = file.lastModified(),
+                        sizeBytes = size,
+                        lastModified = lastModified,
                         sha256 = hash
                     )
                 )

@@ -64,11 +64,14 @@ class BackupEngine(
         val scanner = BackupScanner(env, exclusionFilter)
         val dao = db.syncMetadataDao()
 
+        // Batch-retrieve all existing metadata for this service upfront
+        val existingMetaMap = dao.getAllForService(serviceConfig.id).associateBy { it.relativePath }
+
         val filesToSync = mutableListOf<Pair<ScannedLocalFile, String>>() // (ScannedFile, remoteDestinationPath)
 
         // 1. Complete Backup domain scanning
         if (serviceConfig.isCompleteBackupEnabled) {
-            val completeFiles = scanner.scanCompleteBackup()
+            val completeFiles = scanner.scanCompleteBackup(existingMetaMap)
             for (f in completeFiles) {
                 val remotePath = "$COMPLETE_BACKUP_REMOTE_ROOT/${f.relativePath}"
                 filesToSync.add(f to remotePath)
@@ -78,7 +81,7 @@ class BackupEngine(
         // 2. Custom folder mappings scanning
         for (mapping in serviceConfig.customMappings) {
             if (!mapping.isEnabled) continue
-            val mappedFiles = scanner.scanCustomMapping(mapping)
+            val mappedFiles = scanner.scanCustomMapping(mapping, existingMetaMap)
             val remoteTargetBase = mapping.remoteFolderPath.trim().trim('/')
             for (f in mappedFiles) {
                 val remotePath = if (remoteTargetBase.isEmpty()) f.relativePath else "$remoteTargetBase/${f.relativePath}"
@@ -114,10 +117,10 @@ class BackupEngine(
                 )
             }
 
-            // Differential comparison
+            // Differential comparison via in-memory metadata lookup
             val uploadQueue = mutableListOf<Pair<ScannedLocalFile, String>>()
             for ((scanned, remotePath) in filesToSync) {
-                val record = dao.getByServiceAndPath(serviceConfig.id, scanned.relativePath)
+                val record = existingMetaMap[scanned.relativePath]
                 if (record != null && record.localSha256 == scanned.sha256 && scanned.lastModified <= record.localLastModified) {
                     // Unchanged file -> Skip
                     skippedCount++

@@ -106,4 +106,39 @@ class BackupScannerTest {
         assertTrue(scanner.shouldExcludeFile(fileInsideExcluded, rootDir))
         assertFalse(scanner.shouldExcludeFile(fileOutside, rootDir))
     }
+
+    @Test
+    fun testCachedMetadataFastPath() {
+        val testFile = File(rootDir, "CachedNote.xopp").apply {
+            writeText("Test note content for backup scanner")
+        }
+
+        val mapping = dev.ilamparithi.aournalpp.backup.model.CustomFolderMapping(
+            id = "custom_test",
+            serviceId = "test_service",
+            localFolderPath = rootDir.absolutePath,
+            remoteFolderPath = "BackupTest",
+            isEnabled = true
+        )
+
+        val cachedEntity = dev.ilamparithi.aournalpp.backup.db.SyncMetadataEntity(
+            serviceId = "test_service",
+            relativePath = "CachedNote.xopp",
+            scope = "custom_test",
+            localSha256 = "precomputed_mock_sha256_hash",
+            remoteHash = null,
+            localLastModified = testFile.lastModified(),
+            sizeBytes = testFile.length(),
+            lastSyncedAt = System.currentTimeMillis()
+        )
+
+        val scanner = BackupScanner(
+            env = null,
+            exclusionFilter = ExclusionFilterConfig.DEFAULT
+        )
+
+        val scanned = scanner.scanCustomMapping(mapping, mapOf("CachedNote.xopp" to cachedEntity))
+        org.junit.Assert.assertEquals(1, scanned.size)
+        org.junit.Assert.assertEquals("precomputed_mock_sha256_hash", scanned[0].sha256)
+    }
 }
