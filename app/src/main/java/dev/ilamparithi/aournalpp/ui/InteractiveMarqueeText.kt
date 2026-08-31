@@ -68,46 +68,53 @@ fun InteractiveMarqueeText(
     val density = LocalDensity.current
 
     val textMeasurer = rememberTextMeasurer()
-    val textLayoutResult = remember(text, style, fontWeight, density) {
-        textMeasurer.measure(
-            text = text,
-            style = if (fontWeight != null) style.copy(fontWeight = fontWeight) else style,
-            maxLines = 1,
-            softWrap = false
-        )
-    }
-    val actualTextWidthPx = textLayoutResult.size.width
+    var actualTextWidthPx by remember(text, style, fontWeight) { mutableIntStateOf(-1) }
 
     var containerWidthPx by remember { mutableIntStateOf(0) }
     val animOffset = remember { Animatable(0f) }
 
     val startMarqueeSequence = {
-        val maxScrollPx = (actualTextWidthPx - containerWidthPx).coerceAtLeast(0)
-        if (maxScrollPx > 0 && !isInteracted) {
-            isInteracted = true
-            animJob?.cancel()
-            animJob = coroutineScope.launch {
-                val scrollDistanceDp = with(density) { maxScrollPx.toDp().value }
-                val forwardDurationMs = ((scrollDistanceDp / 50f) * 1000f).toInt().coerceAtLeast(100)
+        if (!isInteracted) {
+            val textWidth = if (actualTextWidthPx >= 0) {
+                actualTextWidthPx
+            } else {
+                val measured = textMeasurer.measure(
+                    text = text,
+                    style = if (fontWeight != null) style.copy(fontWeight = fontWeight) else style,
+                    maxLines = 1,
+                    softWrap = false
+                ).size.width
+                actualTextWidthPx = measured
+                measured
+            }
 
-                // 1. Smooth forward scroll reveal at constant speed
-                animOffset.snapTo(0f)
-                animOffset.animateTo(
-                    targetValue = maxScrollPx.toFloat(),
-                    animationSpec = tween(durationMillis = forwardDurationMs, easing = LinearEasing)
-                )
+            val maxScrollPx = (textWidth - containerWidthPx).coerceAtLeast(0)
+            if (maxScrollPx > 0) {
+                isInteracted = true
+                animJob?.cancel()
+                animJob = coroutineScope.launch {
+                    val scrollDistanceDp = with(density) { maxScrollPx.toDp().value }
+                    val forwardDurationMs = ((scrollDistanceDp / 50f) * 1000f).toInt().coerceAtLeast(100)
 
-                // 2. Pause at the end for comfortable reading
-                delay(1500L)
+                    // 1. Smooth forward scroll reveal at constant speed
+                    animOffset.snapTo(0f)
+                    animOffset.animateTo(
+                        targetValue = maxScrollPx.toFloat(),
+                        animationSpec = tween(durationMillis = forwardDurationMs, easing = LinearEasing)
+                    )
 
-                // 3. Quick Material 3 easing slide back to starting position
-                animOffset.animateTo(
-                    targetValue = 0f,
-                    animationSpec = tween(durationMillis = 420, easing = M3SlideBackEasing)
-                )
+                    // 2. Pause at the end for comfortable reading
+                    delay(1500L)
 
-                delay(100L)
-                isInteracted = false
+                    // 3. Quick Material 3 easing slide back to starting position
+                    animOffset.animateTo(
+                        targetValue = 0f,
+                        animationSpec = tween(durationMillis = 420, easing = M3SlideBackEasing)
+                    )
+
+                    delay(100L)
+                    isInteracted = false
+                }
             }
         }
     }

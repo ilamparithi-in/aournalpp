@@ -1,5 +1,6 @@
 package dev.ilamparithi.aournalpp
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -363,6 +364,10 @@ enum class AppTab(
 
 @Composable
 fun MainResponsiveAppShell() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val aournalPrefs = remember { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
+    val reduceAnimations = remember { aournalPrefs.getBoolean(LinuxEnvironment.PREF_KEY_REDUCE_ANIMATIONS, false) }
+
     var selectedTab by rememberSaveable { mutableIntStateOf(AppTab.HOME.id) }
     val saveableStateHolder = rememberSaveableStateHolder()
     var tabGenerations by rememberSaveable { mutableStateOf(mapOf<Int, Int>()) }
@@ -430,6 +435,44 @@ fun MainResponsiveAppShell() {
         }
     }
 
+    val tabTransitionSpec: androidx.compose.animation.AnimatedContentTransitionScope<Int>.() -> androidx.compose.animation.ContentTransform = {
+        if (reduceAnimations) {
+            fadeIn(animationSpec = androidx.compose.animation.core.tween(120))
+                .togetherWith(fadeOut(animationSpec = androidx.compose.animation.core.tween(100)))
+        } else {
+            val isForward = targetState > initialState
+            val enterOffset = if (isForward) 1 else -1
+            val exitOffset = if (isForward) -1 else 1
+
+            (slideInHorizontally(
+                animationSpec = androidx.compose.animation.core.spring(
+                    dampingRatio = 0.82f,
+                    stiffness = 380f
+                ),
+                initialOffsetX = { (it / 3) * enterOffset }
+            ) + fadeIn(
+                animationSpec = androidx.compose.animation.core.spring(
+                    dampingRatio = 0.9f,
+                    stiffness = 400f
+                )
+            ))
+                .togetherWith(
+                    slideOutHorizontally(
+                        animationSpec = androidx.compose.animation.core.spring(
+                            dampingRatio = 0.82f,
+                            stiffness = 380f
+                        ),
+                        targetOffsetX = { -(it / 3) * exitOffset }
+                    ) + fadeOut(
+                        animationSpec = androidx.compose.animation.core.spring(
+                            dampingRatio = 0.9f,
+                            stiffness = 400f
+                        )
+                    )
+                )
+        }
+    }
+
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val isWideScreen = maxWidth >= 600.dp
 
@@ -476,31 +519,7 @@ fun MainResponsiveAppShell() {
                 Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                     AnimatedContent(
                         targetState = selectedTab,
-                        transitionSpec = {
-                            if (targetState > initialState) {
-                                (slideInHorizontally(
-                                    animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
-                                    initialOffsetX = { it / 3 }
-                                ) + fadeIn(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f)))
-                                    .togetherWith(
-                                        slideOutHorizontally(
-                                             animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
-                                             targetOffsetX = { -it / 3 }
-                                         ) + fadeOut(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f))
-                                    )
-                            } else {
-                                (slideInHorizontally(
-                                    animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
-                                    initialOffsetX = { -it / 3 }
-                                ) + fadeIn(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f)))
-                                    .togetherWith(
-                                        slideOutHorizontally(
-                                             animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
-                                             targetOffsetX = { it / 3 }
-                                         ) + fadeOut(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f))
-                                    )
-                            }
-                        },
+                        transitionSpec = tabTransitionSpec,
                         label = "railTabTransition"
                     ) { tabId ->
                         TabHost(tabId)
@@ -543,31 +562,7 @@ fun MainResponsiveAppShell() {
                 Box(modifier = Modifier.fillMaxSize().padding(padding)) {
                     AnimatedContent(
                         targetState = selectedTab,
-                        transitionSpec = {
-                            if (targetState > initialState) {
-                                (slideInHorizontally(
-                                    animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
-                                    initialOffsetX = { it / 3 }
-                                ) + fadeIn(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f)))
-                                    .togetherWith(
-                                        slideOutHorizontally(
-                                             animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
-                                             targetOffsetX = { -it / 3 }
-                                         ) + fadeOut(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f))
-                                    )
-                            } else {
-                                (slideInHorizontally(
-                                    animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
-                                    initialOffsetX = { -it / 3 }
-                                ) + fadeIn(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f)))
-                                    .togetherWith(
-                                        slideOutHorizontally(
-                                             animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
-                                             targetOffsetX = { it / 3 }
-                                         ) + fadeOut(animationSpec = spring(dampingRatio = 0.9f, stiffness = 400f))
-                                    )
-                            }
-                        },
+                        transitionSpec = tabTransitionSpec,
                         label = "bottomTabTransition"
                     ) { tabId ->
                         TabHost(tabId)

@@ -505,13 +505,14 @@ fun OrganicCollageView(
                         .height(340.dp)
                 )
             } else {
+                val notesMap = remember(notes) { notes.associateBy { it.path } }
                 Box(
                     modifier = Modifier
                         .width(layout.totalWidth.dp)
                         .height(layout.totalHeight.dp)
                 ) {
                     layout.cards.forEachIndexed { index, card ->
-                        val liveNote = notes.find { it.path == card.note.path } ?: notes.getOrNull(index) ?: card.note
+                        val liveNote = notesMap[card.note.path] ?: notes.getOrNull(index) ?: card.note
                         Box(
                             modifier = Modifier
                                 .offset(x = card.x.dp, y = card.y.dp)

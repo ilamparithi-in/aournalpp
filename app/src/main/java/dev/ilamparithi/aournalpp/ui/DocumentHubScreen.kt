@@ -3438,36 +3438,31 @@ fun Modifier.notesGridDragSelect(
     autoScrollThreshold: Float,
     setAutoScrollSpeed: (Float) -> Unit
 ): Modifier = pointerInput(Unit) {
-    fun findNotePathAtOffset(point: Offset): String? {
-        val rounded = point.round()
-        val match = lazyGridState.layoutInfo.visibleItemsInfo.find { itemInfo ->
-            itemInfo.size.toIntRect().contains(rounded - itemInfo.offset)
-        }
-        val key = match?.key as? String ?: return null
-        val currentList = notes()
-        return if (currentList.any { it.path == key }) key else null
-    }
-
     awaitPointerEventScope {
         while (true) {
             val downEvent = awaitPointerEvent(PointerEventPass.Initial)
             val down = downEvent.changes.firstOrNull { it.pressed } ?: continue
             val downId = down.id
             val downPos = down.position
-            val hitPath = findNotePathAtOffset(downPos)
 
-            if (hitPath == null) {
-                continue
+            val initialList = notes()
+            val initialPathMap = initialList.mapIndexed { idx, doc -> doc.path to idx }.toMap()
+
+            fun findNotePathAt(point: Offset): String? {
+                val rounded = point.round()
+                val match = lazyGridState.layoutInfo.visibleItemsInfo.find { itemInfo ->
+                    itemInfo.size.toIntRect().contains(rounded - itemInfo.offset)
+                }
+                val key = match?.key as? String ?: return null
+                return if (initialPathMap.containsKey(key)) key else null
             }
 
-            var isLongPressed = false
+            val hitPath = findNotePathAt(downPos) ?: continue
 
+            var isLongPressed = false
             val longPressTimeout = viewConfiguration.longPressTimeoutMillis
             val touchSlop = viewConfiguration.touchSlop
             val pointerType = down.type
-            // For drag-select, a stylus needs MORE tolerance during the long-press wait window:
-            // the tip can wobble slightly while holding still, and we don't want that to cancel
-            // the long-press before selection mode is entered.
             val effectiveSlop = if (pointerType == PointerType.Stylus || pointerType == PointerType.Eraser) {
                 touchSlop * 2.5f
             } else {
@@ -3500,7 +3495,8 @@ fun Modifier.notesGridDragSelect(
                     setIsInitialEntryDrag(true)
                 }
                 setIsDragSelecting(true)
-                val currentNotesList = notes()
+                val currentNotesList = initialList
+                val pathToIndex = initialPathMap
                 val currentSelected = selectedPaths()
 
                 val wasSelected = currentSelected.contains(hitPath)
@@ -3511,8 +3507,8 @@ fun Modifier.notesGridDragSelect(
                 if (activeSelection && !wasSelected && currentSelected.isNotEmpty()) {
                     // Shift-click range selection when long-pressing a deselected item in selection mode
                     val anchorPath = lastSelectedPath() ?: currentSelected.lastOrNull()
-                    val anchorIdx = currentNotesList.indexOfFirst { it.path == anchorPath }
-                    val hitIdx = currentNotesList.indexOfFirst { it.path == hitPath }
+                    val anchorIdx = pathToIndex[anchorPath] ?: -1
+                    val hitIdx = pathToIndex[hitPath] ?: -1
 
                     val rangePaths = if (anchorIdx >= 0 && hitIdx >= 0) {
                         val start = minOf(anchorIdx, hitIdx)
@@ -3559,10 +3555,10 @@ fun Modifier.notesGridDragSelect(
                             }
                         )
 
-                        val currentHit = findNotePathAtOffset(currentDragPos)
+                        val currentHit = findNotePathAt(currentDragPos)
                         if (currentHit != null && currentHit != lastReportedPath) {
-                            val initialIdx = currentNotesList.indexOfFirst { it.path == initialPath }
-                            val currentIdx = currentNotesList.indexOfFirst { it.path == currentHit }
+                            val initialIdx = pathToIndex[initialPath] ?: -1
+                            val currentIdx = pathToIndex[currentHit] ?: -1
 
                             if (initialIdx >= 0 && currentIdx >= 0) {
                                 val start = minOf(initialIdx, currentIdx)

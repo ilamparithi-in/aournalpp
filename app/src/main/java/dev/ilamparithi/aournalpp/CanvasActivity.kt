@@ -366,13 +366,19 @@ class CanvasActivity : ComponentActivity() {
                     val title = liveTitle?.removePrefix("*")?.removeSuffix("*")?.trim()
                     if (!title.isNullOrBlank() && title != "New Note" && title != "Unsaved Document" && title != "Preferences") {
                         withContext(Dispatchers.IO) {
+                            val currentTarget = targetPath
+                            if (currentTarget != null) {
+                                val currentFile = File(currentTarget)
+                                if (currentFile.name.equals(title, ignoreCase = true) || currentFile.nameWithoutExtension.equals(title, ignoreCase = true)) {
+                                    DocumentRepository(this@CanvasActivity).recordNoteOpened(currentFile.absolutePath)
+                                    return@withContext
+                                }
+                            }
                             val repo = DocumentRepository(this@CanvasActivity)
                             val root = repo.getRootNotesDirectory()
-                            val file = root.walkTopDown().filter {
-                                it.isFile && (it.name.equals(title, ignoreCase = true) || it.nameWithoutExtension.equals(title, ignoreCase = true))
-                            }.firstOrNull()
-                            if (file != null) {
-                                repo.recordNoteOpened(file.absolutePath)
+                            val directFile = File(root, if (title.endsWith(".xopp", ignoreCase = true) || title.endsWith(".pdf", ignoreCase = true) || title.endsWith(".xoj", ignoreCase = true)) title else "$title.xopp")
+                            if (directFile.exists() && directFile.isFile) {
+                                repo.recordNoteOpened(directFile.absolutePath)
                             }
                         }
                     }
@@ -454,6 +460,10 @@ class CanvasActivity : ComponentActivity() {
                     handleSmartBackPress()
                 }
 
+                val wallpaperBitmap = remember {
+                    WallpaperHelper.resolveWallpaperBitmap(this@CanvasActivity).asImageBitmap()
+                }
+
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.surface
@@ -465,7 +475,7 @@ class CanvasActivity : ComponentActivity() {
                         val canvasHeightPx = constraints.maxHeight.toFloat()
                         // Wallpaper Backdrop Layer (covers edge-to-edge)
                         Image(
-                            bitmap = WallpaperHelper.resolveWallpaperBitmap(this@CanvasActivity).asImageBitmap(),
+                            bitmap = wallpaperBitmap,
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()

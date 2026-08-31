@@ -128,12 +128,14 @@ fun StandardNoteCard(
         initialValue = ThumbnailManager.getCachedThumbnail(note.file, note.lastModifiedMs),
         key1 = note.lastModifiedMs
     ) {
-        value = ThumbnailManager.getOrCreateThumbnailBitmap(context, note.file, pdfExportManager)
+        value = ThumbnailManager.getOrCreateThumbnailBitmap(context, note.file, pdfExportManager, note.lastModifiedMs)
     }
     val thumbnailFile = remember(thumbnailImage) { ThumbnailManager.getCachedThumbnailFile(note.file, note.lastModifiedMs) }
 
-    val folderAccentColor = note.folderColorHex?.let {
-        try { Color(android.graphics.Color.parseColor(it)) } catch (e: Exception) { null }
+    val folderAccentColor = remember(note.folderColorHex) {
+        note.folderColorHex?.let {
+            try { Color(android.graphics.Color.parseColor(it)) } catch (e: Exception) { null }
+        }
     } ?: MaterialTheme.colorScheme.primary
 
     val hasActions = onTogglePin != null || onExportPdf != null || onSharePdf != null ||
