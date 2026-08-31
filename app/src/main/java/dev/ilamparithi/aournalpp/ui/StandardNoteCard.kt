@@ -125,12 +125,12 @@ fun StandardNoteCard(
     var showMenu by remember { mutableStateOf(false) }
 
     val thumbnailImage by produceState<ImageBitmap?>(
-        initialValue = ThumbnailManager.getCachedThumbnail(note.file),
+        initialValue = ThumbnailManager.getCachedThumbnail(note.file, note.lastModifiedMs),
         key1 = note.lastModifiedMs
     ) {
         value = ThumbnailManager.getOrCreateThumbnailBitmap(context, note.file, pdfExportManager)
     }
-    val thumbnailFile = remember(thumbnailImage) { ThumbnailManager.getCachedThumbnailFile(note.file) }
+    val thumbnailFile = remember(thumbnailImage) { ThumbnailManager.getCachedThumbnailFile(note.file, note.lastModifiedMs) }
 
     val folderAccentColor = note.folderColorHex?.let {
         try { Color(android.graphics.Color.parseColor(it)) } catch (e: Exception) { null }
@@ -204,22 +204,8 @@ fun StandardNoteCard(
             customActions = customActionsList
         }
 
-    var cardInteractionTimestamp by remember { mutableStateOf(0L) }
-
-    val touchObservingModifier = baseModifier.pointerInput(note.path) {
-        awaitPointerEventScope {
-            while (true) {
-                val event = awaitPointerEvent(PointerEventPass.Initial)
-                val hasTouch = event.changes.any { it.pressed || it.positionChanged() }
-                if (hasTouch || event.type == PointerEventType.Enter || event.type == PointerEventType.Move) {
-                    cardInteractionTimestamp = System.currentTimeMillis()
-                }
-            }
-        }
-    }
-
     val interactiveModifier = if (enableFloatingPreview && !isSelectionMode && !isTrashMode) {
-        touchObservingModifier.floatingPreviewLongPress(
+        baseModifier.floatingPreviewLongPress(
             note = note,
             thumbnailFile = thumbnailFile,
             folderColor = folderAccentColor,
@@ -228,7 +214,7 @@ fun StandardNoteCard(
             onLongPressFallback = onLongClick
         )
     } else {
-        touchObservingModifier.combinedClickable(
+        baseModifier.combinedClickable(
             onClick = onClick,
             onLongClick = onLongClick
         )
@@ -397,7 +383,6 @@ fun StandardNoteCard(
         FloatingDetailsPill(
             note = note,
             folderColor = folderAccentColor,
-            externalTrigger = cardInteractionTimestamp,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(8.dp)

@@ -119,6 +119,41 @@ class XoppNativeRendererTest {
         assertFalse(key.contains("?"))
         assertFalse(key.contains("#"))
         assertFalse(key.contains("🔥"))
-        assertTrue(key.endsWith(".png"))
+        assertTrue(key.endsWith(".webp"))
+    }
+
+    @Test
+    fun `test parseCoordinates with standard float list`() {
+        val raw = "10.5 20.25 30.75 -40.5 50.0 60 70.125"
+        val method = XoppNativeRenderer::class.java.getDeclaredMethod("parseCoordinates", String::class.java)
+        method.isAccessible = true
+        val result = method.invoke(XoppNativeRenderer, raw) as FloatArray
+
+        assertEquals(7, result.size)
+        assertEquals(10.5f, result[0], 0.001f)
+        assertEquals(20.25f, result[1], 0.001f)
+        assertEquals(30.75f, result[2], 0.001f)
+        assertEquals(-40.5f, result[3], 0.001f)
+        assertEquals(50.0f, result[4], 0.001f)
+        assertEquals(60.0f, result[5], 0.001f)
+        assertEquals(70.125f, result[6], 0.001f)
+    }
+
+    @Test
+    fun `test parseCoordinates with irregular whitespace and empty strings`() {
+        val method = XoppNativeRenderer::class.java.getDeclaredMethod("parseCoordinates", String::class.java)
+        method.isAccessible = true
+
+        val emptyResult = method.invoke(XoppNativeRenderer, "   ") as FloatArray
+        assertEquals(0, emptyResult.size)
+
+        val singleToken = method.invoke(XoppNativeRenderer, "42.0") as FloatArray
+        assertEquals(0, singleToken.size) // Less than 2 coordinates returns empty
+
+        val irregular = method.invoke(XoppNativeRenderer, "  \t 1.5  \n  -2.5   3.75  ") as FloatArray
+        assertEquals(3, irregular.size)
+        assertEquals(1.5f, irregular[0], 0.001f)
+        assertEquals(-2.5f, irregular[1], 0.001f)
+        assertEquals(3.75f, irregular[2], 0.001f)
     }
 }

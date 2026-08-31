@@ -503,40 +503,134 @@ object XoppNativeRenderer {
     private fun drawDottedPaper(canvas: Canvas, width: Int, height: Int, scale: Float) {
         val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#BDC3C7")
-            style = Paint.Style.FILL
+            style = Paint.Style.STROKE
+            strokeWidth = 2.4f
+            strokeCap = Paint.Cap.ROUND
         }
 
         val spacing = 14.1732f * scale
-        val radius = 1.2f
+        val cols = (width / spacing).toInt() + 1
+        val rows = (height / spacing).toInt() + 1
+        val totalPoints = cols * rows * 2
+        val points = FloatArray(totalPoints)
+        var idx = 0
+
         var x = spacing
         while (x < width) {
             var y = spacing
             while (y < height) {
-                canvas.drawCircle(x, y, radius, dotPaint)
+                if (idx + 1 < totalPoints) {
+                    points[idx++] = x
+                    points[idx++] = y
+                }
                 y += spacing
             }
             x += spacing
         }
+
+        if (idx > 0) {
+            canvas.drawPoints(points, 0, idx, dotPaint)
+        }
     }
 
     private fun parseCoordinates(raw: String): FloatArray {
-        val tokens = raw.trim().split(Regex("\\s+"))
-        if (tokens.size < 2) return FloatArray(0)
-        val list = FloatArray(tokens.size)
-        var count = 0
-        for (token in tokens) {
-            val v = token.toFloatOrNull()
-            if (v != null) {
-                list[count++] = v
+        var tokenCount = 0
+        var inToken = false
+        val len = raw.length
+        for (i in 0 until len) {
+            val c = raw[i]
+            if (c > ' ') {
+                if (!inToken) {
+                    tokenCount++
+                    inToken = true
+                }
+            } else {
+                inToken = false
             }
         }
-        return if (count == list.size) list else list.copyOf(count)
+        if (tokenCount < 2) return FloatArray(0)
+
+        val result = FloatArray(tokenCount)
+        var writeIdx = 0
+        var i = 0
+        while (i < len) {
+            // Skip whitespace
+            while (i < len && raw[i] <= ' ') {
+                i++
+            }
+            if (i >= len) break
+
+            val start = i
+            var isNegative = false
+            if (raw[i] == '-') {
+                isNegative = true
+                i++
+            } else if (raw[i] == '+') {
+                i++
+            }
+
+            var whole = 0.0
+            while (i < len && raw[i] in '0'..'9') {
+                whole = whole * 10.0 + (raw[i] - '0')
+                i++
+            }
+
+            var frac = 0.0
+            var div = 1.0
+            if (i < len && raw[i] == '.') {
+                i++
+                while (i < len && raw[i] in '0'..'9') {
+                    frac = frac * 10.0 + (raw[i] - '0')
+                    div *= 10.0
+                    i++
+                }
+            }
+
+            var exp = 0
+            if (i < len && (raw[i] == 'e' || raw[i] == 'E')) {
+                i++
+                var expNeg = false
+                if (i < len && raw[i] == '-') {
+                    expNeg = true
+                    i++
+                } else if (i < len && raw[i] == '+') {
+                    i++
+                }
+                while (i < len && raw[i] in '0'..'9') {
+                    exp = exp * 10 + (raw[i] - '0')
+                    i++
+                }
+                if (expNeg) exp = -exp
+            }
+
+            var value = (whole + (frac / div))
+            if (exp != 0) {
+                value *= Math.pow(10.0, exp.toDouble())
+            }
+            if (isNegative) value = -value
+
+            if (i > start) {
+                result[writeIdx++] = value.toFloat()
+            } else {
+                while (i < len && raw[i] > ' ') {
+                    i++
+                }
+            }
+        }
+
+        return if (writeIdx == tokenCount) result else result.copyOf(writeIdx)
     }
 
     private fun parseStrokeWidth(raw: String?): Float {
         if (raw.isNullOrBlank()) return 1.41f
-        val first = raw.trim().split(Regex("\\s+")).firstOrNull()
-        return first?.toFloatOrNull()?.coerceIn(0.2f, 80f) ?: 1.41f
+        var i = 0
+        val len = raw.length
+        while (i < len && raw[i] <= ' ') i++
+        val start = i
+        while (i < len && raw[i] > ' ') i++
+        if (start >= len) return 1.41f
+        val first = raw.substring(start, i)
+        return first.toFloatOrNull()?.coerceIn(0.2f, 80f) ?: 1.41f
     }
 
     /**

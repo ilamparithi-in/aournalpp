@@ -154,22 +154,24 @@ object WallpaperHelper {
 
     fun exportBitmapToPpm(bitmap: Bitmap, targetFile: File): Result<Unit> = runCatching {
         targetFile.outputStream().buffered(64 * 1024).use { out ->
-            val header = "P6\n${bitmap.width} ${bitmap.height}\n255\n".toByteArray(Charsets.US_ASCII)
-            out.write(header)
-
             val width = bitmap.width
             val height = bitmap.height
-            val pixels = IntArray(width * height)
-            bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+            val header = "P6\n$width $height\n255\n".toByteArray(Charsets.US_ASCII)
+            out.write(header)
 
-            val rgbBuffer = ByteArray(pixels.size * 3)
-            for (i in pixels.indices) {
-                val c = pixels[i]
-                rgbBuffer[i * 3 + 0] = ((c shr 16) and 0xFF).toByte()
-                rgbBuffer[i * 3 + 1] = ((c shr 8) and 0xFF).toByte()
-                rgbBuffer[i * 3 + 2] = (c and 0xFF).toByte()
+            val rowPixels = IntArray(width)
+            val rowBytes = ByteArray(width * 3)
+
+            for (y in 0 until height) {
+                bitmap.getPixels(rowPixels, 0, width, 0, y, width, 1)
+                for (x in 0 until width) {
+                    val c = rowPixels[x]
+                    rowBytes[x * 3 + 0] = ((c shr 16) and 0xFF).toByte()
+                    rowBytes[x * 3 + 1] = ((c shr 8) and 0xFF).toByte()
+                    rowBytes[x * 3 + 2] = (c and 0xFF).toByte()
+                }
+                out.write(rowBytes)
             }
-            out.write(rgbBuffer)
         }
     }
 }

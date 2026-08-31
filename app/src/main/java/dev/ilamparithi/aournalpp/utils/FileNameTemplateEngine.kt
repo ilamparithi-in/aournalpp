@@ -61,6 +61,30 @@ object FileNameTemplateEngine {
 
     private val ALPHANUMERIC_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".toCharArray()
 
+    private val REGEX_CUSTOM_DATETIME = Regex("""\{datetime:([^}]+)\}""")
+    private val REGEX_FOLDER_LEVEL = Regex("""\{folder:(\d+)\}""")
+    private val REGEX_CREATED_CUSTOM = Regex("""\{created:([^}]+)\}""")
+    private val REGEX_MODIFIED_CUSTOM = Regex("""\{modified:([^}]+)\}""")
+    private val REGEX_RANDOM_CUSTOM = Regex("""\{random:(\d+)\}""")
+    private val REGEX_ILLEGAL_CHARS = Regex("""[/\\:*?"<>|]""")
+    private val REGEX_WHITESPACE = Regex("""[\r\n\t]""")
+
+    private val dateFormatCache = ThreadLocal.withInitial { mutableMapOf<String, SimpleDateFormat>() }
+
+    private fun getCachedSimpleDateFormat(pattern: String, locale: Locale = Locale.getDefault()): SimpleDateFormat {
+        val key = "$pattern|${locale.toLanguageTag()}"
+        val cache = dateFormatCache.get() ?: mutableMapOf<String, SimpleDateFormat>().also { dateFormatCache.set(it) }
+        return cache.getOrPut(key) { SimpleDateFormat(pattern, locale) }
+    }
+
+    private fun formatDate(date: Date, pattern: String, locale: Locale = Locale.getDefault()): String {
+        return try {
+            getCachedSimpleDateFormat(pattern, locale).format(date)
+        } catch (_: Exception) {
+            SimpleDateFormat(pattern, locale).format(date)
+        }
+    }
+
     data class TemplateContext(
         val existingFile: File? = null,
         val parentFolder: File? = null,
@@ -82,27 +106,26 @@ object FileNameTemplateEngine {
         }
 
         // 1. Evaluate custom datetime patterns: {datetime:PATTERN}
-        val customDateTimeRegex = Regex("""\{datetime:([^}]+)\}""")
-        result = customDateTimeRegex.replace(result) { matchResult ->
+        result = REGEX_CUSTOM_DATETIME.replace(result) { matchResult ->
             val pattern = matchResult.groupValues[1]
             try {
-                SimpleDateFormat(pattern, Locale.getDefault()).format(now)
+                formatDate(now, pattern)
             } catch (_: Exception) {
-                SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.getDefault()).format(now)
+                formatDate(now, "yyyy-MM-dd_HH-mm")
             }
         }
 
         // 2. Standard Date & Time placeholders
         result = result
-            .replace("{date}", SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(now))
-            .replace("{time}", SimpleDateFormat("HH-mm", Locale.getDefault()).format(now))
-            .replace("{datetime}", SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.getDefault()).format(now))
-            .replace("{year}", SimpleDateFormat("yyyy", Locale.getDefault()).format(now))
-            .replace("{month}", SimpleDateFormat("MM", Locale.getDefault()).format(now))
-            .replace("{day}", SimpleDateFormat("dd", Locale.getDefault()).format(now))
-            .replace("{hour}", SimpleDateFormat("HH", Locale.getDefault()).format(now))
-            .replace("{minute}", SimpleDateFormat("mm", Locale.getDefault()).format(now))
-            .replace("{second}", SimpleDateFormat("ss", Locale.getDefault()).format(now))
+            .replace("{date}", formatDate(now, "yyyy-MM-dd"))
+            .replace("{time}", formatDate(now, "HH-mm"))
+            .replace("{datetime}", formatDate(now, "yyyy-MM-dd_HH-mm"))
+            .replace("{year}", formatDate(now, "yyyy"))
+            .replace("{month}", formatDate(now, "MM"))
+            .replace("{day}", formatDate(now, "dd"))
+            .replace("{hour}", formatDate(now, "HH"))
+            .replace("{minute}", formatDate(now, "mm"))
+            .replace("{second}", formatDate(now, "ss"))
 
         // 3. File Info placeholders
         val originalFile = context.existingFile
@@ -127,8 +150,7 @@ object FileNameTemplateEngine {
         val immediateFolder = folderLevels.firstOrNull() ?: "Notes"
         result = result.replace("{folder}", immediateFolder)
 
-        val folderLevelRegex = Regex("""\{folder:(\d+)\}""")
-        result = folderLevelRegex.replace(result) { matchResult ->
+        result = REGEX_FOLDER_LEVEL.replace(result) { matchResult ->
             val level = matchResult.groupValues[1].toIntOrNull() ?: 0
             if (level in folderLevels.indices) {
                 folderLevels[level]
@@ -153,31 +175,28 @@ object FileNameTemplateEngine {
         val createdTime = context.createdTimestamp ?: originalFile?.lastModified() ?: now.time
         val modifiedTime = context.modifiedTimestamp ?: originalFile?.lastModified() ?: now.time
 
-        val createdCustomRegex = Regex("""\{created:([^}]+)\}""")
-        result = createdCustomRegex.replace(result) { matchResult ->
+        result = REGEX_CREATED_CUSTOM.replace(result) { matchResult ->
             val pattern = matchResult.groupValues[1]
             try {
-                SimpleDateFormat(pattern, Locale.getDefault()).format(Date(createdTime))
+                formatDate(Date(createdTime), pattern)
             } catch (_: Exception) {
-                SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(createdTime))
+                formatDate(Date(createdTime), "yyyy-MM-dd")
             }
         }
-        result = result.replace("{created}", SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(createdTime)))
+        result = result.replace("{created}", formatDate(Date(createdTime), "yyyy-MM-dd"))
 
-        val modifiedCustomRegex = Regex("""\{modified:([^}]+)\}""")
-        result = modifiedCustomRegex.replace(result) { matchResult ->
+        result = REGEX_MODIFIED_CUSTOM.replace(result) { matchResult ->
             val pattern = matchResult.groupValues[1]
             try {
-                SimpleDateFormat(pattern, Locale.getDefault()).format(Date(modifiedTime))
+                formatDate(Date(modifiedTime), pattern)
             } catch (_: Exception) {
-                SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(modifiedTime))
+                formatDate(Date(modifiedTime), "yyyy-MM-dd")
             }
         }
-        result = result.replace("{modified}", SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(modifiedTime)))
+        result = result.replace("{modified}", formatDate(Date(modifiedTime), "yyyy-MM-dd"))
 
         // 6. Random Alphanumeric placeholders: {random} and {random:N}
-        val randomCustomRegex = Regex("""\{random:(\d+)\}""")
-        result = randomCustomRegex.replace(result) { matchResult ->
+        result = REGEX_RANDOM_CUSTOM.replace(result) { matchResult ->
             val len = (matchResult.groupValues[1].toIntOrNull() ?: 4).coerceIn(1, 32)
             generateRandomAlphanumeric(len)
         }
@@ -197,8 +216,8 @@ object FileNameTemplateEngine {
      */
     fun sanitizeFileName(input: String, fallback: String = "Note"): String {
         val sanitized = input
-            .replace(Regex("""[/\\:*?"<>|]"""), "_")
-            .replace(Regex("""[\r\n\t]"""), " ")
+            .replace(REGEX_ILLEGAL_CHARS, "_")
+            .replace(REGEX_WHITESPACE, " ")
             .trim()
             .trim('.')
 

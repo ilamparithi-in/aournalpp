@@ -36,17 +36,30 @@ class DocumentRepository(private val context: Context) {
         private val directoryCache = ConcurrentHashMap<String, Pair<List<FolderItem>, List<NoteDocument>>>()
         private val homeNotesCache = ConcurrentHashMap<Int, List<NoteDocument>>()
         private val recentNotesCache = ConcurrentHashMap<Int, List<NoteDocument>>()
+        private val folderMetaCache = ConcurrentHashMap<String, Pair<Long, FolderMetaData>>()
+
         @Volatile private var cachedContinueNote: NoteDocument? = null
         @Volatile private var cachedTotalNotesCount: Int? = null
         @Volatile private var cachedTotalFoldersCount: Int? = null
+        @Volatile private var cachedPinnedNotes: List<String>? = null
+        @Volatile private var cachedPinnedFolders: List<String>? = null
+        @Volatile private var cachedUnpinnedSpecialRoles: Set<String>? = null
+        @Volatile private var cachedOpenedNotesHistory: List<String>? = null
+        @Volatile private var cachedOpenedNotesTimestamps: Map<String, Long>? = null
 
         fun invalidateAllCaches() {
             directoryCache.clear()
             homeNotesCache.clear()
             recentNotesCache.clear()
+            folderMetaCache.clear()
             cachedContinueNote = null
             cachedTotalNotesCount = null
             cachedTotalFoldersCount = null
+            cachedPinnedNotes = null
+            cachedPinnedFolders = null
+            cachedUnpinnedSpecialRoles = null
+            cachedOpenedNotesHistory = null
+            cachedOpenedNotesTimestamps = null
         }
     }
 
@@ -80,6 +93,12 @@ class DocumentRepository(private val context: Context) {
     private val env = LinuxEnvironment(context)
     private val prefs = context.getSharedPreferences("aournal_doc_hub_prefs", Context.MODE_PRIVATE)
 
+    private val rootNotesDirCanonicalPath: String by lazy { canonicalOf(getRootNotesDirectory()) }
+    private val rootNotesDirAbsolutePath: String by lazy { getRootNotesDirectory().absolutePath }
+    private val emergencySavesCanonical: String by lazy { canonicalOf(env.getEmergencySavesDirectory()) }
+    private val importedCanonical: String by lazy { canonicalOf(env.getImportedDirectory()) }
+    private val audioCanonical: String by lazy { canonicalOf(env.getAudioDirectory()) }
+
     fun getLinuxEnvironment(): LinuxEnvironment = env
 
     fun getRootNotesDirectory(): File = env.getNotesDirectory()
@@ -94,34 +113,47 @@ class DocumentRepository(private val context: Context) {
     }
 
     fun isWithinRootDirectory(file: File): Boolean {
+        val target = file.absolutePath
+        val root = rootNotesDirAbsolutePath
+        if (target == root || target.startsWith("$root/") || target.startsWith("$root\\")) return true
         return try {
-            val root = getRootNotesDirectory().canonicalPath
-            val target = file.canonicalPath
-            target == root || target.startsWith("$root/") || target.startsWith("$root\\")
+            val rootCanon = rootNotesDirCanonicalPath
+            val targetCanon = canonicalOf(file)
+            targetCanon == rootCanon || targetCanon.startsWith("$rootCanon/") || targetCanon.startsWith("$rootCanon\\")
         } catch (e: Exception) {
-            val root = getRootNotesDirectory().absolutePath
-            val target = file.absolutePath
-            target == root || target.startsWith("$root/") || target.startsWith("$root\\")
+            false
         }
     }
 
     // Pinned Notes Persistence
     fun getPinnedNotePaths(strictlyWithinRoot: Boolean = true): List<String> {
-        val raw = prefs.getString("pref_pinned_notes_order_json", null) ?: return emptyList()
-        return try {
-            val array = org.json.JSONArray(raw)
-            val list = mutableListOf<String>()
-            for (i in 0 until array.length()) {
-                val p = array.optString(i)
-                if (p.isNotBlank()) {
-                    if (!strictlyWithinRoot || isWithinRootDirectory(File(p))) {
-                        list.add(p)
+        var list = cachedPinnedNotes
+        if (list == null) {
+            val raw = prefs.getString("pref_pinned_notes_order_json", null)
+            list = if (raw != null) {
+                try {
+                    val array = org.json.JSONArray(raw)
+                    val l = mutableListOf<String>()
+                    for (i in 0 until array.length()) {
+                        val p = array.optString(i)
+                        if (p.isNotBlank()) {
+                            l.add(p)
+                        }
                     }
+                    l
+                } catch (e: Exception) {
+                    emptyList()
                 }
+            } else {
+                emptyList()
             }
+            cachedPinnedNotes = list
+        }
+
+        return if (strictlyWithinRoot) {
+            list.filter { isWithinRootDirectory(File(it)) }
+        } else {
             list
-        } catch (e: Exception) {
-            emptyList()
         }
     }
 
@@ -157,6 +189,7 @@ class DocumentRepository(private val context: Context) {
     }
 
     private fun savePinnedNotes(paths: List<String>) {
+        cachedPinnedNotes = paths
         val array = org.json.JSONArray()
         paths.forEach { array.put(it) }
         prefs.edit().putString("pref_pinned_notes_order_json", array.toString()).apply()
@@ -165,36 +198,55 @@ class DocumentRepository(private val context: Context) {
 
     // Pinned Folders Persistence
     fun getPinnedFolderPaths(): List<String> {
-        val raw = prefs.getString("pref_pinned_folders_order_json", null) ?: return emptyList()
-        return try {
-            val array = org.json.JSONArray(raw)
-            val list = mutableListOf<String>()
-            for (i in 0 until array.length()) {
-                val p = array.optString(i)
-                if (p.isNotBlank()) list.add(p)
+        var list = cachedPinnedFolders
+        if (list == null) {
+            val raw = prefs.getString("pref_pinned_folders_order_json", null)
+            list = if (raw != null) {
+                try {
+                    val array = org.json.JSONArray(raw)
+                    val l = mutableListOf<String>()
+                    for (i in 0 until array.length()) {
+                        val p = array.optString(i)
+                        if (p.isNotBlank()) l.add(p)
+                    }
+                    l
+                } catch (e: Exception) {
+                    emptyList()
+                }
+            } else {
+                emptyList()
             }
-            list
-        } catch (e: Exception) {
-            emptyList()
+            cachedPinnedFolders = list
         }
+        return list
     }
 
     fun getUnpinnedSpecialRoles(): Set<String> {
-        val raw = prefs.getString("pref_unpinned_special_roles_json", null) ?: return emptySet()
-        return try {
-            val array = org.json.JSONArray(raw)
-            val set = mutableSetOf<String>()
-            for (i in 0 until array.length()) {
-                val r = array.optString(i)
-                if (r.isNotBlank()) set.add(r.lowercase())
+        var set = cachedUnpinnedSpecialRoles
+        if (set == null) {
+            val raw = prefs.getString("pref_unpinned_special_roles_json", null)
+            set = if (raw != null) {
+                try {
+                    val array = org.json.JSONArray(raw)
+                    val s = mutableSetOf<String>()
+                    for (i in 0 until array.length()) {
+                        val r = array.optString(i)
+                        if (r.isNotBlank()) s.add(r.lowercase())
+                    }
+                    s
+                } catch (e: Exception) {
+                    emptySet()
+                }
+            } else {
+                emptySet()
             }
-            set
-        } catch (e: Exception) {
-            emptySet()
+            cachedUnpinnedSpecialRoles = set
         }
+        return set
     }
 
     private fun saveUnpinnedSpecialRoles(roles: Set<String>) {
+        cachedUnpinnedSpecialRoles = roles
         val array = org.json.JSONArray()
         roles.forEach { array.put(it.lowercase()) }
         prefs.edit().putString("pref_unpinned_special_roles_json", array.toString()).apply()
@@ -253,6 +305,7 @@ class DocumentRepository(private val context: Context) {
     }
 
     private fun savePinnedFolders(paths: List<String>) {
+        cachedPinnedFolders = paths
         val array = org.json.JSONArray()
         paths.forEach { array.put(it) }
         prefs.edit().putString("pref_pinned_folders_order_json", array.toString()).apply()
@@ -262,36 +315,48 @@ class DocumentRepository(private val context: Context) {
     private fun canonicalOf(file: File): String =
         try { file.canonicalPath } catch (e: Exception) { file.absolutePath }
 
+    fun getOpenedNotesTimestamps(): Map<String, Long> {
+        var map = cachedOpenedNotesTimestamps
+        if (map == null) {
+            val raw = prefs.getString("pref_opened_notes_timestamps_json", null)
+            map = if (raw != null) {
+                try {
+                    val obj = org.json.JSONObject(raw)
+                    val m = HashMap<String, Long>()
+                    val keys = obj.keys()
+                    while (keys.hasNext()) {
+                        val k = keys.next()
+                        m[k] = obj.optLong(k)
+                    }
+                    m
+                } catch (e: Exception) {
+                    emptyMap()
+                }
+            } else {
+                emptyMap()
+            }
+            cachedOpenedNotesTimestamps = map
+        }
+        return map
+    }
+
     /** Per-scan cache for the values every file in a scan shares. */
     private inner class ScanCache {
         val pinnedPaths: Set<String> by lazy { getPinnedNotePaths().toSet() }
         val pinnedFolderOrder: List<String> by lazy { getPinnedFolderPaths() }
         val pinnedFolderPaths: Set<String> by lazy { pinnedFolderOrder.toSet() }
         val unpinnedSpecialRoles: Set<String> by lazy { getUnpinnedSpecialRoles() }
+        val openedTimestamps: Map<String, Long> by lazy { getOpenedNotesTimestamps() }
 
-        val openedTimestamps: Map<String, Long> by lazy {
-            val raw = prefs.getString("pref_opened_notes_timestamps_json", null) ?: return@lazy emptyMap()
-            try {
-                val obj = org.json.JSONObject(raw)
-                val map = HashMap<String, Long>()
-                val keys = obj.keys()
-                while (keys.hasNext()) {
-                    val k = keys.next()
-                    map[k] = obj.optLong(k)
-                }
-                map
-            } catch (e: Exception) {
-                emptyMap()
-            }
+        val rootCanonical: String by lazy { rootNotesDirCanonicalPath }
+        val rootAbsolute: String by lazy { rootNotesDirAbsolutePath }
+
+        fun folderMeta(dir: File): FolderMetaData = readFolderMeta(dir)
+
+        fun isRoot(dir: File): Boolean {
+            val path = dir.absolutePath
+            return path == rootAbsolute || canonicalOf(dir) == rootCanonical
         }
-
-        private val rootCanonical: String by lazy { canonicalOf(getRootNotesDirectory()) }
-        private val folderMetas = HashMap<String, FolderMetaData>()
-
-        fun folderMeta(dir: File): FolderMetaData =
-            folderMetas.getOrPut(dir.absolutePath) { readFolderMeta(dir) }
-
-        fun isRoot(dir: File): Boolean = canonicalOf(dir) == rootCanonical
     }
 
 
@@ -351,6 +416,14 @@ class DocumentRepository(private val context: Context) {
         val resultNotes = mutableListOf<NoteDocument>()
         val matchedAutosavePaths = mutableSetOf<String>()
 
+        // Index non-directory files for fast O(1) in-memory autosave matching without disk syscalls
+        val fileMapByName = HashMap<String, File>(allFiles.size)
+        for (f in allFiles) {
+            if (f.isFile) {
+                fileMapByName[f.name] = f
+            }
+        }
+
         // 2a. Gather normal, non-hidden openable files (.xopp, .xoj, .pdf)
         val mainFiles = allFiles.filter { file ->
             file.isFile &&
@@ -370,7 +443,7 @@ class DocumentRepository(private val context: Context) {
                 continue
             }
 
-            val autosaveCandidate = findMatchingAutosave(targetDir, file)
+            val autosaveCandidate = findMatchingAutosave(fileMapByName, file)
             val autosaveInfo = autosaveCandidate?.let { autoFile ->
                 matchedAutosavePaths.add(autoFile.absolutePath)
                 AutosaveInfo(
@@ -482,7 +555,26 @@ class DocumentRepository(private val context: Context) {
                lower.contains(".autosave.xopp") || lower.contains(".autosave.xoj")
     }
 
-    private fun findMatchingAutosave(parentDir: File, mainFile: File): File? {
+    private fun findMatchingAutosave(fileMap: Map<String, File>, mainFile: File): File? {
+        val base = mainFile.nameWithoutExtension
+        val ext = mainFile.extension
+        val candidateNames = listOf(
+            ".${mainFile.name}.autosave.$ext",
+            ".$base.autosave.$ext",
+            ".${mainFile.name}~",
+            "${mainFile.name}~",
+            ".$base.$ext~"
+        )
+        for (name in candidateNames) {
+            val candidate = fileMap[name]
+            if (candidate != null && candidate.isFile && candidate.length() > 0) {
+                return candidate
+            }
+        }
+        return null
+    }
+
+    fun findMatchingAutosave(parentDir: File, mainFile: File): File? {
         val base = mainFile.nameWithoutExtension
         val ext = mainFile.extension
         val candidates = listOf(
@@ -498,7 +590,8 @@ class DocumentRepository(private val context: Context) {
 
     fun isEmergencySavesFolder(folderDir: File): Boolean {
         return folderDir.name.equals("Emergency Saves", ignoreCase = true) ||
-               try { folderDir.canonicalPath == env.getEmergencySavesDirectory().canonicalPath } catch (e: Exception) { false }
+               folderDir.absolutePath == env.getEmergencySavesDirectory().absolutePath ||
+               try { canonicalOf(folderDir) == emergencySavesCanonical } catch (e: Exception) { false }
     }
 
     // Folder Management
@@ -615,8 +708,14 @@ class DocumentRepository(private val context: Context) {
 
     private fun readFolderMeta(folderDir: File): FolderMetaData {
         val metaFile = File(folderDir, FOLDER_META_FILE)
-        val dirName = folderDir.name
+        val metaLastModified = if (metaFile.exists()) metaFile.lastModified() else -1L
+        val cacheKey = folderDir.absolutePath
+        val cached = folderMetaCache[cacheKey]
+        if (cached != null && cached.first == metaLastModified) {
+            return cached.second
+        }
 
+        val dirName = folderDir.name
         var detectedRole: String? = null
         var defaultColor: String? = null
         var defaultIcon: String? = null
@@ -628,28 +727,32 @@ class DocumentRepository(private val context: Context) {
                 defaultIcon = EMERGENCY_SAVES_DEFAULT_ICON
             }
             dirName.equals("Imported", ignoreCase = true) ||
-                try { folderDir.canonicalPath == env.getImportedDirectory().canonicalPath } catch (_: Exception) { false } -> {
+                folderDir.absolutePath == env.getImportedDirectory().absolutePath ||
+                (try { canonicalOf(folderDir) == importedCanonical } catch (_: Exception) { false }) -> {
                 detectedRole = "import"
                 defaultIcon = "import"
             }
             dirName.equals("Audio", ignoreCase = true) ||
-                try { folderDir.canonicalPath == env.getAudioDirectory().canonicalPath } catch (_: Exception) { false } -> {
+                folderDir.absolutePath == env.getAudioDirectory().absolutePath ||
+                (try { canonicalOf(folderDir) == audioCanonical } catch (_: Exception) { false }) -> {
                 detectedRole = "audio"
                 defaultIcon = "audio"
             }
         }
 
         if (!metaFile.exists()) {
-            return FolderMetaData(
+            val meta = FolderMetaData(
                 colorHex = defaultColor,
                 iconEmoji = null,
                 iconType = defaultIcon,
                 role = detectedRole,
                 excludeFromRecents = false
             )
+            folderMetaCache[cacheKey] = Pair(metaLastModified, meta)
+            return meta
         }
 
-        return try {
+        val resultMeta = try {
             val json = JSONObject(metaFile.readText())
             val role = if (json.has("role")) {
                 json.optString("role").takeIf { it.isNotBlank() } ?: detectedRole
@@ -689,6 +792,9 @@ class DocumentRepository(private val context: Context) {
                 excludeFromRecents = false
             )
         }
+
+        folderMetaCache[cacheKey] = Pair(metaLastModified, resultMeta)
+        return resultMeta
     }
 
     private fun writeFolderMeta(
@@ -738,6 +844,7 @@ class DocumentRepository(private val context: Context) {
         }
 
         metaFile.writeText(json.toString(2))
+        folderMetaCache.remove(folderDir.absolutePath)
         invalidateAllCaches()
     }
 
@@ -1410,11 +1517,14 @@ class DocumentRepository(private val context: Context) {
     private fun isExcludedFromRecents(file: File, cache: ScanCache? = null): Boolean {
         val path = file.absolutePath
         if (path.contains("staged_imports") || path.contains("/cache/") || path.contains("/.Trash/")) return true
-        val rootCanonical = canonicalOf(getRootNotesDirectory())
+        val rootPath = rootNotesDirAbsolutePath
+        val rootCanonical = rootNotesDirCanonicalPath
         var curr: File? = file.parentFile
         while (curr != null) {
             val meta = cache?.folderMeta(curr) ?: readFolderMeta(curr)
             if (meta.excludeFromRecents) return true
+            val currPath = curr.absolutePath
+            if (currPath == rootPath) break
             if (canonicalOf(curr) == rootCanonical) break
             curr = curr.parentFile
         }
@@ -1490,32 +1600,22 @@ class DocumentRepository(private val context: Context) {
         val file = File(path)
         if (isExcludedFromRecents(file)) return
 
-        val raw = prefs.getString("pref_opened_notes_history_json", null)
-        val list = try {
-            val array = org.json.JSONArray(raw ?: "[]")
-            val l = mutableListOf<String>()
-            for (i in 0 until array.length()) {
-                val p = array.optString(i)
-                if (p.isNotBlank() && p != path && !p.contains("staged_imports") && !p.contains("/cache/")) {
-                    l.add(p)
-                }
-            }
-            l
-        } catch (e: Exception) {
-            mutableListOf<String>()
-        }
-        list.add(0, path) // Most recently opened at the front
-        val trimmed = list.take(50)
+        val currentList = (cachedOpenedNotesHistory ?: getRecentlyOpenedHistoryFromPrefs()).toMutableList()
+        currentList.remove(path)
+        currentList.add(0, path)
+        val trimmed = currentList.take(50)
+        cachedOpenedNotesHistory = trimmed
+
+        val timestampsMap = (cachedOpenedNotesTimestamps ?: getOpenedNotesTimestamps()).toMutableMap()
+        val now = System.currentTimeMillis()
+        timestampsMap[path] = now
+        cachedOpenedNotesTimestamps = timestampsMap
+
         val jsonArray = org.json.JSONArray()
         trimmed.forEach { jsonArray.put(it) }
 
-        val rawTimestamps = prefs.getString("pref_opened_notes_timestamps_json", null)
-        val timestampsObj = try {
-            if (rawTimestamps != null) org.json.JSONObject(rawTimestamps) else org.json.JSONObject()
-        } catch (e: Exception) {
-            org.json.JSONObject()
-        }
-        timestampsObj.put(path, System.currentTimeMillis())
+        val timestampsObj = org.json.JSONObject()
+        timestampsMap.forEach { (k, v) -> timestampsObj.put(k, v) }
 
         prefs.edit()
             .putString("pref_opened_notes_history_json", jsonArray.toString())
@@ -1533,41 +1633,44 @@ class DocumentRepository(private val context: Context) {
         }
     }
 
-    fun removeOpenedNoteHistory(path: String) {
-        if (path.isBlank()) return
-        val raw = prefs.getString("pref_opened_notes_history_json", null) ?: return
-        try {
+    private fun getRecentlyOpenedHistoryFromPrefs(): List<String> {
+        val raw = prefs.getString("pref_opened_notes_history_json", null) ?: return emptyList()
+        return try {
             val array = org.json.JSONArray(raw)
-            val jsonArray = org.json.JSONArray()
+            val l = mutableListOf<String>()
             for (i in 0 until array.length()) {
                 val p = array.optString(i)
-                if (p.isNotBlank() && p != path) {
-                    jsonArray.put(p)
+                if (p.isNotBlank() && !p.contains("staged_imports") && !p.contains("/cache/")) {
+                    l.add(p)
                 }
             }
-            prefs.edit().putString("pref_opened_notes_history_json", jsonArray.toString()).apply()
+            l
         } catch (e: Exception) {
-            // ignore
+            emptyList()
+        }
+    }
+
+    fun removeOpenedNoteHistory(path: String) {
+        if (path.isBlank()) return
+        val currentList = (cachedOpenedNotesHistory ?: getRecentlyOpenedHistoryFromPrefs()).toMutableList()
+        if (currentList.remove(path)) {
+            cachedOpenedNotesHistory = currentList
+            val jsonArray = org.json.JSONArray()
+            currentList.forEach { jsonArray.put(it) }
+            prefs.edit().putString("pref_opened_notes_history_json", jsonArray.toString()).apply()
         }
     }
 
     fun updateOpenedNotePath(oldPath: String, newPath: String) {
         if (oldPath.isBlank() || newPath.isBlank()) return
-        val raw = prefs.getString("pref_opened_notes_history_json", null) ?: return
-        try {
-            val array = org.json.JSONArray(raw)
+        val currentList = (cachedOpenedNotesHistory ?: getRecentlyOpenedHistoryFromPrefs()).toMutableList()
+        val index = currentList.indexOf(oldPath)
+        if (index != -1) {
+            currentList[index] = newPath
+            cachedOpenedNotesHistory = currentList
             val jsonArray = org.json.JSONArray()
-            for (i in 0 until array.length()) {
-                val p = array.optString(i)
-                if (p == oldPath) {
-                    jsonArray.put(newPath)
-                } else if (p.isNotBlank()) {
-                    jsonArray.put(p)
-                }
-            }
+            currentList.forEach { jsonArray.put(it) }
             prefs.edit().putString("pref_opened_notes_history_json", jsonArray.toString()).apply()
-        } catch (e: Exception) {
-            // ignore
         }
         if (prefs.getString("pref_last_opened_note_path", null) == oldPath) {
             prefs.edit().putString("pref_last_opened_note_path", newPath).apply()
@@ -1575,23 +1678,21 @@ class DocumentRepository(private val context: Context) {
     }
 
     fun getRecentlyOpenedPaths(strictlyWithinRoot: Boolean = true): List<String> {
-        val raw = prefs.getString("pref_opened_notes_history_json", null)
+        var baseList = cachedOpenedNotesHistory
+        if (baseList == null) {
+            baseList = getRecentlyOpenedHistoryFromPrefs()
+            cachedOpenedNotesHistory = baseList
+        }
+
         val list = mutableListOf<String>()
-        if (!raw.isNullOrBlank()) {
-            try {
-                val array = org.json.JSONArray(raw)
-                for (i in 0 until array.length()) {
-                    val p = array.optString(i)
-                    if (p.isNotBlank() && !list.contains(p) && !p.contains("staged_imports") && !p.contains("/cache/")) {
-                        if (!strictlyWithinRoot || isWithinRootDirectory(File(p))) {
-                            list.add(p)
-                        }
-                    }
+        for (p in baseList) {
+            if (!list.contains(p) && !p.contains("staged_imports") && !p.contains("/cache/")) {
+                if (!strictlyWithinRoot || isWithinRootDirectory(File(p))) {
+                    list.add(p)
                 }
-            } catch (e: Exception) {
-                // ignore
             }
         }
+
         val mainPrefsLastOpened = try {
             context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
                 .getString("pref_last_opened_note_path", null)
@@ -1687,10 +1788,25 @@ class DocumentRepository(private val context: Context) {
         res
     }
 
-    suspend fun getHomeNotes(limit: Int = 16): List<NoteDocument> = withContext(Dispatchers.IO) {
+    data class HomeDataResult(
+        val notes: List<NoteDocument>,
+        val totalNotesCount: Int,
+        val totalFoldersCount: Int,
+        val continueNote: NoteDocument?
+    )
+
+    suspend fun getHomeData(limit: Int = 16): HomeDataResult = withContext(Dispatchers.IO) {
         val cache = ScanCache()
-        val pinnedDocs = mutableListOf<NoteDocument>()
+        val rootDir = getRootNotesDirectory()
+        val allOpenableFiles = collectOpenableFiles(rootDir, cache, skipRecentsExcluded = false)
+        val totalNotes = allOpenableFiles.size
+        cachedTotalNotesCount = totalNotes
+
+        val rootFolders = scanDirectory(rootDir).first.size
+        cachedTotalFoldersCount = rootFolders
+
         val seenPaths = mutableSetOf<String>()
+        val pinnedDocs = mutableListOf<NoteDocument>()
 
         for (path in getPinnedNotePaths()) {
             val file = File(path)
@@ -1703,10 +1819,29 @@ class DocumentRepository(private val context: Context) {
             }
         }
 
+        // 1. Find continueNote from recently opened or latest modified
+        var continueDoc: NoteDocument? = null
+        for (path in getRecentlyOpenedPaths()) {
+            val file = File(path)
+            if (file.exists() && file.isFile && isOpenableFile(file) && !isExcludedFromRecents(file, cache)) {
+                continueDoc = buildNoteDocument(file, cache)
+                if (continueDoc != null) break
+            }
+        }
+        if (continueDoc == null) {
+            val latestFile = allOpenableFiles
+                .filter { !isExcludedFromRecents(it, cache) }
+                .maxByOrNull { it.lastModified() }
+            if (latestFile != null) {
+                continueDoc = buildNoteDocument(latestFile, cache)
+            }
+        }
+        cachedContinueNote = continueDoc
+
+        // 2. Build home notes
         val remainingLimit = limit - pinnedDocs.size
         val dynamicDocs = mutableListOf<NoteDocument>()
         if (remainingLimit > 0) {
-            // Add recently opened first
             for (path in getRecentlyOpenedPaths()) {
                 val file = File(path)
                 if (file.exists() && file.isFile && isOpenableFile(file) && !isExcludedFromRecents(file, cache)) {
@@ -1722,9 +1857,9 @@ class DocumentRepository(private val context: Context) {
                 if (dynamicDocs.size >= remainingLimit) break
             }
 
-            // Fill remaining with latest modified
             if (dynamicDocs.size < remainingLimit) {
-                val remainingFiles = collectOpenableFiles(getRootNotesDirectory(), cache, skipRecentsExcluded = true)
+                val remainingFiles = allOpenableFiles
+                    .filter { !isExcludedFromRecents(it, cache) }
                     .sortedByDescending { it.lastModified() }
                 for (file in remainingFiles) {
                     val canonical = canonicalOf(file)
@@ -1740,9 +1875,19 @@ class DocumentRepository(private val context: Context) {
             }
         }
 
-        val res = (pinnedDocs + dynamicDocs).take(limit)
-        homeNotesCache[limit] = res
-        res
+        val homeNotes = (pinnedDocs + dynamicDocs).take(limit)
+        homeNotesCache[limit] = homeNotes
+
+        HomeDataResult(
+            notes = homeNotes,
+            totalNotesCount = totalNotes,
+            totalFoldersCount = rootFolders,
+            continueNote = continueDoc
+        )
+    }
+
+    suspend fun getHomeNotes(limit: Int = 16): List<NoteDocument> = withContext(Dispatchers.IO) {
+        getHomeData(limit).notes
     }
 }
 

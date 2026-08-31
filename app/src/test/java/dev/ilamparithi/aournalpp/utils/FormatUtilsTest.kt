@@ -76,4 +76,24 @@ class FormatUtilsTest {
         assertTrue("US time should contain 2:30 or PM", usTime.contains("2:30") || usTime.contains("PM"))
         assertTrue("German time should contain 14:30", deTime.contains("14:30") || deTime.contains("14"))
     }
+
+    @Test
+    fun `test concurrent multi-threaded formatting safety`() {
+        val threads = (1..8).map {
+            Thread {
+                for (i in 0 until 100) {
+                    val size = FormatUtils.formatFileSize(1024L * 1024L * 5, Locale.US)
+                    assertEquals("5 MB", size)
+
+                    val pct = FormatUtils.formatPercentage(50.5, 1, Locale.US)
+                    assertEquals("50.5%", pct)
+
+                    val num = FormatUtils.formatNumber(123.45, 2, 2, Locale.US)
+                    assertEquals("123.45", num)
+                }
+            }
+        }
+        threads.forEach { it.start() }
+        threads.forEach { it.join() }
+    }
 }

@@ -232,23 +232,13 @@ fun HomeScreen(
     val isScrolled by remember { derivedStateOf { scrollState.value > 100 } }
 
     suspend fun loadHomeDataNow() {
-        data class HomeDataPayload(
-            val notes: List<NoteDocument>,
-            val count: Int,
-            val folders: Int,
-            val lastNote: NoteDocument?
-        )
         val payload = withContext(Dispatchers.IO) {
-            val notes = repository.getHomeNotes(16)
-            val count = repository.countAllNotes()
-            val folders = repository.scanDirectory(repository.getRootNotesDirectory()).first.size
-            val lastNote = repository.getLastOpenedOrModifiedNote()
-            HomeDataPayload(notes, count, folders, lastNote)
+            repository.getHomeData(16)
         }
         recentNotes = payload.notes
-        totalNotesCount = payload.count
-        totalFoldersCount = payload.folders
-        continueNote = payload.lastNote
+        totalNotesCount = payload.totalNotesCount
+        totalFoldersCount = payload.totalFoldersCount
+        continueNote = payload.continueNote
 
         // Prefetch thumbnails off the main thread
         ThumbnailManager.prefetchThumbnails(context, payload.notes, pdfExportManager, scope)

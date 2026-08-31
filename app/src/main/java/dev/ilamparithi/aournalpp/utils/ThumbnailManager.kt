@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.pdf.PdfRenderer
+import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.util.Log
 import android.util.LruCache
@@ -22,6 +23,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * High-performance thumbnail manager for Aournal++.
@@ -33,7 +35,7 @@ import java.util.concurrent.ConcurrentHashMap
  * - In-flight request deduplication so multiple UI components requesting the same note thumbnail
  *   share a single background render task.
  * - Bounded parallel coroutine rendering (4 concurrent workers) avoiding main-thread microstutters.
- * - Multi-tier memory (LruCache) and disk caching with automatic size management.
+ * - Multi-tier memory (LruCache) and WebP disk caching with non-blocking asynchronous size management.
  * - Background prefetching support.
  */
 object ThumbnailManager {
@@ -55,6 +57,9 @@ object ThumbnailManager {
     /** Thumbnails resolved on disk this session. */
     private val resolved = ConcurrentHashMap<String, File>()
 
+    /** Counter for debouncing asynchronous disk cache trimming. */
+    private val writesSinceLastTrim = AtomicInteger(0)
+
     /**
      * Decoded memory cache bounded to an eighth of the runtime heap.
      */
@@ -65,22 +70,38 @@ object ThumbnailManager {
             (value.width * value.height * 4) / 1024
     }
 
-    internal fun cacheKeyFor(noteFile: File): String {
-        val canonical = try { noteFile.canonicalPath } catch (_: Exception) { noteFile.absolutePath }
-        val pathHash = try {
-            val md = java.security.MessageDigest.getInstance("SHA-256")
-            val digest = md.digest(canonical.toByteArray(Charsets.UTF_8))
-            digest.take(8).joinToString("") { "%02x".format(it) }
-        } catch (_: Exception) {
-            canonical.hashCode().toUInt().toString(16)
+    /** Fast in-memory cache for path hashes to avoid repeated SHA calculations. */
+    private val pathHashCache = ConcurrentHashMap<String, String>()
+
+    @Suppress("DEPRECATION")
+    private val webpCompressFormat: Bitmap.CompressFormat =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Bitmap.CompressFormat.WEBP_LOSSY
+        } else {
+            Bitmap.CompressFormat.WEBP
+        }
+
+    internal fun cacheKeyFor(noteFile: File, lastModifiedMs: Long = 0L): String {
+        val path = noteFile.path
+        val pathHash = pathHashCache.getOrPut(path) {
+            try {
+                val md = java.security.MessageDigest.getInstance("SHA-256")
+                val digest = md.digest(path.toByteArray(Charsets.UTF_8))
+                digest.take(8).joinToString("") { "%02x".format(it) }
+            } catch (_: Exception) {
+                path.hashCode().toUInt().toString(16)
+            }
         }
         val cleanName = noteFile.name.replace(Regex("[^a-zA-Z0-9._-]"), "_").take(32)
-        return "thumb_${cleanName}_${pathHash}_${noteFile.lastModified()}.png"
+        val modTime = if (lastModifiedMs > 0L) lastModifiedMs else try { noteFile.lastModified() } catch (_: Exception) { 0L }
+        return "thumb_${cleanName}_${pathHash}_${modTime}.webp"
     }
 
-    fun getCachedThumbnailFile(noteFile: File): File? = resolved[cacheKeyFor(noteFile)]
+    fun getCachedThumbnailFile(noteFile: File, lastModifiedMs: Long = 0L): File? =
+        resolved[cacheKeyFor(noteFile, lastModifiedMs)]
 
-    fun getCachedThumbnail(noteFile: File): ImageBitmap? = decoded[cacheKeyFor(noteFile)]
+    fun getCachedThumbnail(noteFile: File, lastModifiedMs: Long = 0L): ImageBitmap? =
+        decoded[cacheKeyFor(noteFile, lastModifiedMs)]
 
     /**
      * Resolves the thumbnail and decodes it into memory.
@@ -89,12 +110,14 @@ object ThumbnailManager {
     suspend fun getOrCreateThumbnailBitmap(
         context: Context,
         noteFile: File,
-        pdfExportManager: PdfExportManager
+        pdfExportManager: PdfExportManager,
+        lastModifiedMs: Long = 0L
     ): ImageBitmap? = withContext(renderDispatcher) {
-        if (!noteFile.exists() || noteFile.length() == 0L) return@withContext null
-
-        val cacheKey = cacheKeyFor(noteFile)
+        val modTime = if (lastModifiedMs > 0L) lastModifiedMs else try { noteFile.lastModified() } catch (_: Exception) { 0L }
+        val cacheKey = cacheKeyFor(noteFile, modTime)
         decoded[cacheKey]?.let { return@withContext it }
+
+        if (!noteFile.exists() || noteFile.length() == 0L) return@withContext null
 
         // Deduplicate in-flight render requests
         val inFlight = inFlightJobs[cacheKey]
@@ -121,16 +144,16 @@ object ThumbnailManager {
                 // 2. Render thumbnail
                 val renderedBitmap = renderThumbnailBitmap(context, noteFile, pdfExportManager)
                 if (renderedBitmap != null) {
-                    // Save to disk cache asynchronously
+                    // Save to disk cache asynchronously without blocking reader threads
                     val lock = fileLocks.getOrPut(cacheKey) { Mutex() }
                     lock.withLock {
                         if (!cachedFile.exists() || cachedFile.length() == 0L) {
                             try {
                                 FileOutputStream(cachedFile).use { out ->
-                                    renderedBitmap.compress(Bitmap.CompressFormat.PNG, 95, out)
+                                    renderedBitmap.compress(webpCompressFormat, 85, out)
                                 }
                                 resolved[cacheKey] = cachedFile
-                                trimCache(thumbDir)
+                                scheduleAsyncTrim(thumbDir)
                             } catch (e: Exception) {
                                 Log.w(TAG, "Failed to save thumbnail to disk for ${noteFile.name}", e)
                             }
@@ -158,11 +181,11 @@ object ThumbnailManager {
     suspend fun getOrCreateThumbnail(
         context: Context,
         noteFile: File,
-        pdfExportManager: PdfExportManager
+        pdfExportManager: PdfExportManager,
+        lastModifiedMs: Long = 0L
     ): File? = withContext(renderDispatcher) {
-        if (!noteFile.exists() || noteFile.length() == 0L) return@withContext null
-
-        val cacheKey = cacheKeyFor(noteFile)
+        val modTime = if (lastModifiedMs > 0L) lastModifiedMs else try { noteFile.lastModified() } catch (_: Exception) { 0L }
+        val cacheKey = cacheKeyFor(noteFile, modTime)
         val thumbDir = File(context.cacheDir, "thumbnails").apply { if (!exists()) mkdirs() }
         val cachedFile = File(thumbDir, cacheKey)
 
@@ -171,8 +194,10 @@ object ThumbnailManager {
             return@withContext cachedFile
         }
 
+        if (!noteFile.exists() || noteFile.length() == 0L) return@withContext null
+
         // Generate bitmap and save
-        val bitmap = getOrCreateThumbnailBitmap(context, noteFile, pdfExportManager)
+        val bitmap = getOrCreateThumbnailBitmap(context, noteFile, pdfExportManager, modTime)
         if (bitmap != null && cachedFile.exists() && cachedFile.length() > 0) {
             resolved[cacheKey] = cachedFile
             return@withContext cachedFile
@@ -276,12 +301,21 @@ object ThumbnailManager {
         if (notes.isEmpty()) return
         scope.launch(renderDispatcher) {
             for (note in notes) {
-                val cacheKey = cacheKeyFor(note.file)
+                val cacheKey = cacheKeyFor(note.file, note.lastModifiedMs)
                 if (decoded[cacheKey] == null) {
                     try {
-                        getOrCreateThumbnailBitmap(context, note.file, pdfExportManager)
+                        getOrCreateThumbnailBitmap(context, note.file, pdfExportManager, note.lastModifiedMs)
                     } catch (_: Exception) {}
                 }
+            }
+        }
+    }
+
+    private fun scheduleAsyncTrim(thumbDir: File) {
+        if (writesSinceLastTrim.incrementAndGet() >= 25) {
+            writesSinceLastTrim.set(0)
+            CoroutineScope(Dispatchers.IO).launch {
+                trimCache(thumbDir)
             }
         }
     }
@@ -306,3 +340,4 @@ object ThumbnailManager {
         }
     }
 }
+
