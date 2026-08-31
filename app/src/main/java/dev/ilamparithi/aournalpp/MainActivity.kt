@@ -48,6 +48,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
@@ -396,8 +397,61 @@ fun MainResponsiveAppShell() {
         }
     }
 
+    val isCanvasSessionActive by dev.ilamparithi.aournalpp.runtime.ActiveSessionTracker.activeSessionFlow(context)
+        .collectAsStateWithLifecycle(initialValue = null)
+
+    var isClosingSession by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(isClosingSession) {
+        if (isClosingSession) {
+            val activity = context as? android.app.Activity
+            while (isClosingSession) {
+                if (!dev.ilamparithi.aournalpp.runtime.ActiveSessionTracker.isSessionActive(context)) {
+                    isClosingSession = false
+                    activity?.finishAffinity() ?: activity?.finish()
+                    break
+                }
+                kotlinx.coroutines.delay(50)
+            }
+        }
+    }
+
+    androidx.compose.runtime.DisposableEffect(isClosingSession) {
+        if (!isClosingSession) return@DisposableEffect onDispose {}
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: android.content.Context?, intent: android.content.Intent?) {
+                if (intent?.action == "dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED") {
+                    isClosingSession = false
+                    val activity = context as? android.app.Activity
+                    activity?.finishAffinity() ?: activity?.finish()
+                }
+            }
+        }
+        val filter = android.content.IntentFilter("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED")
+        androidx.core.content.ContextCompat.registerReceiver(
+            context,
+            receiver,
+            filter,
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        onDispose {
+            try {
+                context.unregisterReceiver(receiver)
+            } catch (_: Exception) {}
+        }
+    }
+
     BackHandler(enabled = selectedTab != AppTab.HOME.id) {
         selectedTab = AppTab.HOME.id
+    }
+
+    BackHandler(enabled = selectedTab == AppTab.HOME.id && isCanvasSessionActive?.isRunning == true && !isClosingSession) {
+        isClosingSession = true
+        val broadcastIntent = Intent(CanvasCommandReceiver.ACTION_REQUEST_BACKGROUND_CLOSE).apply {
+            setPackage(context.packageName)
+        }
+        context.sendBroadcast(broadcastIntent)
+        CanvasActivity.handleBackgroundCloseRequest()
     }
 
     @Composable
@@ -568,5 +622,15 @@ fun MainResponsiveAppShell() {
                 }
             }
         }
+    }
+
+    androidx.compose.animation.AnimatedVisibility(
+        visible = isClosingSession,
+        enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(300)),
+        exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(300))
+    ) {
+        dev.ilamparithi.aournalpp.ui.SessionClosingScreen(
+            documentTitle = isCanvasSessionActive?.documentTitle
+        )
     }
 }

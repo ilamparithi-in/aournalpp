@@ -1,6 +1,7 @@
 package dev.ilamparithi.aournalpp
 
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.WindowManager
@@ -64,6 +65,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.ContentPaste
@@ -200,6 +202,14 @@ class CanvasActivity : ComponentActivity() {
         const val EXTRA_NOTE_PATH = "dev.ilamparithi.aournalpp.extra.NOTE_PATH"
         const val EXTRA_OPEN_PREFERENCES = "dev.ilamparithi.aournalpp.extra.OPEN_PREFERENCES"
         const val EXTRA_OPEN_PREFS_ALIAS = "EXTRA_OPEN_PREFERENCES"
+        const val EXTRA_TRIGGER_APP_EXIT = "dev.ilamparithi.aournalpp.extra.TRIGGER_APP_EXIT"
+
+        @Volatile
+        private var instance: CanvasActivity? = null
+
+        fun handleBackgroundCloseRequest() {
+            instance?.requestBackgroundClose()
+        }
     }
 
     private lateinit var env: LinuxEnvironment
@@ -236,6 +246,7 @@ class CanvasActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        instance = this
         enableEdgeToEdge()
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -316,10 +327,15 @@ class CanvasActivity : ComponentActivity() {
             scope = lifecycleScope
         )
 
-        // Automatically finish activity when Xournal++ terminates
+        // Automatically finish session and return to MainActivity when Xournal++ terminates
         sessionManager.setOnProcessExitListener {
             runOnUiThread {
                 if (!isFinishing) {
+                    Log.i("CanvasActivity", "X11 / Xournal++ session terminated. isAppExitInProgress=$isAppExitInProgress")
+                    sessionManager.stopSession()
+                    if (!isAppExitInProgress) {
+                        navigateBackToHome()
+                    }
                     finish()
                 }
             }
@@ -342,6 +358,10 @@ class CanvasActivity : ComponentActivity() {
             targetPath != null -> File(targetPath).name
             openPreferences -> "Preferences"
             else -> "New Note"
+        }
+
+        if (intent.getBooleanExtra(EXTRA_TRIGGER_APP_EXIT, false)) {
+            handleExitRequest()
         }
 
         setContent {
@@ -432,6 +452,9 @@ class CanvasActivity : ComponentActivity() {
                 }
                 val showBack = remember {
                     x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_BACK, true)
+                }
+                val showClose = remember {
+                    x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CLOSE, true)
                 }
                 val showKeyboard = remember {
                     x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD, true)
@@ -586,6 +609,7 @@ class CanvasActivity : ComponentActivity() {
                             },
                             showTitle = showTitle,
                             showBack = showBack,
+                            showClose = showClose,
                             showKeyboard = showKeyboard,
                             showDragHandle = showDragHandle,
                             showCut = showCut,
@@ -595,6 +619,7 @@ class CanvasActivity : ComponentActivity() {
                             onOpenImageSelector = { showImageSourceDialog = true },
                             stylusHoverExpands = stylusHoverExpands,
                             onSmartBackPress = { handleSmartBackPress() },
+                            onCloseWindow = { handleCloseWindow() },
                             onToggleKeyboard = {
                                 activeLorieView?.let { view ->
                                     val insetsCtrl = WindowCompat.getInsetsController(window, window.decorView)
@@ -851,6 +876,53 @@ class CanvasActivity : ComponentActivity() {
         }
     }
 
+    private fun navigateBackToHome() {
+        val homeIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+        }
+        startActivity(homeIntent)
+    }
+
+    private var isAppExitInProgress = false
+
+    private fun handleExitRequest() {
+        requestBackgroundClose()
+    }
+
+    fun requestBackgroundClose() {
+        isAppExitInProgress = true
+        Log.i("CanvasActivity", "Executing focus-aware sequential close for app exit...")
+        sessionManager.initiateFocusAwareSequentialClose(
+            onAllClosed = {
+                runOnUiThread {
+                    Log.i("CanvasActivity", "All Xournal++ windows closed. Finishing CanvasActivity cleanly.")
+                    sessionManager.stopSession()
+                    try {
+                        sendBroadcast(Intent("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED").setPackage(packageName))
+                    } catch (_: Exception) {}
+                    finish()
+                }
+            },
+            onAborted = {
+                runOnUiThread {
+                    isAppExitInProgress = false
+                    Log.i("CanvasActivity", "Sequential exit aborted by user.")
+                    Toast.makeText(this@CanvasActivity, "Exit aborted", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onPromptBlocking = {
+                runOnUiThread {
+                    Log.i("CanvasActivity", "Prompt blocking exit detected! Bringing CanvasActivity to foreground...")
+                    val bringToFrontIntent = Intent(this@CanvasActivity, CanvasActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                    }
+                    startActivity(bringToFrontIntent)
+                    Toast.makeText(this@CanvasActivity, "Save or discard changes to exit", Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
+    }
+
     private fun handleSmartBackPress() {
         // If force close dialog is already active, ignore back press to avoid accidental dismissal
         if (showEmergencyForceCloseDialogState.value) {
@@ -871,34 +943,42 @@ class CanvasActivity : ComponentActivity() {
         }
 
         lifecycleScope.launch {
-            // 1. Direct hardware-level X11 key injection
-            injectCtrlQDirect()
-
-            // 2. Multi-strategy background X11 Ctrl+Q close
-            sessionManager.requestCloseSession()
-
-            // 3. If Xournal++ remains open (e.g. Save prompt or modal dialog waiting for user interaction)
-            kotlinx.coroutines.delay(1000)
-            if (!isFinishing && supervisor.isXournalRunning() && !showEmergencyForceCloseDialogState.value) {
-                Toast.makeText(
-                    this@CanvasActivity,
-                    "Please close any open dialogs or prompts in Xournal++ to exit",
-                    Toast.LENGTH_SHORT
-                ).show()
+            if (sessionManager.isModalOrDialogOpen()) {
+                sessionManager.dismissTopDialogOrModal()
+            } else {
+                navigateBackToHome()
             }
         }
     }
 
 
 
+    private fun handleCloseWindow() {
+        lifecycleScope.launch {
+            if (sessionManager.isModalOrDialogOpen()) {
+                sessionManager.dismissTopDialogOrModal()
+                Toast.makeText(this@CanvasActivity, "Close the open prompt to exit", Toast.LENGTH_SHORT).show()
+            } else {
+                injectCtrlQDirect()
+                delay(350)
+                if (sessionManager.isModalOrDialogOpen()) {
+                    Toast.makeText(this@CanvasActivity, "Save or discard changes to exit", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
     private fun injectKeyboardShortcut(keyCode: Int, shortcutStr: String) {
+        sessionManager.injectShortcut(shortcutStr)
         activeLorieView?.let { view ->
             view.requestFocus()
             view.post {
                 view.sendKeyEvent(0, KeyEvent.KEYCODE_CTRL_LEFT, true)
-                view.sendKeyEvent(0, keyCode, true)
-                view.sendKeyEvent(0, keyCode, false)
-                view.sendKeyEvent(0, KeyEvent.KEYCODE_CTRL_LEFT, false)
+                view.postDelayed({
+                    view.sendKeyEvent(0, keyCode, true)
+                    view.sendKeyEvent(0, keyCode, false)
+                    view.sendKeyEvent(0, KeyEvent.KEYCODE_CTRL_LEFT, false)
+                }, 30)
             }
         }
     }
@@ -1123,11 +1203,33 @@ class CanvasActivity : ComponentActivity() {
         return super.dispatchKeyEvent(event)
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+
+        val triggerExit = intent.getBooleanExtra(EXTRA_TRIGGER_APP_EXIT, false)
+        if (triggerExit) {
+            handleExitRequest()
+            return
+        }
+
+        val targetPath = intent.getStringExtra(EXTRA_NOTE_PATH)
+        if (!targetPath.isNullOrBlank()) {
+            val prefs = getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+            prefs.edit().putString("pref_last_opened_note_path", targetPath).apply()
+            DocumentRepository(this).recordNoteOpened(targetPath)
+            sessionManager.openNoteInNewWindow(targetPath)
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        if (instance == this) {
+            instance = null
+        }
         if (isFinishing) {
             sessionManager.stopSession()
-            // Terminate isolated :canvas process cleanly so reopening starts fresh
+            // Terminate isolated :canvas process so the next launch initializes a fresh native X11 instance
             android.os.Process.killProcess(android.os.Process.myPid())
         }
     }
@@ -1157,6 +1259,7 @@ private fun FloatingToolbarOverlay(
     onStylusClickModeChange: (Int) -> Unit,
     showTitle: Boolean,
     showBack: Boolean,
+    showClose: Boolean,
     showKeyboard: Boolean,
     showDragHandle: Boolean,
     showCut: Boolean,
@@ -1166,6 +1269,7 @@ private fun FloatingToolbarOverlay(
     onOpenImageSelector: () -> Unit,
     stylusHoverExpands: Boolean,
     onSmartBackPress: () -> Unit,
+    onCloseWindow: () -> Unit,
     onToggleKeyboard: () -> Unit,
     onInjectShortcut: (Int, String) -> Unit,
     isKeyboardOpen: Boolean
@@ -1306,10 +1410,40 @@ private fun FloatingToolbarOverlay(
                                 ) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = "Exit Note",
+                                        contentDescription = "Return to Home",
                                         modifier = Modifier.size(20.dp),
                                         tint = MaterialTheme.colorScheme.onSurface
                                     )
+                                }
+                            }
+
+                            if (showClose) {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.85f),
+                                    modifier = Modifier
+                                        .padding(horizontal = 2.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            interactionSignal.tryEmit(Unit)
+                                            try { haptics.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                                            onCloseWindow()
+                                        }
+                                ) {
+                                    Box(
+                                        modifier = Modifier.size(32.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Close Note (Ctrl+Q)",
+                                            modifier = Modifier.size(18.dp),
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
+                                    }
                                 }
                             }
 

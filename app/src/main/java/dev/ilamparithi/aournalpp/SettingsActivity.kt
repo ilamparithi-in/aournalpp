@@ -1521,6 +1521,9 @@ fun ToolbarSettingsScreen(
     var showBack by remember {
         mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_BACK, true))
     }
+    var showClose by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CLOSE, true))
+    }
     var showKeyboard by remember {
         mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD, true))
     }
@@ -1941,6 +1944,37 @@ fun ToolbarSettingsScreen(
                             showBack = it
                             x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_SHOW_BACK, it).apply()
                             X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_SHOW_BACK)
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsSwitchListItem(
+                        headline = "Close Button (Ctrl+Q)",
+                        supporting = "Displays a red Material 3 close button on the floating toolbar to trigger Xournal++ quit / save prompt.",
+                        checked = showClose,
+                        leadingContent = {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .alpha(if (showClose) 1f else 0.4f)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        },
+                        onCheckedChange = {
+                            showClose = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CLOSE, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_SHOW_CLOSE)
                         }
                     )
 

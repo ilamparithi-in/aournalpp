@@ -1047,7 +1047,9 @@ fun DocumentHubScreen(
                 onDismiss = { showNewNoteDialog = false },
                 onSkip = {
                     showNewNoteDialog = false
-                    val intent = Intent(context, CanvasActivity::class.java)
+                    val intent = Intent(context, CanvasActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                    }
                     context.startActivity(intent)
                 },
                 onSave = { name, targetFolder ->

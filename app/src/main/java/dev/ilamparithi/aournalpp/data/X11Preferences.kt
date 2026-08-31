@@ -48,6 +48,7 @@ object X11Preferences {
     const val KEY_TOOLBAR_SHOW_CAMERA = "toolbarShowImage"
     const val KEY_TOOLBAR_SHOW_TITLE = "toolbarShowTitle"
     const val KEY_TOOLBAR_SHOW_BACK = "toolbarShowBack"
+    const val KEY_TOOLBAR_SHOW_CLOSE = "toolbarShowClose"
     const val KEY_TOOLBAR_SHOW_DRAG_HANDLE = "toolbarShowDragHandle"
     const val KEY_TOOLBAR_CENTER_WITHIN_SAFE_AREA = "topBarCenterWithinBounds"
 

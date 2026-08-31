@@ -70,11 +70,21 @@
             android:name=".CanvasActivity"
             android:exported="true"
             android:process=":canvas"
+            android:launchMode="singleTask"
             android:theme="@style/Theme.Aournal"
             android:screenOrientation="unspecified"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|fontScale"
             android:windowSoftInputMode="stateHidden|adjustNothing"
             android:hardwareAccelerated="true" />
+
+        <receiver
+            android:name=".CanvasCommandReceiver"
+            android:process=":canvas"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="dev.ilamparithi.aournalpp.ACTION_REQUEST_BACKGROUND_CLOSE" />
+            </intent-filter>
+        </receiver>
 
         <activity
             android:name=".SettingsActivity"

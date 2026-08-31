@@ -48,15 +48,24 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
     private val _documentTitle = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     val documentTitle: kotlinx.coroutines.flow.StateFlow<String?> = _documentTitle
 
-    private var xournalProcess: Process? = null
+    private val xournalProcesses = CopyOnWriteArrayList<Process>()
     private var onXournalExitListener: (() -> Unit)? = null
+    private var onSingleProcessExitListener: ((remainingCount: Int) -> Unit)? = null
 
     fun setOnXournalExitListener(listener: (() -> Unit)?) {
         onXournalExitListener = listener
     }
 
+    fun setOnSingleProcessExitListener(listener: ((remainingCount: Int) -> Unit)?) {
+        onSingleProcessExitListener = listener
+    }
+
     fun isXournalRunning(): Boolean {
-        return xournalProcess?.isAlive == true
+        return xournalProcesses.any { it.isAlive }
+    }
+
+    fun getActiveXournalCount(): Int {
+        return xournalProcesses.count { it.isAlive }
     }
 
     fun startXournal(targetFilePath: String? = null): Process? {
@@ -78,21 +87,45 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
             .apply { environment().putAll(env.getEnvMap()) }
             .start()
             
-        xournalProcess = process
+        xournalProcesses.add(process)
         activeProcesses.add(process)
         monitorProcessOutput(process, "NativeProcess:Xournalpp")
 
         scope.launch {
             try {
                 process.waitFor()
-                Log.i("ProcessSupervisor", "Xournal++ process terminated cleanly.")
-                onXournalExitListener?.invoke()
+                Log.i("ProcessSupervisor", "A Xournal++ process instance terminated cleanly.")
+                xournalProcesses.remove(process)
+                val remaining = xournalProcesses.count { it.isAlive }
+                onSingleProcessExitListener?.invoke(remaining)
+                if (remaining == 0) {
+                    Log.i("ProcessSupervisor", "All Xournal++ process instances terminated.")
+                    onXournalExitListener?.invoke()
+                }
             } catch (e: Exception) {
                 // Ignore
             }
         }
 
         return process
+    }
+
+    fun getVisibleXournalWindowIds(): List<String> {
+        val xdotoolBin = env.resolveExecutable("xdotool")
+        if (!xdotoolBin.exists() || !xdotoolBin.canExecute()) return emptyList()
+
+        val (code, out) = runBinary(listOf(xdotoolBin.absolutePath, "search", "--onlyvisible", "--class", "xournal"))
+        if (code == 0 && out.isNotBlank()) {
+            return out.trim().lines().map { it.trim() }.filter { it.isNotEmpty() }
+        }
+        return emptyList()
+    }
+
+    fun activateWindow(windowId: String): Boolean {
+        val xdotoolBin = env.resolveExecutable("xdotool")
+        if (!xdotoolBin.exists() || !xdotoolBin.canExecute()) return false
+        val (code, _) = runBinary(listOf(xdotoolBin.absolutePath, "windowactivate", "--sync", windowId))
+        return code == 0
     }
 
     fun startTitleWatcher() {
@@ -388,6 +421,7 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
     fun terminateAll() {
         val processesToKill = activeProcesses.toList()
         activeProcesses.clear()
+        xournalProcesses.clear()
         _documentTitle.value = null
 
         for (process in processesToKill) {

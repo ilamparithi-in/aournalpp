@@ -139,6 +139,30 @@ class CanvasSessionManager(
                     supervisor.startXournal(targetFilePath)
                 }
 
+                // Record active session in multi-process tracker
+                ActiveSessionTracker.setActiveSession(
+                    context = context,
+                    env = env,
+                    info = ActiveSessionInfo(
+                        isRunning = true,
+                        pid = android.os.Process.myPid(),
+                        activeNotePath = targetFilePath,
+                        documentTitle = initialDocTitle,
+                        openWindowCount = supervisor.getActiveXournalCount().coerceAtLeast(1)
+                    )
+                )
+
+                // Keep ActiveSessionTracker in sync with title changes
+                scope.launch {
+                    supervisor.documentTitle.collect { title ->
+                        ActiveSessionTracker.updateTitle(context, env, title)
+                    }
+                }
+
+                supervisor.setOnSingleProcessExitListener { remaining ->
+                    ActiveSessionTracker.updateWindowCount(context, env, remaining)
+                }
+
                 // 6. Start X11 Title Watcher to monitor document renames & saves
                 supervisor.startTitleWatcher()
 
@@ -328,24 +352,7 @@ class CanvasSessionManager(
     }
 
     suspend fun isModalOrDialogOpen(): Boolean = withContext(Dispatchers.IO) {
-        val xdotoolBin = env.resolveExecutable("xdotool")
-        if (!xdotoolBin.exists() || !xdotoolBin.canExecute()) return@withContext false
-
-        val searchQueries = listOf(
-            listOf("search", "--onlyvisible", "--class", "xournalpp"),
-            listOf("search", "--onlyvisible", "--class", "xournal")
-        )
-        for (query in searchQueries) {
-            val cmd = mutableListOf(xdotoolBin.absolutePath).apply { addAll(query) }
-            val (code, out) = supervisor.runBinary(cmd)
-            if (code == 0 && out.isNotBlank()) {
-                val ids = out.trim().lines().map { it.trim() }.filter { it.isNotEmpty() }
-                if (ids.size > 1) {
-                    return@withContext true
-                }
-            }
-        }
-        false
+        supervisor.getVisibleXournalWindowIds().size > 1
     }
 
     fun dismissTopDialogOrModal() {
@@ -412,16 +419,117 @@ class CanvasSessionManager(
 
             if (windowIds.isNotEmpty()) {
                 val mainWid = windowIds.first()
-                Log.i(TAG, "Sending $shortcut to main window $mainWid...")
+                Log.i(TAG, "Activating window $mainWid for shortcut $shortcut...")
                 supervisor.runBinary(listOf(xdotoolBin.absolutePath, "windowactivate", "--sync", mainWid))
+                delay(50)
+            }
+            Log.i(TAG, "Sending shortcut $shortcut via XTEST...")
+            supervisor.runBinary(
+                listOf(xdotoolBin.absolutePath, "key", "--clearmodifiers", shortcut)
+            )
+        }
+    }
+
+    fun openNoteInNewWindow(filePath: String) {
+        if (!isSessionRunning) return
+        scope.launch(Dispatchers.IO) {
+            Log.i(TAG, "Opening note in new window within existing session: $filePath")
+            val proc = supervisor.startXournal(filePath)
+            if (proc != null) {
+                val newCount = supervisor.getActiveXournalCount()
+                ActiveSessionTracker.updateWindowCount(context, env, newCount)
+                ActiveSessionTracker.updateTitle(context, env, File(filePath).name)
+            }
+        }
+    }
+
+    fun initiateFocusAwareSequentialClose(
+        onAllClosed: () -> Unit,
+        onAborted: () -> Unit,
+        onPromptBlocking: () -> Unit = {}
+    ) {
+        if (!isSessionRunning) {
+            onAllClosed()
+            return
+        }
+
+        scope.launch(Dispatchers.IO) {
+            Log.i(TAG, "Starting focus-aware sequential close...")
+            val xdotoolBin = env.resolveExecutable("xdotool")
+            if (!xdotoolBin.exists() || !xdotoolBin.canExecute()) {
+                Log.w(TAG, "xdotool not available, falling back to soft exit")
+                requestCloseSession()
+                return@launch
+            }
+
+            while (isSessionRunning && supervisor.isXournalRunning()) {
+                val windowIds = supervisor.getVisibleXournalWindowIds()
+                if (windowIds.isEmpty()) {
+                    Log.i(TAG, "No more visible Xournal++ windows detected.")
+                    break
+                }
+
+                val targetWid = windowIds.first()
+                Log.i(TAG, "Focusing window $targetWid for sequential close...")
+                supervisor.activateWindow(targetWid)
+                delay(40)
+
+                // Inject Ctrl+Q ONCE to the focused window using XTEST (no --window)
+                Log.i(TAG, "Sending Ctrl+Q once to active window $targetWid via XTEST...")
                 supervisor.runBinary(
-                    listOf(xdotoolBin.absolutePath, "key", "--window", mainWid, "--clearmodifiers", shortcut)
+                    listOf(xdotoolBin.absolutePath, "key", "--clearmodifiers", "ctrl+q")
                 )
-            } else {
-                Log.w(TAG, "No visible X11 window found via search, falling back to global keystrokes for $shortcut...")
-                supervisor.runBinary(
-                    listOf(xdotoolBin.absolutePath, "key", "--clearmodifiers", shortcut)
-                )
+
+                // Wait for the window to either close, or for a save prompt dialog to appear
+                var windowStillOpen = true
+                var userAborted = false
+                var promptNotified = false
+                val pollStart = System.currentTimeMillis()
+
+                while (isSessionRunning && windowStillOpen && !userAborted) {
+                    delay(50)
+                    val currentWindows = supervisor.getVisibleXournalWindowIds()
+                    if (!currentWindows.contains(targetWid)) {
+                        Log.i(TAG, "Window $targetWid has closed.")
+                        windowStillOpen = false
+                        break
+                    }
+
+                    if (currentWindows.size > 1) {
+                        // Dialog/prompt detected! Immediately notify
+                        if (!promptNotified) {
+                            promptNotified = true
+                            withContext(Dispatchers.Main) {
+                                onPromptBlocking()
+                            }
+                        }
+                        delay(200)
+                    } else if (promptNotified) {
+                        // Prompt was open and was dismissed without window closing -> user cancelled exit
+                        Log.i(TAG, "Prompt dismissed without closing window. Exit aborted.")
+                        userAborted = true
+                        break
+                    } else if (System.currentTimeMillis() - pollStart > 900) {
+                        // If no prompt appeared and window didn't close after grace period, abort
+                        userAborted = true
+                        break
+                    }
+                }
+
+                if (userAborted) {
+                    Log.i(TAG, "Sequential close aborted by user.")
+                    withContext(Dispatchers.Main) {
+                        onAborted()
+                    }
+                    return@launch
+                }
+
+                delay(50)
+            }
+
+            Log.i(TAG, "All windows closed. Finalizing session exit.")
+            withContext(Dispatchers.Main) {
+                onAllClosed()
             }
         }
     }
@@ -443,6 +551,7 @@ class CanvasSessionManager(
         supervisor.terminateAll()
         File(env.tmpDir, ".X0-lock").delete()
         File(env.tmpDir, ".X11-unix/X0").delete()
+        ActiveSessionTracker.clearActiveSession(context, env)
         if (isPreferencesSession) {
             env.clearQuarantinedEmergencySave()
             val emergencyFile = File(env.xournalConfigDir, "emergencysave.xopp")
