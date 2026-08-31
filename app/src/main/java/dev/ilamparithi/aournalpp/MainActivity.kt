@@ -133,9 +133,10 @@ class MainActivity : ComponentActivity() {
                                 pendingIntentToProcess = null
                             }
                         }
-                        // Provision the runtime tree once the bootstrap is ready.
+                        // Provision the runtime tree once the bootstrap is ready and reveal animation completes.
                         LaunchedEffect(Unit) {
                             withContext(Dispatchers.IO) {
+                                kotlinx.coroutines.delay(850L)
                                 LinuxEnvironment(this@MainActivity).ensureDirectoryTree()
                                 val backupPrefs = dev.ilamparithi.aournalpp.backup.worker.BackupPreferences(this@MainActivity)
                                 if (backupPrefs.isCheckRemoteChangesOnLaunchEnabled) {

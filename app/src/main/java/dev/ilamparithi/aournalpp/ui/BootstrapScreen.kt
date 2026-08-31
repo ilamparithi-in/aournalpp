@@ -217,45 +217,71 @@ fun BootstrapScreen(
     val reusableMatrix = remember { android.graphics.Matrix() }
     val reusableTransformedPath = remember { android.graphics.Path() }
 
+    val unitSunnyPath = remember {
+        val path = android.graphics.Path()
+        val vertices = 10
+        val roundness = 0.35f
+        val r = 0.95f
+        val step = (2.0 * Math.PI / vertices)
+        val cornerOffset = step * roundness
+
+        for (i in 0 until vertices) {
+            val angle = i * step - (Math.PI / 2.0)
+            val p1Angle = angle - cornerOffset
+            val p2Angle = angle + cornerOffset
+
+            val x1 = (r * Math.cos(p1Angle)).toFloat()
+            val y1 = (r * Math.sin(p1Angle)).toFloat()
+            val xc = (r * 1.05f * Math.cos(angle)).toFloat()
+            val yc = (r * 1.05f * Math.sin(angle)).toFloat()
+            val x2 = (r * Math.cos(p2Angle)).toFloat()
+            val y2 = (r * Math.sin(p2Angle)).toFloat()
+
+            if (i == 0) {
+                path.moveTo(x1, y1)
+            } else {
+                path.lineTo(x1, y1)
+            }
+            path.quadTo(xc, yc, x2, y2)
+        }
+        path.close()
+        path
+    }
+
     Surface(
         modifier = Modifier
             .fillMaxSize()
             .onGloballyPositioned { rootLayoutCoordinates = it }
-            .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+            .graphicsLayer(compositingStrategy = if (revealRadius.value > 0f) CompositingStrategy.Offscreen else CompositingStrategy.Auto)
             .drawWithContent {
                 drawContent()
                 val radius = revealRadius.value
                 if (radius > 0f) {
                     val center = heroCenterOffset ?: Offset(size.width / 2f, size.height / 2f)
-                    val sunnyOutline = SunnyShape(vertices = 10, roundness = 0.35f)
-                        .createOutline(Size(radius * 2f, radius * 2f), layoutDirection, density)
-                    if (sunnyOutline is Outline.Generic) {
-                        val androidPath = sunnyOutline.path.asAndroidPath()
-                        reusableMatrix.reset()
-                        reusableMatrix.postTranslate(-radius, -radius)
-                        reusableMatrix.postRotate(capturedRotationAngle)
-                        reusableMatrix.postTranslate(center.x, center.y)
+                    reusableMatrix.reset()
+                    reusableMatrix.postScale(radius, radius)
+                    reusableMatrix.postRotate(capturedRotationAngle)
+                    reusableMatrix.postTranslate(center.x, center.y)
 
-                        reusableTransformedPath.reset()
-                        androidPath.transform(reusableMatrix, reusableTransformedPath)
-                        val composePath = reusableTransformedPath.asComposePath()
+                    reusableTransformedPath.reset()
+                    unitSunnyPath.transform(reusableMatrix, reusableTransformedPath)
+                    val composePath = reusableTransformedPath.asComposePath()
 
-                        // Punch out hero shape hole revealing Home screen
+                    // Punch out hero shape hole revealing Home screen
+                    drawPath(
+                        path = composePath,
+                        color = Color.Black,
+                        blendMode = BlendMode.Clear
+                    )
+
+                    // Glowing rim along outer contour of SunnyShape
+                    val ringAlpha = (1f - (radius / (size.maxDimension * 0.95f)).coerceIn(0f, 1f))
+                    if (ringAlpha > 0.01f) {
                         drawPath(
                             path = composePath,
-                            color = Color.Black,
-                            blendMode = BlendMode.Clear
+                            color = Color.White.copy(alpha = ringAlpha * 0.65f),
+                            style = Stroke(width = 3.5.dp.toPx())
                         )
-
-                        // Glowing rim along outer contour of SunnyShape
-                        val ringAlpha = (1f - (radius / (size.maxDimension * 0.95f)).coerceIn(0f, 1f))
-                        if (ringAlpha > 0.01f) {
-                            drawPath(
-                                path = composePath,
-                                color = Color.White.copy(alpha = ringAlpha * 0.65f),
-                                style = Stroke(width = 3.5.dp.toPx())
-                            )
-                        }
                     }
                 }
             },
