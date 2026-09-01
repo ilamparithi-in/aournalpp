@@ -183,6 +183,20 @@ fun FolderBrowserDialog(
         loadFolders(currentRelativePath)
     }
 
+    androidx.activity.compose.PredictiveBackHandler(enabled = currentRelativePath.isNotEmpty()) { progressFlow ->
+        try {
+            progressFlow.collect { /* tracking */ }
+            val parent = if (currentRelativePath.contains('/')) {
+                currentRelativePath.substringBeforeLast('/')
+            } else {
+                ""
+            }
+            currentRelativePath = parent
+        } catch (_: kotlinx.coroutines.CancellationException) {
+            // Cancelled
+        }
+    }
+
     Dialog(
         onDismissRequest = onDismissRequest,
         properties = DialogProperties(usePlatformDefaultWidth = false)

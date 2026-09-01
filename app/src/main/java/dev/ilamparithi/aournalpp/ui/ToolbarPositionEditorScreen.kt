@@ -197,9 +197,6 @@ fun ToolbarPositionEditorScreen(
     var isSnapCutoutHorizontal by remember { mutableStateOf(false) }
     var isSnapCutoutVertical by remember { mutableStateOf(false) }
 
-    val handleBack = { onNavigateBack() }
-    BackHandler(enabled = true) { handleBack() }
-
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
@@ -812,7 +809,7 @@ fun ToolbarPositionEditorScreen(
 
                     Spacer(Modifier.width(8.dp))
 
-                    OutlinedButton(onClick = { handleBack() }) {
+                    OutlinedButton(onClick = { onNavigateBack() }) {
                         Text("Cancel")
                     }
 

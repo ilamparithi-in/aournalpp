@@ -6,8 +6,13 @@ import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.SeekableTransitionState
+import androidx.compose.animation.core.rememberTransition
+import kotlinx.coroutines.CancellationException
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
@@ -371,6 +376,7 @@ fun MainResponsiveAppShell() {
     val reduceAnimations = remember { aournalPrefs.getBoolean(LinuxEnvironment.PREF_KEY_REDUCE_ANIMATIONS, false) }
 
     var selectedTab by rememberSaveable { mutableIntStateOf(AppTab.HOME.id) }
+
     val saveableStateHolder = rememberSaveableStateHolder()
     var tabGenerations by rememberSaveable { mutableStateOf(mapOf<Int, Int>()) }
 
@@ -441,9 +447,7 @@ fun MainResponsiveAppShell() {
         }
     }
 
-    BackHandler(enabled = selectedTab != AppTab.HOME.id) {
-        selectedTab = AppTab.HOME.id
-    }
+
 
     BackHandler(enabled = selectedTab == AppTab.HOME.id && isCanvasSessionActive?.isRunning == true && !isClosingSession) {
         isClosingSession = true
@@ -504,7 +508,7 @@ fun MainResponsiveAppShell() {
                     dampingRatio = 0.82f,
                     stiffness = 380f
                 ),
-                initialOffsetX = { (it / 3) * enterOffset }
+                initialOffsetX = { fullWidth -> fullWidth * enterOffset }
             ) + fadeIn(
                 animationSpec = androidx.compose.animation.core.spring(
                     dampingRatio = 0.9f,
@@ -517,7 +521,7 @@ fun MainResponsiveAppShell() {
                             dampingRatio = 0.82f,
                             stiffness = 380f
                         ),
-                        targetOffsetX = { -(it / 3) * exitOffset }
+                        targetOffsetX = { fullWidth -> fullWidth * exitOffset }
                     ) + fadeOut(
                         animationSpec = androidx.compose.animation.core.spring(
                             dampingRatio = 0.9f,
@@ -525,6 +529,21 @@ fun MainResponsiveAppShell() {
                         )
                     )
                 )
+        }
+    }
+
+    @Composable
+    fun TabContentArea(modifier: Modifier = Modifier) {
+        dev.ilamparithi.aournalpp.ui.predictive.PredictiveBackLayout(
+            enabled = selectedTab != AppTab.HOME.id,
+            onBack = { selectedTab = AppTab.HOME.id },
+            reduceAnimations = reduceAnimations,
+            modifier = modifier,
+            backgroundContent = {
+                RenderTabContent(AppTab.HOME.id)
+            }
+        ) { _, _ ->
+            TabHost(selectedTab)
         }
     }
 
@@ -568,15 +587,7 @@ fun MainResponsiveAppShell() {
                     }
                 }
 
-                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                    AnimatedContent(
-                        targetState = selectedTab,
-                        transitionSpec = tabTransitionSpec,
-                        label = "railTabTransition"
-                    ) { tabId ->
-                        TabHost(tabId)
-                    }
-                }
+                TabContentArea(modifier = Modifier.weight(1f).fillMaxHeight())
             }
         } else {
             // Mobile Portrait: Bottom Navigation Bar
@@ -611,15 +622,7 @@ fun MainResponsiveAppShell() {
                     }
                 }
             ) { padding ->
-                Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-                    AnimatedContent(
-                        targetState = selectedTab,
-                        transitionSpec = tabTransitionSpec,
-                        label = "bottomTabTransition"
-                    ) { tabId ->
-                        TabHost(tabId)
-                    }
-                }
+                TabContentArea(modifier = Modifier.fillMaxSize().padding(padding))
             }
         }
     }

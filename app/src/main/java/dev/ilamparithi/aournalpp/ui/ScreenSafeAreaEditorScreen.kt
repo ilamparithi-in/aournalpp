@@ -189,8 +189,8 @@ fun ScreenSafeAreaEditorScreen(
         }
     }
 
-    BackHandler(enabled = true) {
-        handleBack()
+    BackHandler(enabled = hasUnsavedChanges) {
+        showDiscardConfirmDialog = true
     }
 
     if (showDiscardConfirmDialog) {
@@ -262,7 +262,7 @@ fun ScreenSafeAreaEditorScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        val screenW = maxWidth
+            val screenW = maxWidth
         val screenH = maxHeight
         val screenWPx = screenW.value * density.density
         val screenHPx = screenH.value * density.density

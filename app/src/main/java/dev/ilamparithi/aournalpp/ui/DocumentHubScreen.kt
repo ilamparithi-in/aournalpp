@@ -574,18 +574,27 @@ fun DocumentHubScreen(
         loadContentNow()
     }
 
-    BackHandler(enabled = isSelectionMode || isViewingTrash || currentDirectory.canonicalPath != repository.getRootNotesDirectory().canonicalPath) {
-        if (isSelectionMode) {
-            isSelectionMode = false
-            selectedNotePaths = emptySet()
-        } else if (isViewingTrash) {
-            isViewingTrash = false
-        } else if (currentDirectory.canonicalPath != repository.getRootNotesDirectory().canonicalPath) {
-            currentDirectory = currentDirectory.parentFile ?: repository.getRootNotesDirectory()
-        }
+    val isFolderBackActive = !isSelectionMode && !isViewingTrash &&
+            currentDirectory.canonicalPath != repository.getRootNotesDirectory().canonicalPath
+    val isTrashBackActive = !isSelectionMode && isViewingTrash
+
+    BackHandler(enabled = isSelectionMode) {
+        isSelectionMode = false
+        selectedNotePaths = emptySet()
     }
 
-    Scaffold(
+    dev.ilamparithi.aournalpp.ui.predictive.PredictiveBackLayout(
+        enabled = isFolderBackActive || isTrashBackActive,
+        onBack = {
+            if (isViewingTrash) {
+                isViewingTrash = false
+            } else if (isFolderBackActive) {
+                currentDirectory = currentDirectory.parentFile ?: repository.getRootNotesDirectory()
+            }
+        },
+        reduceAnimations = reduceAnimations
+    ) { _, _ ->
+        Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -2810,6 +2819,7 @@ fun DocumentHubScreen(
     }
 }
 }
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)

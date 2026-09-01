@@ -7,11 +7,16 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.SeekableTransitionState
+import androidx.compose.animation.core.rememberTransition
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.CancellationException
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -235,6 +240,17 @@ fun SettingsSwitchListItem(
     )
 }
 
+fun getParentSettingsSubpage(page: SettingsSubpage): SettingsSubpage = when (page) {
+    SettingsSubpage.TOOLBAR_POSITION_EDITOR -> SettingsSubpage.TOOLBAR
+    SettingsSubpage.TOOLBAR -> SettingsSubpage.MAIN
+    SettingsSubpage.KEYBOARD -> SettingsSubpage.MAIN
+    SettingsSubpage.INPUT -> SettingsSubpage.MAIN
+    SettingsSubpage.LENOVO_PEN -> SettingsSubpage.INPUT
+    SettingsSubpage.DISPLAY -> SettingsSubpage.MAIN
+    SettingsSubpage.SAFE_AREA_EDITOR -> SettingsSubpage.DISPLAY
+    SettingsSubpage.MAIN -> SettingsSubpage.MAIN
+}
+
 @Composable
 fun SettingsScreen(onBack: (() -> Unit)? = null) {
     SettingsNavigationHost(onFinish = { onBack?.invoke() })
@@ -243,80 +259,92 @@ fun SettingsScreen(onBack: (() -> Unit)? = null) {
 @Composable
 fun SettingsNavigationHost(onFinish: () -> Unit) {
     var currentSubpage by rememberSaveable { mutableStateOf(SettingsSubpage.MAIN) }
+    val context = LocalContext.current
+    val aournalPrefs = remember { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
+    val reduceAnimations = remember { aournalPrefs.getBoolean(LinuxEnvironment.PREF_KEY_REDUCE_ANIMATIONS, false) }
+    val parentSubpage = getParentSettingsSubpage(currentSubpage)
 
-    BackHandler(enabled = true) {
-        when (currentSubpage) {
-            SettingsSubpage.MAIN -> onFinish()
-            SettingsSubpage.TOOLBAR -> currentSubpage = SettingsSubpage.MAIN
-            SettingsSubpage.TOOLBAR_POSITION_EDITOR -> currentSubpage = SettingsSubpage.TOOLBAR
-            SettingsSubpage.LENOVO_PEN -> currentSubpage = SettingsSubpage.INPUT
-            SettingsSubpage.SAFE_AREA_EDITOR -> currentSubpage = SettingsSubpage.DISPLAY
-            else -> currentSubpage = SettingsSubpage.MAIN
-        }
-    }
-
-    AnimatedContent(
-        targetState = currentSubpage,
-        transitionSpec = {
-            if (targetState.ordinal > initialState.ordinal) {
-                slideInHorizontally { width -> width } togetherWith slideOutHorizontally { width -> -width }
-            } else {
-                slideInHorizontally { width -> -width } togetherWith slideOutHorizontally { width -> width }
-            }
-        },
-        label = "SettingsSubpageTransition"
-    ) { targetPage ->
+    @Composable
+    fun RenderSettingsPageContent(
+        targetPage: SettingsSubpage,
+        onNavigate: (SettingsSubpage) -> Unit,
+        onBackAction: () -> Unit,
+        onSetSubpage: (SettingsSubpage) -> Unit
+    ) {
         when (targetPage) {
             SettingsSubpage.MAIN -> MainSettingsScreen(
-                onNavigate = { currentSubpage = it },
-                onBack = onFinish
+                onNavigate = onNavigate,
+                onBack = onBackAction
             )
             SettingsSubpage.TOOLBAR -> ToolbarSettingsScreen(
-                onNavigateToPositionEditor = { currentSubpage = SettingsSubpage.TOOLBAR_POSITION_EDITOR },
-                onBack = { currentSubpage = SettingsSubpage.MAIN }
+                onNavigateToPositionEditor = { onSetSubpage(SettingsSubpage.TOOLBAR_POSITION_EDITOR) },
+                onBack = { onSetSubpage(SettingsSubpage.MAIN) }
             )
             SettingsSubpage.TOOLBAR_POSITION_EDITOR -> {
                 Dialog(
-                    onDismissRequest = { currentSubpage = SettingsSubpage.TOOLBAR },
+                    onDismissRequest = { onSetSubpage(SettingsSubpage.TOOLBAR) },
                     properties = DialogProperties(
                         usePlatformDefaultWidth = false,
                         decorFitsSystemWindows = false
                     )
                 ) {
                     ToolbarPositionEditorScreen(
-                        onNavigateBack = { currentSubpage = SettingsSubpage.TOOLBAR }
+                        onNavigateBack = { onSetSubpage(SettingsSubpage.TOOLBAR) }
                     )
                 }
             }
             SettingsSubpage.KEYBOARD -> KeyboardSettingsScreen(
-                onBack = { currentSubpage = SettingsSubpage.MAIN }
+                onBack = { onSetSubpage(SettingsSubpage.MAIN) }
             )
             SettingsSubpage.INPUT -> InputSettingsScreen(
-                onNavigateToLenovoPen = { currentSubpage = SettingsSubpage.LENOVO_PEN },
-                onNavigateToToolbar = { currentSubpage = SettingsSubpage.TOOLBAR },
-                onBack = { currentSubpage = SettingsSubpage.MAIN }
+                onNavigateToLenovoPen = { onSetSubpage(SettingsSubpage.LENOVO_PEN) },
+                onNavigateToToolbar = { onSetSubpage(SettingsSubpage.TOOLBAR) },
+                onBack = { onSetSubpage(SettingsSubpage.MAIN) }
             )
             SettingsSubpage.LENOVO_PEN -> LenovoPenSettingsScreen(
-                onBack = { currentSubpage = SettingsSubpage.INPUT }
+                onBack = { onSetSubpage(SettingsSubpage.INPUT) }
             )
             SettingsSubpage.DISPLAY -> DisplaySettingsScreen(
-                onNavigateToSafeAreaEditor = { currentSubpage = SettingsSubpage.SAFE_AREA_EDITOR },
-                onBack = { currentSubpage = SettingsSubpage.MAIN }
+                onNavigateToSafeAreaEditor = { onSetSubpage(SettingsSubpage.SAFE_AREA_EDITOR) },
+                onBack = { onSetSubpage(SettingsSubpage.MAIN) }
             )
             SettingsSubpage.SAFE_AREA_EDITOR -> {
                 Dialog(
-                    onDismissRequest = { currentSubpage = SettingsSubpage.DISPLAY },
+                    onDismissRequest = { onSetSubpage(SettingsSubpage.DISPLAY) },
                     properties = DialogProperties(
                         usePlatformDefaultWidth = false,
                         decorFitsSystemWindows = false
                     )
                 ) {
                     ScreenSafeAreaEditorScreen(
-                        onNavigateBack = { currentSubpage = SettingsSubpage.DISPLAY }
+                        onNavigateBack = { onSetSubpage(SettingsSubpage.DISPLAY) }
                     )
                 }
             }
         }
+    }
+
+    dev.ilamparithi.aournalpp.ui.predictive.PredictiveBackLayout(
+        enabled = currentSubpage != SettingsSubpage.MAIN,
+        onBack = { currentSubpage = parentSubpage },
+        reduceAnimations = reduceAnimations,
+        backgroundContent = if (currentSubpage != SettingsSubpage.MAIN) {
+            {
+                RenderSettingsPageContent(
+                    targetPage = parentSubpage,
+                    onNavigate = { currentSubpage = it },
+                    onBackAction = onFinish,
+                    onSetSubpage = { currentSubpage = it }
+                )
+            }
+        } else null
+    ) { _, _ ->
+        RenderSettingsPageContent(
+            targetPage = currentSubpage,
+            onNavigate = { currentSubpage = it },
+            onBackAction = onFinish,
+            onSetSubpage = { currentSubpage = it }
+        )
     }
 }
 
