@@ -33,8 +33,10 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.security.MessageDigest
 import java.util.UUID
 import kotlin.math.abs
+import dev.ilamparithi.aournalpp.backup.model.ConfigSyncStatus
 
 /**
  * Core differential synchronization engine supporting multi-service complete backups,
@@ -48,7 +50,11 @@ class BackupEngine(
 ) {
     companion object {
         private const val TAG = "BackupEngine"
-        private const val COMPLETE_BACKUP_REMOTE_ROOT = "Aournalpp"
+        const val COMPLETE_BACKUP_REMOTE_ROOT = "Aournalpp"
+
+        fun getCompleteBackupRemoteRoot(serviceConfig: ServiceConfig): String {
+            return serviceConfig.remoteBasePath.trim().trim('/').ifBlank { COMPLETE_BACKUP_REMOTE_ROOT }
+        }
     }
 
     /**
@@ -72,8 +78,9 @@ class BackupEngine(
         // 1. Complete Backup domain scanning
         if (serviceConfig.isCompleteBackupEnabled) {
             val completeFiles = scanner.scanCompleteBackup(existingMetaMap)
+            val remoteRoot = getCompleteBackupRemoteRoot(serviceConfig)
             for (f in completeFiles) {
-                val remotePath = "$COMPLETE_BACKUP_REMOTE_ROOT/${f.relativePath}"
+                val remotePath = "$remoteRoot/${f.relativePath}"
                 filesToSync.add(f to remotePath)
             }
         }
@@ -284,21 +291,22 @@ class BackupEngine(
             if (serviceConfig.isCompleteBackupEnabled) {
                 val notesRoot = env.getNotesDirectory()
                 val configRoot = env.xournalConfigDir
+                val remoteRoot = getCompleteBackupRemoteRoot(serviceConfig)
 
                 // List Notes tree
-                val remoteNotes = listRemoteRecursively(provider, "$COMPLETE_BACKUP_REMOTE_ROOT/Notes")
+                val remoteNotes = listRemoteRecursively(provider, "$remoteRoot/Notes")
                 for (rf in remoteNotes) {
                     if (rf.isDirectory) continue
-                    val subPath = rf.remotePath.removePrefix("$COMPLETE_BACKUP_REMOTE_ROOT/Notes").trim('/')
+                    val subPath = rf.remotePath.removePrefix("$remoteRoot/Notes").trim('/')
                     val destFile = File(notesRoot, subPath)
                     remoteFilesToDownload.add(rf.remotePath to destFile)
                 }
 
                 // List .config tree
-                val remoteConfigs = listRemoteRecursively(provider, "$COMPLETE_BACKUP_REMOTE_ROOT/.config/xournalpp")
+                val remoteConfigs = listRemoteRecursively(provider, "$remoteRoot/.config/xournalpp")
                 for (rf in remoteConfigs) {
                     if (rf.isDirectory) continue
-                    val subPath = rf.remotePath.removePrefix("$COMPLETE_BACKUP_REMOTE_ROOT/.config/xournalpp").trim('/')
+                    val subPath = rf.remotePath.removePrefix("$remoteRoot/.config/xournalpp").trim('/')
                     val destFile = File(configRoot, subPath)
                     remoteFilesToDownload.add(rf.remotePath to destFile)
                 }
@@ -464,18 +472,19 @@ class BackupEngine(
             if (serviceConfig.isCompleteBackupEnabled) {
                 val notesRoot = env.getNotesDirectory()
                 val configRoot = env.xournalConfigDir
+                val remoteRoot = getCompleteBackupRemoteRoot(serviceConfig)
 
-                val remoteNotes = listRemoteRecursively(provider, "$COMPLETE_BACKUP_REMOTE_ROOT/Notes")
+                val remoteNotes = listRemoteRecursively(provider, "$remoteRoot/Notes")
                 for (rf in remoteNotes) {
                     if (rf.isDirectory) continue
-                    val subPath = rf.remotePath.removePrefix("$COMPLETE_BACKUP_REMOTE_ROOT/Notes").trim('/')
+                    val subPath = rf.remotePath.removePrefix("$remoteRoot/Notes").trim('/')
                     remoteFiles.add(rf to File(notesRoot, subPath))
                 }
 
-                val remoteConfigs = listRemoteRecursively(provider, "$COMPLETE_BACKUP_REMOTE_ROOT/.config/xournalpp")
+                val remoteConfigs = listRemoteRecursively(provider, "$remoteRoot/.config/xournalpp")
                 for (rf in remoteConfigs) {
                     if (rf.isDirectory) continue
-                    val subPath = rf.remotePath.removePrefix("$COMPLETE_BACKUP_REMOTE_ROOT/.config/xournalpp").trim('/')
+                    val subPath = rf.remotePath.removePrefix("$remoteRoot/.config/xournalpp").trim('/')
                     remoteFiles.add(rf to File(configRoot, subPath))
                 }
             }
@@ -593,10 +602,11 @@ class BackupEngine(
 
                 // 3a. Complete backup domain
                 if (srv.isCompleteBackupEnabled) {
-                    val remoteNotes = listRemoteRecursively(provider, "$COMPLETE_BACKUP_REMOTE_ROOT/Notes")
+                    val remoteRoot = getCompleteBackupRemoteRoot(srv)
+                    val remoteNotes = listRemoteRecursively(provider, "$remoteRoot/Notes")
                     for (rf in remoteNotes) {
                         if (rf.isDirectory) continue
-                        val subPath = rf.remotePath.removePrefix("$COMPLETE_BACKUP_REMOTE_ROOT/Notes").trim('/')
+                        val subPath = rf.remotePath.removePrefix("$remoteRoot/Notes").trim('/')
                         val destFile = File(notesRoot, subPath)
                         val canon = destFile.canonicalPath
                         val displayRel = "Notes/$subPath"
@@ -622,10 +632,10 @@ class BackupEngine(
                         versionsByLocalPath.getOrPut(canon) { mutableListOf() }.add(item)
                     }
 
-                    val remoteConfigs = listRemoteRecursively(provider, "$COMPLETE_BACKUP_REMOTE_ROOT/.config/xournalpp")
+                    val remoteConfigs = listRemoteRecursively(provider, "$remoteRoot/.config/xournalpp")
                     for (rf in remoteConfigs) {
                         if (rf.isDirectory) continue
-                        val subPath = rf.remotePath.removePrefix("$COMPLETE_BACKUP_REMOTE_ROOT/.config/xournalpp").trim('/')
+                        val subPath = rf.remotePath.removePrefix("$remoteRoot/.config/xournalpp").trim('/')
                         val destFile = File(configRoot, subPath)
                         val canon = destFile.canonicalPath
                         val displayRel = ".config/xournalpp/$subPath"
@@ -1032,5 +1042,115 @@ class BackupEngine(
             }
         }
         return results
+    }
+
+    /**
+     * Checks whether the specified remote folder on the given cloud service has an Aournal++ complete sync.
+     * Looks for Notes directory, .config/xournalpp directory, or existing note files.
+     */
+    suspend fun checkRemoteCompleteSync(
+        serviceConfig: ServiceConfig,
+        remotePath: String = getCompleteBackupRemoteRoot(serviceConfig)
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        val provider = StorageProviderFactory.createProvider(serviceConfig)
+        try {
+            val connResult = provider.testConnection()
+            if (connResult.isFailure || connResult.getOrNull() == false) {
+                return@withContext Result.failure(
+                    connResult.exceptionOrNull() ?: Exception("Failed to connect to ${serviceConfig.name}")
+                )
+            }
+
+            val cleanRoot = remotePath.trim().trim('/')
+            val rootList = provider.listFiles(cleanRoot).getOrNull() ?: emptyList()
+            if (rootList.isEmpty()) {
+                return@withContext Result.success(false)
+            }
+
+            // Check if Notes/ or .config/ exists directly in remoteRoot
+            val hasNotesDir = rootList.any { it.isDirectory && (it.remotePath.endsWith("/Notes") || it.remotePath.equals("Notes", ignoreCase = true)) }
+            val hasConfigDir = rootList.any { it.isDirectory && (it.remotePath.endsWith("/.config") || it.remotePath.equals(".config", ignoreCase = true)) }
+
+            if (hasNotesDir || hasConfigDir) {
+                return@withContext Result.success(true)
+            }
+
+            // Check if Notes or .config/xournalpp has files
+            val notesFiles = provider.listFiles("$cleanRoot/Notes").getOrNull() ?: emptyList()
+            if (notesFiles.any { !it.isDirectory }) {
+                return@withContext Result.success(true)
+            }
+
+            val configFiles = provider.listFiles("$cleanRoot/.config/xournalpp").getOrNull() ?: emptyList()
+            if (configFiles.any { !it.isDirectory }) {
+                return@withContext Result.success(true)
+            }
+
+            // Also check if any note files (.xopp) exist in the root folder itself
+            val hasNoteFiles = rootList.any { !it.isDirectory && it.remotePath.endsWith(".xopp", ignoreCase = true) }
+            Result.success(hasNoteFiles)
+        } catch (e: Exception) {
+            Result.failure(e)
+        } finally {
+            provider.disconnect()
+        }
+    }
+
+    /**
+     * Compares the remote settings.xml with the local settings.xml to determine if they are in sync.
+     */
+    suspend fun compareRemoteConfig(
+        serviceConfig: ServiceConfig,
+        remotePath: String = getCompleteBackupRemoteRoot(serviceConfig),
+        localNotesDir: File
+    ): ConfigSyncStatus = withContext(Dispatchers.IO) {
+        val localConfigFile = File(File(localNotesDir, ".config/xournalpp"), "settings.xml")
+        val altLocalConfigFile = File(env.xournalConfigDir, "settings.xml")
+        val activeLocal = if (localConfigFile.exists()) localConfigFile else altLocalConfigFile
+
+        if (!activeLocal.exists()) {
+            return@withContext ConfigSyncStatus.NO_LOCAL_CONFIG
+        }
+
+        val provider = StorageProviderFactory.createProvider(serviceConfig)
+        val tempFile = File(context.cacheDir, "remote_test_settings_${UUID.randomUUID()}.xml")
+        try {
+            val cleanRoot = remotePath.trim().trim('/')
+            val remoteSettingsPath = "$cleanRoot/.config/xournalpp/settings.xml"
+            val downloadRes = provider.downloadFile(remoteSettingsPath, tempFile) { _, _ -> }
+            if (downloadRes.isFailure || !tempFile.exists() || tempFile.length() == 0L) {
+                return@withContext ConfigSyncStatus.NO_REMOTE_CONFIG
+            }
+
+            val localHash = calculateFileHash(activeLocal)
+            val remoteHash = calculateFileHash(tempFile)
+            if (localHash.isNotEmpty() && localHash == remoteHash) {
+                ConfigSyncStatus.IN_SYNC
+            } else {
+                ConfigSyncStatus.MISMATCH
+            }
+        } catch (e: Exception) {
+            ConfigSyncStatus.NO_REMOTE_CONFIG
+        } finally {
+            tempFile.delete()
+            provider.disconnect()
+        }
+    }
+
+    private fun calculateFileHash(file: File): String {
+        if (!file.exists() || !file.isFile || file.length() == 0L) return ""
+        return try {
+            val digest = MessageDigest.getInstance("SHA-256")
+            file.inputStream().use { input ->
+                val buffer = ByteArray(8192)
+                var bytesRead: Int
+                while (input.read(buffer).also { bytesRead = it } != -1) {
+                    digest.update(buffer, 0, bytesRead)
+                }
+            }
+            digest.digest().joinToString("") { "%02x".format(it) }
+        } catch (e: Exception) {
+            ""
+        }
     }
 }

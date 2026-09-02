@@ -65,6 +65,11 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.SettingsBackupRestore
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Sync
@@ -74,6 +79,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
@@ -83,6 +89,21 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import dev.ilamparithi.aournalpp.R
+import dev.ilamparithi.aournalpp.backup.engine.BackupEngine
+import dev.ilamparithi.aournalpp.backup.model.ConfigSyncStatus
+import dev.ilamparithi.aournalpp.backup.model.ConflictResolutionPolicy
+import dev.ilamparithi.aournalpp.backup.model.ServiceConfig
+import dev.ilamparithi.aournalpp.backup.security.CredentialsVault
+import dev.ilamparithi.aournalpp.runtime.NotesHomeConfigManager
+import dev.ilamparithi.aournalpp.ui.AppDialogDefaults
+import dev.ilamparithi.aournalpp.ui.cloud.FolderBrowserDialog
+import dev.ilamparithi.aournalpp.ui.cloud.FolderBrowserMode
+import dev.ilamparithi.aournalpp.ui.cloud.ServiceConfigDialog
+import dev.ilamparithi.aournalpp.ui.util.a11yHeading
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -182,11 +203,16 @@ fun OnboardingScreen(
     val env = remember { LinuxEnvironment(context) }
     val scope = rememberCoroutineScope()
 
-    val totalPages = 5
+    val totalPages = 6
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { totalPages })
 
     // Minimal extraction details expanded state
     var isExtractionDetailsExpanded by remember { mutableStateOf(false) }
+
+    // Settings restoration overlay state (local workspace or cloud restore)
+    var isRestoringSettings by remember { mutableStateOf(false) }
+    var restoringStatusText by remember { mutableStateOf("") }
+    var isRestorationComplete by remember { mutableStateOf(false) }
 
     // Live storage permission state with lifecycle resume observer
     var isPermissionGranted by remember { mutableStateOf(checkStoragePermissionGranted(context)) }
@@ -215,6 +241,49 @@ fun OnboardingScreen(
     var revealCenter by remember { mutableStateOf<Offset?>(null) }
     var isRevealing by remember { mutableStateOf(false) }
     val revealRadius = remember { Animatable(0f) }
+
+    fun triggerRevealAnimation() {
+        if (isRevealing) return
+        isRevealing = true
+        scope.launch {
+            val rootCoords = rootLayoutCoordinates
+            val checkCoords = checkCircleCoordinates
+            val center = if (rootCoords != null && checkCoords != null &&
+                rootCoords.isAttached && checkCoords.isAttached
+            ) {
+                val pos = rootCoords.localPositionOf(checkCoords, Offset.Zero)
+                Offset(
+                    pos.x + checkCoords.size.width / 2f,
+                    pos.y + checkCoords.size.height / 2f
+                )
+            } else {
+                val w = rootCoords?.size?.width?.toFloat() ?: 1200f
+                val h = rootCoords?.size?.height?.toFloat() ?: 800f
+                Offset(w / 2f, h / 2f)
+            }
+            revealCenter = center
+
+            val rootW = rootLayoutCoordinates?.size?.width?.toFloat() ?: 2500f
+            val rootH = rootLayoutCoordinates?.size?.height?.toFloat() ?: 1600f
+            val maxRadius = maxOf(
+                hypot(center.x, center.y),
+                hypot(rootW - center.x, center.y),
+                hypot(center.x, rootH - center.y),
+                hypot(rootW - center.x, rootH - center.y)
+            ) * 1.05f
+
+            val initialRadius = (checkCoords?.size?.width?.toFloat() ?: 72f) / 2f
+            revealRadius.snapTo(initialRadius)
+            revealRadius.animateTo(
+                targetValue = maxRadius,
+                animationSpec = tween(
+                    durationMillis = 750,
+                    easing = FastOutSlowInEasing
+                )
+            )
+            onFinish()
+        }
+    }
 
     Surface(
         modifier = Modifier
@@ -264,7 +333,7 @@ fun OnboardingScreen(
                         .height(56.dp)
                         .padding(horizontal = 16.dp)
                 ) {
-                    if (pagerState.currentPage > 0 && !isRevealing) {
+                    if (pagerState.currentPage > 0 && !isRevealing && !isRestoringSettings) {
                         IconButton(
                             onClick = {
                                 scope.launch {
@@ -281,124 +350,197 @@ fun OnboardingScreen(
                         }
                     }
 
-                    // True Mathematically Centered Progress Dots
-                    Row(
-                        modifier = Modifier.align(Alignment.Center),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        repeat(totalPages) { index ->
-                            val isSelected = pagerState.currentPage == index
-                            Box(
-                                modifier = Modifier
-                                    .height(8.dp)
-                                    .width(if (isSelected) 24.dp else 8.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (isSelected) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.surfaceVariant
-                                    )
-                            )
+                    if (!isRestoringSettings) {
+                        // True Mathematically Centered Progress Dots
+                        Row(
+                            modifier = Modifier.align(Alignment.Center),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            repeat(totalPages) { index ->
+                                val isSelected = pagerState.currentPage == index
+                                Box(
+                                    modifier = Modifier
+                                        .height(8.dp)
+                                        .width(if (isSelected) 24.dp else 8.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (isSelected) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.surfaceVariant
+                                        )
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            // Main Pager Content (Not swipeable like gallery, userScrollEnabled = false, centered max width 500dp)
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .wrapContentWidth(Alignment.CenterHorizontally)
-                    .widthIn(max = 500.dp)
-            ) {
-                HorizontalPager(
-                    state = pagerState,
-                    modifier = Modifier.fillMaxSize(),
-                    userScrollEnabled = false
-                ) { page ->
-                    when (page) {
-                        0 -> OnboardingWelcomePage(
-                            onGetStarted = {
-                                scope.launch { pagerState.animateScrollToPage(1) }
+            // Restoring Settings Indicator Overlay OR Main Pager Content
+            if (isRestoringSettings) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .wrapContentWidth(Alignment.CenterHorizontally)
+                        .widthIn(max = 500.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(96.dp)
+                                .onGloballyPositioned { checkCircleCoordinates = it }
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isRestorationComplete) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(54.dp)
+                                )
+                            } else {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(54.dp),
+                                    strokeWidth = 4.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
                             }
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        Text(
+                            text = if (isRestorationComplete) androidx.compose.ui.res.stringResource(R.string.msg_onboarding_restoring_done)
+                                   else androidx.compose.ui.res.stringResource(R.string.title_onboarding_restoring),
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.a11yHeading()
                         )
-                        1 -> OnboardingStoragePermissionPage(
-                            isGranted = isPermissionGranted,
-                            onRequestPermission = {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                                    launchStoragePermissionSettings(context)
-                                } else {
-                                    legacyPermissionLauncher.launch(
-                                        arrayOf(
-                                            Manifest.permission.READ_EXTERNAL_STORAGE,
-                                            Manifest.permission.WRITE_EXTERNAL_STORAGE
-                                        )
-                                    )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = restoringStatusText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth(0.85f)
+                        )
+                    }
+                }
+            } else {
+                // Main Pager Content (Not swipeable like gallery, userScrollEnabled = false, centered max width 500dp)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .wrapContentWidth(Alignment.CenterHorizontally)
+                        .widthIn(max = 500.dp)
+                ) {
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize(),
+                        userScrollEnabled = false
+                    ) { page ->
+                        when (page) {
+                            0 -> OnboardingWelcomePage(
+                                onGetStarted = {
+                                    scope.launch { pagerState.animateScrollToPage(1) }
                                 }
-                            },
-                            onContinue = {
-                                scope.launch { pagerState.animateScrollToPage(2) }
-                            }
-                        )
-                        2 -> OnboardingChooseFolderPage(
-                            env = env,
-                            onContinue = {
-                                scope.launch { pagerState.animateScrollToPage(3) }
-                            }
-                        )
-                        3 -> OnboardingSettingsPage(
-                            context = context,
-                            onContinue = {
-                                scope.launch { pagerState.animateScrollToPage(4) }
-                            }
-                        )
-                        4 -> OnboardingCompletionPage(
-                            onCheckCoordinates = { checkCircleCoordinates = it },
-                            isRevealing = isRevealing,
-                            onLetMeIn = {
-                                if (isRevealing) return@OnboardingCompletionPage
-                                isRevealing = true
-                                scope.launch {
-                                    val rootCoords = rootLayoutCoordinates
-                                    val checkCoords = checkCircleCoordinates
-                                    val center = if (rootCoords != null && checkCoords != null &&
-                                        rootCoords.isAttached && checkCoords.isAttached
-                                    ) {
-                                        val pos = rootCoords.localPositionOf(checkCoords, Offset.Zero)
-                                        Offset(
-                                            pos.x + checkCoords.size.width / 2f,
-                                            pos.y + checkCoords.size.height / 2f
-                                        )
+                            )
+                            1 -> OnboardingStoragePermissionPage(
+                                isGranted = isPermissionGranted,
+                                onRequestPermission = {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                        launchStoragePermissionSettings(context)
                                     } else {
-                                        val w = rootCoords?.size?.width?.toFloat() ?: 1200f
-                                        val h = rootCoords?.size?.height?.toFloat() ?: 800f
-                                        Offset(w / 2f, h / 2f)
-                                    }
-                                    revealCenter = center
-
-                                    val rootW = rootLayoutCoordinates?.size?.width?.toFloat() ?: 2500f
-                                    val rootH = rootLayoutCoordinates?.size?.height?.toFloat() ?: 1600f
-                                    val maxRadius = maxOf(
-                                        hypot(center.x, center.y),
-                                        hypot(rootW - center.x, center.y),
-                                        hypot(center.x, rootH - center.y),
-                                        hypot(rootW - center.x, rootH - center.y)
-                                    ) * 1.05f
-
-                                    val initialRadius = (checkCoords?.size?.width?.toFloat() ?: 72f) / 2f
-                                    revealRadius.snapTo(initialRadius)
-                                    revealRadius.animateTo(
-                                        targetValue = maxRadius,
-                                        animationSpec = tween(
-                                            durationMillis = 750,
-                                            easing = FastOutSlowInEasing
+                                        legacyPermissionLauncher.launch(
+                                            arrayOf(
+                                                Manifest.permission.READ_EXTERNAL_STORAGE,
+                                                Manifest.permission.WRITE_EXTERNAL_STORAGE
+                                            )
                                         )
-                                    )
-                                    onFinish()
+                                    }
+                                },
+                                onContinue = {
+                                    scope.launch { pagerState.animateScrollToPage(2) }
                                 }
-                            }
-                        )
+                            )
+                            2 -> OnboardingChooseFolderPage(
+                                env = env,
+                                onContinue = {
+                                    scope.launch { pagerState.animateScrollToPage(3) }
+                                },
+                                onRestoreLocal = { localFolder ->
+                                    isRestoringSettings = true
+                                    restoringStatusText = context.getString(
+                                        R.string.desc_onboarding_restoring_folder,
+                                        localFolder.name
+                                    )
+                                    scope.launch {
+                                        delay(400)
+                                        NotesHomeConfigManager.restoreSettingsFromNotesHome(localFolder, context, env)
+                                        delay(600)
+                                        isRestorationComplete = true
+                                        delay(500)
+                                        triggerRevealAnimation()
+                                    }
+                                },
+                                onRestoreCloud = { service, remotePath, localFolder, skipDownload ->
+                                    isRestoringSettings = true
+                                    restoringStatusText = context.getString(
+                                        R.string.desc_onboarding_restoring_cloud,
+                                        service.name
+                                    )
+                                    scope.launch {
+                                        env.setNotesDirectory(localFolder.absolutePath)
+                                        if (!skipDownload) {
+                                            val engine = BackupEngine(context, env, CredentialsVault(context))
+                                            engine.performRestore(
+                                                service.copy(remoteBasePath = remotePath),
+                                                ConflictResolutionPolicy.OVERWRITE_LOCAL
+                                            )
+                                        }
+                                        NotesHomeConfigManager.restoreSettingsFromNotesHome(localFolder, context, env)
+                                        NotesHomeConfigManager.sync(context, env)
+                                        delay(600)
+                                        isRestorationComplete = true
+                                        delay(500)
+                                        triggerRevealAnimation()
+                                    }
+                                }
+                            )
+                            3 -> OnboardingSettingsPage(
+                                context = context,
+                                onContinue = {
+                                    scope.launch { pagerState.animateScrollToPage(4) }
+                                }
+                            )
+                            4 -> OnboardingCloudBackupPage(
+                                context = context,
+                                onContinue = {
+                                    scope.launch { pagerState.animateScrollToPage(5) }
+                                }
+                            )
+                            5 -> OnboardingCompletionPage(
+                                onCheckCoordinates = { checkCircleCoordinates = it },
+                                isRevealing = isRevealing,
+                                onLetMeIn = {
+                                    triggerRevealAnimation()
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -763,10 +905,80 @@ private fun OnboardingStoragePermissionPage(
 @Composable
 private fun OnboardingChooseFolderPage(
     env: LinuxEnvironment,
-    onContinue: () -> Unit
+    onContinue: () -> Unit,
+    onRestoreLocal: (File) -> Unit,
+    onRestoreCloud: (ServiceConfig, String, File, Boolean) -> Unit
 ) {
     val context = LocalContext.current
+    val vault = remember { CredentialsVault(context) }
+    val backupEngine = remember { BackupEngine(context, env, vault) }
+    val scope = rememberCoroutineScope()
+
     var selectedPath by remember { mutableStateOf(env.getNotesDirectory().absolutePath) }
+    val isCompatible = remember(selectedPath) {
+        NotesHomeConfigManager.isAournalCompatible(File(selectedPath))
+    }
+
+    // Cloud Restore Dialog & State variables
+    var showServiceConfigDialog by remember { mutableStateOf(false) }
+    var showServiceSelectionDialog by remember { mutableStateOf(false) }
+    var showNoCompleteSyncDialog by remember { mutableStateOf(false) }
+    var showFolderBrowserDialog by remember { mutableStateOf(false) }
+    var showConflictDialog by remember { mutableStateOf(false) }
+    var isCheckingCloud by remember { mutableStateOf(false) }
+    var isResolvingCloudConflict by remember { mutableStateOf(false) }
+
+    var selectedCloudService by remember { mutableStateOf<ServiceConfig?>(null) }
+    var currentRemotePath by remember { mutableStateOf(BackupEngine.COMPLETE_BACKUP_REMOTE_ROOT) }
+    var configuredServices by remember { mutableStateOf(vault.getAllServices()) }
+
+    fun checkCloudCompleteSync(service: ServiceConfig, remotePath: String) {
+        selectedCloudService = service
+        currentRemotePath = remotePath
+        isCheckingCloud = true
+        scope.launch {
+            val result = backupEngine.checkRemoteCompleteSync(service, remotePath)
+            isCheckingCloud = false
+            if (result.isSuccess && result.getOrNull() == true) {
+                // Complete sync found in remote folder! Validate local folder
+                val localFolder = File(selectedPath)
+                val syncStatus = backupEngine.compareRemoteConfig(service, remotePath, localFolder)
+                when (syncStatus) {
+                    ConfigSyncStatus.IN_SYNC -> {
+                        // Intact and in-sync: skip onboarding immediately
+                        onRestoreCloud(service, remotePath, localFolder, true)
+                    }
+                    ConfigSyncStatus.MISMATCH -> {
+                        // Config mismatch: prompt user
+                        showConflictDialog = true
+                    }
+                    ConfigSyncStatus.NO_LOCAL_CONFIG,
+                    ConfigSyncStatus.NO_REMOTE_CONFIG -> {
+                        // Fresh/empty local folder: download and restore
+                        onRestoreCloud(service, remotePath, localFolder, false)
+                    }
+                }
+            } else {
+                // No complete sync found in this remote folder
+                showNoCompleteSyncDialog = true
+            }
+        }
+    }
+
+    fun handleRestoreFromCloudClick() {
+        val services = vault.getAllServices()
+        configuredServices = services
+        if (services.isEmpty()) {
+            showServiceConfigDialog = true
+        } else if (services.size == 1) {
+            val srv = services.first()
+            selectedCloudService = srv
+            val defaultPath = BackupEngine.getCompleteBackupRemoteRoot(srv)
+            checkCloudCompleteSync(srv, defaultPath)
+        } else {
+            showServiceSelectionDialog = true
+        }
+    }
 
     val folderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -786,6 +998,13 @@ private fun OnboardingChooseFolderPage(
                 context.getString(dev.ilamparithi.aournalpp.R.string.msg_notes_folder_set, resolved),
                 Toast.LENGTH_SHORT
             ).show()
+
+            if (isResolvingCloudConflict && selectedCloudService != null) {
+                isResolvingCloudConflict = false
+                checkCloudCompleteSync(selectedCloudService!!, currentRemotePath)
+            }
+        } else {
+            isResolvingCloudConflict = false
         }
     }
 
@@ -829,7 +1048,8 @@ private fun OnboardingChooseFolderPage(
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            modifier = Modifier.a11yHeading()
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -842,6 +1062,47 @@ private fun OnboardingChooseFolderPage(
         )
 
         Spacer(modifier = Modifier.height(20.dp))
+
+        // Compatible Workspace Detected Card
+        if (isCompatible) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics(mergeDescendants = true) { role = Role.Button }
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SettingsBackupRestore,
+                        contentDescription = androidx.compose.ui.res.stringResource(R.string.cd_folder_compatible_badge),
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(26.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = androidx.compose.ui.res.stringResource(R.string.title_onboarding_folder_compatible),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.a11yHeading()
+                        )
+                        Text(
+                            text = androidx.compose.ui.res.stringResource(R.string.desc_onboarding_folder_compatible),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+        }
 
         // Current Folder Card
         OutlinedCard(
@@ -945,10 +1206,49 @@ private fun OnboardingChooseFolderPage(
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
+        // Restore from Cloud Action Button
+        OutlinedButton(
+            onClick = { handleRestoreFromCloudClick() },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
+            shape = RoundedCornerShape(14.dp),
+            enabled = !isCheckingCloud
+        ) {
+            if (isCheckingCloud) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            } else {
+                Icon(
+                    imageVector = Icons.Default.CloudDownload,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+            Text(
+                text = androidx.compose.ui.res.stringResource(R.string.action_restore_from_cloud),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Primary Action: Restore & Get Started (if compatible) OR Continue (if normal)
         Button(
-            onClick = onContinue,
+            onClick = {
+                if (isCompatible) {
+                    onRestoreLocal(File(selectedPath))
+                } else {
+                    onContinue()
+                }
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp),
@@ -958,17 +1258,240 @@ private fun OnboardingChooseFolderPage(
             )
         ) {
             Text(
-                text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_continue),
+                text = if (isCompatible) androidx.compose.ui.res.stringResource(R.string.action_restore_and_finish)
+                       else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_continue),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.width(8.dp))
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                imageVector = if (isCompatible) Icons.Default.SettingsBackupRestore
+                              else Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = null,
                 modifier = Modifier.size(18.dp)
             )
         }
+    }
+
+    // Dialog 1: Service Selection Dialog (when multiple services exist)
+    if (showServiceSelectionDialog) {
+        AlertDialog(
+            onDismissRequest = { showServiceSelectionDialog = false },
+            properties = AppDialogDefaults.Properties,
+            title = {
+                Text(
+                    text = androidx.compose.ui.res.stringResource(R.string.action_restore_from_cloud),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.a11yHeading()
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    configuredServices.forEach { service ->
+                        OutlinedCard(
+                            onClick = {
+                                showServiceSelectionDialog = false
+                                selectedCloudService = service
+                                val path = BackupEngine.getCompleteBackupRemoteRoot(service)
+                                checkCloudCompleteSync(service, path)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Cloud,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = service.name,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = service.providerType.displayName,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showServiceSelectionDialog = false
+                        showServiceConfigDialog = true
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(androidx.compose.ui.res.stringResource(R.string.action_connect_cloud))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showServiceSelectionDialog = false }) {
+                    Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel))
+                }
+            }
+        )
+    }
+
+    // Dialog 2: Service Config Dialog (add new service)
+    if (showServiceConfigDialog) {
+        ServiceConfigDialog(
+            initialService = null,
+            existingServices = configuredServices,
+            onDismissRequest = { showServiceConfigDialog = false },
+            onSaveService = { service ->
+                vault.saveService(service)
+                configuredServices = vault.getAllServices()
+                showServiceConfigDialog = false
+                selectedCloudService = service
+                val defaultPath = BackupEngine.getCompleteBackupRemoteRoot(service)
+                checkCloudCompleteSync(service, defaultPath)
+            }
+        )
+    }
+
+    // Dialog 3: No Complete Sync Found Dialog
+    if (showNoCompleteSyncDialog && selectedCloudService != null) {
+        AlertDialog(
+            onDismissRequest = { showNoCompleteSyncDialog = false },
+            properties = AppDialogDefaults.Properties,
+            title = {
+                Text(
+                    text = androidx.compose.ui.res.stringResource(R.string.title_dialog_no_complete_sync),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.a11yHeading()
+                )
+            },
+            text = {
+                Text(
+                    androidx.compose.ui.res.stringResource(
+                        R.string.dialog_no_complete_sync_desc,
+                        currentRemotePath,
+                        selectedCloudService!!.name
+                    )
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showNoCompleteSyncDialog = false
+                        showFolderBrowserDialog = true
+                    }
+                ) {
+                    Text(androidx.compose.ui.res.stringResource(R.string.action_choose_remote_folder))
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = {
+                            showNoCompleteSyncDialog = false
+                            // Continue anyway: exits cloud restore loop, returns to local folder selection
+                            // Saved cloud services remain in vault!
+                        }
+                    ) {
+                        Text(androidx.compose.ui.res.stringResource(R.string.action_continue_anyway))
+                    }
+                    TextButton(
+                        onClick = {
+                            showNoCompleteSyncDialog = false
+                            val currentList = vault.getAllServices()
+                            configuredServices = currentList
+                            if (currentList.size > 1) {
+                                showServiceSelectionDialog = true
+                            } else {
+                                showServiceConfigDialog = true
+                            }
+                        }
+                    ) {
+                        Text(androidx.compose.ui.res.stringResource(R.string.action_select_diff_service))
+                    }
+                }
+            }
+        )
+    }
+
+    // Dialog 4: Remote Folder Browser Dialog
+    if (showFolderBrowserDialog && selectedCloudService != null) {
+        FolderBrowserDialog(
+            mode = FolderBrowserMode.REMOTE,
+            title = androidx.compose.ui.res.stringResource(R.string.action_choose_remote_folder),
+            serviceConfig = selectedCloudService,
+            onFolderSelected = { pickedRemotePath ->
+                showFolderBrowserDialog = false
+                currentRemotePath = pickedRemotePath
+                val updated = selectedCloudService!!.copy(remoteBasePath = pickedRemotePath)
+                vault.saveService(updated)
+                selectedCloudService = updated
+                checkCloudCompleteSync(updated, pickedRemotePath)
+            },
+            onDismissRequest = { showFolderBrowserDialog = false }
+        )
+    }
+
+    // Dialog 5: Config Conflict Dialog
+    if (showConflictDialog && selectedCloudService != null) {
+        AlertDialog(
+            onDismissRequest = { showConflictDialog = false },
+            properties = AppDialogDefaults.Properties,
+            title = {
+                Text(
+                    text = androidx.compose.ui.res.stringResource(R.string.title_dialog_config_conflict),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.a11yHeading()
+                )
+            },
+            text = {
+                Text(
+                    androidx.compose.ui.res.stringResource(
+                        R.string.dialog_config_conflict_desc,
+                        File(selectedPath).name,
+                        currentRemotePath
+                    )
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showConflictDialog = false
+                        onRestoreCloud(selectedCloudService!!, currentRemotePath, File(selectedPath), false)
+                    }
+                ) {
+                    Text(androidx.compose.ui.res.stringResource(R.string.action_replace_local_with_cloud))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showConflictDialog = false
+                        isResolvingCloudConflict = true
+                        folderPickerLauncher.launch(null)
+                    }
+                ) {
+                    Text(androidx.compose.ui.res.stringResource(R.string.action_choose_diff_local_folder))
+                }
+            }
+        )
     }
 }
 
@@ -1247,7 +1770,263 @@ private fun OnboardingSettingsPage(
 }
 
 // -----------------------------------------------------------------------------
-// Step 5: Completion Page (Centered & Responsive)
+// Step 5: Cloud Backup & Complete Sync Setup Page
+// -----------------------------------------------------------------------------
+@Composable
+private fun OnboardingCloudBackupPage(
+    context: Context,
+    onContinue: () -> Unit
+) {
+    val vault = remember { CredentialsVault(context) }
+    var services by remember { mutableStateOf(vault.getAllServices()) }
+    var showServiceConfigDialog by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp, vertical = 16.dp)
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(76.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Cloud,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(38.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        Text(
+            text = androidx.compose.ui.res.stringResource(R.string.title_onboarding_cloud_step),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.a11yHeading()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = androidx.compose.ui.res.stringResource(R.string.desc_onboarding_cloud_step),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        if (services.isNotEmpty()) {
+            Text(
+                text = androidx.compose.ui.res.stringResource(R.string.desc_onboarding_cloud_services_select),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.Start)
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                services.forEach { service ->
+                    OutlinedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics(mergeDescendants = true) { role = Role.Switch },
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.outlinedCardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.Cloud,
+                                            contentDescription = androidx.compose.ui.res.stringResource(
+                                                R.string.cd_cloud_service_icon,
+                                                service.name
+                                            ),
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = service.name,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = service.providerType.displayName,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Switch(
+                                checked = service.isCompleteBackupEnabled,
+                                onCheckedChange = { isEnabled ->
+                                    val updated = service.copy(isCompleteBackupEnabled = isEnabled)
+                                    vault.saveService(updated)
+                                    services = vault.getAllServices()
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedButton(
+                onClick = { showServiceConfigDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = androidx.compose.ui.res.stringResource(R.string.action_connect_cloud),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        } else {
+            // Empty State Card
+            OutlinedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.outlinedCardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = androidx.compose.ui.res.stringResource(R.string.title_onboarding_cloud_step),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = androidx.compose.ui.res.stringResource(R.string.desc_onboarding_cloud_step),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    Button(
+                        onClick = { showServiceConfigDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Cloud,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(androidx.compose.ui.res.stringResource(R.string.action_connect_cloud))
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Button(
+            onClick = onContinue,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            shape = RoundedCornerShape(18.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary
+            )
+        ) {
+            Text(
+                text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_continue),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+
+        if (services.isEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(
+                onClick = onContinue,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = androidx.compose.ui.res.stringResource(R.string.action_skip_cloud),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+
+    if (showServiceConfigDialog) {
+        ServiceConfigDialog(
+            initialService = null,
+            existingServices = services,
+            onDismissRequest = { showServiceConfigDialog = false },
+            onSaveService = { newService ->
+                vault.saveService(newService)
+                services = vault.getAllServices()
+                showServiceConfigDialog = false
+            }
+        )
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Step 6: Completion Page (Centered & Responsive)
 // -----------------------------------------------------------------------------
 @Composable
 private fun OnboardingCompletionPage(

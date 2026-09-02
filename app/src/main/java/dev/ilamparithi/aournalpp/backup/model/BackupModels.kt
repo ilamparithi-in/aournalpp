@@ -216,6 +216,16 @@ data class RestoreResult(
 }
 
 /**
+ * Sync comparison status between local workspace config and remote cloud backup.
+ */
+enum class ConfigSyncStatus {
+    IN_SYNC,
+    MISMATCH,
+    NO_LOCAL_CONFIG,
+    NO_REMOTE_CONFIG
+}
+
+/**
  * Origin source for a file version.
  */
 sealed class FileVersionSource {

@@ -349,7 +349,17 @@ class LinuxEnvironment(private val context: Context) {
         }
 
         val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
-        val lastProvisionedVersion = prefs.getLong("pref_last_provisioned_asset_version", -1L)
+        val lastProvisionedVersion = try {
+            prefs.getLong("pref_last_provisioned_asset_version", -1L)
+        } catch (_: ClassCastException) {
+            val fallback = try {
+                prefs.getInt("pref_last_provisioned_asset_version", -1).toLong()
+            } catch (_: Exception) {
+                -1L
+            }
+            prefs.edit().putLong("pref_last_provisioned_asset_version", fallback).apply()
+            fallback
+        }
 
         val needsAssetExtraction = lastProvisionedVersion != currentVersionCode ||
                 !titleWatcherBin.exists() ||

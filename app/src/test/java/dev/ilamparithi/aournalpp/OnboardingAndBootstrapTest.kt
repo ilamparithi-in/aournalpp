@@ -119,4 +119,64 @@ class OnboardingAndBootstrapTest {
         // Subsequent launches retain completed state
         assertTrue(onboardingCompleted)
     }
+
+    @Test
+    fun `test isAournalCompatible detects valid config directories`() {
+        val tempDir = java.nio.file.Files.createTempDirectory("aournal_test").toFile()
+        try {
+            // Empty folder
+            assertFalse(dev.ilamparithi.aournalpp.runtime.NotesHomeConfigManager.isAournalCompatible(tempDir))
+
+            val configDir = java.io.File(tempDir, ".config")
+            configDir.mkdirs()
+
+            // Empty .config
+            assertFalse(dev.ilamparithi.aournalpp.runtime.NotesHomeConfigManager.isAournalCompatible(tempDir))
+
+            // .config with app_settings.json
+            val appSettingsFile = java.io.File(configDir, "app_settings.json")
+            appSettingsFile.writeText("{}")
+            assertTrue(dev.ilamparithi.aournalpp.runtime.NotesHomeConfigManager.isAournalCompatible(tempDir))
+
+            appSettingsFile.delete()
+            assertFalse(dev.ilamparithi.aournalpp.runtime.NotesHomeConfigManager.isAournalCompatible(tempDir))
+
+            // .config with x11_prefs.json
+            val x11PrefsFile = java.io.File(configDir, "x11_prefs.json")
+            x11PrefsFile.writeText("{}")
+            assertTrue(dev.ilamparithi.aournalpp.runtime.NotesHomeConfigManager.isAournalCompatible(tempDir))
+
+            x11PrefsFile.delete()
+            assertFalse(dev.ilamparithi.aournalpp.runtime.NotesHomeConfigManager.isAournalCompatible(tempDir))
+
+            // .config with xournalpp/settings.xml
+            val xoppDir = java.io.File(configDir, "xournalpp")
+            xoppDir.mkdirs()
+            val settingsXml = java.io.File(xoppDir, "settings.xml")
+            settingsXml.writeText("<settings></settings>")
+            assertTrue(dev.ilamparithi.aournalpp.runtime.NotesHomeConfigManager.isAournalCompatible(tempDir))
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `test BackupEngine getCompleteBackupRemoteRoot fallback and custom path`() {
+        val defaultService = dev.ilamparithi.aournalpp.backup.model.ServiceConfig(
+            id = "srv-1",
+            name = "Nextcloud",
+            providerType = dev.ilamparithi.aournalpp.backup.model.StorageProviderType.NEXTCLOUD,
+            remoteBasePath = ""
+        )
+        assertEquals(
+            "Aournalpp",
+            dev.ilamparithi.aournalpp.backup.engine.BackupEngine.getCompleteBackupRemoteRoot(defaultService)
+        )
+
+        val customService = defaultService.copy(remoteBasePath = "/MyVault/Backups/")
+        assertEquals(
+            "MyVault/Backups",
+            dev.ilamparithi.aournalpp.backup.engine.BackupEngine.getCompleteBackupRemoteRoot(customService)
+        )
+    }
 }

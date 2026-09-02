@@ -170,6 +170,56 @@
     <string name="onboarding_folder_preset_download">Download</string>
     <!-- Toast message when notes directory path changes. %1$s is absolute path -->
     <string name="msg_notes_folder_set">Notes folder set to: %1$s</string>
+    <!-- Compatible Aournal++ folder detected badge title -->
+    <string name="title_onboarding_folder_compatible">Aournal++ Workspace Detected</string>
+    <!-- Compatible Aournal++ folder detected badge description -->
+    <string name="desc_onboarding_folder_compatible">Existing settings and notebook configurations found in this folder. Settings will be restored automatically.</string>
+    <!-- Action button to restore settings and complete onboarding -->
+    <string name="action_restore_and_finish">Restore Settings &amp; Get Started</string>
+    <!-- Action button to restore workspace from cloud -->
+    <string name="action_restore_from_cloud">Restore from Cloud</string>
+    <!-- Title for dialog when no complete sync is found in remote folder -->
+    <string name="title_dialog_no_complete_sync">No Complete Sync Found</string>
+    <!-- Description when complete sync is missing in default remote root. %1$s is remote folder path, %2$s is cloud service name -->
+    <string name="dialog_no_complete_sync_desc">No Aournal++ complete sync was found in the folder \'%1$s\' on %2$s.</string>
+    <!-- Action button to choose a different remote folder -->
+    <string name="action_choose_remote_folder">Choose Remote Folder</string>
+    <!-- Action button to select or configure a different cloud service -->
+    <string name="action_select_diff_service">Select Different Service</string>
+    <!-- Title for dialog when local config conflicts with cloud config -->
+    <string name="title_dialog_config_conflict">Configuration Mismatch</string>
+    <!-- Description when local and cloud configs vary. %1$s is local folder name, %2$s is remote folder name -->
+    <string name="dialog_config_conflict_desc">The local folder \'%1$s\' contains existing settings that differ from the cloud backup at \'%2$s\'. Choose how to proceed:</string>
+    <!-- Action button to choose a different local folder during conflict -->
+    <string name="action_choose_diff_local_folder">Choose Different Folder</string>
+    <!-- Action button to overwrite local configuration with cloud backup -->
+    <string name="action_replace_local_with_cloud">Replace Local with Cloud</string>
+    <!-- Title of onboarding screen when restoring settings -->
+    <string name="title_onboarding_restoring">Restoring Settings</string>
+    <!-- Description when restoring from local folder. %1$s is folder path or name -->
+    <string name="desc_onboarding_restoring_folder">Restoring preferences and configurations from %1$s…</string>
+    <!-- Description when restoring from cloud service. %1$s is cloud service name -->
+    <string name="desc_onboarding_restoring_cloud">Restoring workspace and configurations from %1$s…</string>
+    <!-- Message when restoration completes successfully -->
+    <string name="msg_onboarding_restoring_done">Settings restored successfully!</string>
+    <!-- Title for pre-final cloud backup onboarding step -->
+    <string name="title_onboarding_cloud_step">Cloud Backup &amp; Sync</string>
+    <!-- Description for pre-final cloud backup onboarding step -->
+    <string name="desc_onboarding_cloud_step">Keep your notebooks and application settings synchronized across all your devices.</string>
+    <!-- Subtitle on cloud backup step when multiple services are available -->
+    <string name="desc_onboarding_cloud_services_select">Select which cloud services to enable Complete Sync to:</string>
+    <!-- Switch label for enabling complete sync on a cloud service -->
+    <string name="label_complete_sync_enabled">Enable Complete Sync</string>
+    <!-- Action button to connect a cloud storage service -->
+    <string name="action_connect_cloud">Connect Cloud Service</string>
+    <!-- Action button to skip cloud setup and proceed -->
+    <string name="action_skip_cloud">Set Up Later</string>
+    <!-- Content description for cloud service brand icon. %1$s is service name -->
+    <string name="cd_cloud_service_icon">Cloud service %1$s</string>
+    <!-- Content description for compatible folder status badge -->
+    <string name="cd_folder_compatible_badge">Compatible workspace status badge</string>
+    <!-- Content description for restore action -->
+    <string name="cd_restore_settings_action">Restore settings and enter application</string>
     <!-- Step 4 Quick settings title -->
     <string name="onboarding_settings_title">Quick Settings</string>
     <!-- Step 4 Quick settings description -->
