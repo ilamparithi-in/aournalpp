@@ -187,6 +187,7 @@ class CredentialsVault(context: Context) {
             val mObj = JSONObject()
             mObj.put("id", m.id)
             mObj.put("serviceId", m.serviceId)
+            mObj.put("name", m.name)
             mObj.put("localFolderPath", m.localFolderPath)
             mObj.put("remoteFolderPath", m.remoteFolderPath)
             mObj.put("isEnabled", m.isEnabled)
@@ -206,6 +207,7 @@ class CredentialsVault(context: Context) {
                 CustomFolderMapping(
                     id = mObj.getString("id"),
                     serviceId = mObj.getString("serviceId"),
+                    name = mObj.optString("name", ""),
                     localFolderPath = mObj.getString("localFolderPath"),
                     remoteFolderPath = mObj.getString("remoteFolderPath"),
                     isEnabled = mObj.optBoolean("isEnabled", true)

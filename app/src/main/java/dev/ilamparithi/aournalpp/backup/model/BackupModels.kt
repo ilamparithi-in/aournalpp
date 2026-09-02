@@ -88,11 +88,44 @@ enum class ConflictResolutionPolicy(val id: String, val displayName: String, val
  * Custom mapping between a local folder and a remote directory.
  */
 data class CustomFolderMapping(
-    val id: String,
+    val id: String = java.util.UUID.randomUUID().toString(),
     val serviceId: String,
+    val name: String = "",
     val localFolderPath: String,
     val remoteFolderPath: String,
     val isEnabled: Boolean = true
+)
+
+/**
+ * Item within a reusable mapping template set.
+ */
+data class MappingTemplateItem(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val name: String = "",
+    val localFolderPath: String,
+    val remoteFolderPath: String,
+    val isEnabled: Boolean = true
+)
+
+/**
+ * Named reusable profile or template containing multiple folder mapping items.
+ */
+data class MappingSet(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val name: String,
+    val description: String = "",
+    val createdAtEpochMs: Long = System.currentTimeMillis(),
+    val items: List<MappingTemplateItem> = emptyList()
+)
+
+/**
+ * Result of checking whether local and remote folders in a custom mapping exist.
+ */
+data class FolderValidationResult(
+    val mappingId: String,
+    val localExists: Boolean,
+    val remoteExists: Boolean,
+    val checkedAtEpochMs: Long = System.currentTimeMillis()
 )
 
 /**
@@ -286,7 +319,10 @@ data class FileConflictGroup(
     val id: String = java.util.UUID.randomUUID().toString(),
     val relativePath: String,
     val localVersion: FileVersionItem?,
-    val remoteVersions: List<FileVersionItem>
+    val remoteVersions: List<FileVersionItem>,
+    val description: String? = null,
+    val localFilePath: String? = null,
+    val remoteFilePath: String? = null
 ) {
     val allVersions: List<FileVersionItem>
         get() = listOfNotNull(localVersion) + remoteVersions

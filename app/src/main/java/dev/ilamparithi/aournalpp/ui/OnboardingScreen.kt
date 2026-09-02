@@ -99,9 +99,13 @@ import dev.ilamparithi.aournalpp.backup.model.ConflictResolutionPolicy
 import dev.ilamparithi.aournalpp.backup.model.ServiceConfig
 import dev.ilamparithi.aournalpp.backup.security.CredentialsVault
 import dev.ilamparithi.aournalpp.runtime.NotesHomeConfigManager
-import dev.ilamparithi.aournalpp.ui.AppDialogDefaults
+import dev.ilamparithi.aournalpp.backup.model.FileConflictGroup
+import dev.ilamparithi.aournalpp.backup.model.FileVersionItem
+import dev.ilamparithi.aournalpp.ui.cloud.ConfigDiffActivity
+import dev.ilamparithi.aournalpp.ui.cloud.ConflictDialogMode
 import dev.ilamparithi.aournalpp.ui.cloud.FolderBrowserDialog
 import dev.ilamparithi.aournalpp.ui.cloud.FolderBrowserMode
+import dev.ilamparithi.aournalpp.ui.cloud.MultiServiceConflictDialog
 import dev.ilamparithi.aournalpp.ui.cloud.ServiceConfigDialog
 import dev.ilamparithi.aournalpp.ui.util.a11yHeading
 import androidx.compose.material3.ListItem
@@ -932,6 +936,9 @@ private fun OnboardingChooseFolderPage(
     var currentRemotePath by remember { mutableStateOf(BackupEngine.COMPLETE_BACKUP_REMOTE_ROOT) }
     var configuredServices by remember { mutableStateOf(vault.getAllServices()) }
 
+    var detectedConfigConflicts by remember { mutableStateOf<List<FileConflictGroup>>(emptyList()) }
+    var rememberedConfigSelections by remember { mutableStateOf<Map<String, Set<FileVersionItem>>>(emptyMap()) }
+
     fun checkCloudCompleteSync(service: ServiceConfig, remotePath: String) {
         selectedCloudService = service
         currentRemotePath = remotePath
@@ -940,23 +947,16 @@ private fun OnboardingChooseFolderPage(
             val result = backupEngine.checkRemoteCompleteSync(service, remotePath)
             isCheckingCloud = false
             if (result.isSuccess && result.getOrNull() == true) {
-                // Complete sync found in remote folder! Validate local folder
+                // Complete sync found in remote folder! Check for config file conflicts
                 val localFolder = File(selectedPath)
-                val syncStatus = backupEngine.compareRemoteConfig(service, remotePath, localFolder)
-                when (syncStatus) {
-                    ConfigSyncStatus.IN_SYNC -> {
-                        // Intact and in-sync: skip onboarding immediately
-                        onRestoreCloud(service, remotePath, localFolder, true)
-                    }
-                    ConfigSyncStatus.MISMATCH -> {
-                        // Config mismatch: prompt user
-                        showConflictDialog = true
-                    }
-                    ConfigSyncStatus.NO_LOCAL_CONFIG,
-                    ConfigSyncStatus.NO_REMOTE_CONFIG -> {
-                        // Fresh/empty local folder: download and restore
-                        onRestoreCloud(service, remotePath, localFolder, false)
-                    }
+                val conflicts = backupEngine.detectConfigConflicts(service, remotePath, localFolder)
+                if (conflicts.isNotEmpty()) {
+                    detectedConfigConflicts = conflicts
+                    showConflictDialog = true
+                } else {
+                    // No conflicts or 0 diff changes: restore/skip
+                    val hasLocal = NotesHomeConfigManager.isAournalCompatible(localFolder)
+                    onRestoreCloud(service, remotePath, localFolder, hasLocal)
                 }
             } else {
                 // No complete sync found in this remote folder
@@ -1449,41 +1449,34 @@ private fun OnboardingChooseFolderPage(
         )
     }
 
-    // Dialog 5: Config Conflict Dialog
-    if (showConflictDialog && selectedCloudService != null) {
-        AlertDialog(
+    // Dialog 5: Unified Config Conflict Dialog
+    if (showConflictDialog && selectedCloudService != null && detectedConfigConflicts.isNotEmpty()) {
+        MultiServiceConflictDialog(
+            conflictGroups = detectedConfigConflicts,
+            initialSelections = rememberedConfigSelections,
+            mode = ConflictDialogMode.CONFIG_CONFLICT,
             onDismissRequest = { showConflictDialog = false },
-            properties = AppDialogDefaults.Properties,
-            title = {
-                Text(
-                    text = androidx.compose.ui.res.stringResource(R.string.title_dialog_config_conflict),
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.a11yHeading()
-                )
+            onApplyConfigResolutions = { resolutions ->
+                showConflictDialog = false
+                scope.launch {
+                    val localFolder = File(selectedPath)
+                    backupEngine.applyConfigResolutions(resolutions, selectedCloudService!!, localFolder)
+                    onRestoreCloud(selectedCloudService!!, currentRemotePath, localFolder, false)
+                }
             },
-            text = {
-                Text(
-                    androidx.compose.ui.res.stringResource(
-                        R.string.dialog_config_conflict_desc,
-                        File(selectedPath).name,
-                        currentRemotePath
+            onPreviewDiff = { group ->
+                context.startActivity(
+                    ConfigDiffActivity.createIntent(
+                        context = context,
+                        fileName = group.fileName,
+                        localPath = group.localFilePath ?: "",
+                        remotePath = group.remoteFilePath ?: ""
                     )
                 )
             },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showConflictDialog = false
-                        onRestoreCloud(selectedCloudService!!, currentRemotePath, File(selectedPath), false)
-                    }
-                ) {
-                    Text(androidx.compose.ui.res.stringResource(R.string.action_replace_local_with_cloud))
-                }
-            },
-            dismissButton = {
+            secondaryActionButton = {
                 TextButton(
                     onClick = {
-                        showConflictDialog = false
                         isResolvingCloudConflict = true
                         folderPickerLauncher.launch(null)
                     }

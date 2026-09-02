@@ -30,7 +30,7 @@ class BackupScanner(
     companion object {
         private const val TAG = "BackupScanner"
         private val DEFAULT_NOTES_EXTENSIONS = setOf("xopp", "xoj", "pdf")
-        private val DEFAULT_CONFIG_EXTENSIONS = setOf("xml", "ini", "gpl", "lua")
+        private val DEFAULT_CONFIG_EXTENSIONS = setOf("xml", "ini", "gpl", "lua", "json")
     }
 
     private val compiledRegexes = exclusionFilter.regexPatterns.mapNotNull {
@@ -62,9 +62,22 @@ class BackupScanner(
             )
         }
 
-        // 2. Scan Config Directory (~/.config/xournalpp)
+        // 2. Scan Config Directory from Notes Home (~/.config)
+        val notesConfigDir = File(notesDir, ".config")
+        if (notesConfigDir.exists() && notesConfigDir.isDirectory) {
+            scanDirectoryRecursively(
+                rootDir = notesConfigDir,
+                prefix = ".config",
+                scope = BackupScope.CONFIG.id,
+                allowedExtensions = exclusionFilter.includedExtensions ?: DEFAULT_CONFIG_EXTENSIONS,
+                results = results,
+                cachedMetadata = cachedMetadata
+            )
+        }
+
+        // 3. Scan Xournalpp Config Directory (~/.config/xournalpp) if separate
         val configDir = environment.xournalConfigDir
-        if (configDir.exists() && configDir.isDirectory) {
+        if (configDir.exists() && configDir.isDirectory && !configDir.absolutePath.startsWith(notesConfigDir.absolutePath)) {
             scanDirectoryRecursively(
                 rootDir = configDir,
                 prefix = ".config/xournalpp",

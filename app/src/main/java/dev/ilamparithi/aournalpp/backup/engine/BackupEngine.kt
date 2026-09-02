@@ -19,6 +19,7 @@ import dev.ilamparithi.aournalpp.backup.model.ServiceConfig
 import dev.ilamparithi.aournalpp.backup.model.TransferDirection
 import dev.ilamparithi.aournalpp.backup.model.TransferItem
 import dev.ilamparithi.aournalpp.backup.model.TransferStatus
+import dev.ilamparithi.aournalpp.backup.provider.CloudStorageProvider
 import dev.ilamparithi.aournalpp.backup.provider.StorageProviderFactory
 import dev.ilamparithi.aournalpp.backup.queue.FileTransferQueueManager
 import dev.ilamparithi.aournalpp.backup.scanner.BackupScanner
@@ -721,11 +722,29 @@ class BackupEngine(
                     val v1 = allVersions[i]
                     val v2 = allVersions[j]
 
-                    val sizeDiff = v1.sizeBytes != v2.sizeBytes
-                    val timeDiff = abs(v1.lastModifiedEpochMs - v2.lastModifiedEpochMs) > 1000L
-                    val hashDiff = v1.contentHash != null && v2.contentHash != null && !v1.contentHash.equals(v2.contentHash, ignoreCase = true)
+                    val sameHash = v1.contentHash != null && v2.contentHash != null && v1.contentHash.equals(v2.contentHash, ignoreCase = true)
+                    if (sameHash) {
+                        // Hashes match: identical content, 0 changes regardless of lastModified timestamp difference
+                        continue
+                    }
 
-                    if (sizeDiff || timeDiff || hashDiff) {
+                    // If both files exist locally to inspect, check if actual content diff has 0 changes
+                    if (v1.localFilePath != null && v2.localFilePath != null) {
+                        val f1 = File(v1.localFilePath)
+                        val f2 = File(v2.localFilePath)
+                        if (f1.exists() && f2.exists() && !hasContentChanges(f1, f2)) {
+                            continue
+                        }
+                    }
+
+                    val sizeDiff = v1.sizeBytes != v2.sizeBytes
+                    val timeDiff = Math.abs(v1.lastModifiedEpochMs - v2.lastModifiedEpochMs) > 2000L
+                    val hashDiff = v1.contentHash != null && v2.contentHash != null && !v1.contentHash.equals(v2.contentHash, ignoreCase = true)
+                    // If content hashes are unavailable on either side and sizes match, fallback to timestamp difference
+                    val unknownHashDiff = (v1.contentHash == null || v2.contentHash == null) && timeDiff
+
+                    // Only flag conflict if content differs (size or hash), or timestamps differ when hashes cannot verify 0 changes
+                    if (sizeDiff || hashDiff || unknownHashDiff) {
                         hasConflict = true
                         break
                     }
@@ -1135,6 +1154,176 @@ class BackupEngine(
             tempFile.delete()
             provider.disconnect()
         }
+    }
+
+    fun getStorageProvider(service: ServiceConfig): CloudStorageProvider {
+        return StorageProviderFactory.createProvider(service)
+    }
+
+    /**
+     * Detects configuration conflicts across settings.xml, app_settings.json, x11_prefs.json, settings.ini, and sync_mappings.json.
+     * Returns a list of FileConflictGroup populated with descriptions and downloaded remote cache files for diffing.
+     */
+    suspend fun detectConfigConflicts(
+        serviceConfig: ServiceConfig,
+        remotePath: String = getCompleteBackupRemoteRoot(serviceConfig),
+        localNotesDir: File
+    ): List<FileConflictGroup> = withContext(Dispatchers.IO) {
+        val configFilesToCheck = listOf(
+            Triple(
+                ".config/xournalpp/settings.xml",
+                "settings.xml",
+                "Xournal++ pen styles, toolbars, page templates, and drawing preferences."
+            ),
+            Triple(
+                ".config/app_settings.json",
+                "app_settings.json",
+                "Aournal++ Android settings: touch gestures, display scaling, and themes."
+            ),
+            Triple(
+                ".config/x11_prefs.json",
+                "x11_prefs.json",
+                "Termux-X11 display preferences: resolution, refresh rate, and canvas mode."
+            ),
+            Triple(
+                ".config/xournalpp/settings.ini",
+                "settings.ini",
+                "GTK3 interface theme, styling, and UI font configurations."
+            ),
+            Triple(
+                ".config/sync_mappings.json",
+                "sync_mappings.json",
+                "Custom folder sync mappings and saved mapping template sets."
+            )
+        )
+
+        val conflicts = mutableListOf<FileConflictGroup>()
+        val provider = StorageProviderFactory.createProvider(serviceConfig)
+        val cleanRoot = remotePath.trim().trim('/')
+
+        try {
+            val cacheDir = File(context.cacheDir, "config_diff_cache").apply { if (!exists()) mkdirs() }
+
+            for ((relPath, fileName, desc) in configFilesToCheck) {
+                val localFile = File(localNotesDir, relPath)
+                val altLocalFile = if (relPath.startsWith(".config/xournalpp/")) {
+                    File(env.xournalConfigDir, fileName)
+                } else if (fileName == "sync_mappings.json") {
+                    File(context.filesDir, "sync_mappings.json")
+                } else null
+
+                val activeLocal = if (localFile.exists() && localFile.length() > 0L) localFile
+                else if (altLocalFile != null && altLocalFile.exists() && altLocalFile.length() > 0L) altLocalFile
+                else null
+
+                val remoteFilePath = "$cleanRoot/$relPath"
+                val tempRemoteFile = File(cacheDir, "remote_${serviceConfig.id}_$fileName")
+                val downloadRes = provider.downloadFile(remoteFilePath, tempRemoteFile) { _, _ -> }
+
+                val remoteExists = downloadRes.isSuccess && tempRemoteFile.exists() && tempRemoteFile.length() > 0L
+
+                if (activeLocal != null && remoteExists) {
+                    val localHash = calculateFileHash(activeLocal)
+                    val remoteHash = calculateFileHash(tempRemoteFile)
+
+                    if (localHash.isNotEmpty() && remoteHash.isNotEmpty() && localHash != remoteHash) {
+                        // If diff has 0 actual changes (e.g. whitespace/CRLF or identical semantic content), don't inform the user
+                        if (!hasContentChanges(activeLocal, tempRemoteFile)) {
+                            continue
+                        }
+
+                        val localVersion = FileVersionItem(
+                            source = FileVersionSource.LOCAL,
+                            fileName = fileName,
+                            relativePath = relPath,
+                            lastModifiedEpochMs = activeLocal.lastModified(),
+                            sizeBytes = activeLocal.length(),
+                            contentHash = localHash,
+                            localFilePath = activeLocal.absolutePath
+                        )
+                        val remoteVersion = FileVersionItem(
+                            source = FileVersionSource.REMOTE(
+                                serviceId = serviceConfig.id,
+                                serviceName = serviceConfig.name,
+                                providerType = serviceConfig.providerType
+                            ),
+                            fileName = fileName,
+                            relativePath = relPath,
+                            lastModifiedEpochMs = System.currentTimeMillis(), // remote timestamp
+                            sizeBytes = tempRemoteFile.length(),
+                            contentHash = remoteHash,
+                            localFilePath = tempRemoteFile.absolutePath,
+                            remotePath = remoteFilePath
+                        )
+
+                        conflicts.add(
+                            FileConflictGroup(
+                                id = "config_${serviceConfig.id}_$fileName",
+                                relativePath = relPath,
+                                localVersion = localVersion,
+                                remoteVersions = listOf(remoteVersion),
+                                description = desc,
+                                localFilePath = activeLocal.absolutePath,
+                                remoteFilePath = tempRemoteFile.absolutePath
+                            )
+                        )
+                    }
+                }
+            }
+        } catch (_: Exception) {
+        } finally {
+            provider.disconnect()
+        }
+
+        conflicts
+    }
+
+    /**
+     * Applies resolved configuration file selections by writing chosen versions to local notes home and internal app storage.
+     */
+    suspend fun applyConfigResolutions(
+        resolutions: Map<String, FileVersionItem>,
+        serviceConfig: ServiceConfig,
+        localNotesDir: File
+    ) = withContext(Dispatchers.IO) {
+        for ((_, chosenVer) in resolutions) {
+            if (chosenVer.source is FileVersionSource.REMOTE && chosenVer.localFilePath != null) {
+                val downloadedCache = File(chosenVer.localFilePath)
+                if (downloadedCache.exists() && downloadedCache.isFile) {
+                    val targetRelPath = when (chosenVer.fileName) {
+                        "settings.xml", "settings.ini" -> ".config/xournalpp/${chosenVer.fileName}"
+                        else -> ".config/${chosenVer.fileName}"
+                    }
+                    val targetFile = File(localNotesDir, targetRelPath)
+                    targetFile.parentFile?.mkdirs()
+                    downloadedCache.copyTo(targetFile, overwrite = true)
+
+                    // Also mirror into active runtime config locations if applicable
+                    if (chosenVer.fileName == "sync_mappings.json") {
+                        val internalFile = File(context.filesDir, "sync_mappings.json")
+                        downloadedCache.copyTo(internalFile, overwrite = true)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun hasContentChanges(f1: File, f2: File): Boolean {
+        if (!f1.exists() || !f2.exists()) return true
+        if (f1.length() == f2.length() && calculateFileHash(f1) == calculateFileHash(f2)) {
+            return false
+        }
+        val ext = f1.extension.lowercase()
+        if (ext in listOf("xml", "json", "ini", "txt", "conf", "cfg", "properties")) {
+            return try {
+                val lines1 = f1.readLines().map { it.trimEnd() }.filter { it.isNotEmpty() }
+                val lines2 = f2.readLines().map { it.trimEnd() }.filter { it.isNotEmpty() }
+                lines1 != lines2
+            } catch (_: Exception) {
+                true
+            }
+        }
+        return true
     }
 
     private fun calculateFileHash(file: File): String {

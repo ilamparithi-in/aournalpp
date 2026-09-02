@@ -220,6 +220,120 @@
     <string name="cd_folder_compatible_badge">Compatible workspace status badge</string>
     <!-- Content description for restore action -->
     <string name="cd_restore_settings_action">Restore settings and enter application</string>
+    <!-- Description for settings.xml config file -->
+    <string name="desc_config_settings_xml">Xournal++ pen styles, toolbars, page templates, and drawing preferences.</string>
+    <!-- Description for app_settings.json config file -->
+    <string name="desc_config_app_settings">Aournal++ Android settings: touch gestures, display scaling, and themes.</string>
+    <!-- Description for x11_prefs.json config file -->
+    <string name="desc_config_x11_prefs">Termux-X11 display preferences: resolution, refresh rate, and canvas mode.</string>
+    <!-- Description for settings.ini config file -->
+    <string name="desc_config_gtk_theme">GTK3 interface theme, styling, and UI font configurations.</string>
+    <!-- Description for sync_mappings.json config file -->
+    <string name="desc_config_sync_mappings">Custom folder sync mappings and saved mapping template sets.</string>
+    <!-- Relative time difference badge. %1$s is source label, %2$s is relative duration -->
+    <string name="msg_time_comparison_newer">%1$s is %2$s newer</string>
+    <!-- Relative time comparison when both files have identical timestamps -->
+    <string name="msg_time_comparison_same">Identical timestamp</string>
+    <!-- Local source label -->
+    <string name="label_source_local">Local</string>
+    <!-- Cloud source label -->
+    <string name="label_source_cloud">Cloud</string>
+    <!-- Action button to preview diff between config versions -->
+    <string name="action_preview_diff">Preview Diff</string>
+    <!-- Title for configuration diff viewer activity -->
+    <string name="title_config_diff_viewer">Configuration Diff</string>
+    <!-- Label for local side in diff viewer -->
+    <string name="label_diff_local_side">Local Version</string>
+    <!-- Label for cloud side in diff viewer -->
+    <string name="label_diff_cloud_side">Cloud Version</string>
+    <!-- Label when comparing identical files -->
+    <string name="label_diff_identical">Both local and cloud files are identical.</string>
+    <!-- Label for custom mapping name field -->
+    <string name="label_mapping_name">Mapping Name</string>
+    <!-- Hint placeholder for custom mapping name -->
+    <string name="hint_mapping_name">e.g. Mathematics Notes</string>
+    <!-- Status message while checking local and remote folder paths -->
+    <string name="label_checking_folders">Checking folder paths on device and cloud…</string>
+    <!-- Error message when mapped local folder does not exist on device. %1$s is folder path -->
+    <string name="error_local_folder_missing">Local folder not found: %1$s</string>
+    <!-- Error message when mapped remote folder does not exist in cloud. %1$s is folder path -->
+    <string name="error_remote_folder_missing">Remote folder not found: %1$s</string>
+    <!-- Title for Mapping Sets dialog -->
+    <string name="title_mapping_sets">Mapping Sets</string>
+    <!-- Description for Mapping Sets feature -->
+    <string name="desc_mapping_sets">Reusable templates of folder sync mappings across cloud services.</string>
+    <!-- Action button to save current mappings as a template set -->
+    <string name="action_save_as_set">Save as Set</string>
+    <!-- Action button to apply a mapping set to a service -->
+    <string name="action_apply_set">Apply Set</string>
+    <!-- Dialog title to save mapping set -->
+    <string name="title_save_mapping_set">Save Mapping Set</string>
+    <!-- Hint for mapping set name -->
+    <string name="hint_set_name">e.g. Semester 1 Workspaces</string>
+    <!-- Action to replace existing mappings when applying set -->
+    <string name="action_replace_mappings">Replace All Existing</string>
+    <!-- Action to append to existing mappings when applying set -->
+    <string name="action_append_mappings">Append to Existing</string>
+    <!-- Title for apply set confirmation dialog. %1$s is set name -->
+    <string name="title_apply_mapping_set">Apply \"%1$s\"</string>
+    <!-- Description for apply set dialog. %1$s is service name -->
+    <string name="desc_apply_mapping_set">Choose how to apply this mapping set to %1$s:</string>
+    <!-- Toast message when mapping set is saved. %1$s is set name -->
+    <string name="msg_set_saved">Saved mapping set \"%1$s\"</string>
+    <!-- Toast message when mapping set is applied. %1$d is count, %2$s is set name -->
+    <string name="msg_set_applied">Applied %1$d mappings from \"%2$s\"</string>
+    <!-- Toast message when mapping set is deleted. %1$s is set name -->
+    <string name="msg_set_deleted">Deleted mapping set \"%1$s\"</string>
+    <!-- Action button to toggle batch selection mode -->
+    <string name="action_batch_mode">Batch Actions</string>
+    <!-- Action button to delete selected mappings in batch -->
+    <string name="action_batch_delete">Delete Selected</string>
+    <!-- Action button to enable selected mappings in batch -->
+    <string name="action_batch_enable">Enable Selected</string>
+    <!-- Action button to disable selected mappings in batch -->
+    <string name="action_batch_disable">Disable Selected</string>
+    <!-- Label displaying count of selected items in batch mode. %1$d is count -->
+    <string name="label_selected_count">%1$d selected</string>
+    <!-- Hint label displayed on tap before long-pressing to delete a mapping -->
+    <string name="hint_hold_to_delete_mapping">Hold to delete</string>
+    <!-- Search field placeholder for custom mappings -->
+    <string name="hint_search_mappings">Search mappings by name or path…</string>
+    <!-- Pagination indicator. %1$d is current page, %2$d is total pages, %3$d is total items -->
+    <string name="label_page_indicator">Page %1$d of %2$d (%3$d total)</string>
+    <!-- Action button for next page -->
+    <string name="action_next_page">Next</string>
+    <!-- Action button for previous page -->
+    <string name="action_prev_page">Previous</string>
+    <!-- Title for service detail subpage. %1$s is service name -->
+    <string name="title_service_details">%1$s</string>
+    <!-- Action to add selected mappings to a set -->
+    <string name="action_add_to_set">Add to Set</string>
+    <!-- Search field placeholder for mapping sets -->
+    <string name="hint_search_sets">Search sets, mappings, or folders…</string>
+    <!-- Title for applying a mapping set dialog. %1$s is set name -->
+    <string name="dialog_apply_set_title">Apply \"%1$s\" to Cloud</string>
+    <!-- Label for selecting target cloud service in dialog -->
+    <string name="label_select_target_cloud">Select target cloud service:</string>
+    <!-- Radio option to replace existing mappings -->
+    <string name="label_replace_mappings">Replace existing mappings</string>
+    <!-- Radio option to append to existing mappings -->
+    <string name="label_append_mappings">Append to existing mappings</string>
+    <!-- Message when mapping set is applied. %1$s is set name, %2$s is service name, %3$d is mappings count -->
+    <string name="msg_mapping_set_applied">Applied \"%1$s\" to %2$s (%3$d mappings)</string>
+    <!-- Message when mapping set is saved. %1$s is set name -->
+    <string name="msg_mapping_set_saved">Saved mapping set \"%1$s\"</string>
+    <!-- Message when mapping set is deleted. %1$s is set name -->
+    <string name="msg_mapping_set_deleted">Deleted mapping set \"%1$s\"</string>
+    <!-- Overflow indicator for mappings list. %1$d is count -->
+    <string name="label_more_mappings_overflow">+ %1$d more</string>
+    <!-- Title when no mapping sets exist -->
+    <string name="empty_sets_title">No Mapping Sets</string>
+    <!-- Description when no mapping sets exist -->
+    <string name="empty_sets_desc">Save sets of folder mappings to quickly restore them across any of your cloud services.</string>
+    <!-- Message when search query has no matching mapping sets. %1$s is search query -->
+    <string name="empty_sets_search">No mapping sets match \"%1$s\".</string>
+    <!-- Action button to create a new mapping set -->
+    <string name="action_new_set">New Set</string>
     <!-- Step 4 Quick settings title -->
     <string name="onboarding_settings_title">Quick Settings</string>
     <!-- Step 4 Quick settings description -->

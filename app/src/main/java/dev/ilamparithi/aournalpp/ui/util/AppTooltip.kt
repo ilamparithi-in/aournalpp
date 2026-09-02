@@ -13,6 +13,7 @@ import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Shape
 
 /**
  * Material 3 Expressive Tooltip wrapper that displays a tooltip upon:
@@ -79,6 +80,7 @@ fun AppFilledTonalIconButton(
     tooltip: String,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    shape: Shape = IconButtonDefaults.filledShape,
     interactionSource: MutableInteractionSource? = null,
     colors: IconButtonColors = IconButtonDefaults.filledTonalIconButtonColors(),
     content: @Composable () -> Unit
@@ -88,6 +90,7 @@ fun AppFilledTonalIconButton(
             onClick = onClick,
             modifier = modifier.minTouchTarget(),
             enabled = enabled,
+            shape = shape,
             interactionSource = interactionSource,
             colors = colors,
             content = content

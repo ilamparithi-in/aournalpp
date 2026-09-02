@@ -98,6 +98,12 @@
             android:theme="@style/Theme.Aournal"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|fontScale" />
 
+        <activity
+            android:name=".ui.cloud.ConfigDiffActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Aournal"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|fontScale" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

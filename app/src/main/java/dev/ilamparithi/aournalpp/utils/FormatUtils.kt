@@ -108,4 +108,33 @@ object FormatUtils {
         val nf = getCachedNumberFormat(locale, minDecimals = minDecimals, maxDecimals = maxDecimals)
         return nf.format(number)
     }
+
+    /**
+     * Formats the relative difference between two timestamps (e.g. "Cloud is 5m newer", "Local is 2h newer").
+     */
+    fun formatRelativeTimeDifference(
+        epoch1: Long?,
+        epoch2: Long?,
+        label1: String,
+        label2: String
+    ): String {
+        if (epoch1 == null || epoch2 == null || epoch1 <= 0L || epoch2 <= 0L || epoch1 == epoch2) {
+            return ""
+        }
+        val diffMs = epoch1 - epoch2
+        if (Math.abs(diffMs) < 60_000L) {
+            return "About the same time"
+        }
+        val isFirstNewer = diffMs > 0
+        val newerLabel = if (isFirstNewer) label1 else label2
+        val absDiffSec = Math.abs(diffMs) / 1000L
+
+        val durationStr = when {
+            absDiffSec < 3600 -> "${absDiffSec / 60}m"
+            absDiffSec < 86400 -> "${absDiffSec / 3600}h"
+            else -> "${absDiffSec / 86400}d"
+        }
+
+        return "$newerLabel is $durationStr newer"
+    }
 }

@@ -33,6 +33,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import dev.ilamparithi.aournalpp.R
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -62,6 +64,9 @@ fun CustomMappingDialog(
     }
     var isServiceDropdownExpanded by remember { mutableStateOf(false) }
 
+    var name by remember {
+        mutableStateOf(initialMapping?.name ?: if (initialLocalPath.isNotBlank()) File(initialLocalPath).name else "")
+    }
     var localPath by remember {
         mutableStateOf(initialMapping?.localFolderPath ?: initialLocalPath.ifBlank { notesDir.absolutePath })
     }
@@ -88,6 +93,16 @@ fun CustomMappingDialog(
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                // Mapping Name
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(stringResource(dev.ilamparithi.aournalpp.R.string.label_mapping_name)) },
+                    placeholder = { Text(stringResource(dev.ilamparithi.aournalpp.R.string.hint_mapping_name)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
                 // Target Cloud Service Selector
                 if (services.size > 1 && initialMapping == null && initialServiceId == null) {
                     ExposedDropdownMenuBox(
@@ -128,7 +143,12 @@ fun CustomMappingDialog(
                 ) {
                     OutlinedTextField(
                         value = localPath,
-                        onValueChange = { localPath = it },
+                        onValueChange = {
+                            localPath = it
+                            if (name.isBlank() && it.isNotBlank()) {
+                                name = File(it).name
+                            }
+                        },
                         label = { Text("Local Folder Path") },
                         placeholder = { Text(notesDir.absolutePath) },
                         singleLine = true,
@@ -190,9 +210,11 @@ fun CustomMappingDialog(
             Button(
                 onClick = {
                     if (selectedServiceId.isNotBlank() && localPath.isNotBlank() && remotePath.isNotBlank()) {
+                        val computedName = name.trim().ifBlank { File(localPath.trim()).name }
                         val mapping = CustomFolderMapping(
                             id = initialMapping?.id ?: UUID.randomUUID().toString(),
                             serviceId = selectedServiceId,
+                            name = computedName,
                             localFolderPath = localPath.trim(),
                             remoteFolderPath = remotePath.trim(),
                             isEnabled = isEnabled
