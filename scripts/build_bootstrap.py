@@ -15,6 +15,11 @@ import shutil
 import tarfile
 import urllib.request
 import argparse
+import json
+import hashlib
+import subprocess
+import datetime
+import tempfile
 from typing import Dict, Set, List
 
 # Seed packages required for Xournal++ and Matchbox / Openbox
@@ -24,7 +29,8 @@ ROOT_PACKAGES = [
     "xdotool",
     "librsvg",
     "adwaita-icon-theme",
-    "shared-mime-info"
+    "shared-mime-info",
+    "gtk3"
 ]
 
 ARCH_MAPPINGS = {
@@ -199,11 +205,61 @@ class RepositoryIndex:
         self.repo_bases = repo_bases
         self.packages: Dict[str, dict] = {}
 
-    def load_index(self, repo_key: str, url: str):
-        print(f"[*] Fetching package index: {repo_key} ({url})...")
-        req = urllib.request.Request(url + "Packages.gz", headers={"User-Agent": "xopp-builder"})
+    def load_index(self, repo_key: str, dist_name: str, inrelease_url: str, termux_arch: str, keyring_path: str = None):
+        print(f"[*] Fetching and verifying repository: {repo_key} ({inrelease_url})...")
+        req = urllib.request.Request(inrelease_url, headers={"User-Agent": "xopp-builder"})
         with urllib.request.urlopen(req, timeout=30) as resp:
-            data = gzip.decompress(resp.read()).decode("utf-8", errors="ignore")
+            inrelease_data = resp.read()
+
+        # 1. Cryptographic GPG signature verification using Linux gpgv
+        if keyring_path and os.path.exists(keyring_path) and shutil.which("gpgv"):
+            with tempfile.NamedTemporaryFile("wb", delete=False) as tf:
+                tf.write(inrelease_data)
+                temp_inrelease = tf.name
+            try:
+                res = subprocess.run(
+                    ["gpgv", "--keyring", os.path.abspath(keyring_path), temp_inrelease],
+                    capture_output=True, text=True
+                )
+                if res.returncode != 0:
+                    raise RuntimeError(f"GPG signature verification failed for {repo_key} InRelease:\n{res.stderr}")
+                print(f"[✔] GPG signature verified successfully for {repo_key} InRelease.")
+            finally:
+                if os.path.exists(temp_inrelease):
+                    os.unlink(temp_inrelease)
+        else:
+            print(f"[!] Notice: gpgv not found or keyring missing at {keyring_path}. Skipping GPG signature check.")
+
+        # 2. Extract SHA256 of Packages.gz from InRelease
+        inrelease_text = inrelease_data.decode("utf-8", errors="ignore")
+        expected_pkg_sha256 = None
+        target_subpath = f"main/binary-{termux_arch}/Packages.gz"
+        sha256_active = False
+        for line in inrelease_text.splitlines():
+            if line.startswith("SHA256:"):
+                sha256_active = True
+                continue
+            elif sha256_active and line.startswith(" "):
+                parts = line.strip().split()
+                if len(parts) == 3 and parts[2] == target_subpath:
+                    expected_pkg_sha256 = parts[0]
+                    break
+            elif sha256_active and not line.startswith(" "):
+                sha256_active = False
+
+        pkg_gz_url = f"{self.repo_bases[repo_key]}dists/{dist_name}/main/binary-{termux_arch}/Packages.gz"
+        print(f"[*] Downloading Packages.gz from {pkg_gz_url}...")
+        req = urllib.request.Request(pkg_gz_url, headers={"User-Agent": "xopp-builder"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            pkg_gz_data = resp.read()
+
+        if expected_pkg_sha256:
+            actual_sha = hashlib.sha256(pkg_gz_data).hexdigest()
+            if actual_sha != expected_pkg_sha256:
+                raise RuntimeError(f"SHA-256 mismatch for Packages.gz from {repo_key}! Expected {expected_pkg_sha256}, got {actual_sha}")
+            print(f"[✔] Packages.gz SHA-256 verified for {repo_key}.")
+
+        data = gzip.decompress(pkg_gz_data).decode("utf-8", errors="ignore")
 
         current_pkg = {}
         for line in data.splitlines():
@@ -286,6 +342,31 @@ def find_ndk_clang(clang_target: str) -> str:
     return ""
 
 
+def ensure_keyring(keyring_path: str) -> str:
+    if os.path.exists(keyring_path) and os.path.getsize(keyring_path) > 0:
+        return keyring_path
+
+    trusted_sources = [
+        "https://raw.githubusercontent.com/termux/termux-packages/master/packages/termux-keyring/termux-autobuilds.gpg",
+        "https://packages.termux.dev/apt/termux-main/termux-archive-keyring.gpg"
+    ]
+    os.makedirs(os.path.dirname(keyring_path), exist_ok=True)
+    for url in trusted_sources:
+        try:
+            print(f"[*] Fetching trusted Termux archive keyring from: {url}...")
+            req = urllib.request.Request(url, headers={"User-Agent": "Aournalpp-Bootstrap-Build/1.0"})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = resp.read()
+                if len(data) > 0:
+                    with open(keyring_path, "wb") as f:
+                        f.write(data)
+                    print(f"[✔] Trusted keyring fetched and cached at {keyring_path} ({len(data)} bytes).")
+                    return keyring_path
+        except Exception as e:
+            print(f"[!] Warning: Failed fetching keyring from {url}: {e}")
+    return keyring_path
+
+
 def main():
     parser = argparse.ArgumentParser(description="Build bootstrap.tar.xz for Xournal++ Android (Multi-Arch)")
     parser.add_argument("--arch", "-a", default="aarch64", help="Target architecture (aarch64, x86_64, arm, i686 / arm64-v8a, etc.)")
@@ -317,17 +398,21 @@ def main():
     os.makedirs(staging_dir, exist_ok=True)
 
     repos = {
-        "main": f"https://packages.termux.dev/apt/termux-main/dists/stable/main/binary-{termux_arch}/",
-        "x11": f"https://packages.termux.dev/apt/termux-x11/dists/x11/main/binary-{termux_arch}/"
+        "main": ("stable", "https://packages.termux.dev/apt/termux-main/dists/stable/InRelease"),
+        "x11": ("x11", "https://packages.termux.dev/apt/termux-x11/dists/x11/InRelease")
     }
     repo_bases = {
         "main": "https://packages.termux.dev/apt/termux-main/",
         "x11": "https://packages.termux.dev/apt/termux-x11/"
     }
 
+    scripts_dir = os.path.dirname(os.path.abspath(__file__))
+    keyring_path = os.path.join(scripts_dir, "keys", "termux-archive-keyring.gpg")
+    ensure_keyring(keyring_path)
+
     index = RepositoryIndex(repo_bases)
-    for key, url in repos.items():
-        index.load_index(key, url)
+    for key, (dist, inrelease_url) in repos.items():
+        index.load_index(key, dist, inrelease_url, termux_arch, keyring_path)
 
     print(f"[*] Resolving recursive dependency graph for: {ROOT_PACKAGES}")
     all_packages = index.resolve_dependencies(ROOT_PACKAGES)
@@ -344,19 +429,29 @@ def main():
         deb_filename = os.path.basename(meta["Filename"])
         cached_deb_path = os.path.join(cache_dir, deb_filename)
         expected_size = int(meta.get("Size", 0))
+        expected_sha = meta.get("SHA256")
 
         deb_bytes = None
         if os.path.exists(cached_deb_path) and (expected_size == 0 or os.path.getsize(cached_deb_path) == expected_size):
-            print(f" -> [Cache Hit] Extracting: {pkg_name} ({meta.get('Version')})")
             with open(cached_deb_path, "rb") as f:
                 deb_bytes = f.read()
-        else:
+            if expected_sha and hashlib.sha256(deb_bytes).hexdigest() != expected_sha:
+                print(f"[!] Cached deb checksum mismatch for {pkg_name}, redownloading...")
+                deb_bytes = None
+
+        if deb_bytes is None:
             print(f" -> [Download] {pkg_name} ({meta.get('Version')}) from {download_url}")
             req = urllib.request.Request(download_url, headers={"User-Agent": "xopp-builder"})
             with urllib.request.urlopen(req, timeout=45) as resp:
                 deb_bytes = resp.read()
-                with open(cached_deb_path, "wb") as f:
-                    f.write(deb_bytes)
+            if expected_sha:
+                actual_sha = hashlib.sha256(deb_bytes).hexdigest()
+                if actual_sha != expected_sha:
+                    raise RuntimeError(f"Poisoned or corrupted package {pkg_name}! SHA-256 mismatch (got {actual_sha}, expected {expected_sha})")
+            with open(cached_deb_path, "wb") as f:
+                f.write(deb_bytes)
+        else:
+            print(f" -> [Cache Hit Verified] Extracting: {pkg_name} ({meta.get('Version')})")
 
         DebExtractor.extract_data_tar(deb_bytes, staging_dir)
 
@@ -503,7 +598,8 @@ def main():
             ("xopp-wallpaper", "libxopp_wallpaper.so"),
             ("gdk-pixbuf-query-loaders", "libgdk_pixbuf_query_loaders.so"),
             ("glib-compile-schemas", "libglib_compile_schemas.so"),
-            ("xdotool", "libxdotool.so")
+            ("xdotool", "libxdotool.so"),
+            ("gtk3-demo", "libgtk3_demo.so")
         ]
         for bin_name, so_name in bin_mappings:
             src_bin = os.path.join(staging_usr, "bin", bin_name)
@@ -528,8 +624,49 @@ def main():
             print(f"[*] Exported native shim: libxopp-shim.so -> {dest_shim}")
 
     print(f"[*] Packaging final archive to {args.output}...")
-    os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
+    out_dir = os.path.dirname(os.path.abspath(args.output))
+    os.makedirs(out_dir, exist_ok=True)
     os.system(f"tar -cf - -C '{staging_dir}' usr | xz -T0 > '{args.output}'")
+
+    # Generate bootstrap_manifest.json with package versions, uncompressed size, and SHA256
+    print(f"[*] Computing bootstrap manifest metrics...")
+    uncompressed_bytes = 0
+    for root, dirs, files in os.walk(staging_usr):
+        for name in files:
+            fp = os.path.join(root, name)
+            if not os.path.islink(fp):
+                uncompressed_bytes += os.path.getsize(fp)
+
+    compressed_bytes = os.path.getsize(args.output)
+    with open(args.output, "rb") as f:
+        archive_sha256 = hashlib.sha256(f.read()).hexdigest()
+
+    manifest_packages = {}
+    for pkg in sorted(all_packages):
+        if pkg in index.packages:
+            meta = index.packages[pkg]
+            manifest_packages[pkg] = {
+                "version": meta.get("Version", ""),
+                "installed_size": int(meta.get("Installed-Size", 0)) * 1024,
+                "deb_size": int(meta.get("Size", 0))
+            }
+
+    manifest_data = {
+        "manifest_version": 1,
+        "arch": termux_arch,
+        "abi": abi_name,
+        "bootstrap_series": "bootstrap-v1",
+        "archive_compressed_bytes": compressed_bytes,
+        "archive_uncompressed_bytes": uncompressed_bytes,
+        "archive_sha256": archive_sha256,
+        "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "packages": manifest_packages
+    }
+
+    manifest_path = os.path.join(out_dir, "bootstrap_manifest.json")
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(manifest_data, f, indent=2)
+    print(f"[✔] Generated bootstrap manifest: {manifest_path} ({len(manifest_packages)} packages, {uncompressed_bytes} uncompressed bytes)")
 
     print(f"[✔] Bootstrap packaging complete for {termux_arch} ({abi_name}).")
 

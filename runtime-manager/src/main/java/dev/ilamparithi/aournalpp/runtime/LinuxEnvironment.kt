@@ -1015,7 +1015,8 @@ class LinuxEnvironment(private val context: Context) {
             // CRITICAL: Disable desktop portal lookup to prevent D-Bus freeze
             "GTK_USE_PORTAL" to "0",
             "GIO_USE_VFS" to "local",
-            "GTK_PATH" to "${nativeLibDir.absolutePath}:${libDir.absolutePath}/gtk-3.0"
+            "GTK_PATH" to "${nativeLibDir.absolutePath}:${libDir.absolutePath}/gtk-3.0",
+            "ANDROID_APP_LIB_DIR" to nativeLibDir.absolutePath
         )
 
         val (effectiveLang, effectiveLanguage, effectiveLcAll) = LinuxLocaleManager.getEffectiveLocaleEnv(context)

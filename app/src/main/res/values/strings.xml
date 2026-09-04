@@ -120,6 +120,20 @@
     <string name="action_launch_now">Launch Now</string>
     <!-- Action to start runtime environment update immediately -->
     <string name="action_update_now">Update Now</string>
+    <!-- Storage required label -->
+    <string name="update_storage_required">Required: %1$s</string>
+    <!-- Storage available label -->
+    <string name="update_storage_available">Available: %1$s</string>
+    <!-- Storage insufficient warning -->
+    <string name="update_storage_insufficient">Insufficient storage space to update runtime.</string>
+    <!-- Toggle package details -->
+    <string name="update_view_package_details">View package details (%1$d)</string>
+    <string name="update_hide_package_details">Hide package details</string>
+    <!-- Storage Warning and Low Space Prompts -->
+    <string name="storage_notice_title">Storage Notice</string>
+    <string name="storage_insufficient_title">Insufficient Storage</string>
+    <string name="storage_notice_desc">This app will require extracting required libraries and executables which will take up %1$s of your storage. Continue?</string>
+    <string name="storage_insufficient_desc">Clear up at least %1$s of storage before reopening the app.</string>
 
     <!-- ======================================================================= -->
     <!-- Onboarding Experience                                                   -->

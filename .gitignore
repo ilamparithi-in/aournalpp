@@ -53,4 +53,6 @@ scripts/*-arm64
 scripts/*-x86_64
 scripts/*.so
 scripts/*.o
+scripts/keys/
+*.gpg
 

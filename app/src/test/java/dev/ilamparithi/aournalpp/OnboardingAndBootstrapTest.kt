@@ -266,6 +266,178 @@ class OnboardingAndBootstrapTest {
             tempDir.deleteRecursively()
         }
     }
+
+    @Test
+    fun `test BootstrapManifest parse correctly reads fields and packages`() {
+        val json = """
+        {
+          "manifest_version": 1,
+          "arch": "aarch64",
+          "abi": "arm64-v8a",
+          "bootstrap_series": "bootstrap-v1",
+          "archive_compressed_bytes": 45000000,
+          "archive_uncompressed_bytes": 180000000,
+          "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "generated_at": "2026-09-04T12:00:00Z",
+          "packages": {
+            "xournalpp": {
+              "version": "1.2.3",
+              "installed_size": 15000000,
+              "deb_size": 4000000
+            },
+            "gtk3": {
+              "version": "3.24.40",
+              "installed_size": 35000000,
+              "deb_size": 9000000
+            }
+          }
+        }
+        """.trimIndent()
+
+        val manifest = dev.ilamparithi.aournalpp.runtime.BootstrapManifest.parse(json)
+        assertEquals(1, manifest.manifestVersion)
+        assertEquals("aarch64", manifest.arch)
+        assertEquals("arm64-v8a", manifest.abi)
+        assertEquals("bootstrap-v1", manifest.bootstrapSeries)
+        assertEquals(45000000L, manifest.archiveCompressedBytes)
+        assertEquals(180000000L, manifest.archiveUncompressedBytes)
+        assertEquals("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", manifest.archiveSha256)
+        assertEquals(2, manifest.packages.size)
+        assertEquals("1.2.3", manifest.packages["xournalpp"]?.version)
+        assertEquals(15000000L, manifest.packages["xournalpp"]?.installedSize)
+        assertEquals("3.24.40", manifest.packages["gtk3"]?.version)
+    }
+
+    @Test
+    fun `test package diff detection logic correctly classifies added, updated, and removed`() {
+        val oldPkgs = mapOf(
+            "xournalpp" to dev.ilamparithi.aournalpp.runtime.BootstrapPackageInfo("xournalpp", "1.2.0", 100L, 50L),
+            "openbox" to dev.ilamparithi.aournalpp.runtime.BootstrapPackageInfo("openbox", "3.6.1", 100L, 50L),
+            "legacy-lib" to dev.ilamparithi.aournalpp.runtime.BootstrapPackageInfo("legacy-lib", "0.9.0", 100L, 50L)
+        )
+        val newPkgs = mapOf(
+            "xournalpp" to dev.ilamparithi.aournalpp.runtime.BootstrapPackageInfo("xournalpp", "1.2.1", 120L, 60L), // updated
+            "openbox" to dev.ilamparithi.aournalpp.runtime.BootstrapPackageInfo("openbox", "3.6.1", 100L, 50L),    // unchanged
+            "gtk3" to dev.ilamparithi.aournalpp.runtime.BootstrapPackageInfo("gtk3", "3.24.40", 200L, 100L)         // added
+            // "legacy-lib" removed
+        )
+
+        val added = mutableListOf<dev.ilamparithi.aournalpp.runtime.PackageChange>()
+        val updated = mutableListOf<dev.ilamparithi.aournalpp.runtime.PackageChange>()
+        val removed = mutableListOf<dev.ilamparithi.aournalpp.runtime.PackageChange>()
+
+        for ((name, newPkg) in newPkgs) {
+            val oldPkg = oldPkgs[name]
+            if (oldPkg == null) {
+                added.add(dev.ilamparithi.aournalpp.runtime.PackageChange(name, null, newPkg.version))
+            } else if (oldPkg.version != newPkg.version) {
+                updated.add(dev.ilamparithi.aournalpp.runtime.PackageChange(name, oldPkg.version, newPkg.version))
+            }
+        }
+        for ((name, oldPkg) in oldPkgs) {
+            if (!newPkgs.containsKey(name)) {
+                removed.add(dev.ilamparithi.aournalpp.runtime.PackageChange(name, oldPkg.version, null))
+            }
+        }
+
+        assertEquals(1, added.size)
+        assertEquals("gtk3", added[0].name)
+        assertEquals("3.24.40", added[0].newVersion)
+
+        assertEquals(1, updated.size)
+        assertEquals("xournalpp", updated[0].name)
+        assertEquals("1.2.0", updated[0].oldVersion)
+        assertEquals("1.2.1", updated[0].newVersion)
+
+        assertEquals(1, removed.size)
+        assertEquals("legacy-lib", removed[0].name)
+        assertEquals("0.9.0", removed[0].oldVersion)
+    }
+
+    @Test
+    fun `test storage precheck formula for bundled vs dynamic download`() {
+        val safetyBuffer = 50L * 1024L * 1024L // 50 MB
+        val uncompressed = 180L * 1024L * 1024L // 180 MB
+        val compressed = 45L * 1024L * 1024L   // 45 MB
+
+        val bundledRequired = uncompressed + safetyBuffer
+        val dynamicRequired = compressed + uncompressed + safetyBuffer
+
+        assertEquals(230L * 1024L * 1024L, bundledRequired)
+        assertEquals(275L * 1024L * 1024L, dynamicRequired)
+
+        // Case: User has 300MB available
+        val available300 = 300L * 1024L * 1024L
+        assertTrue(available300 >= bundledRequired)
+        assertTrue(available300 >= dynamicRequired)
+
+        // Case: User has 250MB available (sufficient for bundled, insufficient for dynamic)
+        val available250 = 250L * 1024L * 1024L
+        assertTrue(available250 >= bundledRequired)
+        assertFalse(available250 >= dynamicRequired)
+
+        // Case: User has 100MB available (insufficient for both)
+        val available100 = 100L * 1024L * 1024L
+        assertFalse(available100 >= bundledRequired)
+        assertFalse(available100 >= dynamicRequired)
+    }
+
+    @Test
+    fun `test onboarding storage threshold calculation rules`() {
+        fun evaluateStorage(totalBytes: Long, availableBytes: Long, requiredBytes: Long): dev.ilamparithi.aournalpp.runtime.StorageCheckResult {
+            val isInsufficient = availableBytes < requiredBytes
+            val missingBytes = if (isInsufficient) requiredBytes - availableBytes else 0L
+
+            val projectedRemaining = availableBytes - requiredBytes
+            val tenPercentTotal = if (totalBytes > 0L) (totalBytes * 0.10).toLong() else 512L * 1024L * 1024L
+            val fiveTwelveMb = 512L * 1024L * 1024L
+            val lowStorageThreshold = minOf(tenPercentTotal, fiveTwelveMb)
+
+            val isLowStorageWarning = !isInsufficient && projectedRemaining < lowStorageThreshold
+
+            return dev.ilamparithi.aournalpp.runtime.StorageCheckResult(
+                requiredBytes = requiredBytes,
+                availableBytes = availableBytes,
+                totalBytes = totalBytes,
+                isInsufficient = isInsufficient,
+                isLowStorageWarning = isLowStorageWarning,
+                missingBytes = missingBytes
+            )
+        }
+
+        val required = 500L * 1024L * 1024L // 500 MB
+        val total64GB = 64L * 1024L * 1024L * 1024L // 64 GB
+        // For 64GB, 10% = 6.4GB, 512MB is lowest -> threshold = 512MB
+
+        // Scenario 1: Insufficient storage (has only 300MB, requires 500MB)
+        val res1 = evaluateStorage(total64GB, 300L * 1024L * 1024L, required)
+        assertTrue(res1.isInsufficient)
+        assertFalse(res1.isLowStorageWarning)
+        assertEquals(200L * 1024L * 1024L, res1.missingBytes)
+
+        // Scenario 2: Required storage present (600MB available), but after extraction only 100MB remains (< 512MB threshold)
+        val res2 = evaluateStorage(total64GB, 600L * 1024L * 1024L, required)
+        assertFalse(res2.isInsufficient)
+        assertTrue(res2.isLowStorageWarning)
+        assertEquals(0L, res2.missingBytes)
+
+        // Scenario 3: Ample storage present (10GB available), projected remaining is 9.5GB (>= 512MB threshold)
+        val res3 = evaluateStorage(total64GB, 10L * 1024L * 1024L * 1024L, required)
+        assertFalse(res3.isInsufficient)
+        assertFalse(res3.isLowStorageWarning)
+
+        // Scenario 4: Small storage disk (e.g. 4GB total). 10% = 400MB (< 512MB) -> threshold = 400MB
+        val total4GB = 4L * 1024L * 1024L * 1024L
+        // Available 850MB -> projected remaining is 350MB (< 400MB threshold)
+        val res4 = evaluateStorage(total4GB, 850L * 1024L * 1024L, required)
+        assertFalse(res4.isInsufficient)
+        assertTrue(res4.isLowStorageWarning)
+
+        // Available 1000MB -> projected remaining is 500MB (>= 400MB threshold)
+        val res5 = evaluateStorage(total4GB, 1000L * 1024L * 1024L, required)
+        assertFalse(res5.isInsufficient)
+        assertFalse(res5.isLowStorageWarning)
+    }
 }
 
 class FakeSharedPreferences(

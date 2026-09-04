@@ -296,6 +296,7 @@ bootstrapTasksMap.forEach { (flavorName, archName) ->
     val flavorOutDir = file("build/generated/bootstrap-assets/$flavorName/assets")
     val flavorJniDir = file("build/generated/bootstrap-assets/$flavorName/jniLibs")
     val flavorOutputFile = File(flavorOutDir, "bootstrap.tar.xz")
+    val flavorManifestFile = File(flavorOutDir, "bootstrap_manifest.json")
 
     tasks.register<Exec>(taskName) {
         description = "Downloads and builds bootstrap.tar.xz and jniLibs for $flavorName ($archName)"
@@ -303,6 +304,7 @@ bootstrapTasksMap.forEach { (flavorName, archName) ->
         workingDir = rootDir.resolve("scripts")
         inputs.dir(rootDir.resolve("scripts"))
         outputs.file(flavorOutputFile)
+        outputs.file(flavorManifestFile)
         outputs.dir(flavorJniDir)
         doFirst {
             flavorOutDir.mkdirs()

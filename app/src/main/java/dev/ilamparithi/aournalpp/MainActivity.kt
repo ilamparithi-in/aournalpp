@@ -70,6 +70,7 @@ import dev.ilamparithi.aournalpp.ui.EnvironmentUpdateDialog
 import dev.ilamparithi.aournalpp.ui.HomeScreen
 import dev.ilamparithi.aournalpp.ui.LicensesScreen
 import dev.ilamparithi.aournalpp.ui.OnboardingScreen
+import dev.ilamparithi.aournalpp.ui.StoragePromptDialog
 import dev.ilamparithi.aournalpp.ui.cloud.CloudScreen
 import dev.ilamparithi.aournalpp.backup.worker.BackupScheduler
 import dev.ilamparithi.aournalpp.SettingsScreen
@@ -241,10 +242,26 @@ class MainActivity : ComponentActivity() {
                                     installedVersion = updateState.installedVersion,
                                     newVersion = updateState.newVersion,
                                     countdownSeconds = updateState.countdownSeconds,
+                                    diff = updateState.diff,
                                     onUpdate = { viewModel.startInstallOrUpgrade() },
                                     onSkip = { viewModel.skipUpdateForCurrentSession() }
                                 )
                             }
+                        }
+                        is BootstrapState.StorageWarning -> {
+                            val warningState = state as BootstrapState.StorageWarning
+                            BootstrapScreen(
+                                state = BootstrapState.Checking,
+                                onRetry = { viewModel.retry() }
+                            )
+                            StoragePromptDialog(
+                                requiredBytes = warningState.requiredBytes,
+                                availableBytes = warningState.availableBytes,
+                                isInsufficient = warningState.isInsufficient,
+                                missingBytes = warningState.missingBytes,
+                                onContinue = { viewModel.proceedAfterStorageWarning() },
+                                onClose = { finishAffinity() }
+                            )
                         }
                         is BootstrapState.Ready -> {
                             if (isOnboardingCompleted && !hasBootstrapRevealed) {

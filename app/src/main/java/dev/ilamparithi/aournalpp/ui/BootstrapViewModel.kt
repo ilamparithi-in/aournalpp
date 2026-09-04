@@ -17,10 +17,17 @@ import java.io.File
 
 sealed interface BootstrapState {
     data object Checking : BootstrapState
+    data class StorageWarning(
+        val requiredBytes: Long,
+        val availableBytes: Long,
+        val isInsufficient: Boolean,
+        val missingBytes: Long
+    ) : BootstrapState
     data class UpdatePrompt(
         val installedVersion: Long,
         val newVersion: Long,
-        val countdownSeconds: Int
+        val countdownSeconds: Int,
+        val diff: dev.ilamparithi.aournalpp.runtime.BootstrapDiff? = null
     ) : BootstrapState
     data class Installing(
         val progress: InstallProgress? = null,
@@ -86,6 +93,11 @@ class BootstrapViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun proceedAfterStorageWarning() {
+        Log.i(TAG, "User chose to continue with bootstrap extraction despite storage threshold.")
+        performInstallOrUpgrade()
+    }
+
     fun checkAndInitialize() {
         viewModelScope.launch {
             _uiState.value = BootstrapState.Checking
@@ -98,9 +110,20 @@ class BootstrapViewModel(application: Application) : AndroidViewModel(applicatio
             Log.i(TAG, "needsBootstrap: $needsUpgrade, isUpgradeAvailable: $isUpgrade, onboardingDone: $onboardingDone (currentAppVersion: ${installer.getCurrentAppVersionCode()})")
 
             if (!onboardingDone) {
-                // First install: extract in background while user views onboarding
+                // First install: extract in background while user views onboarding unless storage threshold is triggered
                 if (needsUpgrade) {
-                    performInstallOrUpgrade()
+                    val storageCheck = installer.checkStorageThresholds()
+                    if (storageCheck.isInsufficient || storageCheck.isLowStorageWarning) {
+                        Log.w(TAG, "Storage threshold warning during onboarding: insufficient=${storageCheck.isInsufficient}, lowStorage=${storageCheck.isLowStorageWarning}")
+                        _uiState.value = BootstrapState.StorageWarning(
+                            requiredBytes = storageCheck.requiredBytes,
+                            availableBytes = storageCheck.availableBytes,
+                            isInsufficient = storageCheck.isInsufficient,
+                            missingBytes = storageCheck.missingBytes
+                        )
+                    } else {
+                        performInstallOrUpgrade()
+                    }
                 } else {
                     verifyAndSetReady()
                 }
@@ -110,8 +133,19 @@ class BootstrapViewModel(application: Application) : AndroidViewModel(applicatio
                 val currentVer = installer.getCurrentAppVersionCode()
                 startUpdateCountdown(installedVer, currentVer)
             } else if (needsUpgrade) {
-                // Missing / incomplete install: extract immediately
-                performInstallOrUpgrade()
+                // Incomplete install: check storage thresholds before extracting
+                val storageCheck = installer.checkStorageThresholds()
+                if (storageCheck.isInsufficient || storageCheck.isLowStorageWarning) {
+                    Log.w(TAG, "Storage threshold warning: insufficient=${storageCheck.isInsufficient}, lowStorage=${storageCheck.isLowStorageWarning}")
+                    _uiState.value = BootstrapState.StorageWarning(
+                        requiredBytes = storageCheck.requiredBytes,
+                        availableBytes = storageCheck.availableBytes,
+                        isInsufficient = storageCheck.isInsufficient,
+                        missingBytes = storageCheck.missingBytes
+                    )
+                } else {
+                    performInstallOrUpgrade()
+                }
             } else {
                 // All up to date
                 verifyAndSetReady()
@@ -120,10 +154,15 @@ class BootstrapViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     private fun startUpdateCountdown(installedVersion: Long, newVersion: Long) {
+        val diff = installer.computeDiff()
         updateCountdownJob?.cancel()
         updateCountdownJob = viewModelScope.launch {
+            if (diff != null && !diff.hasSufficientSpace) {
+                _uiState.value = BootstrapState.UpdatePrompt(installedVersion, newVersion, 0, diff)
+                return@launch
+            }
             for (sec in UPDATE_TIMEOUT_SECONDS downTo 1) {
-                _uiState.value = BootstrapState.UpdatePrompt(installedVersion, newVersion, sec)
+                _uiState.value = BootstrapState.UpdatePrompt(installedVersion, newVersion, sec, diff)
                 delay(1000L)
             }
             Log.i(TAG, "Update countdown timer expired. Auto-starting update...")
@@ -137,6 +176,21 @@ class BootstrapViewModel(application: Application) : AndroidViewModel(applicatio
             return
         }
         installJob = viewModelScope.launch {
+            val diff = installer.computeDiff()
+            if (diff != null && !diff.hasSufficientSpace) {
+                val reqMb = diff.requiredSpaceBytes / (1024 * 1024)
+                val availMb = diff.availableSpaceBytes / (1024 * 1024)
+                val errMsg = "Insufficient storage space: $reqMb MB required, but only $availMb MB available."
+                Log.e(TAG, errMsg)
+                _uiState.value = BootstrapState.Error(
+                    dev.ilamparithi.aournalpp.runtime.InsufficientStorageException(
+                        diff.requiredSpaceBytes,
+                        diff.availableSpaceBytes
+                    )
+                )
+                return@launch
+            }
+
             _uiState.value = BootstrapState.Installing(message = "Starting runtime extraction...")
             Log.i(TAG, "Starting bootstrap extraction/upgrade...")
             val result = installer.installOrUpgrade { progress ->

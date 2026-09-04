@@ -538,3 +538,90 @@ char *setlocale(int category, const char *locale) {
     }
     return res ? res : (char *)"C.UTF-8";
 }
+
+/* ========================================================================= */
+/* 4. Subprocess Execution Redirection (SELinux W^X Compliance)              */
+/* ========================================================================= */
+
+typedef int (*real_execve_t)(const char *, char *const [], char *const []);
+static real_execve_t sys_execve = NULL;
+
+__attribute__((visibility("default")))
+int execve(const char *pathname, char *const argv[], char *const envp[]) {
+    if (!sys_execve) {
+        sys_execve = (real_execve_t)dlsym(RTLD_NEXT, "execve");
+    }
+
+    if (!pathname) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    // Check if the path targets the writable app usr/bin directory
+    // e.g. /data/data/<pkg>/files/usr/bin/<binary> or /data/user/0/<pkg>/files/usr/bin/<binary>
+    const char *bin_dir = "/files/usr/bin/";
+    const char *pos = strstr(pathname, bin_dir);
+    const char *binary_name = NULL;
+
+    if (pos) {
+        binary_name = pos + strlen(bin_dir);
+    } else {
+        // Also check if pathname is just a plain relative name or in /usr/bin
+        const char *slash = strrchr(pathname, '/');
+        if (slash) {
+            binary_name = slash + 1;
+        } else {
+            binary_name = pathname;
+        }
+    }
+
+    // Attempt to redirect to Android's executable nativeLibraryDir
+    // Android packages executables as lib<name>.so (or lib<name_with_underscores>.so)
+    const char *native_lib_dir = getenv("ANDROID_APP_LIB_DIR");
+    if (!native_lib_dir || !*native_lib_dir) {
+        // Fallback to searching first component in LD_LIBRARY_PATH
+        const char *ld_path = getenv("LD_LIBRARY_PATH");
+        if (ld_path && *ld_path) {
+            static char fallback_dir[512];
+            const char *colon = strchr(ld_path, ':');
+            size_t len = colon ? (size_t)(colon - ld_path) : strlen(ld_path);
+            if (len < sizeof(fallback_dir)) {
+                memcpy(fallback_dir, ld_path, len);
+                fallback_dir[len] = '\0';
+                native_lib_dir = fallback_dir;
+            }
+        }
+    }
+
+    if (native_lib_dir && *native_lib_dir && binary_name && *binary_name) {
+        // Convert dashes to underscores for the lib name, e.g. gtk3-demo -> libgtk3_demo.so
+        char normalized_bin[128];
+        size_t blen = strlen(binary_name);
+        if (blen < sizeof(normalized_bin)) {
+            for (size_t i = 0; i < blen; i++) {
+                normalized_bin[i] = (binary_name[i] == '-') ? '_' : binary_name[i];
+            }
+            normalized_bin[blen] = '\0';
+
+            char candidate_path[1024];
+            // 1. Try native_lib_dir/lib<normalized>.so
+            snprintf(candidate_path, sizeof(candidate_path), "%s/lib%s.so", native_lib_dir, normalized_bin);
+            if (access(candidate_path, X_OK) == 0) {
+                return sys_execve ? sys_execve(candidate_path, argv, envp) : -1;
+            }
+
+            // 2. Try native_lib_dir/lib<original>.so
+            snprintf(candidate_path, sizeof(candidate_path), "%s/lib%s.so", native_lib_dir, binary_name);
+            if (access(candidate_path, X_OK) == 0) {
+                return sys_execve ? sys_execve(candidate_path, argv, envp) : -1;
+            }
+        }
+    }
+
+    if (sys_execve) {
+        return sys_execve(pathname, argv, envp);
+    }
+    errno = ENOSYS;
+    return -1;
+}
+
