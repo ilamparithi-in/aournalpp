@@ -35,6 +35,16 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ImageBitmap
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -244,8 +254,11 @@ class CanvasActivity : ComponentActivity() {
 
     private var cameraTempFile: File? = null
     private val cameraLauncher = registerForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        if (success && cameraTempFile != null && cameraTempFile!!.exists()) {
-            processAndPasteCameraImage(cameraTempFile!!)
+        val file = cameraTempFile
+        if (success && file != null && file.exists() && file.length() > 0L) {
+            processAndPasteCameraImage(file)
+        } else if (file != null && file.exists() && file.length() == 0L) {
+            try { file.delete() } catch (_: Exception) {}
         }
     }
 
@@ -877,6 +890,18 @@ class CanvasActivity : ComponentActivity() {
 
                         // Modern Image Source Selection Bottom Sheet
                         if (showImageSourceDialog) {
+                            var tempFilesList by remember(showImageSourceDialog) {
+                                val cameraDir = File(LinuxEnvironment(this@CanvasActivity).getNotesDirectory(), ".temp/Camera")
+                                val list = if (cameraDir.exists() && cameraDir.isDirectory) {
+                                    cameraDir.listFiles { file ->
+                                        file.isFile && file.extension.lowercase() in listOf("jpg", "jpeg", "png", "webp")
+                                    }?.sortedByDescending { it.lastModified() }?.toList() ?: emptyList()
+                                } else {
+                                    emptyList()
+                                }
+                                mutableStateOf(list)
+                            }
+
                             ModalBottomSheet(
                                 onDismissRequest = { showImageSourceDialog = false },
                                 sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -977,6 +1002,56 @@ class CanvasActivity : ComponentActivity() {
                                                 launchFilePicker()
                                             }
                                     )
+
+                                    if (tempFilesList.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 4.dp, vertical = 2.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "Temporary Saves",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            Text(
+                                                text = "${tempFilesList.size}",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.height(2.dp))
+
+                                        LazyRow(
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            items(tempFilesList, key = { it.absolutePath }) { file ->
+                                                TemporarySaveCard(
+                                                    file = file,
+                                                    onSelect = {
+                                                        showImageSourceDialog = false
+                                                        processAndPasteCameraImage(file)
+                                                    },
+                                                    onDelete = {
+                                                        try {
+                                                            file.delete()
+                                                        } catch (_: Exception) {}
+                                                        val cameraDir = File(LinuxEnvironment(this@CanvasActivity).getNotesDirectory(), ".temp/Camera")
+                                                        tempFilesList = cameraDir.listFiles { f ->
+                                                            f.isFile && f.extension.lowercase() in listOf("jpg", "jpeg", "png", "webp")
+                                                        }?.sortedByDescending { it.lastModified() }?.toList() ?: emptyList()
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
 
                                     Spacer(modifier = Modifier.height(16.dp))
                                 }
@@ -1147,7 +1222,9 @@ class CanvasActivity : ComponentActivity() {
 
     private fun launchCameraCapture() {
         try {
-            val cameraDir = File(cacheDir, "camera").apply { if (!exists()) mkdirs() }
+            val cameraDir = File(LinuxEnvironment(this).getNotesDirectory(), ".temp/Camera").apply {
+                if (!exists()) mkdirs()
+            }
             val tempFile = File(cameraDir, "capture_${System.currentTimeMillis()}.jpg")
             cameraTempFile = tempFile
             val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", tempFile)
@@ -1276,7 +1353,6 @@ class CanvasActivity : ComponentActivity() {
                     withContext(Dispatchers.Main) {
                         Toast.makeText(this@CanvasActivity, "Close open dialogs before inserting image", Toast.LENGTH_SHORT).show()
                     }
-                    file.delete()
                     return@launch
                 }
 
@@ -1326,7 +1402,6 @@ class CanvasActivity : ComponentActivity() {
                         Toast.makeText(this@CanvasActivity, "Photo inserted", Toast.LENGTH_SHORT).show()
                     }
                 }
-                file.delete()
             } catch (e: Exception) {
                 Log.e("CanvasActivity", "Failed to process captured camera photo", e)
                 withContext(Dispatchers.Main) {
@@ -1379,6 +1454,118 @@ class CanvasActivity : ComponentActivity() {
             sessionManager.stopSession()
             // Terminate isolated :canvas process so the next launch initializes a fresh native X11 instance
             android.os.Process.killProcess(android.os.Process.myPid())
+        }
+    }
+}
+
+@Composable
+private fun TemporarySaveCard(
+    file: File,
+    onSelect: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val bitmapState = produceState<ImageBitmap?>(initialValue = null, key1 = file.path) {
+        value = withContext(Dispatchers.IO) {
+            try {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(file.absolutePath, bounds)
+                val targetSize = 256
+                var sampleSize = 1
+                while (bounds.outWidth / sampleSize > targetSize || bounds.outHeight / sampleSize > targetSize) {
+                    sampleSize *= 2
+                }
+                val opts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+                val bm = BitmapFactory.decodeFile(file.absolutePath, opts)
+                bm?.asImageBitmap()
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
+    val timeFormatted = remember(file.lastModified()) {
+        val sdf = SimpleDateFormat("MMM d, HH:mm", Locale.getDefault())
+        sdf.format(Date(file.lastModified()))
+    }
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 2.dp,
+        modifier = modifier
+            .width(110.dp)
+            .height(130.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onSelect() }
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            val bitmap = bitmapState.value
+            if (bitmap != null) {
+                Image(
+                    bitmap = bitmap,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Image,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                }
+            }
+
+            // Dark gradient overlay for bottom text readability
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(36.dp)
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))
+                        )
+                    )
+            )
+
+            // Formatted timestamp
+            Text(
+                text = timeFormatted,
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
+            )
+
+            // Delete button (top end)
+            Surface(
+                shape = CircleShape,
+                color = Color.Black.copy(alpha = 0.55f),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(4.dp)
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .clickable { onDelete() }
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Delete temporary image",
+                        tint = Color.White,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
         }
     }
 }

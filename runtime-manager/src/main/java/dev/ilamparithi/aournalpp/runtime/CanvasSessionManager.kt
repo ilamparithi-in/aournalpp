@@ -352,32 +352,22 @@ class CanvasSessionManager(
     }
 
     suspend fun isModalOrDialogOpen(): Boolean = withContext(Dispatchers.IO) {
-        supervisor.getVisibleXournalWindowIds().size > 1
+        supervisor.getVisibleXournalDialogWindowIds().isNotEmpty()
     }
 
     fun dismissTopDialogOrModal() {
         if (!isSessionRunning) return
         scope.launch(Dispatchers.IO) {
+            val dialogIds = supervisor.getVisibleXournalDialogWindowIds()
+            val topWid = dialogIds.lastOrNull()
             val xdotoolBin = env.resolveExecutable("xdotool")
-            if (!xdotoolBin.exists() || !xdotoolBin.canExecute()) return@launch
-
-            val (code, out) = supervisor.runBinary(
-                listOf(xdotoolBin.absolutePath, "search", "--onlyvisible", "--class", "xournalpp")
-            )
-            val windowIds = if (code == 0 && out.isNotBlank()) {
-                out.trim().lines().map { it.trim() }.filter { it.isNotEmpty() }
-            } else {
-                emptyList()
-            }
-
-            if (windowIds.size > 1) {
-                val topWid = windowIds.last()
+            if (topWid != null && xdotoolBin.exists() && xdotoolBin.canExecute()) {
                 Log.i(TAG, "Dismissing top dialog window $topWid via Escape...")
                 supervisor.runBinary(listOf(xdotoolBin.absolutePath, "windowactivate", "--sync", topWid))
                 supervisor.runBinary(
                     listOf(xdotoolBin.absolutePath, "key", "--window", topWid, "--clearmodifiers", "Escape")
                 )
-            } else {
+            } else if (xdotoolBin.exists() && xdotoolBin.canExecute()) {
                 supervisor.runBinary(
                     listOf(xdotoolBin.absolutePath, "key", "--clearmodifiers", "Escape")
                 )

@@ -48,6 +48,9 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
     private val _documentTitle = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     val documentTitle: kotlinx.coroutines.flow.StateFlow<String?> = _documentTitle
 
+    private val _isModalOrDialogOpen = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val isModalOrDialogOpen: kotlinx.coroutines.flow.StateFlow<Boolean> = _isModalOrDialogOpen
+
     private val xournalProcesses = CopyOnWriteArrayList<Process>()
     private var onXournalExitListener: (() -> Unit)? = null
     private var onSingleProcessExitListener: ((remainingCount: Int) -> Unit)? = null
@@ -111,12 +114,44 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
     }
 
     fun getVisibleXournalWindowIds(): List<String> {
+        val watcherFile = env.resolveExecutable("xopp-title-watcher")
+        if (watcherFile.exists() && watcherFile.canExecute()) {
+            val (code, out) = runBinary(listOf(watcherFile.absolutePath, "--list-windows"))
+            if (code == 0 && out.isNotBlank()) {
+                return out.trim().lines().map { it.trim() }.filter { it.isNotEmpty() }
+            }
+        }
         val xdotoolBin = env.resolveExecutable("xdotool")
         if (!xdotoolBin.exists() || !xdotoolBin.canExecute()) return emptyList()
 
         val (code, out) = runBinary(listOf(xdotoolBin.absolutePath, "search", "--onlyvisible", "--class", "xournal"))
         if (code == 0 && out.isNotBlank()) {
             return out.trim().lines().map { it.trim() }.filter { it.isNotEmpty() }
+        }
+        return emptyList()
+    }
+
+    fun getVisibleXournalDialogWindowIds(): List<String> {
+        val watcherFile = env.resolveExecutable("xopp-title-watcher")
+        if (watcherFile.exists() && watcherFile.canExecute()) {
+            val (code, out) = runBinary(listOf(watcherFile.absolutePath, "--list-dialogs"))
+            if (code == 0 && out.isNotBlank()) {
+                return out.trim().lines().map { it.trim() }.filter { it.isNotEmpty() }
+            }
+            if (code == 1) {
+                // Exit code 1 indicates cleanly verified 0 dialogs
+                return emptyList()
+            }
+        }
+        // Fallback to xdotool if watcher binary is missing
+        val xdotoolBin = env.resolveExecutable("xdotool")
+        if (!xdotoolBin.exists() || !xdotoolBin.canExecute()) return emptyList()
+        val (code, out) = runBinary(listOf(xdotoolBin.absolutePath, "search", "--onlyvisible", "--class", "xournal"))
+        if (code == 0 && out.isNotBlank()) {
+            val wins = out.trim().lines().map { it.trim() }.filter { it.isNotEmpty() }
+            if (wins.size > 1) {
+                return wins.drop(1)
+            }
         }
         return emptyList()
     }
@@ -159,6 +194,9 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
                                 if (clean.isNotBlank() && clean != "Xournal++") {
                                     _documentTitle.value = clean
                                 }
+                            } else if (line.startsWith("DIALOGS:")) {
+                                val count = line.removePrefix("DIALOGS:").trim().toIntOrNull() ?: 0
+                                _isModalOrDialogOpen.value = count > 0
                             }
                             line = reader.readLine()
                         }
