@@ -679,6 +679,12 @@
     <string name="cloud_conflicts_button">Conflicts</string>
     <!-- Button to open transfer queue subpage -->
     <string name="cloud_queue_button">Queue</string>
+    <!-- Tooltip description for mapping sets button in Cloud Sync Hub -->
+    <string name="cd_cloud_mapping_sets">Mapping Sets</string>
+    <!-- Tooltip description for check conflicts button in Cloud Sync Hub -->
+    <string name="cd_cloud_check_conflicts">Check for Conflicts</string>
+    <!-- Tooltip description for transfer queue button in Cloud Sync Hub -->
+    <string name="cd_cloud_transfer_queue">Transfer Queue</string>
     <!-- Button to trigger sync across all clouds -->
     <string name="cloud_sync_all_button">Sync All Active Cloud Services</string>
     <!-- Sync in progress label -->
@@ -858,12 +864,28 @@
     <string name="queue_completed_transfers">Completed</string>
     <!-- Section header: Failed transfers -->
     <string name="queue_failed_transfers">Failed</string>
+    <!-- Section header: Paused transfers -->
+    <string name="queue_paused_transfers">Paused</string>
     <!-- Speed indicator label. %1$s is speed string -->
     <string name="label_transfer_speed">%1$s/s</string>
     <!-- Action button to clear completed transfer items -->
     <string name="action_clear_completed">Clear Completed</string>
     <!-- Action button to cancel all transfers -->
     <string name="action_cancel_all">Cancel All</string>
+    <!-- Action button to pause transfer -->
+    <string name="action_pause">Pause</string>
+    <!-- Action button to pause all transfers -->
+    <string name="action_pause_all">Pause All</string>
+    <!-- Action button to resume transfer -->
+    <string name="action_resume">Resume</string>
+    <!-- Action button to resume all transfers -->
+    <string name="action_resume_all">Resume All</string>
+    <!-- Action button to retry all transfers -->
+    <string name="action_retry_all">Retry All</string>
+    <!-- Action button to dismiss/remove item from queue -->
+    <string name="action_dismiss">Dismiss</string>
+    <!-- Filter option for all cloud services -->
+    <string name="queue_filter_all_clouds">All Clouds</string>
     <!-- QR scanner dialog title -->
     <string name="dialog_qr_scanner_title">Scan Login QR Code</string>
     <!-- QR scanner dialog hint -->

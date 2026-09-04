@@ -241,6 +241,13 @@ fun TransferItemCard(item: TransferItem) {
                             modifier = Modifier.size(18.dp)
                         )
                     }
+                    TransferStatus.PAUSED -> {
+                        Text(
+                            text = "Paused",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
                     TransferStatus.CANCELLED -> {
                         Text(
                             text = "Cancelled",

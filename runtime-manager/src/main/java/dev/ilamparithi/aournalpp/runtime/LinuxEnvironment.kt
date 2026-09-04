@@ -203,6 +203,20 @@ class LinuxEnvironment(private val context: Context) {
         ensureGtkBookmarks()
     }
 
+    /**
+     * Updates PREF_KEY_NOTES_DIR and GTK bookmarks without triggering eager config copy or sync.
+     * Use this during onboarding or restore flows before external configs are downloaded or restored.
+     */
+    fun setNotesDirectoryPathOnly(newPath: String) {
+        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putString(PREF_KEY_NOTES_DIR, newPath).apply()
+        val target = File(newPath)
+        if (!target.exists()) {
+            target.mkdirs()
+        }
+        ensureGtkBookmarks()
+    }
+
     fun ensureDirectoryTree() {
         val dirs = listOf(
             rootDir, usrDir, binDir, libDir, shareDir, tmpDir, homeDir, configDir, xournalConfigDir, openboxConfigDir
@@ -421,7 +435,11 @@ class LinuxEnvironment(private val context: Context) {
         ensureXournalppSettings()
         ensureMenuBarShortcuts()
         checkAndQuarantineEmergencySave()
-        NotesHomeConfigManager.sync(context, this)
+        if (isOnboardingCompleted()) {
+            NotesHomeConfigManager.sync(context, this)
+        } else {
+            Log.i(TAG, "Skipping NotesHomeConfigManager.sync: onboarding not completed yet")
+        }
     }
 
     val quarantineRecoveryDir: File by lazy {

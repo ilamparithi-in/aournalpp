@@ -8,6 +8,7 @@ enum class TransferDirection {
 enum class TransferStatus {
     QUEUED,
     IN_PROGRESS,
+    PAUSED,
     COMPLETED,
     FAILED,
     SKIPPED,
@@ -32,5 +33,7 @@ data class TransferItem(
     val status: TransferStatus = TransferStatus.QUEUED,
     val errorMessage: String? = null,
     val startedAtEpochMs: Long = 0L,
-    val completedAtEpochMs: Long = 0L
+    val completedAtEpochMs: Long = 0L,
+    val scope: String? = null,
+    val relativePath: String? = null
 )

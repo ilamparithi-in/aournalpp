@@ -494,26 +494,28 @@ fun OnboardingScreen(
                                     )
                                     scope.launch {
                                         delay(400)
+                                        env.setNotesDirectoryPathOnly(localFolder.absolutePath)
                                         NotesHomeConfigManager.restoreSettingsFromNotesHome(localFolder, context, env)
+                                        NotesHomeConfigManager.sync(context, env)
                                         delay(600)
                                         isRestorationComplete = true
                                         delay(500)
                                         triggerRevealAnimation()
                                     }
                                 },
-                                onRestoreCloud = { service, remotePath, localFolder, skipDownload ->
+                                onRestoreCloud = { service, remotePath, localFolder, skipDownload, conflictPolicy ->
                                     isRestoringSettings = true
                                     restoringStatusText = context.getString(
                                         R.string.desc_onboarding_restoring_cloud,
                                         service.name
                                     )
                                     scope.launch {
-                                        env.setNotesDirectory(localFolder.absolutePath)
+                                        env.setNotesDirectoryPathOnly(localFolder.absolutePath)
                                         if (!skipDownload) {
                                             val engine = BackupEngine(context, env, CredentialsVault(context))
                                             engine.performRestore(
                                                 service.copy(remoteBasePath = remotePath),
-                                                ConflictResolutionPolicy.OVERWRITE_LOCAL
+                                                conflictPolicy
                                             )
                                         }
                                         NotesHomeConfigManager.restoreSettingsFromNotesHome(localFolder, context, env)
@@ -911,7 +913,7 @@ private fun OnboardingChooseFolderPage(
     env: LinuxEnvironment,
     onContinue: () -> Unit,
     onRestoreLocal: (File) -> Unit,
-    onRestoreCloud: (ServiceConfig, String, File, Boolean) -> Unit
+    onRestoreCloud: (ServiceConfig, String, File, Boolean, ConflictResolutionPolicy) -> Unit
 ) {
     val context = LocalContext.current
     val vault = remember { CredentialsVault(context) }
@@ -954,9 +956,8 @@ private fun OnboardingChooseFolderPage(
                     detectedConfigConflicts = conflicts
                     showConflictDialog = true
                 } else {
-                    // No conflicts or 0 diff changes: restore/skip
-                    val hasLocal = NotesHomeConfigManager.isAournalCompatible(localFolder)
-                    onRestoreCloud(service, remotePath, localFolder, hasLocal)
+                    // No conflicts or 0 diff changes: download and restore from cloud
+                    onRestoreCloud(service, remotePath, localFolder, false, ConflictResolutionPolicy.OVERWRITE_LOCAL)
                 }
             } else {
                 // No complete sync found in this remote folder
@@ -1461,7 +1462,7 @@ private fun OnboardingChooseFolderPage(
                 scope.launch {
                     val localFolder = File(selectedPath)
                     backupEngine.applyConfigResolutions(resolutions, selectedCloudService!!, localFolder)
-                    onRestoreCloud(selectedCloudService!!, currentRemotePath, localFolder, false)
+                    onRestoreCloud(selectedCloudService!!, currentRemotePath, localFolder, false, ConflictResolutionPolicy.KEEP_NEWER)
                 }
             },
             onPreviewDiff = { group ->

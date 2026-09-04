@@ -134,8 +134,9 @@ class MainActivity : ComponentActivity() {
                                 pendingIntentToProcess = null
                             }
                         }
-                        // Provision the runtime tree once the bootstrap is ready and reveal animation completes.
-                        LaunchedEffect(Unit) {
+                        // Provision the runtime tree once the bootstrap is ready, onboarding completed, and reveal animation completes.
+                        LaunchedEffect(isOnboardingCompleted) {
+                            if (!isOnboardingCompleted) return@LaunchedEffect
                             withContext(Dispatchers.IO) {
                                 kotlinx.coroutines.delay(850L)
                                 LinuxEnvironment(this@MainActivity).ensureDirectoryTree()
@@ -152,7 +153,8 @@ class MainActivity : ComponentActivity() {
                         }
 
                         // Fast In-App Periodic Sync (e.g. 5 min intervals while app is actively running)
-                        LaunchedEffect(Unit) {
+                        LaunchedEffect(isOnboardingCompleted) {
+                            if (!isOnboardingCompleted) return@LaunchedEffect
                             val backupPrefs = dev.ilamparithi.aournalpp.backup.worker.BackupPreferences(this@MainActivity)
                             val intervalMins = backupPrefs.periodicSyncIntervalMinutes
                             if (intervalMins in 1..14) {

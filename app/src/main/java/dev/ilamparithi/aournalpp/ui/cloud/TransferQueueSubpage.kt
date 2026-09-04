@@ -20,18 +20,27 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PauseCircle
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.StopCircle
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -43,29 +52,37 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.ilamparithi.aournalpp.R
+import dev.ilamparithi.aournalpp.backup.engine.BackupEngine
 import dev.ilamparithi.aournalpp.backup.model.TransferDirection
 import dev.ilamparithi.aournalpp.backup.model.TransferItem
 import dev.ilamparithi.aournalpp.backup.model.TransferStatus
 import dev.ilamparithi.aournalpp.backup.queue.FileTransferQueueManager
 import dev.ilamparithi.aournalpp.utils.FormatUtils
+import kotlinx.coroutines.launch
 
 enum class QueueFilter {
     ALL,
     ACTIVE,
     QUEUED,
+    PAUSED,
     COMPLETED,
     FAILED
 }
@@ -73,27 +90,59 @@ enum class QueueFilter {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransferQueueSubpage(
+    engine: BackupEngine? = null,
     onNavigateBack: () -> Unit
 ) {
     val items: List<TransferItem> by FileTransferQueueManager.items.collectAsStateWithLifecycle()
-    var selectedFilter by remember { mutableStateOf(QueueFilter.ALL) }
+    val coroutineScope = rememberCoroutineScope()
 
-    val activeCount = items.count { it.status == TransferStatus.IN_PROGRESS }
-    val queuedCount = items.count { it.status == TransferStatus.QUEUED }
-    val completedCount = items.count { it.status == TransferStatus.COMPLETED }
-    val failedCount = items.count { it.status == TransferStatus.FAILED }
+    // Multi-cloud detection & filtering
+    val cloudServices = remember(items) {
+        items.map { it.serviceId to it.serviceName }.distinct()
+    }
+    var selectedServiceId by remember { mutableStateOf<String?>(null) }
 
-    val totalActiveSpeed = items.filter { it.status == TransferStatus.IN_PROGRESS }.sumOf { it.speedBytesPerSec }
-
-    val filteredItems = remember(items, selectedFilter) {
-        when (selectedFilter) {
-            QueueFilter.ALL -> items
-            QueueFilter.ACTIVE -> items.filter { it.status == TransferStatus.IN_PROGRESS }
-            QueueFilter.QUEUED -> items.filter { it.status == TransferStatus.QUEUED }
-            QueueFilter.COMPLETED -> items.filter { it.status == TransferStatus.COMPLETED }
-            QueueFilter.FAILED -> items.filter { it.status == TransferStatus.FAILED }
+    // Adaptive filter behavior:
+    // If only one cloud service is present in the queue, adapt to it automatically.
+    // If multiple exist, keep user selection or default to all.
+    LaunchedEffect(cloudServices) {
+        if (cloudServices.size == 1) {
+            selectedServiceId = cloudServices.first().first
+        } else if (cloudServices.isEmpty()) {
+            selectedServiceId = null
+        } else if (selectedServiceId != null && cloudServices.none { it.first == selectedServiceId }) {
+            selectedServiceId = null
         }
     }
+
+    // Items filtered by selected cloud service
+    val cloudFilteredItems = remember(items, selectedServiceId) {
+        if (selectedServiceId == null) items else items.filter { it.serviceId == selectedServiceId }
+    }
+
+    var selectedFilter by remember { mutableStateOf(QueueFilter.ALL) }
+
+    val activeCount = cloudFilteredItems.count { it.status == TransferStatus.IN_PROGRESS }
+    val queuedCount = cloudFilteredItems.count { it.status == TransferStatus.QUEUED }
+    val pausedCount = cloudFilteredItems.count { it.status == TransferStatus.PAUSED }
+    val completedCount = cloudFilteredItems.count { it.status == TransferStatus.COMPLETED }
+    val failedCount = cloudFilteredItems.count { it.status == TransferStatus.FAILED }
+
+    val totalActiveSpeed = cloudFilteredItems.filter { it.status == TransferStatus.IN_PROGRESS }.sumOf { it.speedBytesPerSec }
+
+    val filteredItems = remember(cloudFilteredItems, selectedFilter) {
+        when (selectedFilter) {
+            QueueFilter.ALL -> cloudFilteredItems
+            QueueFilter.ACTIVE -> cloudFilteredItems.filter { it.status == TransferStatus.IN_PROGRESS }
+            QueueFilter.QUEUED -> cloudFilteredItems.filter { it.status == TransferStatus.QUEUED }
+            QueueFilter.PAUSED -> cloudFilteredItems.filter { it.status == TransferStatus.PAUSED }
+            QueueFilter.COMPLETED -> cloudFilteredItems.filter { it.status == TransferStatus.COMPLETED }
+            QueueFilter.FAILED -> cloudFilteredItems.filter { it.status == TransferStatus.FAILED }
+        }
+    }
+
+    var isRetryingAll by remember { mutableStateOf(false) }
+    val retryingItemIds = remember { mutableStateMapOf<String, Boolean>() }
 
     Scaffold(
         topBar = {
@@ -101,12 +150,12 @@ fun TransferQueueSubpage(
                 title = {
                     Column {
                         Text(
-                            androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.queue_title),
+                            stringResource(R.string.queue_title),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "${items.size} total items • ${formatSpeedRate(totalActiveSpeed)}",
+                            text = "${filteredItems.size} items • ${formatSpeedRate(totalActiveSpeed)}",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -116,16 +165,95 @@ fun TransferQueueSubpage(
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_back)
+                            contentDescription = stringResource(R.string.action_back)
                         )
                     }
                 },
                 actions = {
-                    if (completedCount > 0 || failedCount > 0) {
-                        TextButton(onClick = { FileTransferQueueManager.clearCompleted() }) {
-                            Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(18.dp))
+                    // Retry All Failed Transfers
+                    if (failedCount > 0 && engine != null) {
+                        TextButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    isRetryingAll = true
+                                    try {
+                                        if (selectedServiceId != null) {
+                                            val failedInView = cloudFilteredItems.filter { it.status == TransferStatus.FAILED }
+                                            failedInView.forEach { engine.retryTransfer(it) }
+                                        } else {
+                                            engine.retryAllFailed()
+                                        }
+                                    } finally {
+                                        isRetryingAll = false
+                                    }
+                                }
+                            },
+                            enabled = !isRetryingAll
+                        ) {
+                            if (isRetryingAll) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            } else {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                            }
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_clear))
+                            Text(stringResource(R.string.action_retry_all))
+                        }
+                    }
+
+                    // Pause All / Resume All
+                    if (activeCount > 0 || queuedCount > 0) {
+                        IconButton(
+                            onClick = {
+                                if (selectedServiceId != null) {
+                                    val activeInView = cloudFilteredItems.filter { it.status == TransferStatus.IN_PROGRESS || it.status == TransferStatus.QUEUED }
+                                    FileTransferQueueManager.pauseItems(activeInView.map { it.id }.toSet())
+                                } else {
+                                    FileTransferQueueManager.pauseAll()
+                                }
+                            }
+                        ) {
+                            Icon(
+                                Icons.Default.Pause,
+                                contentDescription = stringResource(R.string.action_pause_all),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    } else if (pausedCount > 0) {
+                        IconButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    if (selectedServiceId != null) {
+                                        val pausedInView = cloudFilteredItems.filter { it.status == TransferStatus.PAUSED }
+                                        if (engine != null) {
+                                            engine.resumeItems(pausedInView)
+                                        } else {
+                                            FileTransferQueueManager.resumeItems(pausedInView.map { it.id }.toSet())
+                                        }
+                                    } else {
+                                        if (engine != null) {
+                                            engine.resumeAllPaused()
+                                        } else {
+                                            FileTransferQueueManager.resumeAll()
+                                        }
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(
+                                Icons.Default.PlayArrow,
+                                contentDescription = stringResource(R.string.action_resume_all),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    // Clear Completed Transfers
+                    if (completedCount > 0) {
+                        IconButton(onClick = { FileTransferQueueManager.clearCompleted(selectedServiceId) }) {
+                            Icon(
+                                Icons.Default.DeleteSweep,
+                                contentDescription = stringResource(R.string.action_clear_completed)
+                            )
                         }
                     }
                 },
@@ -141,7 +269,7 @@ fun TransferQueueSubpage(
                 .padding(padding)
                 .padding(horizontal = 16.dp)
         ) {
-            // Live Stats Cards
+            // Live Stats Cards Row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -149,7 +277,7 @@ fun TransferQueueSubpage(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 StatCard(
-                    title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.queue_active_transfers),
+                    title = stringResource(R.string.queue_active_transfers),
                     value = "$activeCount",
                     icon = Icons.Default.Sync,
                     color = MaterialTheme.colorScheme.primary,
@@ -163,15 +291,31 @@ fun TransferQueueSubpage(
                     modifier = Modifier.weight(1f)
                 )
                 StatCard(
-                    title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.queue_completed_transfers),
+                    title = stringResource(R.string.queue_queued_transfers),
+                    value = "$queuedCount",
+                    icon = Icons.Default.HourglassEmpty,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.weight(1f)
+                )
+                if (pausedCount > 0) {
+                    StatCard(
+                        title = stringResource(R.string.queue_paused_transfers),
+                        value = "$pausedCount",
+                        icon = Icons.Default.PauseCircle,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                StatCard(
+                    title = stringResource(R.string.queue_completed_transfers),
                     value = "$completedCount",
                     icon = Icons.Default.CheckCircle,
-                    color = MaterialTheme.colorScheme.tertiary,
+                    color = Color(0xFF2E7D32),
                     modifier = Modifier.weight(1f)
                 )
                 if (failedCount > 0) {
                     StatCard(
-                        title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.queue_failed_transfers),
+                        title = stringResource(R.string.queue_failed_transfers),
                         value = "$failedCount",
                         icon = Icons.Default.Error,
                         color = MaterialTheme.colorScheme.error,
@@ -180,37 +324,76 @@ fun TransferQueueSubpage(
                 }
             }
 
-            // Filter Chips Bar
+            // Cloud Service Filter Row (Show all clouds and allow filtering to a single cloud)
+            if (cloudServices.isNotEmpty()) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(vertical = 4.dp)
+                ) {
+                    item {
+                        FilterChip(
+                            selected = selectedServiceId == null,
+                            onClick = { selectedServiceId = null },
+                            leadingIcon = {
+                                Icon(Icons.Default.Cloud, contentDescription = null, modifier = Modifier.size(16.dp))
+                            },
+                            label = { Text("${stringResource(R.string.queue_filter_all_clouds)} (${items.size})") }
+                        )
+                    }
+                    items(cloudServices, key = { it.first }) { (svcId, svcName) ->
+                        val count = items.count { it.serviceId == svcId }
+                        FilterChip(
+                            selected = selectedServiceId == svcId,
+                            onClick = { selectedServiceId = svcId },
+                            leadingIcon = {
+                                Icon(Icons.Default.Cloud, contentDescription = null, modifier = Modifier.size(16.dp))
+                            },
+                            label = { Text("$svcName ($count)") }
+                        )
+                    }
+                }
+            }
+
+            // Status Filter Chips Bar
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(vertical = 6.dp)
+                contentPadding = PaddingValues(vertical = 4.dp)
             ) {
                 item {
                     FilterChip(
                         selected = selectedFilter == QueueFilter.ALL,
                         onClick = { selectedFilter = QueueFilter.ALL },
-                        label = { Text("All (${items.size})") }
+                        label = { Text("All (${cloudFilteredItems.size})") }
                     )
                 }
                 item {
                     FilterChip(
                         selected = selectedFilter == QueueFilter.ACTIVE,
                         onClick = { selectedFilter = QueueFilter.ACTIVE },
-                        label = { Text("${androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.queue_active_transfers)} ($activeCount)") }
+                        label = { Text("${stringResource(R.string.queue_active_transfers)} ($activeCount)") }
                     )
                 }
                 item {
                     FilterChip(
                         selected = selectedFilter == QueueFilter.QUEUED,
                         onClick = { selectedFilter = QueueFilter.QUEUED },
-                        label = { Text("${androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.queue_queued_transfers)} ($queuedCount)") }
+                        label = { Text("${stringResource(R.string.queue_queued_transfers)} ($queuedCount)") }
                     )
+                }
+                if (pausedCount > 0) {
+                    item {
+                        FilterChip(
+                            selected = selectedFilter == QueueFilter.PAUSED,
+                            onClick = { selectedFilter = QueueFilter.PAUSED },
+                            label = { Text("${stringResource(R.string.queue_paused_transfers)} ($pausedCount)") }
+                        )
+                    }
                 }
                 item {
                     FilterChip(
                         selected = selectedFilter == QueueFilter.COMPLETED,
                         onClick = { selectedFilter = QueueFilter.COMPLETED },
-                        label = { Text("${androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.queue_completed_transfers)} ($completedCount)") }
+                        label = { Text("${stringResource(R.string.queue_completed_transfers)} ($completedCount)") }
                     )
                 }
                 if (failedCount > 0) {
@@ -218,7 +401,7 @@ fun TransferQueueSubpage(
                         FilterChip(
                             selected = selectedFilter == QueueFilter.FAILED,
                             onClick = { selectedFilter = QueueFilter.FAILED },
-                            label = { Text("${androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.queue_failed_transfers)} ($failedCount)") }
+                            label = { Text("${stringResource(R.string.queue_failed_transfers)} ($failedCount)") }
                         )
                     }
                 }
@@ -243,7 +426,7 @@ fun TransferQueueSubpage(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.queue_empty_desc),
+                            text = stringResource(R.string.queue_empty_desc),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -255,7 +438,38 @@ fun TransferQueueSubpage(
                     contentPadding = PaddingValues(bottom = 24.dp)
                 ) {
                     items(filteredItems, key = { it.id }) { item ->
-                        QueueItemCard(item = item)
+                        val isItemRetrying = retryingItemIds[item.id] == true
+                        QueueItemCard(
+                            item = item,
+                            isRetrying = isItemRetrying,
+                            onPause = { FileTransferQueueManager.requestPause(item.id) },
+                            onResume = {
+                                coroutineScope.launch {
+                                    retryingItemIds[item.id] = true
+                                    try {
+                                        if (engine != null) {
+                                            engine.resumeTransfer(item)
+                                        } else {
+                                            FileTransferQueueManager.requestResume(item.id)
+                                        }
+                                    } finally {
+                                        retryingItemIds.remove(item.id)
+                                    }
+                                }
+                            },
+                            onCancel = { FileTransferQueueManager.requestCancel(item.id) },
+                            onRetry = {
+                                coroutineScope.launch {
+                                    retryingItemIds[item.id] = true
+                                    try {
+                                        engine?.retryTransfer(item)
+                                    } finally {
+                                        retryingItemIds.remove(item.id)
+                                    }
+                                }
+                            },
+                            onDismiss = { FileTransferQueueManager.dismissItem(item.id) }
+                        )
                     }
                 }
             }
@@ -282,7 +496,7 @@ private fun StatCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(imageVector = icon, contentDescription = null, tint = color, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(text = title, style = MaterialTheme.typography.labelSmall, color = color)
+                Text(text = title, style = MaterialTheme.typography.labelSmall, color = color, maxLines = 1)
             }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
@@ -296,10 +510,24 @@ private fun StatCard(
 }
 
 @Composable
-private fun QueueItemCard(item: TransferItem) {
+private fun QueueItemCard(
+    item: TransferItem,
+    isRetrying: Boolean = false,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onCancel: () -> Unit,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit
+) {
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        colors = CardDefaults.cardColors(
+            containerColor = when (item.status) {
+                TransferStatus.FAILED -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)
+                TransferStatus.PAUSED -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.25f)
+                else -> MaterialTheme.colorScheme.surfaceContainer
+            }
+        ),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
@@ -314,7 +542,8 @@ private fun QueueItemCard(item: TransferItem) {
                 }
                 val iconTint = when (item.status) {
                     TransferStatus.IN_PROGRESS -> MaterialTheme.colorScheme.primary
-                    TransferStatus.COMPLETED -> MaterialTheme.colorScheme.tertiary
+                    TransferStatus.PAUSED -> MaterialTheme.colorScheme.tertiary
+                    TransferStatus.COMPLETED -> Color(0xFF2E7D32)
                     TransferStatus.FAILED -> MaterialTheme.colorScheme.error
                     TransferStatus.QUEUED, TransferStatus.SKIPPED, TransferStatus.CANCELLED -> MaterialTheme.colorScheme.outline
                 }
@@ -348,46 +577,131 @@ private fun QueueItemCard(item: TransferItem) {
                     )
                 }
 
-                // Status or Cancel Button
+                // Action Controls based on Status
                 when (item.status) {
                     TransferStatus.IN_PROGRESS, TransferStatus.QUEUED -> {
-                        IconButton(
-                            onClick = { FileTransferQueueManager.requestCancel(item.id) },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.StopCircle,
-                                contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel),
-                                tint = MaterialTheme.colorScheme.error
-                            )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(
+                                onClick = onPause,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Pause,
+                                    contentDescription = stringResource(R.string.action_pause),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            IconButton(
+                                onClick = onCancel,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.StopCircle,
+                                    contentDescription = stringResource(R.string.action_cancel),
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                    TransferStatus.PAUSED -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (isRetrying) {
+                                CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                            } else {
+                                IconButton(
+                                    onClick = onResume,
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = stringResource(R.string.action_resume),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            IconButton(
+                                onClick = onCancel,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.StopCircle,
+                                    contentDescription = stringResource(R.string.action_cancel),
+                                    tint = MaterialTheme.colorScheme.outline
+                                )
+                            }
                         }
                     }
                     TransferStatus.COMPLETED -> {
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
-                            contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.queue_completed_transfers),
-                            tint = MaterialTheme.colorScheme.tertiary,
-                            modifier = Modifier.size(20.dp)
+                            contentDescription = stringResource(R.string.queue_completed_transfers),
+                            tint = Color(0xFF2E7D32),
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                     TransferStatus.FAILED -> {
-                        Icon(
-                            imageVector = Icons.Default.Error,
-                            contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.queue_failed_transfers),
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (isRetrying) {
+                                CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                            } else {
+                                IconButton(
+                                    onClick = onRetry,
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = stringResource(R.string.action_retry),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            IconButton(
+                                onClick = onDismiss,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = stringResource(R.string.action_dismiss),
+                                    tint = MaterialTheme.colorScheme.outline
+                                )
+                            }
+                        }
+                    }
+                    TransferStatus.CANCELLED -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (isRetrying) {
+                                CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                            } else {
+                                IconButton(
+                                    onClick = onRetry,
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = stringResource(R.string.action_retry),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            IconButton(
+                                onClick = onDismiss,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = stringResource(R.string.action_dismiss),
+                                    tint = MaterialTheme.colorScheme.outline
+                                )
+                            }
+                        }
                     }
                     TransferStatus.SKIPPED -> {
                         Text(
-                            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_skip),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline
-                        )
-                    }
-                    TransferStatus.CANCELLED -> {
-                        Text(
-                            text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel),
+                            text = stringResource(R.string.action_skip),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.outline
                         )
@@ -395,8 +709,8 @@ private fun QueueItemCard(item: TransferItem) {
                 }
             }
 
-            // Progress bar and details for Active transfer
-            if (item.status == TransferStatus.IN_PROGRESS) {
+            // Progress bar and details for Active or Paused transfer
+            if (item.status == TransferStatus.IN_PROGRESS || item.status == TransferStatus.PAUSED) {
                 Spacer(modifier = Modifier.height(10.dp))
                 LinearProgressIndicator(
                     progress = { item.progress },
@@ -404,7 +718,7 @@ private fun QueueItemCard(item: TransferItem) {
                         .fillMaxWidth()
                         .height(6.dp)
                         .clip(RoundedCornerShape(3.dp)),
-                    color = MaterialTheme.colorScheme.primary,
+                    color = if (item.status == TransferStatus.PAUSED) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
                     trackColor = MaterialTheme.colorScheme.surfaceVariant
                 )
                 Spacer(modifier = Modifier.height(6.dp))
@@ -418,24 +732,60 @@ private fun QueueItemCard(item: TransferItem) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = formatSpeedRate(item.speedBytesPerSec),
+                        text = if (item.status == TransferStatus.PAUSED) stringResource(R.string.queue_paused_transfers) else formatSpeedRate(item.speedBytesPerSec),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        color = if (item.status == TransferStatus.PAUSED) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
                     )
                 }
             }
 
-            // Error message if Failed
+            // Prominent Error Box for Failed Transfers with Retry button
             if (item.status == TransferStatus.FAILED && !item.errorMessage.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = item.errorMessage,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Error,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = item.errorMessage,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        FilledTonalButton(
+                            onClick = onRetry,
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                            modifier = Modifier.height(28.dp)
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(stringResource(R.string.action_retry), style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
             }
         }
     }

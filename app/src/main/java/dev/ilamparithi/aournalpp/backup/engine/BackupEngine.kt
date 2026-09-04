@@ -26,6 +26,7 @@ import dev.ilamparithi.aournalpp.backup.scanner.BackupScanner
 import dev.ilamparithi.aournalpp.backup.scanner.ScannedLocalFile
 import dev.ilamparithi.aournalpp.backup.security.CredentialsVault
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
+import dev.ilamparithi.aournalpp.runtime.NotesHomeConfigManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -35,9 +36,10 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.security.MessageDigest
-import java.util.UUID
-import kotlin.math.abs
 import dev.ilamparithi.aournalpp.backup.model.ConfigSyncStatus
+import dev.ilamparithi.aournalpp.backup.model.BackupScope
+import java.io.FileNotFoundException
+import java.util.UUID
 
 /**
  * Core differential synchronization engine supporting multi-service complete backups,
@@ -64,8 +66,12 @@ class BackupEngine(
     suspend fun performBackup(
         serviceConfig: ServiceConfig,
         concurrency: Int = 2,
-        onProgress: ((current: Int, total: Int, currentFile: String) -> Unit)? = null
+        onProgress: ((current: Int, total: Int, currentFile: String) -> Unit)? = null,
+        clearCompletedQueue: Boolean = true
     ): BackupResult = withContext(Dispatchers.IO) {
+        if (clearCompletedQueue) {
+            FileTransferQueueManager.clearCompleted()
+        }
         val startTime = System.currentTimeMillis()
         val exclusionFilter = vault.getExclusionFilter()
         val scanner = BackupScanner(env, exclusionFilter)
@@ -130,30 +136,16 @@ class BackupEngine(
             for ((scanned, remotePath) in filesToSync) {
                 val record = existingMetaMap[scanned.relativePath]
                 if (record != null && record.localSha256 == scanned.sha256 && scanned.lastModified <= record.localLastModified) {
-                    // Unchanged file -> Skip
+                    // Unchanged file -> Skip (do not clutter active transfer queue)
                     skippedCount++
-                    val queueItem = TransferItem(
-                        id = UUID.randomUUID().toString(),
-                        serviceId = serviceConfig.id,
-                        serviceName = serviceConfig.name,
-                        localFilePath = scanned.file.absolutePath,
-                        remotePath = remotePath,
-                        fileName = scanned.file.name,
-                        direction = TransferDirection.UPLOAD,
-                        totalBytes = scanned.sizeBytes,
-                        transferredBytes = scanned.sizeBytes,
-                        progress = 1f,
-                        status = TransferStatus.SKIPPED
-                    )
-                    FileTransferQueueManager.enqueue(queueItem)
                 } else {
                     uploadQueue.add(scanned to remotePath)
                 }
             }
 
-            // Enqueue all active upload items
+            // Enqueue all active upload items with deterministic IDs
             val transferItems = uploadQueue.map { (scanned, remotePath) ->
-                val id = UUID.randomUUID().toString()
+                val id = "${serviceConfig.id}_${TransferDirection.UPLOAD.name}_$remotePath"
                 TransferItem(
                     id = id,
                     serviceId = serviceConfig.id,
@@ -163,7 +155,9 @@ class BackupEngine(
                     fileName = scanned.file.name,
                     direction = TransferDirection.UPLOAD,
                     totalBytes = scanned.sizeBytes,
-                    status = TransferStatus.QUEUED
+                    status = TransferStatus.QUEUED,
+                    scope = scanned.scope,
+                    relativePath = scanned.relativePath
                 ) to (scanned to remotePath)
             }
 
@@ -177,20 +171,37 @@ class BackupEngine(
                     val (scanned, remotePath) = payload
                     async {
                         semaphore.withPermit {
-                            if (FileTransferQueueManager.isCancelled(item.id)) {
+                            if (FileTransferQueueManager.isCancelled(item.id) || FileTransferQueueManager.isPaused(item.id)) {
                                 return@withPermit
                             }
 
                             FileTransferQueueManager.markStarted(item.id)
                             onProgress?.invoke(processedCount + 1, totalFiles, scanned.file.name)
 
-                            val uploadResult = provider.uploadFile(
-                                localFile = scanned.file,
-                                remotePath = remotePath,
-                                onProgress = { transferred, total ->
-                                    FileTransferQueueManager.updateProgress(item.id, transferred, total)
-                                }
-                            )
+                            val uploadResult = try {
+                                provider.uploadFile(
+                                    localFile = scanned.file,
+                                    remotePath = remotePath,
+                                    onProgress = { transferred, total ->
+                                        if (FileTransferQueueManager.isPaused(item.id)) {
+                                            throw java.io.IOException("Transfer paused by user")
+                                        }
+                                        if (FileTransferQueueManager.isCancelled(item.id)) {
+                                            throw java.io.IOException("Transfer cancelled by user")
+                                        }
+                                        FileTransferQueueManager.updateProgress(item.id, transferred, total)
+                                    }
+                                )
+                            } catch (e: Exception) {
+                                Result.failure(e)
+                            }
+
+                            if (FileTransferQueueManager.isPaused(item.id)) {
+                                return@withPermit
+                            }
+                            if (FileTransferQueueManager.isCancelled(item.id)) {
+                                return@withPermit
+                            }
 
                             if (uploadResult.isSuccess) {
                                 FileTransferQueueManager.markCompleted(item.id)
@@ -257,8 +268,12 @@ class BackupEngine(
         serviceConfig: ServiceConfig,
         conflictPolicy: ConflictResolutionPolicy = ConflictResolutionPolicy.KEEP_NEWER,
         concurrency: Int = 2,
-        onProgress: ((current: Int, total: Int, currentFile: String) -> Unit)? = null
+        onProgress: ((current: Int, total: Int, currentFile: String) -> Unit)? = null,
+        clearCompletedQueue: Boolean = true
     ): RestoreResult = withContext(Dispatchers.IO) {
+        if (clearCompletedQueue) {
+            FileTransferQueueManager.clearCompleted()
+        }
         val startTime = System.currentTimeMillis()
         val dao = db.syncMetadataDao()
         val provider = StorageProviderFactory.createProvider(serviceConfig)
@@ -269,7 +284,7 @@ class BackupEngine(
         var failedCount = 0
         var totalBytesDownloaded = 0L
         var hasRestoredConfigs = false
-        val remoteFilesToDownload = mutableListOf<Pair<String, File>>() // (remotePath, localDestinationFile)
+        val remoteFilesToDownload = mutableListOf<Triple<RemoteFileMetadata, String, File>>() // (rf, remotePath, localDestinationFile)
 
         try {
             val connResult = provider.testConnection()
@@ -291,28 +306,42 @@ class BackupEngine(
 
             if (serviceConfig.isCompleteBackupEnabled) {
                 val notesRoot = env.getNotesDirectory()
-                val configRoot = env.xournalConfigDir
+                val notesConfigDir = File(notesRoot, ".config")
                 val remoteRoot = getCompleteBackupRemoteRoot(serviceConfig)
 
-                // List Notes tree
+                // 1. List Notes tree
                 val remoteNotes = listRemoteRecursively(provider, "$remoteRoot/Notes")
                 for (rf in remoteNotes) {
                     if (rf.isDirectory) continue
                     val subPath = rf.remotePath.removePrefix("$remoteRoot/Notes").trim('/')
                     val destFile = File(notesRoot, subPath)
-                    remoteFilesToDownload.add(rf.remotePath to destFile)
+                    remoteFilesToDownload.add(Triple(rf, rf.remotePath, destFile))
                 }
 
-                // List .config tree
-                val remoteConfigs = listRemoteRecursively(provider, "$remoteRoot/.config/xournalpp")
+                // 2. List .config tree (downloads all files including root configs and xournalpp subfolder)
+                val remoteConfigs = listRemoteRecursively(provider, "$remoteRoot/.config")
+                val addedRemotePaths = mutableSetOf<String>()
                 for (rf in remoteConfigs) {
                     if (rf.isDirectory) continue
+                    val subPath = rf.remotePath.removePrefix("$remoteRoot/.config").trim('/')
+                    if (subPath.isEmpty()) continue
+                    val destFile = File(notesConfigDir, subPath)
+                    remoteFilesToDownload.add(Triple(rf, rf.remotePath, destFile))
+                    addedRemotePaths.add(rf.remotePath)
+                }
+
+                // Fallback for legacy backups where only $remoteRoot/.config/xournalpp was backed up
+                val legacyConfigs = listRemoteRecursively(provider, "$remoteRoot/.config/xournalpp")
+                for (rf in legacyConfigs) {
+                    if (rf.isDirectory || rf.remotePath in addedRemotePaths) continue
                     val subPath = rf.remotePath.removePrefix("$remoteRoot/.config/xournalpp").trim('/')
-                    val destFile = File(configRoot, subPath)
-                    remoteFilesToDownload.add(rf.remotePath to destFile)
+                    if (subPath.isEmpty()) continue
+                    val destFile = File(File(notesConfigDir, "xournalpp"), subPath)
+                    remoteFilesToDownload.add(Triple(rf, rf.remotePath, destFile))
                 }
             }
 
+            // Custom Folder Mappings
             for (mapping in serviceConfig.customMappings) {
                 if (!mapping.isEnabled) continue
                 val localBase = File(mapping.localFolderPath)
@@ -322,7 +351,7 @@ class BackupEngine(
                     if (rf.isDirectory) continue
                     val subPath = if (remoteBase.isNotEmpty()) rf.remotePath.removePrefix(remoteBase).trim('/') else rf.remotePath
                     val destFile = File(localBase, subPath)
-                    remoteFilesToDownload.add(rf.remotePath to destFile)
+                    remoteFilesToDownload.add(Triple(rf, rf.remotePath, destFile))
                 }
             }
 
@@ -330,7 +359,7 @@ class BackupEngine(
 
             // Apply Conflict Policy
             val downloadQueue = mutableListOf<Pair<String, File>>()
-            for ((remotePath, localFile) in remoteFilesToDownload) {
+            for ((rf, remotePath, localFile) in remoteFilesToDownload) {
                 if (!localFile.exists()) {
                     downloadQueue.add(remotePath to localFile)
                 } else {
@@ -342,15 +371,18 @@ class BackupEngine(
                             skippedCount++
                         }
                         ConflictResolutionPolicy.KEEP_NEWER -> {
-                            // Compare timestamps
-                            downloadQueue.add(remotePath to localFile)
+                            if (rf.lastModifiedEpochMs > localFile.lastModified()) {
+                                downloadQueue.add(remotePath to localFile)
+                            } else {
+                                skippedCount++
+                            }
                         }
                     }
                 }
             }
 
             val transferItems = downloadQueue.map { (remotePath, localFile) ->
-                val id = UUID.randomUUID().toString()
+                val id = "${serviceConfig.id}_${TransferDirection.DOWNLOAD.name}_$remotePath"
                 TransferItem(
                     id = id,
                     serviceId = serviceConfig.id,
@@ -359,8 +391,10 @@ class BackupEngine(
                     remotePath = remotePath,
                     fileName = localFile.name,
                     direction = TransferDirection.DOWNLOAD,
-                    totalBytes = 0L,
-                    status = TransferStatus.QUEUED
+                    totalBytes = if (localFile.exists()) localFile.length() else 0L,
+                    status = TransferStatus.QUEUED,
+                    scope = "restore",
+                    relativePath = remotePath
                 ) to (remotePath to localFile)
             }
 
@@ -374,18 +408,38 @@ class BackupEngine(
                     val (remotePath, localFile) = payload
                     async {
                         semaphore.withPermit {
-                            if (FileTransferQueueManager.isCancelled(item.id)) return@withPermit
+                            if (FileTransferQueueManager.isCancelled(item.id) || FileTransferQueueManager.isPaused(item.id)) {
+                                return@withPermit
+                            }
 
                             FileTransferQueueManager.markStarted(item.id)
                             onProgress?.invoke(processed + 1, totalDiscovered, localFile.name)
 
-                            val downloadResult = provider.downloadFile(
-                                remotePath = remotePath,
-                                destinationFile = localFile,
-                                onProgress = { downloaded, total ->
-                                    FileTransferQueueManager.updateProgress(item.id, downloaded, total)
-                                }
-                            )
+                            val downloadResult = try {
+                                localFile.parentFile?.mkdirs()
+                                provider.downloadFile(
+                                    remotePath = remotePath,
+                                    destinationFile = localFile,
+                                    onProgress = { transferred, total ->
+                                        if (FileTransferQueueManager.isPaused(item.id)) {
+                                            throw java.io.IOException("Transfer paused by user")
+                                        }
+                                        if (FileTransferQueueManager.isCancelled(item.id)) {
+                                            throw java.io.IOException("Transfer cancelled by user")
+                                        }
+                                        FileTransferQueueManager.updateProgress(item.id, transferred, total)
+                                    }
+                                )
+                            } catch (e: Exception) {
+                                Result.failure(e)
+                            }
+
+                            if (FileTransferQueueManager.isPaused(item.id)) {
+                                return@withPermit
+                            }
+                            if (FileTransferQueueManager.isCancelled(item.id)) {
+                                return@withPermit
+                            }
 
                             if (downloadResult.isSuccess) {
                                 FileTransferQueueManager.markCompleted(item.id)
@@ -393,7 +447,7 @@ class BackupEngine(
                                     restoredCount++
                                     totalBytesDownloaded += localFile.length()
                                     processed++
-                                    if (localFile.absolutePath.startsWith(env.xournalConfigDir.absolutePath)) {
+                                    if (localFile.absolutePath.contains("/.config/") || localFile.absolutePath.startsWith(env.xournalConfigDir.absolutePath)) {
                                         hasRestoredConfigs = true
                                     }
                                 }
@@ -412,14 +466,12 @@ class BackupEngine(
                 tasks.awaitAll()
             }
 
-            // Sanitize settings if .config files were restored
+            // Sanitize settings and restore internal configurations if .config files were restored
             if (hasRestoredConfigs) {
                 try {
-                    env.ensureXournalppSettings()
-                    env.checkAndOverrideAutoloadPreference()
-                    env.ensureMenuBarShortcuts()
+                    NotesHomeConfigManager.restoreSettingsFromNotesHome(env.getNotesDirectory(), context, env)
                 } catch (e: Exception) {
-                    Log.w(TAG, "Error sanitizing restored Xournal++ settings", e)
+                    Log.w(TAG, "Error restoring settings from Notes Home after download", e)
                 }
             }
 
@@ -447,10 +499,11 @@ class BackupEngine(
         concurrency: Int = 2,
         onProgress: ((current: Int, total: Int, currentFile: String) -> Unit)? = null
     ): List<BackupResult> {
+        FileTransferQueueManager.clearCompleted()
         val services = vault.getAllServices().filter { it.isEnabled }
         val results = mutableListOf<BackupResult>()
         for (service in services) {
-            val result = performBackup(service, concurrency, onProgress)
+            val result = performBackup(service, concurrency, onProgress, clearCompletedQueue = false)
             results.add(result)
         }
         return results
@@ -472,7 +525,7 @@ class BackupEngine(
 
             if (serviceConfig.isCompleteBackupEnabled) {
                 val notesRoot = env.getNotesDirectory()
-                val configRoot = env.xournalConfigDir
+                val notesConfigDir = File(notesRoot, ".config")
                 val remoteRoot = getCompleteBackupRemoteRoot(serviceConfig)
 
                 val remoteNotes = listRemoteRecursively(provider, "$remoteRoot/Notes")
@@ -482,11 +535,25 @@ class BackupEngine(
                     remoteFiles.add(rf to File(notesRoot, subPath))
                 }
 
-                val remoteConfigs = listRemoteRecursively(provider, "$remoteRoot/.config/xournalpp")
+                val remoteConfigs = listRemoteRecursively(provider, "$remoteRoot/.config")
+                val addedRemoteConfigPaths = mutableSetOf<String>()
                 for (rf in remoteConfigs) {
                     if (rf.isDirectory) continue
+                    val subPath = rf.remotePath.removePrefix("$remoteRoot/.config").trim('/')
+                    if (subPath.isNotEmpty()) {
+                        remoteFiles.add(rf to File(notesConfigDir, subPath))
+                        addedRemoteConfigPaths.add(rf.remotePath)
+                    }
+                }
+
+                // Fallback for legacy backups
+                val legacyConfigs = listRemoteRecursively(provider, "$remoteRoot/.config/xournalpp")
+                for (rf in legacyConfigs) {
+                    if (rf.isDirectory || rf.remotePath in addedRemoteConfigPaths) continue
                     val subPath = rf.remotePath.removePrefix("$remoteRoot/.config/xournalpp").trim('/')
-                    remoteFiles.add(rf to File(configRoot, subPath))
+                    if (subPath.isNotEmpty()) {
+                        remoteFiles.add(rf to File(File(notesConfigDir, "xournalpp"), subPath))
+                    }
                 }
             }
 
@@ -633,11 +700,45 @@ class BackupEngine(
                         versionsByLocalPath.getOrPut(canon) { mutableListOf() }.add(item)
                     }
 
-                    val remoteConfigs = listRemoteRecursively(provider, "$remoteRoot/.config/xournalpp")
+                    val remoteConfigs = listRemoteRecursively(provider, "$remoteRoot/.config")
+                    val addedRemoteConfigPaths = mutableSetOf<String>()
                     for (rf in remoteConfigs) {
                         if (rf.isDirectory) continue
+                        val subPath = rf.remotePath.removePrefix("$remoteRoot/.config").trim('/')
+                        if (subPath.isEmpty()) continue
+                        val destFile = File(File(notesRoot, ".config"), subPath)
+                        val canon = destFile.canonicalPath
+                        val displayRel = ".config/$subPath"
+                        if (!relativePathByLocalPath.containsKey(canon)) {
+                            relativePathByLocalPath[canon] = displayRel
+                        }
+                        val item = FileVersionItem(
+                            source = FileVersionSource.REMOTE(
+                                serviceId = srv.id,
+                                serviceName = srv.name,
+                                providerType = srv.providerType,
+                                mappingId = null,
+                                mappingRemotePath = null
+                            ),
+                            fileName = destFile.name,
+                            relativePath = displayRel,
+                            localFilePath = destFile.absolutePath,
+                            sizeBytes = rf.sizeBytes,
+                            lastModifiedEpochMs = rf.lastModifiedEpochMs,
+                            contentHash = rf.contentHash,
+                            remotePath = rf.remotePath
+                        )
+                        versionsByLocalPath.getOrPut(canon) { mutableListOf() }.add(item)
+                        addedRemoteConfigPaths.add(rf.remotePath)
+                    }
+
+                    // Fallback for legacy backups
+                    val legacyConfigs = listRemoteRecursively(provider, "$remoteRoot/.config/xournalpp")
+                    for (rf in legacyConfigs) {
+                        if (rf.isDirectory || rf.remotePath in addedRemoteConfigPaths) continue
                         val subPath = rf.remotePath.removePrefix("$remoteRoot/.config/xournalpp").trim('/')
-                        val destFile = File(configRoot, subPath)
+                        if (subPath.isEmpty()) continue
+                        val destFile = File(File(notesRoot, ".config/xournalpp"), subPath)
                         val canon = destFile.canonicalPath
                         val displayRel = ".config/xournalpp/$subPath"
                         if (!relativePathByLocalPath.containsKey(canon)) {
@@ -996,11 +1097,9 @@ class BackupEngine(
 
         if (hasRestoredConfigs) {
             try {
-                env.ensureXournalppSettings()
-                env.checkAndOverrideAutoloadPreference()
-                env.ensureMenuBarShortcuts()
+                NotesHomeConfigManager.restoreSettingsFromNotesHome(env.getNotesDirectory(), context, env)
             } catch (e: Exception) {
-                Log.w(TAG, "Error sanitizing restored Xournal++ settings", e)
+                Log.w(TAG, "Error restoring settings from Notes Home after conflict resolution", e)
             }
         }
 
@@ -1032,8 +1131,8 @@ class BackupEngine(
         if (clean == "Notes") {
             return env.getNotesDirectory()
         }
-        if (clean.startsWith(".config/xournalpp/")) {
-            return File(env.xournalConfigDir, clean.removePrefix(".config/xournalpp/").trim('/'))
+        if (clean.startsWith(".config/")) {
+            return File(env.getNotesDirectory(), clean)
         }
         for (mapping in customMappings) {
             val mappingRemote = mapping.remoteFolderPath.trim().trim('/')
@@ -1306,6 +1405,12 @@ class BackupEngine(
                 }
             }
         }
+
+        try {
+            NotesHomeConfigManager.restoreSettingsFromNotesHome(localNotesDir, context, env)
+        } catch (e: Exception) {
+            Log.w(TAG, "Error applying config resolutions to internal settings", e)
+        }
     }
 
     private fun hasContentChanges(f1: File, f2: File): Boolean {
@@ -1341,5 +1446,155 @@ class BackupEngine(
         } catch (e: Exception) {
             ""
         }
+    }
+
+    /**
+     * Retries or resumes a single file transfer manually.
+     */
+    suspend fun retryTransfer(item: TransferItem): Result<Unit> = withContext(Dispatchers.IO) {
+        val service = vault.getAllServices().firstOrNull { it.id == item.serviceId }
+            ?: return@withContext Result.failure(IllegalStateException("Cloud service ${item.serviceName} not found"))
+
+        val provider = StorageProviderFactory.createProvider(service)
+        try {
+            val connResult = provider.testConnection()
+            if (connResult.isFailure || connResult.getOrNull() == false) {
+                val err = connResult.exceptionOrNull()?.message ?: "Failed to connect to ${service.name}"
+                FileTransferQueueManager.markFailed(item.id, err)
+                return@withContext Result.failure(Exception(err))
+            }
+
+            FileTransferQueueManager.markRetrying(item.id)
+            FileTransferQueueManager.markStarted(item.id)
+
+            if (item.direction == TransferDirection.UPLOAD) {
+                val localFile = File(item.localFilePath)
+                if (!localFile.exists()) {
+                    val err = "Local file not found: ${item.localFilePath}"
+                    FileTransferQueueManager.markFailed(item.id, err)
+                    return@withContext Result.failure(FileNotFoundException(err))
+                }
+
+                val uploadResult = try {
+                    provider.uploadFile(
+                        localFile = localFile,
+                        remotePath = item.remotePath,
+                        onProgress = { transferred, total ->
+                            if (FileTransferQueueManager.isPaused(item.id)) {
+                                throw java.io.IOException("Transfer paused by user")
+                            }
+                            if (FileTransferQueueManager.isCancelled(item.id)) {
+                                throw java.io.IOException("Transfer cancelled by user")
+                            }
+                            FileTransferQueueManager.updateProgress(item.id, transferred, total)
+                        }
+                    )
+                } catch (e: Exception) {
+                    Result.failure(e)
+                }
+
+                if (FileTransferQueueManager.isPaused(item.id)) {
+                    return@withContext Result.success(Unit)
+                }
+                if (FileTransferQueueManager.isCancelled(item.id)) {
+                    return@withContext Result.failure(Exception("Transfer cancelled"))
+                }
+
+                if (uploadResult.isSuccess) {
+                    FileTransferQueueManager.markCompleted(item.id)
+                    val dao = db.syncMetadataDao()
+                    val sha = BackupScanner.calculateSha256(localFile)
+                    val relPath = item.relativePath ?: localFile.name
+                    val scope = item.scope ?: BackupScope.NOTES.id
+                    dao.insertOrUpdate(
+                        SyncMetadataEntity(
+                            serviceId = service.id,
+                            relativePath = relPath,
+                            scope = scope,
+                            localSha256 = sha,
+                            remoteHash = null,
+                            localLastModified = localFile.lastModified(),
+                            sizeBytes = localFile.length(),
+                            lastSyncedAt = System.currentTimeMillis()
+                        )
+                    )
+                    Result.success(Unit)
+                } else {
+                    val errMsg = uploadResult.exceptionOrNull()?.message ?: "Upload failed"
+                    FileTransferQueueManager.markFailed(item.id, errMsg)
+                    Result.failure(uploadResult.exceptionOrNull() ?: Exception(errMsg))
+                }
+            } else {
+                val localFile = File(item.localFilePath)
+                localFile.parentFile?.mkdirs()
+
+                val downloadResult = try {
+                    provider.downloadFile(
+                        remotePath = item.remotePath,
+                        destinationFile = localFile,
+                        onProgress = { downloaded, total ->
+                            if (FileTransferQueueManager.isPaused(item.id)) {
+                                throw java.io.IOException("Transfer paused by user")
+                            }
+                            if (FileTransferQueueManager.isCancelled(item.id)) {
+                                throw java.io.IOException("Transfer cancelled by user")
+                            }
+                            FileTransferQueueManager.updateProgress(item.id, downloaded, total)
+                        }
+                    )
+                } catch (e: Exception) {
+                    Result.failure(e)
+                }
+
+                if (FileTransferQueueManager.isPaused(item.id)) {
+                    return@withContext Result.success(Unit)
+                }
+                if (FileTransferQueueManager.isCancelled(item.id)) {
+                    return@withContext Result.failure(Exception("Transfer cancelled"))
+                }
+
+                if (downloadResult.isSuccess) {
+                    FileTransferQueueManager.markCompleted(item.id)
+                    Result.success(Unit)
+                } else {
+                    val errMsg = downloadResult.exceptionOrNull()?.message ?: "Download failed"
+                    FileTransferQueueManager.markFailed(item.id, errMsg)
+                    Result.failure(downloadResult.exceptionOrNull() ?: Exception(errMsg))
+                }
+            }
+        } finally {
+            provider.disconnect()
+        }
+    }
+
+    /**
+     * Retries all currently failed transfers.
+     */
+    suspend fun retryAllFailed(): List<Result<Unit>> = withContext(Dispatchers.IO) {
+        val failedItems = FileTransferQueueManager.items.value.filter { it.status == TransferStatus.FAILED }
+        failedItems.map { retryTransfer(it) }
+    }
+
+    /**
+     * Resumes a paused transfer.
+     */
+    suspend fun resumeTransfer(item: TransferItem): Result<Unit> {
+        FileTransferQueueManager.requestResume(item.id)
+        return retryTransfer(item)
+    }
+
+    /**
+     * Resumes all paused transfers.
+     */
+    suspend fun resumeAllPaused(): List<Result<Unit>> = withContext(Dispatchers.IO) {
+        val pausedItems = FileTransferQueueManager.items.value.filter { it.status == TransferStatus.PAUSED }
+        pausedItems.map { resumeTransfer(it) }
+    }
+
+    /**
+     * Resumes the given list of paused transfers.
+     */
+    suspend fun resumeItems(items: List<TransferItem>): List<Result<Unit>> = withContext(Dispatchers.IO) {
+        items.map { resumeTransfer(it) }
     }
 }

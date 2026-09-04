@@ -15,6 +15,25 @@ object NotesHomeConfigManager {
     private const val XOURNALPP_DIR_NAME = "xournalpp"
     private const val SYNC_METADATA_FILE = "notes_home_sync_meta.json"
 
+    private const val APP_SETTINGS_PREFS_NAME = "aournal_prefs"
+    private const val SYNC_MAPPINGS_FILE = "sync_mappings.json"
+    private const val META_TYPES_KEY = "__meta_types"
+
+    fun getX11Prefs(context: Context): SharedPreferences {
+        return context.getSharedPreferences("${context.packageName}_preferences", Context.MODE_PRIVATE)
+    }
+
+    fun notifyX11PreferencesChanged(context: Context, key: String = "all") {
+        try {
+            val intent = android.content.Intent("com.termux.x11.ACTION_PREFERENCES_CHANGED").apply {
+                putExtra("key", key)
+                putExtra("fromBroadcast", true)
+                setPackage(context.packageName)
+            }
+            context.sendBroadcast(intent)
+        } catch (_: Exception) {}
+    }
+
     fun getConfigDirectory(notesHomeDir: File): File {
         return File(notesHomeDir, CONFIG_FOLDER_NAME)
     }
@@ -48,7 +67,10 @@ object NotesHomeConfigManager {
             // 2. Termux-X11 Preferences Sync
             syncX11Prefs(context, configDir, meta)
 
-            // 3. Xournal++ & GTK Settings Sync (Recursive)
+            // 3. Custom Folder Mappings Sync (sync_mappings.json)
+            syncMappingsFile(context, configDir, meta)
+
+            // 4. Xournal++ & GTK Settings Sync (Recursive)
             syncXournalppConfigs(env, configDir, meta)
 
             // Save updated sync metadata
@@ -61,7 +83,7 @@ object NotesHomeConfigManager {
     /**
      * Determines whether the given folder is an existing Aournal++ compatible workspace.
      * A folder is compatible if it contains a .config directory with app_settings.json,
-     * x11_prefs.json, or a non-empty xournalpp config directory (such as settings.xml).
+     * x11_prefs.json, sync_mappings.json, settings.ini, or a non-empty xournalpp config directory (such as settings.xml).
      */
     fun isAournalCompatible(notesHomeDir: File): Boolean {
         if (!notesHomeDir.exists() || !notesHomeDir.isDirectory) return false
@@ -73,8 +95,10 @@ object NotesHomeConfigManager {
         val xoppDir = File(configDir, XOURNALPP_DIR_NAME)
         val hasXopp = xoppDir.exists() && (xoppDir.list()?.isNotEmpty() == true)
         val hasDirectSettings = File(configDir, "settings.xml").exists()
+        val hasSyncMappings = File(configDir, SYNC_MAPPINGS_FILE).exists()
+        val hasGtkSettings = File(configDir, "settings.ini").exists()
 
-        return hasAppSettings || hasX11Prefs || hasXopp || hasDirectSettings
+        return hasAppSettings || hasX11Prefs || hasXopp || hasDirectSettings || hasSyncMappings || hasGtkSettings
     }
 
     /**
@@ -93,7 +117,7 @@ object NotesHomeConfigManager {
             // 1. Force import app settings
             val appSettingsFile = File(configDir, APP_SETTINGS_FILE)
             if (appSettingsFile.exists()) {
-                val appPrefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+                val appPrefs = context.getSharedPreferences(APP_SETTINGS_PREFS_NAME, Context.MODE_PRIVATE)
                 importJsonToSharedPreferences(appSettingsFile, appPrefs)
                 meta["hash_$APP_SETTINGS_FILE"] = getFileHash(appSettingsFile)
             }
@@ -101,12 +125,21 @@ object NotesHomeConfigManager {
             // 2. Force import X11 preferences
             val x11PrefsFile = File(configDir, X11_PREFS_FILE)
             if (x11PrefsFile.exists()) {
-                val x11Prefs = context.getSharedPreferences("com.termux.x11_preferences", Context.MODE_PRIVATE)
+                val x11Prefs = getX11Prefs(context)
                 importJsonToSharedPreferences(x11PrefsFile, x11Prefs)
                 meta["hash_$X11_PREFS_FILE"] = getFileHash(x11PrefsFile)
+                notifyX11PreferencesChanged(context, "all")
             }
 
-            // 3. Force import Xournal++ and GTK configurations
+            // 3. Force import sync_mappings.json if present
+            val syncMappingsFile = File(configDir, SYNC_MAPPINGS_FILE)
+            if (syncMappingsFile.exists()) {
+                val internalMappingsFile = File(context.filesDir, SYNC_MAPPINGS_FILE)
+                syncMappingsFile.copyTo(internalMappingsFile, overwrite = true)
+                meta["hash_$SYNC_MAPPINGS_FILE"] = getFileHash(syncMappingsFile)
+            }
+
+            // 4. Force import Xournal++ and GTK configurations
             val extXoppDir = File(configDir, XOURNALPP_DIR_NAME)
             val internalXoppDir = env.xournalConfigDir
             if (!internalXoppDir.exists()) {
@@ -121,13 +154,19 @@ object NotesHomeConfigManager {
                 }
             }
 
-            // Also check if settings.ini (GTK) exists in external configDir
+            // Also check if settings.ini (GTK) exists in external configDir or xoppDir
             val extGtkSettings = File(configDir, "settings.ini")
-            if (extGtkSettings.exists()) {
+            val extXoppGtkSettings = File(extXoppDir, "settings.ini")
+            val gtkSource = when {
+                extGtkSettings.exists() -> extGtkSettings
+                extXoppGtkSettings.exists() -> extXoppGtkSettings
+                else -> null
+            }
+            if (gtkSource != null) {
                 val intGtkDir = File(env.configDir, "gtk-3.0")
                 if (!intGtkDir.exists()) intGtkDir.mkdirs()
                 val intGtkSettings = File(intGtkDir, "settings.ini")
-                extGtkSettings.copyTo(intGtkSettings, overwrite = true)
+                gtkSource.copyTo(intGtkSettings, overwrite = true)
                 meta["hash_xopp_settings.ini"] = getFileHash(intGtkSettings)
             }
 
@@ -188,7 +227,7 @@ object NotesHomeConfigManager {
 
     private fun syncAppSettings(context: Context, configDir: File, meta: MutableMap<String, String>) {
         val externalFile = File(configDir, APP_SETTINGS_FILE)
-        val appPrefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        val appPrefs = context.getSharedPreferences(APP_SETTINGS_PREFS_NAME, Context.MODE_PRIVATE)
         val metaKey = "hash_$APP_SETTINGS_FILE"
         val lastSyncHash = meta[metaKey] ?: ""
 
@@ -206,7 +245,7 @@ object NotesHomeConfigManager {
 
     private fun syncX11Prefs(context: Context, configDir: File, meta: MutableMap<String, String>) {
         val externalFile = File(configDir, X11_PREFS_FILE)
-        val x11Prefs = context.getSharedPreferences("com.termux.x11_preferences", Context.MODE_PRIVATE)
+        val x11Prefs = getX11Prefs(context)
         val metaKey = "hash_$X11_PREFS_FILE"
         val lastSyncHash = meta[metaKey] ?: ""
 
@@ -216,10 +255,18 @@ object NotesHomeConfigManager {
             Log.i(TAG, "External $X11_PREFS_FILE modified. Importing to X11 Preferences...")
             importJsonToSharedPreferences(externalFile, x11Prefs)
             meta[metaKey] = getFileHash(externalFile)
+            notifyX11PreferencesChanged(context, "all")
         } else {
             exportSharedPreferencesToJson(x11Prefs, externalFile)
             meta[metaKey] = getFileHash(externalFile)
         }
+    }
+
+    private fun syncMappingsFile(context: Context, configDir: File, meta: MutableMap<String, String>) {
+        val internalFile = File(context.filesDir, SYNC_MAPPINGS_FILE)
+        val externalFile = File(configDir, SYNC_MAPPINGS_FILE)
+        val metaKey = "hash_$SYNC_MAPPINGS_FILE"
+        syncSingleFile(internalFile, externalFile, metaKey, meta)
     }
 
     private fun syncXournalppConfigs(env: LinuxEnvironment, configDir: File, meta: MutableMap<String, String>) {
@@ -385,36 +432,114 @@ object NotesHomeConfigManager {
         "pref_last_provisioned_asset_version"
     )
 
-    private fun exportSharedPreferencesToJson(prefs: SharedPreferences, destFile: File) {
+    fun exportSharedPreferencesToJson(prefs: SharedPreferences, destFile: File) {
         try {
             val allEntries = prefs.all
             val json = JSONObject()
+            val metaTypes = JSONObject()
+
             for ((key, value) in allEntries) {
-                if (key !in EXCLUDED_SHARED_PREFS_KEYS) {
-                    json.put(key, value)
+                if (key in EXCLUDED_SHARED_PREFS_KEYS || key == META_TYPES_KEY) continue
+                when (value) {
+                    is Boolean -> {
+                        metaTypes.put(key, "BOOLEAN")
+                        json.put(key, value)
+                    }
+                    is Int -> {
+                        metaTypes.put(key, "INT")
+                        json.put(key, value)
+                    }
+                    is Long -> {
+                        metaTypes.put(key, "LONG")
+                        json.put(key, value)
+                    }
+                    is Float -> {
+                        metaTypes.put(key, "FLOAT")
+                        json.put(key, value.toDouble())
+                    }
+                    is Double -> {
+                        metaTypes.put(key, "FLOAT")
+                        json.put(key, value)
+                    }
+                    is String -> {
+                        metaTypes.put(key, "STRING")
+                        json.put(key, value)
+                    }
+                    is Set<*> -> {
+                        metaTypes.put(key, "STRING_SET")
+                        val arr = org.json.JSONArray()
+                        for (item in value) {
+                            if (item != null) arr.put(item.toString())
+                        }
+                        json.put(key, arr)
+                    }
+                    else -> {
+                        if (value != null) {
+                            metaTypes.put(key, "STRING")
+                            json.put(key, value.toString())
+                        }
+                    }
                 }
             }
+            json.put(META_TYPES_KEY, metaTypes)
             destFile.writeText(json.toString(2), Charsets.UTF_8)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to export SharedPreferences to ${destFile.name}", e)
         }
     }
 
-    private fun importJsonToSharedPreferences(sourceFile: File, prefs: SharedPreferences) {
+    fun importJsonToSharedPreferences(sourceFile: File, prefs: SharedPreferences) {
         try {
             val text = sourceFile.readText(Charsets.UTF_8)
             val json = JSONObject(text)
+            val metaTypesObj = json.optJSONObject(META_TYPES_KEY)
             val editor = prefs.edit()
             val existingEntries = prefs.all
 
             val keys = json.keys()
             while (keys.hasNext()) {
                 val key = keys.next()
-                if (key in EXCLUDED_SHARED_PREFS_KEYS) continue
+                if (key in EXCLUDED_SHARED_PREFS_KEYS || key == META_TYPES_KEY) continue
                 val rawValue = json.get(key)
                 val existing = existingEntries[key]
+                val recordedType = metaTypesObj?.optString(key, "") ?: ""
 
-                if (existing != null) {
+                if (recordedType.isNotEmpty()) {
+                    when (recordedType) {
+                        "BOOLEAN" -> {
+                            val b = (rawValue as? Boolean) ?: rawValue.toString().toBooleanStrictOrNull()
+                            if (b != null) editor.putBoolean(key, b)
+                        }
+                        "INT" -> {
+                            val num = (rawValue as? Number)?.toInt() ?: rawValue.toString().toIntOrNull()
+                            if (num != null) editor.putInt(key, num)
+                        }
+                        "LONG" -> {
+                            val num = (rawValue as? Number)?.toLong() ?: rawValue.toString().toLongOrNull()
+                            if (num != null) editor.putLong(key, num)
+                        }
+                        "FLOAT" -> {
+                            val num = (rawValue as? Number)?.toFloat() ?: rawValue.toString().toFloatOrNull()
+                            if (num != null) editor.putFloat(key, num)
+                        }
+                        "STRING" -> {
+                            editor.putString(key, rawValue.toString())
+                        }
+                        "STRING_SET" -> {
+                            val set = mutableSetOf<String>()
+                            val arr = rawValue as? org.json.JSONArray
+                            if (arr != null) {
+                                for (i in 0 until arr.length()) {
+                                    set.add(arr.getString(i))
+                                }
+                            }
+                            editor.putStringSet(key, set)
+                        }
+                        else -> {
+                            editor.putString(key, rawValue.toString())
+                        }
+                    }
+                } else if (existing != null) {
                     when (existing) {
                         is Long -> {
                             val num = (rawValue as? Number)?.toLong() ?: rawValue.toString().toLongOrNull()
@@ -435,21 +560,41 @@ object NotesHomeConfigManager {
                         is String -> {
                             editor.putString(key, rawValue.toString())
                         }
+                        is Set<*> -> {
+                            val set = mutableSetOf<String>()
+                            val arr = rawValue as? org.json.JSONArray
+                            if (arr != null) {
+                                for (i in 0 until arr.length()) {
+                                    set.add(arr.getString(i))
+                                }
+                            }
+                            editor.putStringSet(key, set)
+                        }
                     }
                 } else {
-                    when (rawValue) {
-                        is Boolean -> editor.putBoolean(key, rawValue)
-                        is Int -> {
-                            if (isKnownLongKey(key)) {
-                                editor.putLong(key, rawValue.toLong())
-                            } else {
-                                editor.putInt(key, rawValue)
-                            }
+                    // Fallback for legacy JSON files without __meta_types and no existing preference
+                    when {
+                        rawValue is Boolean -> editor.putBoolean(key, rawValue)
+                        isKnownFloatKey(key) -> {
+                            val num = (rawValue as? Number)?.toFloat() ?: rawValue.toString().toFloatOrNull()
+                            if (num != null) editor.putFloat(key, num)
                         }
-                        is Long -> editor.putLong(key, rawValue)
-                        is Float -> editor.putFloat(key, rawValue)
-                        is Double -> editor.putFloat(key, rawValue.toFloat())
-                        is String -> editor.putString(key, rawValue)
+                        isKnownLongKey(key) -> {
+                            val num = (rawValue as? Number)?.toLong() ?: rawValue.toString().toLongOrNull()
+                            if (num != null) editor.putLong(key, num)
+                        }
+                        rawValue is Int -> editor.putInt(key, rawValue)
+                        rawValue is Long -> editor.putLong(key, rawValue)
+                        rawValue is Float -> editor.putFloat(key, rawValue)
+                        rawValue is Double -> editor.putFloat(key, rawValue.toFloat())
+                        rawValue is org.json.JSONArray -> {
+                            val set = mutableSetOf<String>()
+                            for (i in 0 until rawValue.length()) {
+                                set.add(rawValue.getString(i))
+                            }
+                            editor.putStringSet(key, set)
+                        }
+                        else -> editor.putString(key, rawValue.toString())
                     }
                 }
             }
@@ -457,6 +602,13 @@ object NotesHomeConfigManager {
         } catch (e: Exception) {
             Log.w(TAG, "Failed to import JSON from ${sourceFile.name} to SharedPreferences", e)
         }
+    }
+
+    private fun isKnownFloatKey(key: String): Boolean {
+        return key == "toolbarPosXRatio" ||
+                key == "toolbarPosYRatio" ||
+                key.endsWith("Ratio") ||
+                key.endsWith("_ratio")
     }
 
     private fun isKnownLongKey(key: String): Boolean {

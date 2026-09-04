@@ -19,17 +19,22 @@ object FileTransferQueueManager {
     val items: StateFlow<List<TransferItem>> = _items.asStateFlow()
 
     private val cancellationFlags = ConcurrentHashMap<String, Boolean>()
+    private val pauseFlags = ConcurrentHashMap<String, Boolean>()
     private val speedTrackers = ConcurrentHashMap<String, Pair<Long, Long>>() // id -> (lastBytes, lastTimestampMs)
 
     fun enqueue(item: TransferItem) {
         cancellationFlags[item.id] = false
+        pauseFlags[item.id] = false
         _items.update { current ->
             current.filterNot { it.id == item.id } + item
         }
     }
 
     fun enqueueAll(newItems: List<TransferItem>) {
-        newItems.forEach { cancellationFlags[it.id] = false }
+        newItems.forEach {
+            cancellationFlags[it.id] = false
+            pauseFlags[it.id] = false
+        }
         val newIds = newItems.map { it.id }.toSet()
         _items.update { current ->
             current.filterNot { it.id in newIds } + newItems
@@ -37,6 +42,8 @@ object FileTransferQueueManager {
     }
 
     fun markStarted(id: String) {
+        cancellationFlags[id] = false
+        pauseFlags[id] = false
         speedTrackers[id] = 0L to System.currentTimeMillis()
         _items.update { list ->
             list.map {
@@ -130,11 +137,32 @@ object FileTransferQueueManager {
         }
     }
 
-    fun requestCancel(id: String) {
-        cancellationFlags[id] = true
+    fun markRetrying(id: String) {
+        cancellationFlags[id] = false
+        pauseFlags[id] = false
+        speedTrackers.remove(id)
         _items.update { list ->
             list.map {
-                if (it.id == id && it.status == TransferStatus.IN_PROGRESS || it.status == TransferStatus.QUEUED) {
+                if (it.id == id) {
+                    it.copy(
+                        status = TransferStatus.QUEUED,
+                        errorMessage = null,
+                        speedBytesPerSec = 0L,
+                        progress = 0f,
+                        transferredBytes = 0L
+                    )
+                } else it
+            }
+        }
+    }
+
+    fun requestCancel(id: String) {
+        cancellationFlags[id] = true
+        pauseFlags[id] = false
+        speedTrackers.remove(id)
+        _items.update { list ->
+            list.map {
+                if (it.id == id && (it.status == TransferStatus.IN_PROGRESS || it.status == TransferStatus.QUEUED || it.status == TransferStatus.PAUSED)) {
                     it.copy(status = TransferStatus.CANCELLED, speedBytesPerSec = 0L)
                 } else it
             }
@@ -145,14 +173,119 @@ object FileTransferQueueManager {
         return cancellationFlags[id] == true
     }
 
-    fun clearCompleted() {
+    fun requestPause(id: String) {
+        pauseFlags[id] = true
+        speedTrackers.remove(id)
         _items.update { list ->
-            list.filter { it.status == TransferStatus.IN_PROGRESS || it.status == TransferStatus.QUEUED }
+            list.map {
+                if (it.id == id && (it.status == TransferStatus.IN_PROGRESS || it.status == TransferStatus.QUEUED)) {
+                    it.copy(status = TransferStatus.PAUSED, speedBytesPerSec = 0L)
+                } else it
+            }
+        }
+    }
+
+    fun requestResume(id: String) {
+        pauseFlags[id] = false
+        cancellationFlags[id] = false
+        _items.update { list ->
+            list.map {
+                if (it.id == id && it.status == TransferStatus.PAUSED) {
+                    it.copy(status = TransferStatus.QUEUED, speedBytesPerSec = 0L)
+                } else it
+            }
+        }
+    }
+
+    fun isPaused(id: String): Boolean {
+        return pauseFlags[id] == true
+    }
+
+    fun pauseAll() {
+        _items.value.forEach { item ->
+            if (item.status == TransferStatus.IN_PROGRESS || item.status == TransferStatus.QUEUED) {
+                pauseFlags[item.id] = true
+            }
+        }
+        speedTrackers.clear()
+        _items.update { list ->
+            list.map {
+                if (it.status == TransferStatus.IN_PROGRESS || it.status == TransferStatus.QUEUED) {
+                    it.copy(status = TransferStatus.PAUSED, speedBytesPerSec = 0L)
+                } else it
+            }
+        }
+    }
+
+    fun resumeAll() {
+        _items.value.forEach { item ->
+            if (item.status == TransferStatus.PAUSED) {
+                pauseFlags[item.id] = false
+                cancellationFlags[item.id] = false
+            }
+        }
+        _items.update { list ->
+            list.map {
+                if (it.status == TransferStatus.PAUSED) {
+                    it.copy(status = TransferStatus.QUEUED)
+                } else it
+            }
+        }
+    }
+
+    fun pauseItems(ids: Set<String>) {
+        ids.forEach { id -> pauseFlags[id] = true }
+        _items.update { list ->
+            list.map {
+                if (ids.contains(it.id) && (it.status == TransferStatus.IN_PROGRESS || it.status == TransferStatus.QUEUED)) {
+                    speedTrackers.remove(it.id)
+                    it.copy(status = TransferStatus.PAUSED, speedBytesPerSec = 0L)
+                } else it
+            }
+        }
+    }
+
+    fun resumeItems(ids: Set<String>) {
+        ids.forEach { id ->
+            pauseFlags[id] = false
+            cancellationFlags[id] = false
+        }
+        _items.update { list ->
+            list.map {
+                if (ids.contains(it.id) && it.status == TransferStatus.PAUSED) {
+                    it.copy(status = TransferStatus.QUEUED)
+                } else it
+            }
+        }
+    }
+
+    fun dismissItem(id: String) {
+        cancellationFlags.remove(id)
+        pauseFlags.remove(id)
+        speedTrackers.remove(id)
+        _items.update { list ->
+            list.filterNot { it.id == id }
+        }
+    }
+
+    fun clearCompleted(serviceId: String? = null) {
+        _items.update { list ->
+            list.filter {
+                if (serviceId != null && it.serviceId != serviceId) {
+                    true
+                } else {
+                    it.status == TransferStatus.IN_PROGRESS ||
+                    it.status == TransferStatus.QUEUED ||
+                    it.status == TransferStatus.PAUSED ||
+                    it.status == TransferStatus.FAILED
+                }
+            }
         }
     }
 
     fun clearAll() {
         cancellationFlags.clear()
+        pauseFlags.clear()
         speedTrackers.clear()
         _items.value = emptyList()
     }

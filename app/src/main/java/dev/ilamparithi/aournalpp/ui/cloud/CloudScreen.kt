@@ -5,10 +5,14 @@ import androidx.compose.ui.res.stringResource
 import dev.ilamparithi.aournalpp.R
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -26,6 +30,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Deselect
 import androidx.compose.ui.res.pluralStringResource
 import dev.ilamparithi.aournalpp.ui.util.AppIconButton
+import dev.ilamparithi.aournalpp.ui.util.AppFilledTonalIconButton
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -263,9 +268,29 @@ fun CloudScreen(
         exclusionFilter = vault.getExclusionFilter()
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        when {
-            currentSubpage == CloudSubpage.MAPPING_SETS -> {
+    BackHandler(enabled = currentSubpage != CloudSubpage.OVERVIEW || selectedDetailServiceId != null) {
+        if (currentSubpage != CloudSubpage.OVERVIEW) {
+            currentSubpage = CloudSubpage.OVERVIEW
+        } else if (selectedDetailServiceId != null) {
+            selectedDetailServiceId = null
+        }
+    }
+
+    AnimatedContent(
+        targetState = currentSubpage,
+        transitionSpec = {
+            if (reduceAnimations) {
+                fadeIn(animationSpec = tween(150)) togetherWith fadeOut(animationSpec = tween(150))
+            } else if (targetState.ordinal > initialState.ordinal) {
+                slideInHorizontally { width -> width } togetherWith slideOutHorizontally { width -> -width }
+            } else {
+                slideInHorizontally { width -> -width } togetherWith slideOutHorizontally { width -> width }
+            }
+        },
+        label = "CloudSubpageTransition"
+    ) { subpage ->
+        when (subpage) {
+            CloudSubpage.MAPPING_SETS -> {
                 MappingSetsSubpage(
                     services = services,
                     mappingRepo = mappingRepo,
@@ -286,78 +311,97 @@ fun CloudScreen(
                     }
                 )
             }
-            currentSubpage == CloudSubpage.TRANSFER_QUEUE -> {
-                TransferQueueSubpage(onNavigateBack = { currentSubpage = CloudSubpage.OVERVIEW })
+            CloudSubpage.TRANSFER_QUEUE -> {
+                TransferQueueSubpage(
+                    engine = engine,
+                    onNavigateBack = { currentSubpage = CloudSubpage.OVERVIEW }
+                )
             }
-            selectedDetailServiceId != null -> {
-                val detailService = services.firstOrNull { it.id == selectedDetailServiceId }
-                if (detailService != null) {
-                    ServiceDetailSubpage(
-                        service = detailService,
-                        engine = engine,
-                        mappingRepo = mappingRepo,
-                        onNavigateBack = { selectedDetailServiceId = null },
-                        onEditService = {
-                            editingService = detailService
-                            showServiceDialog = true
-                        },
-                        onDeleteService = {
-                            vault.deleteService(detailService.id)
-                            selectedDetailServiceId = null
-                            refreshState()
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar("Removed \"${detailService.name}\"")
-                            }
-                        },
-                        onToggleEnabled = { enabled ->
-                            val updated = detailService.copy(isEnabled = enabled)
-                            vault.saveService(updated)
-                            refreshState()
-                        },
-                        onToggleCompleteBackup = { enabled ->
-                            val updated = detailService.copy(isCompleteBackupEnabled = enabled)
-                            vault.saveService(updated)
-                            refreshState()
-                        },
-                        onRestore = {
-                            restoreTargetService = detailService
-                            showRestoreConfirmDialog = true
-                        },
-                        onAddMapping = {
-                            mappingTargetServiceId = detailService.id
-                            editingMapping = null
-                            initialMappingLocalPath = ""
-                            showMappingDialog = true
-                        },
-                        onEditMapping = { mapping ->
-                            mappingTargetServiceId = detailService.id
-                            editingMapping = mapping
-                            initialMappingLocalPath = mapping.localFolderPath
-                            showMappingDialog = true
-                        },
-                        onOpenMappingSets = {
-                            currentSubpage = CloudSubpage.MAPPING_SETS
-                        },
-                        onShowSnackbar = { msg ->
-                            coroutineScope.launch { snackbarHostState.showSnackbar(msg) }
-                        },
-                        onMappingsUpdated = { updatedMappings ->
-                            val updated = detailService.copy(customMappings = updatedMappings)
-                            vault.saveService(updated)
-                            mappingRepo.saveMappingsForService(detailService.id, updatedMappings)
-                            val env = LinuxEnvironment(context)
-                            mappingRepo.syncToNotesHome(env.getNotesDirectory())
-                            refreshState()
+            CloudSubpage.OVERVIEW -> {
+                AnimatedContent(
+                    targetState = selectedDetailServiceId,
+                    transitionSpec = {
+                        if (reduceAnimations) {
+                            fadeIn(animationSpec = tween(150)) togetherWith fadeOut(animationSpec = tween(150))
+                        } else if (targetState != null && initialState == null) {
+                            slideInHorizontally { width -> width } togetherWith slideOutHorizontally { width -> -width }
+                        } else if (targetState == null && initialState != null) {
+                            slideInHorizontally { width -> -width } togetherWith slideOutHorizontally { width -> width }
+                        } else {
+                            fadeIn(animationSpec = tween(150)) togetherWith fadeOut(animationSpec = tween(150))
                         }
-                    )
-                } else {
-                    selectedDetailServiceId = null
-                }
-            }
-            else -> {
-                Scaffold(
-                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            snackbarHost = { SnackbarHost(snackbarHostState) },
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                    label = "ServiceDetailTransition"
+                ) { detailId ->
+                    if (detailId != null) {
+                        val detailService = services.firstOrNull { it.id == detailId }
+                        if (detailService != null) {
+                            ServiceDetailSubpage(
+                                service = detailService,
+                                engine = engine,
+                                mappingRepo = mappingRepo,
+                                onNavigateBack = { selectedDetailServiceId = null },
+                                onEditService = {
+                                    editingService = detailService
+                                    showServiceDialog = true
+                                },
+                                onDeleteService = {
+                                    vault.deleteService(detailService.id)
+                                    selectedDetailServiceId = null
+                                    refreshState()
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar("Removed \"${detailService.name}\"")
+                                    }
+                                },
+                                onToggleEnabled = { enabled ->
+                                    val updated = detailService.copy(isEnabled = enabled)
+                                    vault.saveService(updated)
+                                    refreshState()
+                                },
+                                onToggleCompleteBackup = { enabled ->
+                                    val updated = detailService.copy(isCompleteBackupEnabled = enabled)
+                                    vault.saveService(updated)
+                                    refreshState()
+                                },
+                                onRestore = {
+                                    restoreTargetService = detailService
+                                    showRestoreConfirmDialog = true
+                                },
+                                onAddMapping = {
+                                    mappingTargetServiceId = detailService.id
+                                    editingMapping = null
+                                    initialMappingLocalPath = ""
+                                    showMappingDialog = true
+                                },
+                                onEditMapping = { mapping ->
+                                    mappingTargetServiceId = detailService.id
+                                    editingMapping = mapping
+                                    initialMappingLocalPath = mapping.localFolderPath
+                                    showMappingDialog = true
+                                },
+                                onOpenMappingSets = {
+                                    currentSubpage = CloudSubpage.MAPPING_SETS
+                                },
+                                onShowSnackbar = { msg ->
+                                    coroutineScope.launch { snackbarHostState.showSnackbar(msg) }
+                                },
+                                onMappingsUpdated = { updatedMappings ->
+                                    val updated = detailService.copy(customMappings = updatedMappings)
+                                    vault.saveService(updated)
+                                    mappingRepo.saveMappingsForService(detailService.id, updatedMappings)
+                                    val env = LinuxEnvironment(context)
+                                    mappingRepo.syncToNotesHome(env.getNotesDirectory())
+                                    refreshState()
+                                }
+                            )
+                        } else {
+                            selectedDetailServiceId = null
+                        }
+                    } else {
+                        Scaffold(
+                            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
                     title = {
@@ -692,6 +736,8 @@ fun CloudScreen(
 }
 }
 }
+}
+}
 
     if (showServiceDialog) {
         ServiceConfigDialog(
@@ -882,38 +928,49 @@ fun OverviewCard(
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilledTonalButton(
+                    AppFilledTonalIconButton(
                         onClick = onOpenMappingSets,
+                        tooltip = stringResource(R.string.cd_cloud_mapping_sets),
                         shape = RoundedCornerShape(10.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Bookmark,
-                            contentDescription = stringResource(R.string.title_mapping_sets),
-                            modifier = Modifier.size(16.dp)
+                            contentDescription = stringResource(R.string.cd_cloud_mapping_sets),
+                            modifier = Modifier.size(18.dp)
                         )
                     }
 
-                    FilledTonalButton(
+                    AppFilledTonalIconButton(
                         onClick = onCheckConflicts,
+                        tooltip = stringResource(R.string.cd_cloud_check_conflicts),
                         shape = RoundedCornerShape(10.dp),
                         enabled = !isCheckingConflicts
                     ) {
                         if (isCheckingConflicts) {
                             CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
+                                modifier = Modifier.size(18.dp),
                                 strokeWidth = 2.dp,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
                             )
                         } else {
-                            Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Icon(
+                                imageVector = Icons.Default.Tune,
+                                contentDescription = stringResource(R.string.cd_cloud_check_conflicts),
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                     }
 
-                    FilledTonalButton(
+                    AppFilledTonalIconButton(
                         onClick = onOpenQueue,
+                        tooltip = stringResource(R.string.cd_cloud_transfer_queue),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Icon(Icons.Default.CloudQueue, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(
+                            imageVector = Icons.Default.CloudQueue,
+                            contentDescription = stringResource(R.string.cd_cloud_transfer_queue),
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
             }

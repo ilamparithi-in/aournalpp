@@ -31,6 +31,23 @@ class BackupScanner(
         private const val TAG = "BackupScanner"
         private val DEFAULT_NOTES_EXTENSIONS = setOf("xopp", "xoj", "pdf")
         private val DEFAULT_CONFIG_EXTENSIONS = setOf("xml", "ini", "gpl", "lua", "json")
+
+        fun calculateSha256(file: File): String {
+            return try {
+                val digest = MessageDigest.getInstance("SHA-256")
+                file.inputStream().use { input ->
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        digest.update(buffer, 0, bytesRead)
+                    }
+                }
+                digest.digest().joinToString("") { "%02x".format(it) }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to compute SHA-256 for ${file.absolutePath}", e)
+                ""
+            }
+        }
     }
 
     private val compiledRegexes = exclusionFilter.regexPatterns.mapNotNull {
@@ -203,20 +220,5 @@ class BackupScanner(
         return false
     }
 
-    private fun calculateSha256(file: File): String {
-        return try {
-            val digest = MessageDigest.getInstance("SHA-256")
-            file.inputStream().use { input ->
-                val buffer = ByteArray(8192)
-                var bytesRead: Int
-                while (input.read(buffer).also { bytesRead = it } != -1) {
-                    digest.update(buffer, 0, bytesRead)
-                }
-            }
-            digest.digest().joinToString("") { "%02x".format(it) }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to compute SHA-256 for ${file.absolutePath}", e)
-            ""
-        }
-    }
+    private fun calculateSha256(file: File): String = BackupScanner.calculateSha256(file)
 }
