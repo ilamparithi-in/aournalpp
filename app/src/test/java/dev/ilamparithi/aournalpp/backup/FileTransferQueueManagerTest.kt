@@ -435,4 +435,34 @@ class FileTransferQueueManagerTest {
         assertEquals(1, srv2Filtered.size)
         assertEquals("OneDrive", srv2Filtered[0].serviceName)
     }
+
+    @Test
+    fun testEnqueueAllWithDuplicatesWithinList() {
+        val item1 = TransferItem(
+            id = "duplicate_id",
+            serviceId = "srv_1",
+            serviceName = "Google Drive",
+            localFilePath = "/test/1.xopp",
+            remotePath = "1.xopp",
+            fileName = "1.xopp",
+            direction = TransferDirection.UPLOAD,
+            totalBytes = 100L,
+            status = TransferStatus.QUEUED
+        )
+        val item2 = TransferItem(
+            id = "duplicate_id",
+            serviceId = "srv_1",
+            serviceName = "Google Drive",
+            localFilePath = "/test/1.xopp",
+            remotePath = "1.xopp",
+            fileName = "1.xopp",
+            direction = TransferDirection.UPLOAD,
+            totalBytes = 200L,
+            status = TransferStatus.QUEUED
+        )
+
+        FileTransferQueueManager.enqueueAll(listOf(item1, item2))
+        assertEquals(1, FileTransferQueueManager.items.value.size)
+        assertEquals("duplicate_id", FileTransferQueueManager.items.value[0].id)
+    }
 }

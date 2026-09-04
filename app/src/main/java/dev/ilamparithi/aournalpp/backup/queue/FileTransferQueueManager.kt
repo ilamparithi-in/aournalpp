@@ -31,13 +31,14 @@ object FileTransferQueueManager {
     }
 
     fun enqueueAll(newItems: List<TransferItem>) {
-        newItems.forEach {
+        val distinctNewItems = newItems.distinctBy { it.id }
+        distinctNewItems.forEach {
             cancellationFlags[it.id] = false
             pauseFlags[it.id] = false
         }
-        val newIds = newItems.map { it.id }.toSet()
+        val newIds = distinctNewItems.map { it.id }.toSet()
         _items.update { current ->
-            current.filterNot { it.id in newIds } + newItems
+            current.filterNot { it.id in newIds } + distinctNewItems
         }
     }
 

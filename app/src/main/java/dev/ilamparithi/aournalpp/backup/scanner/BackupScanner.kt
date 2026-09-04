@@ -65,6 +65,7 @@ class BackupScanner(
     fun scanCompleteBackup(cachedMetadata: Map<String, SyncMetadataEntity>? = null): List<ScannedLocalFile> {
         val environment = env ?: return emptyList()
         val results = mutableListOf<ScannedLocalFile>()
+        val seenRelativePaths = mutableSetOf<String>()
 
         // 1. Scan Notes Directory (~/Notes)
         val notesDir = environment.getNotesDirectory()
@@ -75,7 +76,9 @@ class BackupScanner(
                 scope = BackupScope.NOTES.id,
                 allowedExtensions = exclusionFilter.includedExtensions ?: DEFAULT_NOTES_EXTENSIONS,
                 results = results,
-                cachedMetadata = cachedMetadata
+                cachedMetadata = cachedMetadata,
+                seenRelativePaths = seenRelativePaths,
+                skipSubdirName = ".config"
             )
         }
 
@@ -88,7 +91,8 @@ class BackupScanner(
                 scope = BackupScope.CONFIG.id,
                 allowedExtensions = exclusionFilter.includedExtensions ?: DEFAULT_CONFIG_EXTENSIONS,
                 results = results,
-                cachedMetadata = cachedMetadata
+                cachedMetadata = cachedMetadata,
+                seenRelativePaths = seenRelativePaths
             )
         }
 
@@ -101,7 +105,8 @@ class BackupScanner(
                 scope = BackupScope.CONFIG.id,
                 allowedExtensions = exclusionFilter.includedExtensions ?: DEFAULT_CONFIG_EXTENSIONS,
                 results = results,
-                cachedMetadata = cachedMetadata
+                cachedMetadata = cachedMetadata,
+                seenRelativePaths = seenRelativePaths
             )
         }
 
@@ -117,6 +122,7 @@ class BackupScanner(
     ): List<ScannedLocalFile> {
         val results = mutableListOf<ScannedLocalFile>()
         val localDir = File(mapping.localFolderPath)
+        val seenRelativePaths = mutableSetOf<String>()
         if (localDir.exists() && localDir.isDirectory) {
             scanDirectoryRecursively(
                 rootDir = localDir,
@@ -124,7 +130,8 @@ class BackupScanner(
                 scope = "custom_${mapping.id}",
                 allowedExtensions = exclusionFilter.includedExtensions, // null means allow all valid non-excluded
                 results = results,
-                cachedMetadata = cachedMetadata
+                cachedMetadata = cachedMetadata,
+                seenRelativePaths = seenRelativePaths
             )
         }
         return results
@@ -136,9 +143,14 @@ class BackupScanner(
         scope: String,
         allowedExtensions: Set<String>?,
         results: MutableList<ScannedLocalFile>,
-        cachedMetadata: Map<String, SyncMetadataEntity>? = null
+        cachedMetadata: Map<String, SyncMetadataEntity>? = null,
+        seenRelativePaths: MutableSet<String>? = null,
+        skipSubdirName: String? = null
     ) {
-        val files = rootDir.walkTopDown().filter { it.isFile }.toList()
+        val files = rootDir.walkTopDown()
+            .onEnter { dir -> skipSubdirName == null || dir.name != skipSubdirName }
+            .filter { it.isFile }
+            .toList()
         for (file in files) {
             if (shouldExcludeFile(file, rootDir)) {
                 continue
@@ -151,6 +163,9 @@ class BackupScanner(
 
             val relFromRoot = file.relativeTo(rootDir).path.replace('\\', '/')
             val relativePath = if (prefix.isNotEmpty()) "$prefix/$relFromRoot" else relFromRoot
+            if (seenRelativePaths != null && !seenRelativePaths.add(relativePath)) {
+                continue
+            }
             val size = file.length()
             val lastModified = file.lastModified()
 

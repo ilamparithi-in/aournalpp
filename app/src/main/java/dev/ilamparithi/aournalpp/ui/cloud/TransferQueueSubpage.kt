@@ -131,7 +131,7 @@ fun TransferQueueSubpage(
     val totalActiveSpeed = cloudFilteredItems.filter { it.status == TransferStatus.IN_PROGRESS }.sumOf { it.speedBytesPerSec }
 
     val filteredItems = remember(cloudFilteredItems, selectedFilter) {
-        when (selectedFilter) {
+        val list = when (selectedFilter) {
             QueueFilter.ALL -> cloudFilteredItems
             QueueFilter.ACTIVE -> cloudFilteredItems.filter { it.status == TransferStatus.IN_PROGRESS }
             QueueFilter.QUEUED -> cloudFilteredItems.filter { it.status == TransferStatus.QUEUED }
@@ -139,6 +139,7 @@ fun TransferQueueSubpage(
             QueueFilter.COMPLETED -> cloudFilteredItems.filter { it.status == TransferStatus.COMPLETED }
             QueueFilter.FAILED -> cloudFilteredItems.filter { it.status == TransferStatus.FAILED }
         }
+        list.distinctBy { it.id }
     }
 
     var isRetryingAll by remember { mutableStateOf(false) }

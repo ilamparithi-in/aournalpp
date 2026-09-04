@@ -81,6 +81,7 @@ class BackupEngine(
         val existingMetaMap = dao.getAllForService(serviceConfig.id).associateBy { it.relativePath }
 
         val filesToSync = mutableListOf<Pair<ScannedLocalFile, String>>() // (ScannedFile, remoteDestinationPath)
+        val seenRemotePaths = mutableSetOf<String>()
 
         // 1. Complete Backup domain scanning
         if (serviceConfig.isCompleteBackupEnabled) {
@@ -88,7 +89,9 @@ class BackupEngine(
             val remoteRoot = getCompleteBackupRemoteRoot(serviceConfig)
             for (f in completeFiles) {
                 val remotePath = "$remoteRoot/${f.relativePath}"
-                filesToSync.add(f to remotePath)
+                if (seenRemotePaths.add(remotePath)) {
+                    filesToSync.add(f to remotePath)
+                }
             }
         }
 
@@ -99,7 +102,9 @@ class BackupEngine(
             val remoteTargetBase = mapping.remoteFolderPath.trim().trim('/')
             for (f in mappedFiles) {
                 val remotePath = if (remoteTargetBase.isEmpty()) f.relativePath else "$remoteTargetBase/${f.relativePath}"
-                filesToSync.add(f to remotePath)
+                if (seenRemotePaths.add(remotePath)) {
+                    filesToSync.add(f to remotePath)
+                }
             }
         }
 
@@ -285,6 +290,7 @@ class BackupEngine(
         var totalBytesDownloaded = 0L
         var hasRestoredConfigs = false
         val remoteFilesToDownload = mutableListOf<Triple<RemoteFileMetadata, String, File>>() // (rf, remotePath, localDestinationFile)
+        val seenDownloadRemotePaths = mutableSetOf<String>()
 
         try {
             val connResult = provider.testConnection()
@@ -315,7 +321,9 @@ class BackupEngine(
                     if (rf.isDirectory) continue
                     val subPath = rf.remotePath.removePrefix("$remoteRoot/Notes").trim('/')
                     val destFile = File(notesRoot, subPath)
-                    remoteFilesToDownload.add(Triple(rf, rf.remotePath, destFile))
+                    if (seenDownloadRemotePaths.add(rf.remotePath)) {
+                        remoteFilesToDownload.add(Triple(rf, rf.remotePath, destFile))
+                    }
                 }
 
                 // 2. List .config tree (downloads all files including root configs and xournalpp subfolder)
@@ -326,8 +334,10 @@ class BackupEngine(
                     val subPath = rf.remotePath.removePrefix("$remoteRoot/.config").trim('/')
                     if (subPath.isEmpty()) continue
                     val destFile = File(notesConfigDir, subPath)
-                    remoteFilesToDownload.add(Triple(rf, rf.remotePath, destFile))
-                    addedRemotePaths.add(rf.remotePath)
+                    if (seenDownloadRemotePaths.add(rf.remotePath)) {
+                        remoteFilesToDownload.add(Triple(rf, rf.remotePath, destFile))
+                        addedRemotePaths.add(rf.remotePath)
+                    }
                 }
 
                 // Fallback for legacy backups where only $remoteRoot/.config/xournalpp was backed up
@@ -337,7 +347,9 @@ class BackupEngine(
                     val subPath = rf.remotePath.removePrefix("$remoteRoot/.config/xournalpp").trim('/')
                     if (subPath.isEmpty()) continue
                     val destFile = File(File(notesConfigDir, "xournalpp"), subPath)
-                    remoteFilesToDownload.add(Triple(rf, rf.remotePath, destFile))
+                    if (seenDownloadRemotePaths.add(rf.remotePath)) {
+                        remoteFilesToDownload.add(Triple(rf, rf.remotePath, destFile))
+                    }
                 }
             }
 
@@ -351,7 +363,9 @@ class BackupEngine(
                     if (rf.isDirectory) continue
                     val subPath = if (remoteBase.isNotEmpty()) rf.remotePath.removePrefix(remoteBase).trim('/') else rf.remotePath
                     val destFile = File(localBase, subPath)
-                    remoteFilesToDownload.add(Triple(rf, rf.remotePath, destFile))
+                    if (seenDownloadRemotePaths.add(rf.remotePath)) {
+                        remoteFilesToDownload.add(Triple(rf, rf.remotePath, destFile))
+                    }
                 }
             }
 
