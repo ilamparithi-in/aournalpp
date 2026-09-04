@@ -969,17 +969,19 @@ class CanvasActivity : ComponentActivity() {
     }
 
     private fun injectKeyboardShortcut(keyCode: Int, shortcutStr: String) {
-        sessionManager.injectShortcut(shortcutStr)
-        activeLorieView?.let { view ->
-            view.requestFocus()
-            view.post {
-                view.sendKeyEvent(0, KeyEvent.KEYCODE_CTRL_LEFT, true)
-                view.postDelayed({
-                    view.sendKeyEvent(0, keyCode, true)
-                    view.sendKeyEvent(0, keyCode, false)
-                    view.sendKeyEvent(0, KeyEvent.KEYCODE_CTRL_LEFT, false)
+        val lorieView = activeLorieView
+        if (lorieView != null) {
+            lorieView.requestFocus()
+            lorieView.post {
+                lorieView.sendKeyEvent(0, KeyEvent.KEYCODE_CTRL_LEFT, true)
+                lorieView.postDelayed({
+                    lorieView.sendKeyEvent(0, keyCode, true)
+                    lorieView.sendKeyEvent(0, keyCode, false)
+                    lorieView.sendKeyEvent(0, KeyEvent.KEYCODE_CTRL_LEFT, false)
                 }, 30)
             }
+        } else {
+            sessionManager.injectShortcut(shortcutStr)
         }
     }
 
