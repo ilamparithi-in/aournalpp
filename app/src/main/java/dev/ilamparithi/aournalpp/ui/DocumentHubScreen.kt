@@ -2836,10 +2836,10 @@ fun ExpressiveNoteCard(
     var showMenu by remember { mutableStateOf(false) }
 
     val thumbnailImage by produceState<ImageBitmap?>(
-        initialValue = ThumbnailManager.getCachedThumbnail(note.file),
+        initialValue = ThumbnailManager.getCachedThumbnail(note.file, note.lastModifiedMs),
         key1 = note.lastModifiedMs
     ) {
-        value = ThumbnailManager.getOrCreateThumbnailBitmap(context, note.file, pdfExportManager)
+        value = ThumbnailManager.getOrCreateThumbnailBitmap(context, note.file, pdfExportManager, note.lastModifiedMs)
     }
 
     val cardShape = RoundedCornerShape(16.dp)

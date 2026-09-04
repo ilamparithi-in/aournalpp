@@ -145,8 +145,34 @@ object XoppNativeRenderer {
         val top: Float,
         val right: Float,
         val bottom: Float,
-        val base64Data: String
+        val bitmap: Bitmap?
     )
+
+    private fun decodeBase64Image(base64Str: String, reqWidth: Int, reqHeight: Int): Bitmap? {
+        return try {
+            val rawBytes = android.util.Base64.decode(base64Str, android.util.Base64.DEFAULT)
+            val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            android.graphics.BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, bounds)
+            val w = bounds.outWidth
+            val h = bounds.outHeight
+            if (w <= 0 || h <= 0) return null
+
+            val targetW = reqWidth.coerceIn(50, 2048)
+            val targetH = reqHeight.coerceIn(50, 2048)
+            var sample = 1
+            while ((w / (sample * 2)) >= targetW && (h / (sample * 2)) >= targetH) {
+                sample *= 2
+            }
+            val decodeOptions = android.graphics.BitmapFactory.Options().apply {
+                inSampleSize = sample
+                inPreferredConfig = Bitmap.Config.RGB_565
+            }
+            android.graphics.BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, decodeOptions)
+        } catch (e: Exception) {
+            logW("Failed to decode base64 embedded image: ${e.message}")
+            null
+        }
+    }
 
     private fun parseAndRenderPageZero(
         context: Context,
@@ -167,6 +193,9 @@ object XoppNativeRenderer {
 
         var inPage = false
         var inLayer = false
+        var currentTag: String? = null
+        val textBuffer = StringBuilder()
+
         var currentTool = "pen"
         var currentColor = Color.BLACK
         var currentWidth = 1.41f
@@ -185,6 +214,8 @@ object XoppNativeRenderer {
         while (eventType != XmlPullParser.END_DOCUMENT) {
             when (eventType) {
                 XmlPullParser.START_TAG -> {
+                    currentTag = parser.name
+                    textBuffer.setLength(0)
                     when (parser.name) {
                         "xournal" -> {
                             creatorVersion = parser.getAttributeValue(null, "creator") ?: "unknown"
@@ -262,19 +293,33 @@ object XoppNativeRenderer {
                 }
                 XmlPullParser.TEXT -> {
                     if (inPage && inLayer) {
-                        val text = parser.text
-                        if (!text.isNullOrBlank()) {
-                            if (strokes.size < 5000) {
-                                val parsedPoints = parseCoordinates(text)
-                                if (parsedPoints.isNotEmpty()) {
-                                    strokes.add(
-                                        StrokeElement(
-                                            tool = currentTool,
-                                            color = currentColor,
-                                            width = currentWidth,
-                                            points = parsedPoints
+                        when (currentTag) {
+                            "stroke" -> {
+                                val text = parser.text
+                                if (!text.isNullOrBlank() && strokes.size < 5000) {
+                                    val parsedPoints = parseCoordinates(text)
+                                    if (parsedPoints.isNotEmpty()) {
+                                        strokes.add(
+                                            StrokeElement(
+                                                tool = currentTool,
+                                                color = currentColor,
+                                                width = currentWidth,
+                                                points = parsedPoints
+                                            )
                                         )
-                                    )
+                                    }
+                                }
+                            }
+                            "text" -> {
+                                val text = parser.text
+                                if (!text.isNullOrBlank()) {
+                                    textBuffer.append(text)
+                                }
+                            }
+                            "image", "teximage" -> {
+                                val text = parser.text
+                                if (!text.isNullOrBlank() && images.size < 5) {
+                                    textBuffer.append(text)
                                 }
                             }
                         }
@@ -282,7 +327,39 @@ object XoppNativeRenderer {
                 }
                 XmlPullParser.END_TAG -> {
                     when (parser.name) {
-                        "layer" -> inLayer = false
+                        "text" -> {
+                            if (inPage && inLayer && texts.size < 200) {
+                                val str = textBuffer.toString().trim()
+                                if (str.isNotEmpty()) {
+                                    texts.add(TextElement(str, currentTextX, currentTextY, currentTextSize, currentTextColor))
+                                }
+                            }
+                            textBuffer.setLength(0)
+                            currentTag = null
+                        }
+                        "image", "teximage" -> {
+                            if (inPage && inLayer && images.size < 5) {
+                                val str = textBuffer.toString().trim()
+                                if (str.isNotEmpty()) {
+                                    val scale = targetWidth.toFloat() / pageWidth
+                                    val reqW = ((imgRight - imgLeft) * scale).toInt()
+                                    val reqH = ((imgBottom - imgTop) * scale).toInt()
+                                    val bmp = decodeBase64Image(str, reqW, reqH)
+                                    if (bmp != null) {
+                                        images.add(ImageElement(imgLeft, imgTop, imgRight, imgBottom, bmp))
+                                    }
+                                }
+                            }
+                            textBuffer.setLength(0)
+                            currentTag = null
+                        }
+                        "stroke" -> {
+                            currentTag = null
+                        }
+                        "layer" -> {
+                            inLayer = false
+                            currentTag = null
+                        }
                         "page" -> {
                             // Done parsing Page 0! Stop immediately for maximum performance
                             break
@@ -317,7 +394,20 @@ object XoppNativeRenderer {
         // 1. Render Background
         renderBackground(context, noteFile, canvas, targetWidth, targetHeight, scale, background)
 
-        // 2. Render Text elements
+        // 2. Render Images (embedded pictures)
+        for (img in images) {
+            val bmp = img.bitmap ?: continue
+            val dstRect = android.graphics.RectF(
+                img.left * scale,
+                img.top * scale,
+                img.right * scale,
+                img.bottom * scale
+            )
+            canvas.drawBitmap(bmp, null, dstRect, null)
+            try { bmp.recycle() } catch (_: Exception) {}
+        }
+
+        // 3. Render Text elements
         val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.FILL
         }

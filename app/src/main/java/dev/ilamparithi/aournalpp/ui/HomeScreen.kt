@@ -279,11 +279,36 @@ fun HomeScreen(
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                 loadHomeData()
+                scope.launch {
+                    kotlinx.coroutines.delay(1000)
+                    loadHomeDataNow()
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: android.content.Context?, intent: android.content.Intent?) {
+                scope.launch {
+                    kotlinx.coroutines.delay(500)
+                    loadHomeDataNow()
+                }
+            }
+        }
+        val filter = android.content.IntentFilter("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED")
+        androidx.core.content.ContextCompat.registerReceiver(
+            context,
+            receiver,
+            filter,
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        onDispose {
+            try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
         }
     }
 
@@ -1520,12 +1545,12 @@ private fun EnlargedContinueHeroSection(
     )
 
     val thumbnailImage by produceState<ImageBitmap?>(
-        initialValue = ThumbnailManager.getCachedThumbnail(note.file),
+        initialValue = ThumbnailManager.getCachedThumbnail(note.file, note.lastModifiedMs),
         key1 = note.lastModifiedMs
     ) {
-        value = ThumbnailManager.getOrCreateThumbnailBitmap(context, note.file, pdfExportManager)
+        value = ThumbnailManager.getOrCreateThumbnailBitmap(context, note.file, pdfExportManager, note.lastModifiedMs)
     }
-    val thumbnailFile = remember(thumbnailImage) { ThumbnailManager.getCachedThumbnailFile(note.file) }
+    val thumbnailFile = remember(thumbnailImage) { ThumbnailManager.getCachedThumbnailFile(note.file, note.lastModifiedMs) }
 
     val relativeTime = remember(note.lastModifiedMs) {
         val diff = System.currentTimeMillis() - note.lastModifiedMs

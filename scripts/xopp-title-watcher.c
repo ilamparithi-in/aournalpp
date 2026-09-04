@@ -506,56 +506,28 @@ static void query_managed_xournal_windows(Display *dpy, Window root,
 
     if (candidate_count == 0) return;
 
-    // Identify primary document window among candidates
-    int main_idx = -1;
-    int best_score = -1;
-
+    // Classify candidate windows: document windows vs dialogs/prompts
     for (int i = 0; i < candidate_count; i++) {
         Window w = candidate_windows[i];
-        if (is_transient_window(dpy, w) || is_modal_state(dpy, w)) {
-            continue;
-        }
-        char *title = NULL;
-        int score = score_candidate_window(dpy, w, &title);
-        if (title) free(title);
-        if (score > best_score) {
-            best_score = score;
-            main_idx = i;
-        }
-    }
-
-    if (main_idx >= 0) {
-        if (*out_main_count < max_windows) {
-            out_main[(*out_main_count)++] = candidate_windows[main_idx];
-        }
-        for (int i = 0; i < candidate_count; i++) {
-            if (i == main_idx) continue;
-            // Any other managed window is a dialog, prompt, or subwindow (including untitled prompts)
+        if (is_dialog_window(dpy, w)) {
             if (*out_dialog_count < max_windows) {
-                out_dialogs[(*out_dialog_count)++] = candidate_windows[i];
+                out_dialogs[(*out_dialog_count)++] = w;
             }
-        }
-    } else {
-        // No obvious document window found. Classify windows explicitly
-        for (int i = 0; i < candidate_count; i++) {
-            Window w = candidate_windows[i];
-            if (is_dialog_window(dpy, w)) {
-                if (*out_dialog_count < max_windows) {
-                    out_dialogs[(*out_dialog_count)++] = w;
-                }
-            } else {
+        } else {
+            char *title = NULL;
+            int score = score_candidate_window(dpy, w, &title);
+            if (title) free(title);
+            if (score > 0) {
+                // Legitimate document window (including multi-window sessions)
                 if (*out_main_count < max_windows) {
                     out_main[(*out_main_count)++] = w;
                 }
-            }
-        }
-        if (*out_dialog_count == 0 && *out_main_count > 1) {
-            for (int i = 1; i < *out_main_count; i++) {
+            } else {
+                // Managed window lacking document characteristics -> prompt/dialog
                 if (*out_dialog_count < max_windows) {
-                    out_dialogs[(*out_dialog_count)++] = out_main[i];
+                    out_dialogs[(*out_dialog_count)++] = w;
                 }
             }
-            *out_main_count = 1;
         }
     }
 }
