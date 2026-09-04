@@ -123,6 +123,12 @@ object X11Preferences {
             changed = true
         }
 
+        // Default floating toolbar mode to Pin / Unpin mode (unpinned by default)
+        if (!prefs.contains(KEY_TOOLBAR_PIN_BUTTON_MODE)) {
+            editor.putBoolean(KEY_TOOLBAR_PIN_BUTTON_MODE, true)
+            changed = true
+        }
+
         if (changed) {
             editor.apply()
         }
@@ -130,9 +136,33 @@ object X11Preferences {
 
     fun notifyChanged(context: Context, key: String) {
         try {
+            val prefs = getPrefs(context)
+            val value = prefs.all[key]
             val intent = Intent(ACTION_PREFERENCES_CHANGED).apply {
                 putExtra("key", key)
                 putExtra("fromBroadcast", true)
+                when (value) {
+                    is Boolean -> {
+                        putExtra("value_type", "boolean")
+                        putExtra("value_boolean", value)
+                    }
+                    is Int -> {
+                        putExtra("value_type", "int")
+                        putExtra("value_int", value)
+                    }
+                    is Float -> {
+                        putExtra("value_type", "float")
+                        putExtra("value_float", value)
+                    }
+                    is Long -> {
+                        putExtra("value_type", "long")
+                        putExtra("value_long", value)
+                    }
+                    is String -> {
+                        putExtra("value_type", "string")
+                        putExtra("value_string", value)
+                    }
+                }
                 setPackage(context.packageName)
             }
             context.sendBroadcast(intent)

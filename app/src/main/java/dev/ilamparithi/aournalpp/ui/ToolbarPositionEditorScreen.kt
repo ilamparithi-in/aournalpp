@@ -237,7 +237,7 @@ fun ToolbarPositionEditorScreen(
         val showCopy = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_COPY, true) }
         val showPaste = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_PASTE, true) }
         val showImage = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_IMAGE, true) }
-        val pinButtonMode = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_PIN_BUTTON_MODE, false) }
+        val pinButtonMode = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_PIN_BUTTON_MODE, true) }
 
         var measuredToolbarWPx by remember { mutableFloatStateOf(0f) }
         var measuredToolbarHPx by remember { mutableFloatStateOf(0f) }

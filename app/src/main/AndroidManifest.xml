@@ -83,6 +83,7 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="dev.ilamparithi.aournalpp.ACTION_REQUEST_BACKGROUND_CLOSE" />
+                <action android:name="com.termux.x11.ACTION_PREFERENCES_CHANGED" />
             </intent-filter>
         </receiver>
 

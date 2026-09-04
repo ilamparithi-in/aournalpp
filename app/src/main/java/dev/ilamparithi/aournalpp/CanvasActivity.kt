@@ -102,8 +102,11 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import android.content.SharedPreferences
+import android.os.SystemClock
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -210,6 +213,21 @@ class CanvasActivity : ComponentActivity() {
         fun handleBackgroundCloseRequest() {
             instance?.requestBackgroundClose()
         }
+
+        fun notifyPreferenceChanged(key: String) {
+            instance?.onPreferenceChanged(key)
+        }
+    }
+
+    private val preferenceUpdateVersionState = mutableIntStateOf(0)
+
+    fun onPreferenceChanged(key: String) {
+        preferenceUpdateVersionState.intValue++
+    }
+
+    override fun onResume() {
+        super.onResume()
+        preferenceUpdateVersionState.intValue++
     }
 
     private lateinit var env: LinuxEnvironment
@@ -367,17 +385,19 @@ class CanvasActivity : ComponentActivity() {
         setContent {
             AournalTheme {
                 val showEmergencyForceCloseDialog by remember { showEmergencyForceCloseDialogState }
-                val alwaysShowFileName = remember {
-                    x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_ALWAYS_SHOW_FILE_NAME, false)
+                val preferenceVersion by remember { preferenceUpdateVersionState }
+
+                var alwaysShowFileName by remember {
+                    mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_ALWAYS_SHOW_FILE_NAME, false))
                 }
-                val startCollapsed = remember {
-                    x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_START_COLLAPSED, false)
+                var startCollapsed by remember {
+                    mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_START_COLLAPSED, false))
                 }
-                val pinButtonMode = remember {
-                    x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_PIN_BUTTON_MODE, false)
+                var pinButtonMode by remember {
+                    mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_PIN_BUTTON_MODE, true))
                 }
-                val autoCollapseTimeoutMs = remember {
-                    x11Prefs.getInt(X11Preferences.KEY_TOOLBAR_AUTO_COLLAPSE_TIMEOUT_MS, 5000)
+                var autoCollapseTimeoutMs by remember {
+                    mutableIntStateOf(x11Prefs.getInt(X11Preferences.KEY_TOOLBAR_AUTO_COLLAPSE_TIMEOUT_MS, 5000))
                 }
 
                 val liveTitle by sessionManager.documentTitle.collectAsState()
@@ -417,23 +437,23 @@ class CanvasActivity : ComponentActivity() {
                     WindowTitleHelper.resolveWindowIcon(displayTitle)
                 }
 
-                val defaultNormX = remember {
-                    x11Prefs.getFloat(X11Preferences.KEY_TOOLBAR_POS_X_RATIO, 0.5f)
+                var defaultNormX by remember {
+                    mutableFloatStateOf(x11Prefs.getFloat(X11Preferences.KEY_TOOLBAR_POS_X_RATIO, 0.5f))
                 }
-                val defaultNormY = remember {
-                    x11Prefs.getFloat(X11Preferences.KEY_TOOLBAR_POS_Y_RATIO, 0.0f)
+                var defaultNormY by remember {
+                    mutableFloatStateOf(x11Prefs.getFloat(X11Preferences.KEY_TOOLBAR_POS_Y_RATIO, 0.0f))
                 }
-                val showStylusClickOverride = remember {
-                    x11Prefs.getBoolean(X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE, false)
+                var showStylusClickOverride by remember {
+                    mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE, false))
                 }
-                val showTouchStylus = remember {
-                    x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_TOUCH_STYLUS, true)
+                var showTouchStylus by remember {
+                    mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_TOUCH_STYLUS, true))
                 }
-                val disableTouchStylusOnStylusHover = remember {
-                    x11Prefs.getBoolean(X11Preferences.KEY_DISABLE_TOUCH_STYLUS_ON_STYLUS_HOVER, true)
+                var disableTouchStylusOnStylusHover by remember {
+                    mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_DISABLE_TOUCH_STYLUS_ON_STYLUS_HOVER, true))
                 }
-                val rememberFingerAsStylusState = remember {
-                    x11Prefs.getBoolean(X11Preferences.KEY_REMEMBER_FINGER_AS_STYLUS_STATE, false)
+                var rememberFingerAsStylusState by remember {
+                    mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_REMEMBER_FINGER_AS_STYLUS_STATE, false))
                 }
                 var isFingerAsStylus by remember {
                     mutableStateOf(
@@ -447,36 +467,112 @@ class CanvasActivity : ComponentActivity() {
                 var stylusClickMode by remember {
                     mutableIntStateOf(1)
                 }
-                val showTitle = remember {
-                    x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_TITLE, true)
+                var showTitle by remember {
+                    mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_TITLE, true))
                 }
-                val showBack = remember {
-                    x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_BACK, true)
+                var showBack by remember {
+                    mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_BACK, true))
                 }
-                val showClose = remember {
-                    x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CLOSE, true)
+                var showClose by remember {
+                    mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CLOSE, true))
                 }
-                val showKeyboard = remember {
-                    x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD, true)
+                var showKeyboard by remember {
+                    mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD, true))
                 }
-                val showDragHandle = remember {
-                    x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_DRAG_HANDLE, true)
+                var showDragHandle by remember {
+                    mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_DRAG_HANDLE, true))
                 }
-                val showCut = remember {
-                    x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CUT, true)
+                var showCut by remember {
+                    mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CUT, true))
                 }
-                val showCopy = remember {
-                    x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_COPY, true)
+                var showCopy by remember {
+                    mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_COPY, true))
                 }
-                val showPaste = remember {
-                    x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_PASTE, true)
+                var showPaste by remember {
+                    mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_PASTE, true))
                 }
-                val showImage = remember {
-                    x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_IMAGE, true)
+                var showImage by remember {
+                    mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_IMAGE, true))
                 }
                 var showImageSourceDialog by remember { mutableStateOf(false) }
-                val stylusHoverExpands = remember {
-                    x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_STYLUS_HOVER_EXPANDS, true)
+                var stylusHoverExpands by remember {
+                    mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_STYLUS_HOVER_EXPANDS, true))
+                }
+
+                DisposableEffect(x11Prefs) {
+                    val listener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+                        when (key) {
+                            X11Preferences.KEY_TOOLBAR_PIN_BUTTON_MODE ->
+                                pinButtonMode = prefs.getBoolean(key, true)
+                            X11Preferences.KEY_TOOLBAR_AUTO_COLLAPSE_TIMEOUT_MS ->
+                                autoCollapseTimeoutMs = prefs.getInt(key, 5000)
+                            X11Preferences.KEY_TOOLBAR_ALWAYS_SHOW_FILE_NAME ->
+                                alwaysShowFileName = prefs.getBoolean(key, false)
+                            X11Preferences.KEY_TOOLBAR_START_COLLAPSED ->
+                                startCollapsed = prefs.getBoolean(key, false)
+                            X11Preferences.KEY_TOOLBAR_STYLUS_HOVER_EXPANDS ->
+                                stylusHoverExpands = prefs.getBoolean(key, true)
+                            X11Preferences.KEY_TOOLBAR_SHOW_TITLE ->
+                                showTitle = prefs.getBoolean(key, true)
+                            X11Preferences.KEY_TOOLBAR_SHOW_BACK ->
+                                showBack = prefs.getBoolean(key, true)
+                            X11Preferences.KEY_TOOLBAR_SHOW_CLOSE ->
+                                showClose = prefs.getBoolean(key, true)
+                            X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD ->
+                                showKeyboard = prefs.getBoolean(key, true)
+                            X11Preferences.KEY_TOOLBAR_SHOW_DRAG_HANDLE ->
+                                showDragHandle = prefs.getBoolean(key, true)
+                            X11Preferences.KEY_TOOLBAR_SHOW_CUT ->
+                                showCut = prefs.getBoolean(key, true)
+                            X11Preferences.KEY_TOOLBAR_SHOW_COPY ->
+                                showCopy = prefs.getBoolean(key, true)
+                            X11Preferences.KEY_TOOLBAR_SHOW_PASTE ->
+                                showPaste = prefs.getBoolean(key, true)
+                            X11Preferences.KEY_TOOLBAR_SHOW_IMAGE ->
+                                showImage = prefs.getBoolean(key, true)
+                            X11Preferences.KEY_TOOLBAR_POS_X_RATIO ->
+                                defaultNormX = prefs.getFloat(key, 0.5f)
+                            X11Preferences.KEY_TOOLBAR_POS_Y_RATIO ->
+                                defaultNormY = prefs.getFloat(key, 0.0f)
+                            X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE ->
+                                showStylusClickOverride = prefs.getBoolean(key, false)
+                            X11Preferences.KEY_TOOLBAR_SHOW_TOUCH_STYLUS ->
+                                showTouchStylus = prefs.getBoolean(key, true)
+                            X11Preferences.KEY_DISABLE_TOUCH_STYLUS_ON_STYLUS_HOVER ->
+                                disableTouchStylusOnStylusHover = prefs.getBoolean(key, true)
+                            X11Preferences.KEY_REMEMBER_FINGER_AS_STYLUS_STATE ->
+                                rememberFingerAsStylusState = prefs.getBoolean(key, false)
+                        }
+                    }
+                    x11Prefs.registerOnSharedPreferenceChangeListener(listener)
+                    onDispose {
+                        x11Prefs.unregisterOnSharedPreferenceChangeListener(listener)
+                    }
+                }
+
+                LaunchedEffect(preferenceVersion) {
+                    if (preferenceVersion > 0) {
+                        pinButtonMode = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_PIN_BUTTON_MODE, true)
+                        autoCollapseTimeoutMs = x11Prefs.getInt(X11Preferences.KEY_TOOLBAR_AUTO_COLLAPSE_TIMEOUT_MS, 5000)
+                        alwaysShowFileName = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_ALWAYS_SHOW_FILE_NAME, false)
+                        startCollapsed = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_START_COLLAPSED, false)
+                        stylusHoverExpands = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_STYLUS_HOVER_EXPANDS, true)
+                        showTitle = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_TITLE, true)
+                        showBack = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_BACK, true)
+                        showClose = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CLOSE, true)
+                        showKeyboard = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD, true)
+                        showDragHandle = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_DRAG_HANDLE, true)
+                        showCut = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CUT, true)
+                        showCopy = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_COPY, true)
+                        showPaste = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_PASTE, true)
+                        showImage = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_IMAGE, true)
+                        defaultNormX = x11Prefs.getFloat(X11Preferences.KEY_TOOLBAR_POS_X_RATIO, 0.5f)
+                        defaultNormY = x11Prefs.getFloat(X11Preferences.KEY_TOOLBAR_POS_Y_RATIO, 0.0f)
+                        showStylusClickOverride = x11Prefs.getBoolean(X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE, false)
+                        showTouchStylus = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_TOUCH_STYLUS, true)
+                        disableTouchStylusOnStylusHover = x11Prefs.getBoolean(X11Preferences.KEY_DISABLE_TOUCH_STYLUS_ON_STYLUS_HOVER, true)
+                        rememberFingerAsStylusState = x11Prefs.getBoolean(X11Preferences.KEY_REMEMBER_FINGER_AS_STYLUS_STATE, false)
+                    }
                 }
 
                 BackHandler(enabled = true) {
@@ -519,7 +615,15 @@ class CanvasActivity : ComponentActivity() {
                         val rawBottom = remember(safeCustom, safeAll) { if (safeCustom) x11Prefs.getInt(X11Preferences.KEY_SAFE_AREA_BOTTOM, 0) else safeAll }
                         val refRotation = remember { x11Prefs.getInt(X11Preferences.KEY_SAFE_AREA_REF_ROTATION, Surface.ROTATION_0) }
                         val disableInMulti = remember { x11Prefs.getBoolean(X11Preferences.KEY_SAFE_AREA_DISABLE_IN_MULTIWINDOW, true) }
-                        val centerTopBarWithinBounds = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOP_BAR_CENTER_WITHIN_BOUNDS, false) }
+                        var centerTopBarWithinBounds by remember {
+                            mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOP_BAR_CENTER_WITHIN_BOUNDS, false))
+                        }
+
+                        LaunchedEffect(preferenceVersion) {
+                            if (preferenceVersion > 0) {
+                                centerTopBarWithinBounds = x11Prefs.getBoolean(X11Preferences.KEY_TOP_BAR_CENTER_WITHIN_BOUNDS, false)
+                            }
+                        }
 
                         val isAndroidMultiWindow = isInMultiWindowMode
                         val effectiveInsets = remember(disableInMulti, isAndroidMultiWindow, rawLeft, rawTop, rawRight, rawBottom, refRotation, currentRotation) {
@@ -616,7 +720,15 @@ class CanvasActivity : ComponentActivity() {
                             showCopy = showCopy,
                             showPaste = showPaste,
                             showImage = showImage,
-                            onOpenImageSelector = { showImageSourceDialog = true },
+                            onOpenImageSelector = {
+                                lifecycleScope.launch {
+                                    if (sessionManager.isModalOrDialogOpen()) {
+                                        Toast.makeText(this@CanvasActivity, "Close open dialogs before inserting image", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        showImageSourceDialog = true
+                                    }
+                                }
+                            },
                             stylusHoverExpands = stylusHoverExpands,
                             onSmartBackPress = { handleSmartBackPress() },
                             onCloseWindow = { handleCloseWindow() },
@@ -1069,57 +1181,83 @@ class CanvasActivity : ComponentActivity() {
     private fun processAndPasteImageUri(uri: Uri) {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
+                if (sessionManager.isModalOrDialogOpen()) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@CanvasActivity, "Close open dialogs before inserting image", Toast.LENGTH_SHORT).show()
+                    }
+                    return@launch
+                }
+
+                var rotationDegrees = 0f
+                try {
+                    contentResolver.openInputStream(uri)?.use { exifStream ->
+                        val exif = ExifInterface(exifStream)
+                        val orientation = exif.getAttributeInt(
+                            ExifInterface.TAG_ORIENTATION,
+                            ExifInterface.ORIENTATION_NORMAL
+                        )
+                        rotationDegrees = when (orientation) {
+                            ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                            ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                            ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                            else -> 0f
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w("CanvasActivity", "Could not parse EXIF from URI", e)
+                }
+
+                val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 contentResolver.openInputStream(uri)?.use { isStream ->
-                    val raw = isStream.readBytes()
-                    if (raw.isNotEmpty()) {
-                        val isPng = raw.size >= 8 && raw[0] == 0x89.toByte() && raw[1] == 0x50.toByte() && raw[2] == 0x4E.toByte() && raw[3] == 0x47.toByte()
-                        val pngBytes: ByteArray = if (isPng) {
-                            raw
+                    BitmapFactory.decodeStream(isStream, null, boundsOptions)
+                }
+
+                val maxDim = 2560
+                var sampleSize = 1
+                while (boundsOptions.outWidth / sampleSize > maxDim || boundsOptions.outHeight / sampleSize > maxDim) {
+                    sampleSize *= 2
+                }
+
+                val isPng = boundsOptions.outMimeType?.equals("image/png", ignoreCase = true) == true
+
+                val pngBytes: ByteArray = if (isPng && sampleSize == 1 && rotationDegrees == 0f) {
+                    contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0)
+                } else {
+                    val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+                    val originalBitmap = contentResolver.openInputStream(uri)?.use { isStream ->
+                        BitmapFactory.decodeStream(isStream, null, decodeOptions)
+                    }
+
+                    if (originalBitmap != null) {
+                        val finalBitmap = if (rotationDegrees != 0f) {
+                            val matrix = Matrix().apply { postRotate(rotationDegrees) }
+                            Bitmap.createBitmap(originalBitmap, 0, 0, originalBitmap.width, originalBitmap.height, matrix, true).also {
+                                if (it != originalBitmap) originalBitmap.recycle()
+                            }
                         } else {
-                            var rotationDegrees = 0f
-                            try {
-                                contentResolver.openInputStream(uri)?.use { exifStream ->
-                                    val exif = ExifInterface(exifStream)
-                                    val orientation = exif.getAttributeInt(
-                                        ExifInterface.TAG_ORIENTATION,
-                                        ExifInterface.ORIENTATION_NORMAL
-                                    )
-                                    rotationDegrees = when (orientation) {
-                                        ExifInterface.ORIENTATION_ROTATE_90 -> 90f
-                                        ExifInterface.ORIENTATION_ROTATE_180 -> 180f
-                                        ExifInterface.ORIENTATION_ROTATE_270 -> 270f
-                                        else -> 0f
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                Log.w("CanvasActivity", "Could not parse EXIF from URI", e)
-                            }
-
-                            val bmp = BitmapFactory.decodeByteArray(raw, 0, raw.size)
-                            if (bmp != null) {
-                                val finalBmp = if (rotationDegrees != 0f) {
-                                    val matrix = Matrix().apply { postRotate(rotationDegrees) }
-                                    Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true).also {
-                                        if (it != bmp) bmp.recycle()
-                                    }
-                                } else {
-                                    bmp
-                                }
-                                val baos = ByteArrayOutputStream()
-                                finalBmp.compress(Bitmap.CompressFormat.PNG, 100, baos)
-                                finalBmp.recycle()
-                                baos.toByteArray()
-                            } else {
-                                raw
-                            }
+                            originalBitmap
                         }
 
-                        withContext(Dispatchers.Main) {
-                            // Isolated in-memory X11 clipboard push: does NOT touch host Android clipboard!
-                            activeLorieView?.stageClipboardImage(pngBytes)
-                            injectKeyboardShortcut(KeyEvent.KEYCODE_V, "ctrl+v")
-                            Toast.makeText(this@CanvasActivity, "Image inserted", Toast.LENGTH_SHORT).show()
-                        }
+                        val baos = ByteArrayOutputStream()
+                        finalBitmap.compress(Bitmap.CompressFormat.PNG, 100, baos)
+                        val bytes = baos.toByteArray()
+                        finalBitmap.recycle()
+                        bytes
+                    } else {
+                        contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0)
+                    }
+                }
+
+                if (pngBytes.isNotEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        // Isolated in-memory X11 clipboard push: does NOT touch host Android clipboard!
+                        activeLorieView?.stageClipboardImage(pngBytes)
+                        injectKeyboardShortcut(KeyEvent.KEYCODE_V, "ctrl+v")
+                        Toast.makeText(this@CanvasActivity, "Image inserted", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@CanvasActivity, "Failed to read image data", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
@@ -1134,6 +1272,14 @@ class CanvasActivity : ComponentActivity() {
     private fun processAndPasteCameraImage(file: File) {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
+                if (sessionManager.isModalOrDialogOpen()) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@CanvasActivity, "Close open dialogs before inserting image", Toast.LENGTH_SHORT).show()
+                    }
+                    file.delete()
+                    return@launch
+                }
+
                 val exif = ExifInterface(file.absolutePath)
                 val orientation = exif.getAttributeInt(
                     ExifInterface.TAG_ORIENTATION,
@@ -1283,6 +1429,7 @@ private fun FloatingToolbarOverlay(
 
     var isHeaderExpanded by rememberSaveable { mutableStateOf(!startCollapsed) }
     var isPinned by rememberSaveable { mutableStateOf(false) }
+    var lastCollapseTimeMs by remember { mutableLongStateOf(0L) }
 
     val interactionSignal = remember {
         MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
@@ -1296,6 +1443,7 @@ private fun FloatingToolbarOverlay(
                 }
                 if (triggered == null) {
                     if (isHeaderExpanded && !isPinned) {
+                        lastCollapseTimeMs = SystemClock.uptimeMillis()
                         isHeaderExpanded = false
                     }
                     break
@@ -1357,23 +1505,7 @@ private fun FloatingToolbarOverlay(
         Surface(
             modifier = Modifier
                 .shadow(elevation = 8.dp, shape = RoundedCornerShape(24.dp))
-                .clip(RoundedCornerShape(24.dp))
-                .pointerInput(stylusHoverExpands) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                            val isStylus = event.changes.any {
-                                it.type == PointerType.Stylus || it.type == PointerType.Eraser
-                            }
-                            if (isStylus && (event.type == PointerEventType.Move || event.type == PointerEventType.Enter)) {
-                                interactionSignal.tryEmit(Unit)
-                                if (stylusHoverExpands && !isHeaderExpanded) {
-                                    isHeaderExpanded = true
-                                }
-                            }
-                        }
-                    }
-                },
+                .clip(RoundedCornerShape(24.dp)),
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
             tonalElevation = 6.dp
@@ -1821,6 +1953,7 @@ private fun FloatingToolbarOverlay(
                                 IconButton(
                                     onClick = {
                                         interactionSignal.tryEmit(Unit)
+                                        lastCollapseTimeMs = SystemClock.uptimeMillis()
                                         isHeaderExpanded = false
                                     },
                                     modifier = Modifier.size(36.dp)
@@ -1891,6 +2024,24 @@ private fun FloatingToolbarOverlay(
                                         isHeaderExpanded = true
                                     }
                                 )
+                            }
+                            .pointerInput(stylusHoverExpands) {
+                                if (stylusHoverExpands) {
+                                    awaitPointerEventScope {
+                                        while (true) {
+                                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                                            val isStylus = event.changes.any {
+                                                it.type == PointerType.Stylus || it.type == PointerType.Eraser
+                                            }
+                                            if (isStylus && (event.type == PointerEventType.Move || event.type == PointerEventType.Enter)) {
+                                                if (SystemClock.uptimeMillis() - lastCollapseTimeMs > 600L) {
+                                                    interactionSignal.tryEmit(Unit)
+                                                    isHeaderExpanded = true
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                             .pointerInput(Unit) {
                                 detectDragGesturesAfterLongPress(
