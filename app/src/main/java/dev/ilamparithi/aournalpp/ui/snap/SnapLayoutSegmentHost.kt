@@ -5,7 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -61,13 +63,21 @@ fun SnapLayoutSegmentHost(
             strength = 0.45f
         )
 
+        val targetConfiguringSlot = activeConfiguringSlot ?: geometries.indices.firstOrNull { assignedSlotMap[it] == null } ?: 0
+
         for (geo in geometries) {
             val assignedWinId = assignedSlotMap[geo.slotIndex]
             val assignedWin = openWindows.find { it.id == assignedWinId }
-            val isCurrentConfiguring = activeConfiguringSlot == null || activeConfiguringSlot == geo.slotIndex
+            val isCurrentConfiguring = geo.slotIndex == targetConfiguringSlot
 
             val slotWidthDp = with(density) { geo.width.toDp() }
             val slotHeightDp = with(density) { geo.height.toDp() }
+
+            val availableWindows = remember(openWindows, assignedSlotMap, geo.slotIndex) {
+                openWindows.filter { win ->
+                    assignedSlotMap.entries.none { it.key != geo.slotIndex && it.value == win.id }
+                }
+            }
 
             Box(
                 modifier = Modifier
@@ -89,7 +99,7 @@ fun SnapLayoutSegmentHost(
             ) {
                 if (isCurrentConfiguring) {
                     WindowGalleryPicker(
-                        windows = openWindows,
+                        windows = if (availableWindows.isNotEmpty()) availableWindows else openWindows,
                         previewCache = previewCache,
                         isCompact = true,
                         headerTitle = "Select Note for Slot ${geo.slotIndex + 1}",
@@ -99,16 +109,40 @@ fun SnapLayoutSegmentHost(
                         onCloseWindow = null
                     )
                 } else if (assignedWin != null) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.padding(12.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        ) {
+                            Text(
+                                text = "Slot ${geo.slotIndex + 1}: ${assignedWin.title}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                            )
+                        }
+                        Text(
+                            text = "Tap to change note",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                } else {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                         modifier = Modifier.padding(16.dp)
                     ) {
                         Text(
-                            text = "Slot ${geo.slotIndex + 1}: ${assignedWin.title}",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            text = "Slot ${geo.slotIndex + 1} (Waiting)",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                         )
                     }

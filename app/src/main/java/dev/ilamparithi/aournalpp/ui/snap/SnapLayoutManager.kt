@@ -96,6 +96,24 @@ class SnapLayoutManager(private val context: Context? = null) {
         resolvedRatios[trimmed]?.let { return it }
         trimmed.toFloatOrNull()?.let { return it }
 
+        if (trimmed.startsWith("min(") && trimmed.endsWith(")")) {
+            val inside = trimmed.substring(4, trimmed.length - 1)
+            val parts = inside.split(",", limit = 2).map { it.trim() }
+            if (parts.size == 2) {
+                val left = resolveAnchor(parts[0], resolvedRatios, 0f)
+                val right = resolveAnchor(parts[1], resolvedRatios, 0f)
+                return minOf(left, right)
+            }
+        } else if (trimmed.startsWith("max(") && trimmed.endsWith(")")) {
+            val inside = trimmed.substring(4, trimmed.length - 1)
+            val parts = inside.split(",", limit = 2).map { it.trim() }
+            if (parts.size == 2) {
+                val left = resolveAnchor(parts[0], resolvedRatios, 0f)
+                val right = resolveAnchor(parts[1], resolvedRatios, 0f)
+                return maxOf(left, right)
+            }
+        }
+
         // Support basic expressions like "1.0 - v1", "1 - v1", "v1 + 0.1"
         if (trimmed.contains("-")) {
             val parts = trimmed.split("-", limit = 2).map { it.trim() }

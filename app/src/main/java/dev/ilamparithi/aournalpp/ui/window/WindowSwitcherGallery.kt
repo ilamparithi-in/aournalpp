@@ -46,7 +46,13 @@ import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import dev.ilamparithi.aournalpp.ui.preview.DreamyStarsBackground
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -264,6 +270,28 @@ fun WindowPreviewCard(
     onSelect: () -> Unit,
     onClose: (() -> Unit)? = null
 ) {
+    val context = LocalContext.current
+    var fallbackThumbnail by remember(windowInfo.id, windowInfo.title) { mutableStateOf<ImageBitmap?>(null) }
+
+    LaunchedEffect(windowInfo.id, windowInfo.title, preview) {
+        if (preview == null && fallbackThumbnail == null) {
+            withContext(Dispatchers.IO) {
+                try {
+                    val repo = dev.ilamparithi.aournalpp.data.DocumentRepository(context)
+                    val doc = repo.findNoteDocumentByTitle(windowInfo.title)
+                    if (doc != null) {
+                        val thumb = dev.ilamparithi.aournalpp.utils.ThumbnailManager.getOrCreateThumbnailBitmap(context, doc.file, null, doc.lastModifiedMs)
+                        if (thumb != null) {
+                            withContext(Dispatchers.Main) {
+                                fallbackThumbnail = thumb
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
     val isActive = windowInfo.isActive
 
     val borderColor = if (isActive) {
@@ -361,9 +389,19 @@ fun WindowPreviewCard(
                     .padding(8.dp),
                 contentAlignment = Alignment.Center
             ) {
+                val currentFallback = fallbackThumbnail
                 if (preview != null && !preview.isRecycled) {
                     Image(
                         bitmap = preview.asImageBitmap(),
+                        contentDescription = "Preview of ${windowInfo.title}",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(10.dp))
+                    )
+                } else if (currentFallback != null) {
+                    Image(
+                        bitmap = currentFallback,
                         contentDescription = "Preview of ${windowInfo.title}",
                         contentScale = ContentScale.Fit,
                         modifier = Modifier

@@ -110,7 +110,7 @@ object ThumbnailManager {
     suspend fun getOrCreateThumbnailBitmap(
         context: Context,
         noteFile: File,
-        pdfExportManager: PdfExportManager,
+        pdfExportManager: PdfExportManager? = null,
         lastModifiedMs: Long = 0L
     ): ImageBitmap? = withContext(renderDispatcher) {
         val modTime = if (lastModifiedMs > 0L) lastModifiedMs else try { noteFile.lastModified() } catch (_: Exception) { 0L }
@@ -181,7 +181,7 @@ object ThumbnailManager {
     suspend fun getOrCreateThumbnail(
         context: Context,
         noteFile: File,
-        pdfExportManager: PdfExportManager,
+        pdfExportManager: PdfExportManager? = null,
         lastModifiedMs: Long = 0L
     ): File? = withContext(renderDispatcher) {
         val modTime = if (lastModifiedMs > 0L) lastModifiedMs else try { noteFile.lastModified() } catch (_: Exception) { 0L }
@@ -215,7 +215,7 @@ object ThumbnailManager {
     private suspend fun renderThumbnailBitmap(
         context: Context,
         noteFile: File,
-        pdfExportManager: PdfExportManager
+        pdfExportManager: PdfExportManager? = null
     ): Bitmap? = withContext(renderDispatcher) {
         val ext = noteFile.extension.lowercase()
 
@@ -230,20 +230,22 @@ object ThumbnailManager {
                 return@withContext nativeBitmap
             }
 
-            // Fallback Path: Headless Linux CLI process conversion
-            Log.i(TAG, "Native render returned null for ${noteFile.name}; trying headless PDF fallback")
-            val tempPdf = File(context.cacheDir, "temp_thumb_${System.currentTimeMillis()}_${noteFile.nameWithoutExtension}.pdf")
-            try {
-                val converted = pdfExportManager.convertXoppToPdf(noteFile, tempPdf)
-                if (converted.isSuccess) {
-                    return@withContext renderPdfToBitmap(tempPdf, THUMBNAIL_WIDTH)
-                } else {
-                    Log.w(TAG, "Headless fallback also failed for ${noteFile.name}")
+            // Fallback Path: Headless Linux CLI process conversion (if manager provided)
+            if (pdfExportManager != null) {
+                Log.i(TAG, "Native render returned null for ${noteFile.name}; trying headless PDF fallback")
+                val tempPdf = File(context.cacheDir, "temp_thumb_${System.currentTimeMillis()}_${noteFile.nameWithoutExtension}.pdf")
+                try {
+                    val converted = pdfExportManager.convertXoppToPdf(noteFile, tempPdf)
+                    if (converted.isSuccess) {
+                        return@withContext renderPdfToBitmap(tempPdf, THUMBNAIL_WIDTH)
+                    } else {
+                        Log.w(TAG, "Headless fallback also failed for ${noteFile.name}")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Exception during fallback rendering for ${noteFile.name}", e)
+                } finally {
+                    if (tempPdf.exists()) tempPdf.delete()
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "Exception during fallback rendering for ${noteFile.name}", e)
-            } finally {
-                if (tempPdf.exists()) tempPdf.delete()
             }
         }
 

@@ -73,11 +73,14 @@ fun SnapDividerOverlay(
             var isDragging by remember(div.id) { mutableStateOf(false) }
             var isSpringAnimating by remember(div.id) { mutableStateOf(false) }
             var currentLiveRatio by remember(div.id) { mutableFloatStateOf(div.currentRatio) }
+            var rawDragRatio by remember(div.id) { mutableFloatStateOf(div.currentRatio) }
+            var isMagneticallySnapped by remember(div.id) { mutableStateOf(false) }
             val animRatio = remember(div.id) { Animatable(div.currentRatio) }
 
             LaunchedEffect(div.currentRatio) {
                 if (!isDragging && !isSpringAnimating) {
                     currentLiveRatio = div.currentRatio
+                    rawDragRatio = div.currentRatio
                     animRatio.snapTo(div.currentRatio)
                 }
             }
@@ -120,6 +123,7 @@ fun SnapDividerOverlay(
                                             )
                                         ) {
                                             currentLiveRatio = value
+                                            rawDragRatio = value
                                             currentOnUpdateRatio(currentDiv.id, value)
                                         }
                                         isSpringAnimating = false
@@ -134,22 +138,37 @@ fun SnapDividerOverlay(
                                     isDragging = true
                                     isSpringAnimating = false
                                     coroutineScope.launch { animRatio.stop() }
+                                    rawDragRatio = currentDiv.currentRatio
                                     currentLiveRatio = currentDiv.currentRatio
+                                    isMagneticallySnapped = kotlin.math.abs(currentDiv.currentRatio - 0.5f) < 0.005f
                                     try { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) } catch (_: Exception) {}
                                 },
                                 onDragEnd = {
                                     isDragging = false
+                                    isMagneticallySnapped = false
                                     try { view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) } catch (_: Exception) {}
                                     currentOnDragEnd()
                                 },
                                 onDragCancel = {
                                     isDragging = false
+                                    isMagneticallySnapped = false
                                     currentOnDragEnd()
                                 },
                                 onDrag = { change, dragAmount ->
                                     change.consume()
                                     val deltaRatio = dragAmount.x / viewportWidth.toFloat()
-                                    val nextRatio = (currentLiveRatio + deltaRatio).coerceIn(currentDiv.minRatio, currentDiv.maxRatio)
+                                    rawDragRatio = (rawDragRatio + deltaRatio).coerceIn(currentDiv.minRatio, currentDiv.maxRatio)
+                                    val distToCenter = kotlin.math.abs(rawDragRatio - 0.5f)
+                                    val snapThreshold = 0.024f
+                                    val releaseThreshold = 0.038f
+                                    val shouldSnap = if (isMagneticallySnapped) distToCenter < releaseThreshold else distToCenter < snapThreshold
+
+                                    if (!isMagneticallySnapped && shouldSnap) {
+                                        try { view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK) } catch (_: Exception) {}
+                                    }
+                                    isMagneticallySnapped = shouldSnap
+
+                                    val nextRatio = if (shouldSnap) 0.5f else rawDragRatio
                                     currentLiveRatio = nextRatio
                                     currentOnUpdateRatio(currentDiv.id, nextRatio)
                                 }
@@ -199,6 +218,7 @@ fun SnapDividerOverlay(
                                             )
                                         ) {
                                             currentLiveRatio = value
+                                            rawDragRatio = value
                                             currentOnUpdateRatio(currentDiv.id, value)
                                         }
                                         isSpringAnimating = false
@@ -213,22 +233,37 @@ fun SnapDividerOverlay(
                                     isDragging = true
                                     isSpringAnimating = false
                                     coroutineScope.launch { animRatio.stop() }
+                                    rawDragRatio = currentDiv.currentRatio
                                     currentLiveRatio = currentDiv.currentRatio
+                                    isMagneticallySnapped = kotlin.math.abs(currentDiv.currentRatio - 0.5f) < 0.005f
                                     try { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) } catch (_: Exception) {}
                                 },
                                 onDragEnd = {
                                     isDragging = false
+                                    isMagneticallySnapped = false
                                     try { view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) } catch (_: Exception) {}
                                     currentOnDragEnd()
                                 },
                                 onDragCancel = {
                                     isDragging = false
+                                    isMagneticallySnapped = false
                                     currentOnDragEnd()
                                 },
                                 onDrag = { change, dragAmount ->
                                     change.consume()
                                     val deltaRatio = dragAmount.y / viewportHeight.toFloat()
-                                    val nextRatio = (currentLiveRatio + deltaRatio).coerceIn(currentDiv.minRatio, currentDiv.maxRatio)
+                                    rawDragRatio = (rawDragRatio + deltaRatio).coerceIn(currentDiv.minRatio, currentDiv.maxRatio)
+                                    val distToCenter = kotlin.math.abs(rawDragRatio - 0.5f)
+                                    val snapThreshold = 0.024f
+                                    val releaseThreshold = 0.038f
+                                    val shouldSnap = if (isMagneticallySnapped) distToCenter < releaseThreshold else distToCenter < snapThreshold
+
+                                    if (!isMagneticallySnapped && shouldSnap) {
+                                        try { view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK) } catch (_: Exception) {}
+                                    }
+                                    isMagneticallySnapped = shouldSnap
+
+                                    val nextRatio = if (shouldSnap) 0.5f else rawDragRatio
                                     currentLiveRatio = nextRatio
                                     currentOnUpdateRatio(currentDiv.id, nextRatio)
                                 }

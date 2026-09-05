@@ -157,6 +157,38 @@ class SnapLayoutManagerTest {
     }
 
     @Test
+    fun testGridFourFourHandlebarsIndependentControl() {
+        manager.setMode(SnapLayoutMode.GRID_FOUR)
+        val dividers = manager.calculateDividerGeometries(1000, 1000)
+        assertEquals(4, dividers.size)
+        val divMap = dividers.associateBy { it.id }
+        assertTrue(divMap.containsKey("v_top"))
+        assertTrue(divMap.containsKey("v_bottom"))
+        assertTrue(divMap.containsKey("h_left"))
+        assertTrue(divMap.containsKey("h_right"))
+
+        // Independently resize v_top to 0.4
+        manager.updateDividerRatio("v_top", 0.4f)
+        var slots = manager.calculateGeometries(1000, 1000)
+        // Top row widths changed
+        assertEquals(400, slots[0].width)
+        assertEquals(600, slots[1].width)
+        // Bottom row widths unchanged at 500
+        assertEquals(500, slots[2].width)
+        assertEquals(500, slots[3].width)
+
+        // Independently resize h_left to 0.6
+        manager.updateDividerRatio("h_left", 0.6f)
+        slots = manager.calculateGeometries(1000, 1000)
+        // Left column heights changed
+        assertEquals(600, slots[0].height)
+        assertEquals(400, slots[2].height)
+        // Right column heights unchanged at 500
+        assertEquals(500, slots[1].height)
+        assertEquals(500, slots[3].height)
+    }
+
+    @Test
     fun testRatioUpdatesAndClamping() {
         manager.setMode(SnapLayoutMode.SPLIT_TWO)
 

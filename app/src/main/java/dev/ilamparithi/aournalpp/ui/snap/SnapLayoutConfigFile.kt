@@ -29,13 +29,15 @@ object SnapLayoutConfigFile {
         return try {
             val content = file.readText()
             val root = JSONObject(content)
+            val version = root.optInt("version", 1)
             val layoutsArr = root.optJSONArray("layouts") ?: JSONArray()
             val result = mutableListOf<SnapLayoutConfig>()
             for (i in 0 until layoutsArr.length()) {
                 val item = layoutsArr.getJSONObject(i)
                 result.add(SnapLayoutConfig.fromJson(item))
             }
-            if (result.isEmpty()) {
+            val gridConfig = result.find { it.id == SnapLayoutMode.GRID_FOUR.id }
+            if (result.isEmpty() || version < 2 || (gridConfig != null && gridConfig.landscape.dividers.size < 4)) {
                 val defaults = createDefaultConfigurations()
                 saveConfigurations(context, defaults)
                 defaults
@@ -52,7 +54,7 @@ object SnapLayoutConfigFile {
         try {
             val file = getConfigFile(context)
             val root = JSONObject()
-            root.put("version", 1)
+            root.put("version", 2)
             val layoutsArr = JSONArray()
             configs.forEach { layoutsArr.put(it.toJson()) }
             root.put("layouts", layoutsArr)
@@ -155,16 +157,50 @@ object SnapLayoutConfigFile {
     }
 
     private fun createGridFourConfig(): SnapLayoutConfig {
-        // 2x2 Grid (identical structure for landscape and portrait)
+        // 4 separate handlebars: 2 vertical, 2 horizontal for full independent window control
         val dividers = listOf(
-            DividerDef(id = "v1", orientation = DividerOrientation.VERTICAL, defaultRatio = 0.5f, minRatio = 0.15f, maxRatio = 0.85f),
-            DividerDef(id = "h1", orientation = DividerOrientation.HORIZONTAL, defaultRatio = 0.5f, minRatio = 0.15f, maxRatio = 0.85f)
+            DividerDef(
+                id = "v_top",
+                orientation = DividerOrientation.VERTICAL,
+                defaultRatio = 0.5f,
+                minRatio = 0.15f,
+                maxRatio = 0.85f,
+                start = "0.0",
+                end = "min(h_left, h_right)"
+            ),
+            DividerDef(
+                id = "v_bottom",
+                orientation = DividerOrientation.VERTICAL,
+                defaultRatio = 0.5f,
+                minRatio = 0.15f,
+                maxRatio = 0.85f,
+                start = "max(h_left, h_right)",
+                end = "1.0"
+            ),
+            DividerDef(
+                id = "h_left",
+                orientation = DividerOrientation.HORIZONTAL,
+                defaultRatio = 0.5f,
+                minRatio = 0.15f,
+                maxRatio = 0.85f,
+                start = "0.0",
+                end = "min(v_top, v_bottom)"
+            ),
+            DividerDef(
+                id = "h_right",
+                orientation = DividerOrientation.HORIZONTAL,
+                defaultRatio = 0.5f,
+                minRatio = 0.15f,
+                maxRatio = 0.85f,
+                start = "max(v_top, v_bottom)",
+                end = "1.0"
+            )
         )
         val slots = listOf(
-            SlotDef(slotIndex = 0, left = "0.0", top = "0.0", right = "v1", bottom = "h1"),
-            SlotDef(slotIndex = 1, left = "v1", top = "0.0", right = "1.0", bottom = "h1"),
-            SlotDef(slotIndex = 2, left = "0.0", top = "h1", right = "v1", bottom = "1.0"),
-            SlotDef(slotIndex = 3, left = "v1", top = "h1", right = "1.0", bottom = "1.0")
+            SlotDef(slotIndex = 0, left = "0.0", top = "0.0", right = "v_top", bottom = "h_left"),
+            SlotDef(slotIndex = 1, left = "v_top", top = "0.0", right = "1.0", bottom = "h_right"),
+            SlotDef(slotIndex = 2, left = "0.0", top = "h_left", right = "v_bottom", bottom = "1.0"),
+            SlotDef(slotIndex = 3, left = "v_bottom", top = "h_right", right = "1.0", bottom = "1.0")
         )
 
         return SnapLayoutConfig(

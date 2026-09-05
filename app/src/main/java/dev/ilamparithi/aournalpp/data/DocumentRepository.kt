@@ -1739,6 +1739,34 @@ class DocumentRepository(private val context: Context) {
         buildNoteDocument(file, ScanCache())
     }
 
+    suspend fun findNoteDocumentByTitle(title: String): NoteDocument? = withContext(Dispatchers.IO) {
+        val cleanTitle = title.removePrefix("*").removeSuffix("*").trim()
+        if (cleanTitle.isBlank() || cleanTitle.equals("New Note", ignoreCase = true) ||
+            cleanTitle.equals("Unsaved Document", ignoreCase = true) ||
+            cleanTitle.equals("Preferences", ignoreCase = true) ||
+            cleanTitle.equals("Xournal++", ignoreCase = true)) {
+            return@withContext null
+        }
+        val root = getRootNotesDirectory()
+        val candidates = listOf(
+            cleanTitle,
+            "$cleanTitle.xopp",
+            "$cleanTitle.pdf",
+            "$cleanTitle.xoj"
+        )
+        for (cand in candidates) {
+            val f = File(root, cand)
+            if (f.exists() && f.isFile) {
+                return@withContext getNoteDocumentForFile(f)
+            }
+        }
+        val matched = collectOpenableFiles(root).firstOrNull {
+            it.nameWithoutExtension.equals(cleanTitle, ignoreCase = true) ||
+            it.name.equals(cleanTitle, ignoreCase = true)
+        }
+        matched?.let { getNoteDocumentForFile(it) }
+    }
+
     suspend fun countAllNotes(): Int = withContext(Dispatchers.IO) {
         val count = collectOpenableFiles(getRootNotesDirectory()).size
         cachedTotalNotesCount = count
