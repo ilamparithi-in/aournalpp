@@ -339,7 +339,28 @@ static void scan_window_tree(Display *dpy, Window w, int *best_score, char **bes
     }
 }
 
-static void evaluate_and_emit_document_title(Display *dpy, Window root) {
+static void evaluate_and_emit_document_title(Display *dpy, Window root, Window active_win) {
+    if (active_win != None) {
+        Window target_doc_win = active_win;
+        Window prop_w = None;
+        if (XGetTransientForHint(dpy, active_win, &prop_w) != 0 && prop_w != None && prop_w != root) {
+            target_doc_win = prop_w;
+        }
+
+        char *active_title = NULL;
+        int score = score_candidate_window(dpy, target_doc_win, &active_title);
+        if (score > 0 && active_title != NULL) {
+            if (strcmp(last_emitted_title, active_title) != 0) {
+                snprintf(last_emitted_title, sizeof(last_emitted_title), "%s", active_title);
+                printf("TITLE:%s\n", active_title);
+                fflush(stdout);
+            }
+            free(active_title);
+            return;
+        }
+        if (active_title) free(active_title);
+    }
+
     int best_score = -1;
     char *best_title = NULL;
 
@@ -536,20 +557,7 @@ static int last_emitted_dialog_count = -1;
 static char last_emitted_windows_buffer[4096] = "";
 
 static void evaluate_and_emit_status(Display *dpy, Window root) {
-    evaluate_and_emit_document_title(dpy, root);
-
-    Window main_wins[64];
-    Window dialog_wins[64];
-    int main_count = 0, dialog_count = 0;
-    query_managed_xournal_windows(dpy, root, main_wins, &main_count, dialog_wins, &dialog_count, 64);
-
-    if (dialog_count != last_emitted_dialog_count) {
-        last_emitted_dialog_count = dialog_count;
-        printf("DIALOGS:%d\n", dialog_count);
-        fflush(stdout);
-    }
-
-    // Determine currently active window
+    // Determine currently active window first
     Window active_win = None;
     if (net_active != None) {
         Atom actual_type;
@@ -563,6 +571,23 @@ static void evaluate_and_emit_status(Display *dpy, Window root) {
             }
             XFree(prop);
         }
+    }
+
+    if (active_win != None) {
+        XSelectInput(dpy, active_win, PropertyChangeMask | StructureNotifyMask);
+    }
+
+    evaluate_and_emit_document_title(dpy, root, active_win);
+
+    Window main_wins[64];
+    Window dialog_wins[64];
+    int main_count = 0, dialog_count = 0;
+    query_managed_xournal_windows(dpy, root, main_wins, &main_count, dialog_wins, &dialog_count, 64);
+
+    if (dialog_count != last_emitted_dialog_count) {
+        last_emitted_dialog_count = dialog_count;
+        printf("DIALOGS:%d\n", dialog_count);
+        fflush(stdout);
     }
 
     char windows_buf[4096];

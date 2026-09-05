@@ -39,9 +39,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import dev.ilamparithi.aournalpp.ui.preview.DreamyStarsBackground
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,6 +58,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -96,6 +103,7 @@ fun WindowSwitcherGallery(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .zIndex(200f)
             .background(Color.Black.copy(alpha = (0.6f * morphProgress.value).coerceIn(0f, 0.6f)))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -103,6 +111,15 @@ fun WindowSwitcherGallery(
             ) { onDismiss() },
         contentAlignment = Alignment.Center
     ) {
+        // Dreamy stars background with reduced strength (0.65f)
+        DreamyStarsBackground(
+            modifier = Modifier.fillMaxSize(),
+            accentColor = MaterialTheme.colorScheme.primary,
+            progress = morphProgress.value,
+            alpha = morphProgress.value,
+            strength = 0.65f
+        )
+
         Column(
             modifier = Modifier
                 .graphicsLayer {
@@ -238,16 +255,28 @@ private fun WindowPreviewCard(
                     modifier = Modifier.weight(1f)
                 )
 
-                // Small Material 3 Close Button (like Windows 11 tab switcher)
+                // Small Material 3 Close Button with Red Hover Highlight
+                val closeInteractionSource = remember { MutableInteractionSource() }
+                val isCloseHovered by closeInteractionSource.collectIsHoveredAsState()
+                val closeBgColor by animateColorAsState(
+                    targetValue = if (isCloseHovered) Color(0xFFD32F2F) else Color.Transparent,
+                    label = "closeHoverBg"
+                )
+                val closeIconTint by animateColorAsState(
+                    targetValue = if (isCloseHovered) Color.White else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                    label = "closeHoverTint"
+                )
+
                 Surface(
                     shape = CircleShape,
-                    color = Color.Transparent,
+                    color = closeBgColor,
                     modifier = Modifier
                         .size(28.dp)
                         .clip(CircleShape)
+                        .hoverable(interactionSource = closeInteractionSource)
                         .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
+                            interactionSource = closeInteractionSource,
+                            indication = ripple(bounded = true, color = Color.Red)
                         ) { onClose() }
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -255,7 +284,7 @@ private fun WindowPreviewCard(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Close ${windowInfo.title}",
                             modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                            tint = closeIconTint
                         )
                     }
                 }

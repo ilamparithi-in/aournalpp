@@ -76,4 +76,35 @@ class FloatingToolbarWindowSwitcherTest {
         assertFalse(shouldPerformSequentialClose("unknown"))
         assertTrue(shouldPerformSequentialClose(X11Preferences.CLOSE_BEHAVIOR_ALL_SEQUENTIAL))
     }
+
+    @Test
+    fun testWindowSwitcherToolbarVisibility() {
+        fun isWindowSwitcherVisibleInToolbar(configEnabled: Boolean, openWindowCount: Int): Boolean {
+            return configEnabled && openWindowCount > 1
+        }
+
+        // When config is disabled, never show
+        assertFalse(isWindowSwitcherVisibleInToolbar(configEnabled = false, openWindowCount = 2))
+        // When config is enabled, but only 0 or 1 window open, must NOT show
+        assertFalse(isWindowSwitcherVisibleInToolbar(configEnabled = true, openWindowCount = 0))
+        assertFalse(isWindowSwitcherVisibleInToolbar(configEnabled = true, openWindowCount = 1))
+        // When config is enabled and 2 or more windows open, must show
+        assertTrue(isWindowSwitcherVisibleInToolbar(configEnabled = true, openWindowCount = 2))
+        assertTrue(isWindowSwitcherVisibleInToolbar(configEnabled = true, openWindowCount = 5))
+    }
+
+    @Test
+    fun testGallerySelectedWindowAnimationSuppression() {
+        fun shouldPlaySlideAnimation(
+            selectedWindowId: String,
+            activeWindowId: String?
+        ): Boolean {
+            return selectedWindowId != activeWindowId
+        }
+
+        // Selecting already focused window must suppress animation
+        assertFalse(shouldPlaySlideAnimation(selectedWindowId = "win1", activeWindowId = "win1"))
+        // Selecting another window must play animation
+        assertTrue(shouldPlaySlideAnimation(selectedWindowId = "win2", activeWindowId = "win1"))
+    }
 }

@@ -163,6 +163,18 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
         val xdotoolBin = env.resolveExecutable("xdotool")
         if (!xdotoolBin.exists() || !xdotoolBin.canExecute()) return false
         val (code, _) = runBinary(listOf(xdotoolBin.absolutePath, "windowactivate", "--sync", windowId))
+        if (code == 0) {
+            val current = _openWindows.value
+            if (current.isNotEmpty()) {
+                val updated = current.map { it.copy(isActive = (it.id == windowId)) }
+                _openWindows.value = updated
+                updated.find { it.isActive }?.let { active ->
+                    if (active.title.isNotBlank() && active.title != "Xournal++") {
+                        _documentTitle.value = active.title
+                    }
+                }
+            }
+        }
         return code == 0
     }
 
@@ -219,6 +231,13 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
                                 val clean = sanitizeWindowTitle(raw)
                                 if (clean.isNotBlank() && clean != "Xournal++") {
                                     _documentTitle.value = clean
+                                    val currentWins = _openWindows.value
+                                    if (currentWins.isNotEmpty()) {
+                                        val updated = currentWins.map { win ->
+                                            if (win.isActive) win.copy(title = clean) else win
+                                        }
+                                        _openWindows.value = updated
+                                    }
                                 }
                             } else if (line.startsWith("DIALOGS:")) {
                                 val count = line.removePrefix("DIALOGS:").trim().toIntOrNull() ?: 0
@@ -242,6 +261,10 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
                                 }
                                 if (windowList.isNotEmpty()) {
                                     _openWindows.value = windowList
+                                    val activeWin = windowList.find { it.isActive }
+                                    if (activeWin != null && activeWin.title.isNotBlank() && activeWin.title != "Xournal++") {
+                                        _documentTitle.value = activeWin.title
+                                    }
                                 }
                             }
                             line = reader.readLine()

@@ -94,6 +94,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import dev.ilamparithi.aournalpp.ui.animation.SpringSlideTransition
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -511,41 +512,8 @@ fun MainResponsiveAppShell() {
     }
 
     val tabTransitionSpec: androidx.compose.animation.AnimatedContentTransitionScope<Int>.() -> androidx.compose.animation.ContentTransform = {
-        if (reduceAnimations) {
-            fadeIn(animationSpec = androidx.compose.animation.core.tween(120))
-                .togetherWith(fadeOut(animationSpec = androidx.compose.animation.core.tween(100)))
-        } else {
-            val isForward = targetState > initialState
-            val enterOffset = if (isForward) 1 else -1
-            val exitOffset = if (isForward) -1 else 1
-
-            (slideInHorizontally(
-                animationSpec = androidx.compose.animation.core.spring(
-                    dampingRatio = 0.82f,
-                    stiffness = 380f
-                ),
-                initialOffsetX = { (it / 3) * enterOffset }
-            ) + fadeIn(
-                animationSpec = androidx.compose.animation.core.spring(
-                    dampingRatio = 0.9f,
-                    stiffness = 400f
-                )
-            ))
-                .togetherWith(
-                    slideOutHorizontally(
-                        animationSpec = androidx.compose.animation.core.spring(
-                            dampingRatio = 0.82f,
-                            stiffness = 380f
-                        ),
-                        targetOffsetX = { -(it / 3) * exitOffset }
-                    ) + fadeOut(
-                        animationSpec = androidx.compose.animation.core.spring(
-                            dampingRatio = 0.9f,
-                            stiffness = 400f
-                        )
-                    )
-                )
-        }
+        val isForward = targetState > initialState
+        SpringSlideTransition.createSpec<Int>(isForward = isForward, reduceAnimations = reduceAnimations)(this)
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
