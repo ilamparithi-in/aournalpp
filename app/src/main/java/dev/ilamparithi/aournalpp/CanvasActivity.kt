@@ -107,6 +107,14 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Mouse
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.RestartAlt
+import dev.ilamparithi.aournalpp.ui.snap.DividerGeometry
+import dev.ilamparithi.aournalpp.ui.snap.SnapDividerOverlay
+import dev.ilamparithi.aournalpp.ui.snap.SnapLayoutDropdownMenu
+import dev.ilamparithi.aournalpp.ui.snap.SnapLayoutManager
+import dev.ilamparithi.aournalpp.ui.snap.SnapLayoutMode
+import dev.ilamparithi.aournalpp.ui.snap.SnapLayoutSegmentHost
+import dev.ilamparithi.aournalpp.ui.snap.SnapLayoutToolbarButton
+import dev.ilamparithi.aournalpp.ui.snap.WindowSlotGeometry
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.PushPin
@@ -548,6 +556,16 @@ class CanvasActivity : ComponentActivity() {
                 var showWindowSwitcher by remember {
                     mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_WINDOW_SWITCHER, true))
                 }
+                var showSnapLayouts by remember {
+                    mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_SNAP_LAYOUTS, true))
+                }
+                val snapLayoutManager = remember { SnapLayoutManager(this@CanvasActivity) }
+                var activeSnapMode by remember { mutableStateOf(snapLayoutManager.activeMode) }
+                var isSnapMirrored by remember { mutableStateOf(snapLayoutManager.isMirrored) }
+                var showSnapAssistHost by remember { mutableStateOf(false) }
+                var activeConfiguringSlot by remember { mutableStateOf<Int?>(null) }
+                var snapDividers by remember { mutableStateOf<List<DividerGeometry>>(emptyList()) }
+                var snapGeometries by remember { mutableStateOf<List<WindowSlotGeometry>>(emptyList()) }
                 var showKeyboard by remember {
                     mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD, true))
                 }
@@ -593,6 +611,8 @@ class CanvasActivity : ComponentActivity() {
                                 showClose = prefs.getBoolean(key, true)
                             X11Preferences.KEY_TOOLBAR_SHOW_WINDOW_SWITCHER ->
                                 showWindowSwitcher = prefs.getBoolean(key, true)
+                            X11Preferences.KEY_TOOLBAR_SHOW_SNAP_LAYOUTS ->
+                                showSnapLayouts = prefs.getBoolean(key, true)
                             X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD ->
                                 showKeyboard = prefs.getBoolean(key, true)
                             X11Preferences.KEY_TOOLBAR_SHOW_DRAG_HANDLE ->
@@ -636,6 +656,7 @@ class CanvasActivity : ComponentActivity() {
                         showBack = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_BACK, true)
                         showClose = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CLOSE, true)
                         showWindowSwitcher = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_WINDOW_SWITCHER, true)
+                        showSnapLayouts = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_SNAP_LAYOUTS, true)
                         showKeyboard = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD, true)
                         showDragHandle = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_DRAG_HANDLE, true)
                         showCut = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CUT, true)
@@ -666,11 +687,77 @@ class CanvasActivity : ComponentActivity() {
                     }
                 }
 
+                fun applySnapLayout(
+                    mode: SnapLayoutMode,
+                    mirrored: Boolean = snapLayoutManager.isMirrored,
+                    configureSlotsIfMultiWindow: Boolean = false
+                ) {
+                    val currentSupervisor = if (this@CanvasActivity::supervisor.isInitialized) this@CanvasActivity.supervisor else return
+                    val lorie = activeLorieView
+                    val vpW = lorie?.width?.takeIf { it > 0 } ?: 0
+                    val vpH = lorie?.height?.takeIf { it > 0 } ?: 0
+
+                    activeSnapMode = mode
+                    isSnapMirrored = mirrored
+                    snapLayoutManager.setMode(mode, mirrored)
+                    x11Prefs.edit().putString(X11Preferences.KEY_ACTIVE_SNAP_LAYOUT, mode.id).apply()
+
+                    when (mode) {
+                        SnapLayoutMode.UNLOCKED -> {
+                            showSnapAssistHost = false
+                            snapDividers = emptyList()
+                            snapGeometries = emptyList()
+                            openWindows.forEach { currentSupervisor.setWindowDecorations(it.id, decorated = true) }
+                        }
+                        SnapLayoutMode.SINGLE -> {
+                            showSnapAssistHost = false
+                            snapDividers = emptyList()
+                            snapGeometries = emptyList()
+                            openWindows.forEach { currentSupervisor.setWindowDecorations(it.id, decorated = false) }
+                            val activeWin = openWindows.find { it.isActive } ?: openWindows.firstOrNull()
+                            if (activeWin != null) {
+                                currentSupervisor.setWindowMaximized(activeWin.id, true)
+                            }
+                        }
+                        SnapLayoutMode.SPLIT_TWO, SnapLayoutMode.SPLIT_THREE, SnapLayoutMode.GRID_FOUR -> {
+                            openWindows.forEach { currentSupervisor.setWindowDecorations(it.id, decorated = false) }
+                            if (vpW > 0 && vpH > 0) {
+                                val geometries = snapLayoutManager.calculateGeometries(vpW, vpH)
+                                val dividers = snapLayoutManager.calculateDividerGeometries(vpW, vpH)
+                                snapGeometries = geometries
+                                snapDividers = dividers
+
+                                val assignments = snapLayoutManager.buildSnapAssignments(vpW, vpH, openWindows)
+                                if (assignments.isNotEmpty()) {
+                                    currentSupervisor.snapWindowsBatch(assignments)
+                                }
+                            }
+
+                            if (configureSlotsIfMultiWindow && openWindows.size >= mode.minWindows) {
+                                captureCurrentWindowPreview { bmp ->
+                                    openWindows.find { it.isActive }?.let { windowPreviewCache[it.id] = bmp }
+                                }
+                                showSnapAssistHost = true
+                                activeConfiguringSlot = null
+                            } else {
+                                showSnapAssistHost = false
+                            }
+                        }
+                    }
+                }
+
                 fun performWindowSwitch(targetWindow: dev.ilamparithi.aournalpp.runtime.ProcessSupervisor.X11WindowInfo, isForward: Boolean) {
                     val activeWin = openWindows.find { it.isActive }
                     val view = activeLorieView
                     val currentW = view?.width ?: 0
                     val currentH = view?.height ?: 0
+
+                    if (activeSnapMode != SnapLayoutMode.SINGLE && activeSnapMode != SnapLayoutMode.UNLOCKED) {
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            sessionManager.switchToWindow(targetWindow.id)
+                        }
+                        return
+                    }
 
                     if (isSwitchTransitionActive) {
                         // Rapid switching / spamming: advance immediately to the next target
@@ -732,10 +819,21 @@ class CanvasActivity : ComponentActivity() {
                 }
 
                 BackHandler(enabled = true) {
-                    if (showWindowSwitcherGallery) {
+                    if (showSnapAssistHost) {
+                        showSnapAssistHost = false
+                    } else if (showWindowSwitcherGallery) {
                         showWindowSwitcherGallery = false
                     } else {
                         handleSmartBackPress()
+                    }
+                }
+
+                // Fall back to SINGLE mode if remaining open windows is less than layout's requirement
+                LaunchedEffect(openWindows.size) {
+                    if (activeSnapMode != SnapLayoutMode.SINGLE && activeSnapMode != SnapLayoutMode.UNLOCKED) {
+                        if (openWindows.size < activeSnapMode.minWindows) {
+                            applySnapLayout(SnapLayoutMode.SINGLE)
+                        }
                     }
                 }
 
@@ -752,6 +850,22 @@ class CanvasActivity : ComponentActivity() {
                     ) {
                         val canvasWidthPx = constraints.maxWidth.toFloat()
                         val canvasHeightPx = constraints.maxHeight.toFloat()
+
+                        // Automatically re-adapt active snap layout on orientation/viewport dimension changes
+                        LaunchedEffect(canvasWidthPx, canvasHeightPx, activeSnapMode, isSnapMirrored) {
+                            if (activeSnapMode != SnapLayoutMode.SINGLE && activeSnapMode != SnapLayoutMode.UNLOCKED) {
+                                val vpW = canvasWidthPx.toInt()
+                                val vpH = canvasHeightPx.toInt()
+                                if (vpW > 0 && vpH > 0) {
+                                    snapGeometries = snapLayoutManager.calculateGeometries(vpW, vpH)
+                                    snapDividers = snapLayoutManager.calculateDividerGeometries(vpW, vpH)
+                                    val assignments = snapLayoutManager.buildSnapAssignments(vpW, vpH, openWindows)
+                                    if (assignments.isNotEmpty() && this@CanvasActivity::supervisor.isInitialized) {
+                                        this@CanvasActivity.supervisor.snapWindowsBatch(assignments)
+                                    }
+                                }
+                            }
+                        }
 
                         // Debounced window resize & preview synchronization
                         // Ensures active and background window previews match new window size without thrashing during active divider drag
@@ -911,6 +1025,84 @@ class CanvasActivity : ComponentActivity() {
                             }
                         }
 
+                        // Snap Divider Overlay (Real-time draggable resize handlebars along snap borders)
+                        if (activeSnapMode != SnapLayoutMode.SINGLE && activeSnapMode != SnapLayoutMode.UNLOCKED && !showSnapAssistHost) {
+                            val vpW = activeLorieView?.width?.takeIf { it > 0 } ?: canvasWidthPx.toInt()
+                            val vpH = activeLorieView?.height?.takeIf { it > 0 } ?: canvasHeightPx.toInt()
+                            Box(
+                                modifier = viewportModifier
+                                    .zIndex(15f)
+                            ) {
+                                SnapDividerOverlay(
+                                    viewportWidth = vpW,
+                                    viewportHeight = vpH,
+                                    dividers = snapDividers,
+                                    onUpdateRatio = { id, ratio ->
+                                        snapLayoutManager.updateDividerRatio(id, ratio)
+                                        val w = activeLorieView?.width?.takeIf { it > 0 } ?: canvasWidthPx.toInt()
+                                        val h = activeLorieView?.height?.takeIf { it > 0 } ?: canvasHeightPx.toInt()
+                                        snapDividers = snapLayoutManager.calculateDividerGeometries(w, h)
+                                        snapGeometries = snapLayoutManager.calculateGeometries(w, h)
+                                        val assignments = snapLayoutManager.buildSnapAssignments(w, h, openWindows)
+                                        if (assignments.isNotEmpty() && this@CanvasActivity::supervisor.isInitialized) {
+                                            this@CanvasActivity.supervisor.snapWindowsBatch(assignments)
+                                        }
+                                    },
+                                    onResetRatio = { id ->
+                                        snapLayoutManager.resetDividerRatios()
+                                        val w = activeLorieView?.width?.takeIf { it > 0 } ?: canvasWidthPx.toInt()
+                                        val h = activeLorieView?.height?.takeIf { it > 0 } ?: canvasHeightPx.toInt()
+                                        snapDividers = snapLayoutManager.calculateDividerGeometries(w, h)
+                                        snapGeometries = snapLayoutManager.calculateGeometries(w, h)
+                                        val assignments = snapLayoutManager.buildSnapAssignments(w, h, openWindows)
+                                        if (assignments.isNotEmpty() && this@CanvasActivity::supervisor.isInitialized) {
+                                            this@CanvasActivity.supervisor.snapWindowsBatch(assignments)
+                                        }
+                                    },
+                                    onDragEnd = {}
+                                )
+                            }
+                        }
+
+                        // Snap Assist Segment Host (In-segment Note Selection Gallery)
+                        if (showSnapAssistHost && snapGeometries.isNotEmpty()) {
+                            Box(
+                                modifier = viewportModifier
+                                    .zIndex(20f)
+                            ) {
+                                SnapLayoutSegmentHost(
+                                    geometries = snapGeometries,
+                                    openWindows = openWindows,
+                                    previewCache = windowPreviewCache,
+                                    assignedSlotMap = snapLayoutManager.slotAssignments,
+                                    activeConfiguringSlot = activeConfiguringSlot,
+                                    onSelectWindowForSlot = { slotIdx, selectedWin ->
+                                        snapLayoutManager.assignWindowToSlot(slotIdx, selectedWin.id)
+                                        val vpW = activeLorieView?.width?.takeIf { it > 0 } ?: canvasWidthPx.toInt()
+                                        val vpH = activeLorieView?.height?.takeIf { it > 0 } ?: canvasHeightPx.toInt()
+                                        val assignments = snapLayoutManager.buildSnapAssignments(vpW, vpH, openWindows)
+                                        if (assignments.isNotEmpty() && this@CanvasActivity::supervisor.isInitialized) {
+                                            this@CanvasActivity.supervisor.snapWindowsBatch(assignments)
+                                        }
+                                        val nextUnassigned = snapGeometries.indices.firstOrNull { snapLayoutManager.slotAssignments[it] == null }
+                                        if (nextUnassigned != null) {
+                                            activeConfiguringSlot = nextUnassigned
+                                        } else {
+                                            showSnapAssistHost = false
+                                            activeConfiguringSlot = null
+                                        }
+                                    },
+                                    onSlotClicked = { slotIdx ->
+                                        activeConfiguringSlot = slotIdx
+                                    },
+                                    onDismiss = {
+                                        showSnapAssistHost = false
+                                        activeConfiguringSlot = null
+                                    }
+                                )
+                            }
+                        }
+
                         // Floating Toolbar Overlay with Isolated Recomposition Scope (stays on top of window animations)
                         FloatingToolbarOverlay(
                             canvasWidthPx = canvasWidthPx,
@@ -947,6 +1139,16 @@ class CanvasActivity : ComponentActivity() {
                             showBack = showBack,
                             showClose = showClose,
                             showWindowSwitcher = showWindowSwitcher && (openWindows.size > 1),
+                            showSnapLayouts = showSnapLayouts && (openWindows.size > 1),
+                            activeSnapMode = activeSnapMode,
+                            isSnapMirrored = isSnapMirrored,
+                            onSelectSnapMode = { mode, mirrored ->
+                                applySnapLayout(mode, mirrored, configureSlotsIfMultiWindow = true)
+                            },
+                            onToggleSnapMirror = {
+                                snapLayoutManager.toggleMirrored()
+                                applySnapLayout(activeSnapMode, snapLayoutManager.isMirrored, configureSlotsIfMultiWindow = false)
+                            },
                             openWindowCount = openWindows.size.coerceAtLeast(1),
                             onQuickSwitchWindow = { performQuickSwitch() },
                             onOpenWindowGallery = {
@@ -1877,6 +2079,11 @@ private fun FloatingToolbarOverlay(
     showBack: Boolean,
     showClose: Boolean,
     showWindowSwitcher: Boolean = true,
+    showSnapLayouts: Boolean = true,
+    activeSnapMode: SnapLayoutMode = SnapLayoutMode.SINGLE,
+    isSnapMirrored: Boolean = false,
+    onSelectSnapMode: (SnapLayoutMode, Boolean) -> Unit = { _, _ -> },
+    onToggleSnapMirror: () -> Unit = {},
     openWindowCount: Int = 1,
     onQuickSwitchWindow: () -> Unit = {},
     onOpenWindowGallery: () -> Unit = {},
@@ -2173,6 +2380,22 @@ private fun FloatingToolbarOverlay(
                                         }
                                     }
                                 }
+                            }
+
+                            if (showSnapLayouts && openWindowCount > 1) {
+                                SnapLayoutToolbarButton(
+                                    activeMode = activeSnapMode,
+                                    isMirrored = isSnapMirrored,
+                                    openWindowCount = openWindowCount,
+                                    onSelectMode = { mode, mirrored ->
+                                        interactionSignal.tryEmit(Unit)
+                                        onSelectSnapMode(mode, mirrored)
+                                    },
+                                    onToggleMirror = {
+                                        interactionSignal.tryEmit(Unit)
+                                        onToggleSnapMirror()
+                                    }
+                                )
                             }
 
                             if (showTitle) {

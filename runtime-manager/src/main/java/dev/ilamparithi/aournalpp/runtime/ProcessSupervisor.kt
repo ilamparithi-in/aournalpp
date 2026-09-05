@@ -159,11 +159,84 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
         return emptyList()
     }
 
+    data class WindowSnapAssignment(
+        val windowId: String,
+        val x: Int,
+        val y: Int,
+        val width: Int,
+        val height: Int
+    ) : java.io.Serializable
+
+    @Volatile
+    private var watcherStdinWriter: java.io.BufferedWriter? = null
+
+    fun sendWatcherCommand(command: String): Boolean {
+        synchronized(this) {
+            val writer = watcherStdinWriter
+            if (writer != null) {
+                try {
+                    writer.write(command)
+                    writer.newLine()
+                    writer.flush()
+                    return true
+                } catch (e: Exception) {
+                    Log.w("ProcessSupervisor", "Failed to send command to watcher: $command", e)
+                }
+            }
+        }
+        return false
+    }
+
+    fun snapWindowsBatch(batch: List<WindowSnapAssignment>): Boolean {
+        if (batch.isEmpty()) return true
+        val batchStr = batch.joinToString("|") { "${it.windowId}:${it.x},${it.y},${it.width},${it.height}" }
+        if (sendWatcherCommand("SNAP_BATCH $batchStr")) {
+            return true
+        }
+        val watcherFile = env.resolveExecutable("xopp-title-watcher")
+        if (watcherFile.exists() && watcherFile.canExecute()) {
+            val (code, _) = runBinary(listOf(watcherFile.absolutePath, "--snap-batch", batchStr))
+            return code == 0
+        }
+        return false
+    }
+
+    fun setWindowMaximized(windowId: String, maximize: Boolean): Boolean {
+        val cmd = if (maximize) "MAXIMIZE $windowId" else "UNMAXIMIZE $windowId"
+        if (sendWatcherCommand(cmd)) return true
+        val watcherFile = env.resolveExecutable("xopp-title-watcher")
+        if (watcherFile.exists() && watcherFile.canExecute()) {
+            val flag = if (maximize) "--maximize" else "--unmaximize"
+            val (code, _) = runBinary(listOf(watcherFile.absolutePath, flag, windowId))
+            return code == 0
+        }
+        return false
+    }
+
+    fun setWindowDecorations(windowId: String, decorated: Boolean): Boolean {
+        val flagVal = if (decorated) 1 else 0
+        if (sendWatcherCommand("SET_DECOR $windowId $flagVal")) return true
+        val watcherFile = env.resolveExecutable("xopp-title-watcher")
+        if (watcherFile.exists() && watcherFile.canExecute()) {
+            val (code, _) = runBinary(listOf(watcherFile.absolutePath, "--set-decor", windowId, flagVal.toString()))
+            return code == 0
+        }
+        return false
+    }
+
     fun activateWindow(windowId: String): Boolean {
-        val xdotoolBin = env.resolveExecutable("xdotool")
-        if (!xdotoolBin.exists() || !xdotoolBin.canExecute()) return false
-        val (code, _) = runBinary(listOf(xdotoolBin.absolutePath, "windowactivate", "--sync", windowId))
-        if (code == 0) {
+        val activated = if (sendWatcherCommand("ACTIVATE $windowId")) {
+            true
+        } else {
+            val xdotoolBin = env.resolveExecutable("xdotool")
+            if (xdotoolBin.exists() && xdotoolBin.canExecute()) {
+                val (code, _) = runBinary(listOf(xdotoolBin.absolutePath, "windowactivate", "--sync", windowId))
+                code == 0
+            } else {
+                false
+            }
+        }
+        if (activated) {
             val current = _openWindows.value
             if (current.isNotEmpty()) {
                 val updated = current.map { it.copy(isActive = (it.id == windowId)) }
@@ -175,10 +248,11 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
                 }
             }
         }
-        return code == 0
+        return activated
     }
 
     fun closeWindow(windowId: String): Boolean {
+        if (sendWatcherCommand("CLOSE $windowId")) return true
         val watcherFile = env.resolveExecutable("xopp-title-watcher")
         if (watcherFile.exists() && watcherFile.canExecute()) {
             val (code, _) = runBinary(listOf(watcherFile.absolutePath, "--close-window", windowId))
@@ -221,6 +295,9 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
                         .start()
                     process = proc
                     activeProcesses.add(proc)
+                    synchronized(this@ProcessSupervisor) {
+                        watcherStdinWriter = proc.outputStream.bufferedWriter()
+                    }
 
                     BufferedReader(InputStreamReader(proc.inputStream)).use { reader ->
                         var line: String? = reader.readLine()
@@ -273,6 +350,10 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
                 } catch (e: Exception) {
                     Log.e("NativeProcess:TitleWatcher", "Error in title watcher loop", e)
                 } finally {
+                    synchronized(this@ProcessSupervisor) {
+                        try { watcherStdinWriter?.close() } catch (_: Exception) {}
+                        watcherStdinWriter = null
+                    }
                     process?.let { activeProcesses.remove(it) }
                 }
                 kotlinx.coroutines.delay(1000)

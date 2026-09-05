@@ -50,8 +50,13 @@ object X11Preferences {
     const val KEY_TOOLBAR_SHOW_BACK = "toolbarShowBack"
     const val KEY_TOOLBAR_SHOW_CLOSE = "toolbarShowClose"
     const val KEY_TOOLBAR_SHOW_WINDOW_SWITCHER = "toolbarShowWindowSwitcher"
+    const val KEY_TOOLBAR_SHOW_SNAP_LAYOUTS = "toolbarShowSnapLayouts"
     const val KEY_TOOLBAR_SHOW_DRAG_HANDLE = "toolbarShowDragHandle"
     const val KEY_TOOLBAR_CENTER_WITHIN_SAFE_AREA = "topBarCenterWithinBounds"
+
+    // Snap Layout Preferences
+    const val KEY_ACTIVE_SNAP_LAYOUT = "activeSnapLayout"
+    const val KEY_SNAP_LAYOUT_RATIOS = "snapLayoutRatios"
 
     // Window Management & Close Behavior
     const val KEY_CLOSE_BUTTON_BEHAVIOR = "closeButtonBehavior"

@@ -132,50 +132,111 @@ fun WindowSwitcherGallery(
                 .padding(horizontal = 24.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Header: Title & Window Count Badge
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f),
-                tonalElevation = 6.dp,
-                shadowElevation = 8.dp,
-                modifier = Modifier.padding(bottom = 20.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+            WindowGalleryPicker(
+                windows = windows,
+                previewCache = previewCache,
+                isCompact = false,
+                headerTitle = "Open Notes",
+                onSelectWindow = onSelectWindow,
+                onCloseWindow = onCloseWindow
+            )
+        }
+    }
+}
+
+/**
+ * Reusable Window Gallery Picker that can be embedded either fullscreen or inside a segmented layout area.
+ */
+@Composable
+fun WindowGalleryPicker(
+    windows: List<ProcessSupervisor.X11WindowInfo>,
+    previewCache: Map<String, Bitmap>,
+    modifier: Modifier = Modifier,
+    isCompact: Boolean = false,
+    headerTitle: String? = "Select Note",
+    onSelectWindow: (ProcessSupervisor.X11WindowInfo) -> Unit,
+    onCloseWindow: ((ProcessSupervisor.X11WindowInfo) -> Unit)? = null
+) {
+    val config = LocalConfiguration.current
+    val isLandscape = config.screenWidthDp > config.screenHeightDp
+
+    androidx.compose.foundation.layout.BoxWithConstraints(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        val availableW = maxWidth
+        val availableH = maxHeight
+        val compactMode = isCompact || availableW < 400.dp || availableH < 350.dp
+
+        val cardWidth = if (compactMode) {
+            (availableW * 0.65f).coerceIn(150.dp, 220.dp)
+        } else if (isLandscape) {
+            280.dp
+        } else {
+            230.dp
+        }
+
+        val previewHeight = if (compactMode) {
+            (availableH * 0.45f).coerceIn(90.dp, 150.dp)
+        } else if (isLandscape) {
+            175.dp
+        } else {
+            220.dp
+        }
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            if (!headerTitle.isNullOrBlank()) {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f),
+                    tonalElevation = if (compactMode) 3.dp else 6.dp,
+                    shadowElevation = if (compactMode) 4.dp else 8.dp,
+                    modifier = Modifier.padding(bottom = if (compactMode) 10.dp else 20.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Description,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = "Open Notes",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Badge(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    Row(
+                        modifier = Modifier.padding(
+                            horizontal = if (compactMode) 10.dp else 16.dp,
+                            vertical = if (compactMode) 4.dp else 8.dp
+                        ),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(
-                            text = "${windows.size}",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 4.dp)
+                        Icon(
+                            imageVector = Icons.Default.Description,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(if (compactMode) 14.dp else 18.dp)
                         )
+                        Text(
+                            text = headerTitle,
+                            style = if (compactMode) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Badge(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        ) {
+                            Text(
+                                text = "${windows.size}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 4.dp)
+                            )
+                        }
                     }
                 }
             }
 
-            // Carousel / Row of Window Preview Cards
+            // Scrollable row of window preview cards
             LazyRow(
                 modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
+                contentPadding = PaddingValues(horizontal = if (compactMode) 8.dp else 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (compactMode) 10.dp else 16.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 items(windows, key = { it.id }) { win ->
@@ -183,9 +244,10 @@ fun WindowSwitcherGallery(
                     WindowPreviewCard(
                         windowInfo = win,
                         preview = previewBitmap,
-                        isLandscape = isLandscape,
+                        cardWidth = cardWidth,
+                        previewHeight = previewHeight,
                         onSelect = { onSelectWindow(win) },
-                        onClose = { onCloseWindow(win) }
+                        onClose = onCloseWindow?.let { closeFn -> { closeFn(win) } }
                     )
                 }
             }
@@ -194,15 +256,14 @@ fun WindowSwitcherGallery(
 }
 
 @Composable
-private fun WindowPreviewCard(
+fun WindowPreviewCard(
     windowInfo: ProcessSupervisor.X11WindowInfo,
     preview: Bitmap?,
-    isLandscape: Boolean,
+    cardWidth: androidx.compose.ui.unit.Dp,
+    previewHeight: androidx.compose.ui.unit.Dp,
     onSelect: () -> Unit,
-    onClose: () -> Unit
+    onClose: (() -> Unit)? = null
 ) {
-    val cardWidth = if (isLandscape) 280.dp else 230.dp
-    val previewHeight = if (isLandscape) 175.dp else 220.dp
     val isActive = windowInfo.isActive
 
     val borderColor = if (isActive) {
@@ -255,37 +316,38 @@ private fun WindowPreviewCard(
                     modifier = Modifier.weight(1f)
                 )
 
-                // Small Material 3 Close Button with Red Hover Highlight
-                val closeInteractionSource = remember { MutableInteractionSource() }
-                val isCloseHovered by closeInteractionSource.collectIsHoveredAsState()
-                val closeBgColor by animateColorAsState(
-                    targetValue = if (isCloseHovered) Color(0xFFD32F2F) else Color.Transparent,
-                    label = "closeHoverBg"
-                )
-                val closeIconTint by animateColorAsState(
-                    targetValue = if (isCloseHovered) Color.White else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                    label = "closeHoverTint"
-                )
+                if (onClose != null) {
+                    val closeInteractionSource = remember { MutableInteractionSource() }
+                    val isCloseHovered by closeInteractionSource.collectIsHoveredAsState()
+                    val closeBgColor by animateColorAsState(
+                        targetValue = if (isCloseHovered) Color(0xFFD32F2F) else Color.Transparent,
+                        label = "closeHoverBg"
+                    )
+                    val closeIconTint by animateColorAsState(
+                        targetValue = if (isCloseHovered) Color.White else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        label = "closeHoverTint"
+                    )
 
-                Surface(
-                    shape = CircleShape,
-                    color = closeBgColor,
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .hoverable(interactionSource = closeInteractionSource)
-                        .clickable(
-                            interactionSource = closeInteractionSource,
-                            indication = ripple(bounded = true, color = Color.Red)
-                        ) { onClose() }
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close ${windowInfo.title}",
-                            modifier = Modifier.size(14.dp),
-                            tint = closeIconTint
-                        )
+                    Surface(
+                        shape = CircleShape,
+                        color = closeBgColor,
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .hoverable(interactionSource = closeInteractionSource)
+                            .clickable(
+                                interactionSource = closeInteractionSource,
+                                indication = ripple(bounded = true, color = Color.Red)
+                            ) { onClose() }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close ${windowInfo.title}",
+                                modifier = Modifier.size(14.dp),
+                                tint = closeIconTint
+                            )
+                        }
                     }
                 }
             }

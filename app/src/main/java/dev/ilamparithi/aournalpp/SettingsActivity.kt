@@ -58,6 +58,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.DisplaySettings
 import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Draw
@@ -1528,6 +1529,9 @@ fun ToolbarSettingsScreen(
     var showWindowSwitcher by remember {
         mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_WINDOW_SWITCHER, true))
     }
+    var showSnapLayouts by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_SNAP_LAYOUTS, true))
+    }
     var closeButtonBehavior by remember {
         mutableStateOf(x11Prefs.getString(X11Preferences.KEY_CLOSE_BUTTON_BEHAVIOR, X11Preferences.CLOSE_BEHAVIOR_FOREGROUND) ?: X11Preferences.CLOSE_BEHAVIOR_FOREGROUND)
     }
@@ -2060,6 +2064,37 @@ fun ToolbarSettingsScreen(
                             showWindowSwitcher = it
                             x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_SHOW_WINDOW_SWITCHER, it).apply()
                             X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_SHOW_WINDOW_SWITCHER)
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsSwitchListItem(
+                        headline = "Snap Layouts",
+                        supporting = "Displays the snap layouts dropdown button on the floating toolbar.",
+                        checked = showSnapLayouts,
+                        leadingContent = {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .alpha(if (showSnapLayouts) 1f else 0.4f)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.GridView,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                }
+                            }
+                        },
+                        onCheckedChange = {
+                            showSnapLayouts = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_SHOW_SNAP_LAYOUTS, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_SHOW_SNAP_LAYOUTS)
                         }
                     )
 

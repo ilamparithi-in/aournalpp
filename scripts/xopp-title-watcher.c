@@ -39,6 +39,10 @@ static Atom net_active = None;
 static Atom net_client_list = None;
 static Atom net_wm_state = None;
 static Atom net_wm_state_modal = None;
+static Atom net_wm_state_maximized_vert = None;
+static Atom net_wm_state_maximized_horz = None;
+static Atom net_moveresize_window = None;
+static Atom motif_wm_hints = None;
 
 static void init_atoms(Display *dpy) {
     net_wm_name = XInternAtom(dpy, "_NET_WM_NAME", False);
@@ -62,6 +66,10 @@ static void init_atoms(Display *dpy) {
     net_client_list = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
     net_wm_state = XInternAtom(dpy, "_NET_WM_STATE", False);
     net_wm_state_modal = XInternAtom(dpy, "_NET_WM_STATE_MODAL", False);
+    net_wm_state_maximized_vert = XInternAtom(dpy, "_NET_WM_STATE_MAXIMIZED_VERT", False);
+    net_wm_state_maximized_horz = XInternAtom(dpy, "_NET_WM_STATE_MAXIMIZED_HORZ", False);
+    net_moveresize_window = XInternAtom(dpy, "_NET_MOVERESIZE_WINDOW", False);
+    motif_wm_hints = XInternAtom(dpy, "_MOTIF_WM_HINTS", False);
 }
 
 static char *case_str_search(const char *haystack, const char *needle) {
@@ -613,6 +621,172 @@ static void evaluate_and_emit_status(Display *dpy, Window root) {
     }
 }
 
+struct MotifHints {
+    unsigned long flags;
+    unsigned long functions;
+    unsigned long decorations;
+    long input_mode;
+    unsigned long status;
+};
+
+static void set_window_maximized_state(Display *dpy, Window root, Window target, int maximize) {
+    if (!dpy || target == None) return;
+    if (net_wm_state != None && net_wm_state_maximized_vert != None && net_wm_state_maximized_horz != None) {
+        XEvent ev;
+        memset(&ev, 0, sizeof(ev));
+        ev.xclient.type = ClientMessage;
+        ev.xclient.window = target;
+        ev.xclient.message_type = net_wm_state;
+        ev.xclient.format = 32;
+        ev.xclient.data.l[0] = maximize ? 1 : 0; // 1 = _NET_WM_STATE_ADD, 0 = _NET_WM_STATE_REMOVE
+        ev.xclient.data.l[1] = (long)net_wm_state_maximized_vert;
+        ev.xclient.data.l[2] = (long)net_wm_state_maximized_horz;
+        ev.xclient.data.l[3] = 1; // source indication: normal application
+        ev.xclient.data.l[4] = 0;
+        XSendEvent(dpy, root, False, SubstructureRedirectMask | SubstructureNotifyMask, &ev);
+    }
+}
+
+static void snap_window_geometry(Display *dpy, Window root, Window target, int x, int y, int w, int h) {
+    if (!dpy || target == None) return;
+    set_window_maximized_state(dpy, root, target, 0);
+    int real_w = (w > 0) ? w : 1;
+    int real_h = (h > 0) ? h : 1;
+    XMoveResizeWindow(dpy, target, x, y, real_w, real_h);
+    if (net_moveresize_window != None) {
+        XEvent ev;
+        memset(&ev, 0, sizeof(ev));
+        ev.xclient.type = ClientMessage;
+        ev.xclient.window = target;
+        ev.xclient.message_type = net_moveresize_window;
+        ev.xclient.format = 32;
+        ev.xclient.data.l[0] = 1 | (1 << 8) | (1 << 9) | (1 << 10) | (1 << 11);
+        ev.xclient.data.l[1] = x;
+        ev.xclient.data.l[2] = y;
+        ev.xclient.data.l[3] = real_w;
+        ev.xclient.data.l[4] = real_h;
+        XSendEvent(dpy, root, False, SubstructureRedirectMask | SubstructureNotifyMask, &ev);
+    }
+}
+
+static void set_window_decorations(Display *dpy, Window target, int decorated) {
+    if (!dpy || target == None || motif_wm_hints == None) return;
+    struct MotifHints hints;
+    memset(&hints, 0, sizeof(hints));
+    hints.flags = 2; // MWM_HINTS_DECORATIONS
+    hints.decorations = decorated ? 1 : 0;
+    XChangeProperty(dpy, target, motif_wm_hints, motif_wm_hints, 32,
+                    PropModeReplace, (unsigned char *)&hints, 5);
+}
+
+static void activate_window(Display *dpy, Window root, Window target) {
+    if (!dpy || target == None) return;
+    if (net_active != None) {
+        XEvent ev;
+        memset(&ev, 0, sizeof(ev));
+        ev.xclient.type = ClientMessage;
+        ev.xclient.window = target;
+        ev.xclient.message_type = net_active;
+        ev.xclient.format = 32;
+        ev.xclient.data.l[0] = 1;
+        ev.xclient.data.l[1] = CurrentTime;
+        XSendEvent(dpy, root, False, SubstructureRedirectMask | SubstructureNotifyMask, &ev);
+    }
+    XSetInputFocus(dpy, target, RevertToPointerRoot, CurrentTime);
+    XRaiseWindow(dpy, target);
+}
+
+static void close_window_graceful(Display *dpy, Window target) {
+    if (!dpy || target == None) return;
+    Atom wm_protocols = XInternAtom(dpy, "WM_PROTOCOLS", False);
+    Atom wm_delete_window = XInternAtom(dpy, "WM_DELETE_WINDOW", False);
+    XEvent ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.xclient.type = ClientMessage;
+    ev.xclient.window = target;
+    ev.xclient.message_type = wm_protocols;
+    ev.xclient.format = 32;
+    ev.xclient.data.l[0] = (long)wm_delete_window;
+    ev.xclient.data.l[1] = CurrentTime;
+    XSendEvent(dpy, target, False, NoEventMask, &ev);
+}
+
+static void process_snap_batch_token(Display *dpy, Window root, char *token) {
+    unsigned long wid = 0;
+    int x = 0, y = 0, w = 0, h = 0;
+    if (sscanf(token, "%lu:%d,%d,%d,%d", &wid, &x, &y, &w, &h) == 5 ||
+        sscanf(token, "%lu %d %d %d %d", &wid, &x, &y, &w, &h) == 5) {
+        if (wid != 0) {
+            snap_window_geometry(dpy, root, (Window)wid, x, y, w, h);
+        }
+    }
+}
+
+static void process_snap_batch(Display *dpy, Window root, const char *batch_str) {
+    if (!batch_str || !*batch_str) return;
+    char *copy = strdup(batch_str);
+    if (!copy) return;
+    char *saveptr = NULL;
+    char *token = strtok_r(copy, "|;", &saveptr);
+    while (token) {
+        while (*token == ' ') token++;
+        if (*token) {
+            process_snap_batch_token(dpy, root, token);
+        }
+        token = strtok_r(NULL, "|;", &saveptr);
+    }
+    free(copy);
+    XFlush(dpy);
+}
+
+static void handle_ipc_command(Display *dpy, Window root, const char *line) {
+    if (!line || !*line) return;
+    while (*line == ' ' || *line == '\t') line++;
+    if (*line == '\0' || *line == '\n') return;
+
+    if (strncmp(line, "SNAP_BATCH ", 11) == 0) {
+        process_snap_batch(dpy, root, line + 11);
+    } else if (strncmp(line, "SNAP ", 5) == 0) {
+        unsigned long wid = 0;
+        int x = 0, y = 0, w = 0, h = 0;
+        if (sscanf(line + 5, "%lu %d %d %d %d", &wid, &x, &y, &w, &h) == 5) {
+            snap_window_geometry(dpy, root, (Window)wid, x, y, w, h);
+            XFlush(dpy);
+        }
+    } else if (strncmp(line, "UNMAXIMIZE ", 11) == 0) {
+        unsigned long wid = strtoul(line + 11, NULL, 0);
+        if (wid != 0) {
+            set_window_maximized_state(dpy, root, (Window)wid, 0);
+            XFlush(dpy);
+        }
+    } else if (strncmp(line, "MAXIMIZE ", 9) == 0) {
+        unsigned long wid = strtoul(line + 9, NULL, 0);
+        if (wid != 0) {
+            set_window_maximized_state(dpy, root, (Window)wid, 1);
+            XFlush(dpy);
+        }
+    } else if (strncmp(line, "SET_DECOR ", 10) == 0) {
+        unsigned long wid = 0;
+        int decor = 0;
+        if (sscanf(line + 10, "%lu %d", &wid, &decor) == 2) {
+            set_window_decorations(dpy, (Window)wid, decor);
+            XFlush(dpy);
+        }
+    } else if (strncmp(line, "ACTIVATE ", 9) == 0) {
+        unsigned long wid = strtoul(line + 9, NULL, 0);
+        if (wid != 0) {
+            activate_window(dpy, root, (Window)wid);
+            XFlush(dpy);
+        }
+    } else if (strncmp(line, "CLOSE ", 6) == 0) {
+        unsigned long wid = strtoul(line + 6, NULL, 0);
+        if (wid != 0) {
+            close_window_graceful(dpy, (Window)wid);
+            XFlush(dpy);
+        }
+    }
+}
+
 int main(int argc, char **argv) {
     // Install custom error handler so closing dialogs never abort this process
     XSetErrorHandler(ignore_x_errors);
@@ -638,21 +812,54 @@ int main(int argc, char **argv) {
     if (argc > 1) {
         if (strcmp(argv[1], "--close-window") == 0 && argc > 2) {
             Window target = (Window)strtoul(argv[2], NULL, 0);
-            if (target != None) {
-                Atom wm_protocols = XInternAtom(dpy, "WM_PROTOCOLS", False);
-                Atom wm_delete_window = XInternAtom(dpy, "WM_DELETE_WINDOW", False);
-                XEvent ev;
-                memset(&ev, 0, sizeof(ev));
-                ev.xclient.type = ClientMessage;
-                ev.xclient.window = target;
-                ev.xclient.message_type = wm_protocols;
-                ev.xclient.format = 32;
-                ev.xclient.data.l[0] = wm_delete_window;
-                ev.xclient.data.l[1] = CurrentTime;
-                XSendEvent(dpy, target, False, NoEventMask, &ev);
-                XFlush(dpy);
-                printf("OK\n");
-            }
+            close_window_graceful(dpy, target);
+            XFlush(dpy);
+            printf("OK\n");
+            XCloseDisplay(dpy);
+            return 0;
+        } else if (strcmp(argv[1], "--snap-window") == 0 && argc > 6) {
+            Window target = (Window)strtoul(argv[2], NULL, 0);
+            int x = atoi(argv[3]);
+            int y = atoi(argv[4]);
+            int w = atoi(argv[5]);
+            int h = atoi(argv[6]);
+            snap_window_geometry(dpy, root, target, x, y, w, h);
+            XFlush(dpy);
+            printf("OK\n");
+            XCloseDisplay(dpy);
+            return 0;
+        } else if (strcmp(argv[1], "--snap-batch") == 0 && argc > 2) {
+            process_snap_batch(dpy, root, argv[2]);
+            printf("OK\n");
+            XCloseDisplay(dpy);
+            return 0;
+        } else if (strcmp(argv[1], "--unmaximize") == 0 && argc > 2) {
+            Window target = (Window)strtoul(argv[2], NULL, 0);
+            set_window_maximized_state(dpy, root, target, 0);
+            XFlush(dpy);
+            printf("OK\n");
+            XCloseDisplay(dpy);
+            return 0;
+        } else if (strcmp(argv[1], "--maximize") == 0 && argc > 2) {
+            Window target = (Window)strtoul(argv[2], NULL, 0);
+            set_window_maximized_state(dpy, root, target, 1);
+            XFlush(dpy);
+            printf("OK\n");
+            XCloseDisplay(dpy);
+            return 0;
+        } else if (strcmp(argv[1], "--set-decor") == 0 && argc > 3) {
+            Window target = (Window)strtoul(argv[2], NULL, 0);
+            int decor = atoi(argv[3]);
+            set_window_decorations(dpy, target, decor);
+            XFlush(dpy);
+            printf("OK\n");
+            XCloseDisplay(dpy);
+            return 0;
+        } else if (strcmp(argv[1], "--activate-window") == 0 && argc > 2) {
+            Window target = (Window)strtoul(argv[2], NULL, 0);
+            activate_window(dpy, root, target);
+            XFlush(dpy);
+            printf("OK\n");
             XCloseDisplay(dpy);
             return 0;
         } else if (strcmp(argv[1], "--list-dialogs") == 0 || strcmp(argv[1], "--check-dialogs") == 0) {
@@ -688,6 +895,7 @@ int main(int argc, char **argv) {
 
     int x11_fd = ConnectionNumber(dpy);
     XEvent ev;
+    char stdin_buf[4096];
 
     while (1) {
         int need_update = 0;
@@ -716,12 +924,25 @@ int main(int argc, char **argv) {
             evaluate_and_emit_status(dpy, root);
         }
 
-        struct pollfd pfd;
-        pfd.fd = x11_fd;
-        pfd.events = POLLIN;
-        pfd.revents = 0;
-        int ret = poll(&pfd, 1, 400); // 400ms periodic refresh & poll
-        if (ret == 0) {
+        struct pollfd pfds[2];
+        pfds[0].fd = x11_fd;
+        pfds[0].events = POLLIN;
+        pfds[0].revents = 0;
+        pfds[1].fd = STDIN_FILENO;
+        pfds[1].events = POLLIN;
+        pfds[1].revents = 0;
+
+        int ret = poll(pfds, 2, 400); // 400ms periodic refresh & poll
+        if (ret > 0) {
+            if (pfds[1].revents & POLLIN) {
+                if (fgets(stdin_buf, sizeof(stdin_buf), stdin)) {
+                    handle_ipc_command(dpy, root, stdin_buf);
+                }
+            }
+            if (pfds[1].revents & POLLHUP) {
+                break;
+            }
+        } else if (ret == 0) {
             // Periodic sync check to guarantee title and dialog state are always current
             evaluate_and_emit_status(dpy, root);
         }
