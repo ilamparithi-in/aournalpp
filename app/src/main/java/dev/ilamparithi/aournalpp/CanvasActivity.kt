@@ -56,6 +56,8 @@ import dev.ilamparithi.aournalpp.ui.animation.SpringSlideTransition
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.zIndex
+import dev.ilamparithi.aournalpp.utils.WindowPreviewUtils
+import androidx.compose.ui.text.rememberTextMeasurer
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -162,6 +164,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import dev.ilamparithi.aournalpp.ui.AppDialogDefaults
@@ -431,12 +434,26 @@ class CanvasActivity : ComponentActivity() {
 
                 val liveTitle by sessionManager.documentTitle.collectAsState()
                 val openWindows by sessionManager.openWindows.collectAsState(initial = emptyList())
+                val windowPreviewCache = remember { mutableStateMapOf<String, Bitmap>() }
+                var transitionOutgoingBitmap by remember { mutableStateOf<Bitmap?>(null) }
+                var transitionIncomingBitmap by remember { mutableStateOf<Bitmap?>(null) }
+                var transitionTargetWindow by remember { mutableStateOf<dev.ilamparithi.aournalpp.runtime.ProcessSupervisor.X11WindowInfo?>(null) }
+                var isTransitionForward by remember { mutableStateOf(true) }
+                var isSwitchTransitionActive by remember { mutableStateOf(false) }
+                var transitionSequence by remember { mutableIntStateOf(0) }
 
                 val activeWindow = remember(openWindows) {
                     openWindows.find { it.isActive }
                 }
-                val activeWindowIndex = remember(openWindows, activeWindow) {
-                    if (activeWindow != null) openWindows.indexOf(activeWindow).coerceAtLeast(0) else 0
+                val currentDisplayWindow = remember(openWindows, activeWindow, isSwitchTransitionActive, transitionTargetWindow) {
+                    if (isSwitchTransitionActive && transitionTargetWindow != null) {
+                        transitionTargetWindow
+                    } else {
+                        activeWindow
+                    }
+                }
+                val activeWindowIndex = remember(openWindows, currentDisplayWindow) {
+                    if (currentDisplayWindow != null) openWindows.indexOfFirst { it.id == currentDisplayWindow.id }.coerceAtLeast(0) else 0
                 }
 
                 androidx.compose.runtime.LaunchedEffect(liveTitle) {
@@ -464,9 +481,9 @@ class CanvasActivity : ComponentActivity() {
                 val baseDocumentName = remember(targetPath, initialTitle) {
                     targetPath?.let { File(it).nameWithoutExtension } ?: (initialTitle ?: "New Note")
                 }
-                val displayTitle = remember(openWindows, activeWindow, liveTitle, alwaysShowFileName, openPreferences, baseDocumentName, initialTitle) {
+                val displayTitle = remember(openWindows, currentDisplayWindow, liveTitle, alwaysShowFileName, openPreferences, baseDocumentName, initialTitle) {
                     val raw = when {
-                        activeWindow != null && activeWindow.title.isNotBlank() && activeWindow.title != "Xournal++" -> activeWindow.title
+                        currentDisplayWindow != null && currentDisplayWindow.title.isNotBlank() && currentDisplayWindow.title != "Xournal++" -> currentDisplayWindow.title
                         !liveTitle.isNullOrBlank() && liveTitle != "Xournal++" -> liveTitle!!
                         openPreferences && (liveTitle == null || liveTitle?.removePrefix("*")?.trim() == "New Note" || liveTitle?.removePrefix("*")?.trim() == "Unsaved Document") -> "Preferences"
                         else -> initialTitle ?: "New Note"
@@ -551,12 +568,6 @@ class CanvasActivity : ComponentActivity() {
                 }
                 var showImageSourceDialog by remember { mutableStateOf(false) }
                 var showWindowSwitcherGallery by remember { mutableStateOf(false) }
-                val windowPreviewCache = remember { mutableStateMapOf<String, Bitmap>() }
-                var transitionOutgoingBitmap by remember { mutableStateOf<Bitmap?>(null) }
-                var transitionIncomingBitmap by remember { mutableStateOf<Bitmap?>(null) }
-                var transitionTargetWindow by remember { mutableStateOf<dev.ilamparithi.aournalpp.runtime.ProcessSupervisor.X11WindowInfo?>(null) }
-                var isTransitionForward by remember { mutableStateOf(true) }
-                var isSwitchTransitionActive by remember { mutableStateOf(false) }
                 var stylusHoverExpands by remember {
                     mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_STYLUS_HOVER_EXPANDS, true))
                 }
@@ -655,19 +666,30 @@ class CanvasActivity : ComponentActivity() {
                     }
                 }
 
-                // Keep window preview cache warm while user is actively viewing a note
-                androidx.compose.runtime.LaunchedEffect(activeWindow?.id, isSwitchTransitionActive) {
-                    if (activeWindow != null && !isSwitchTransitionActive) {
-                        kotlinx.coroutines.delay(250)
-                        captureCurrentWindowPreview { bmp ->
-                            windowPreviewCache[activeWindow.id] = bmp
-                        }
-                    }
-                }
-
                 fun performWindowSwitch(targetWindow: dev.ilamparithi.aournalpp.runtime.ProcessSupervisor.X11WindowInfo, isForward: Boolean) {
-                    if (isSwitchTransitionActive) return
                     val activeWin = openWindows.find { it.isActive }
+                    val view = activeLorieView
+                    val currentW = view?.width ?: 0
+                    val currentH = view?.height ?: 0
+
+                    if (isSwitchTransitionActive) {
+                        // Rapid switching / spamming: advance immediately to the next target
+                        val previousTarget = transitionTargetWindow
+                        transitionOutgoingBitmap = transitionIncomingBitmap
+                            ?: previousTarget?.let { windowPreviewCache[it.id] }
+                            ?: activeWin?.let { windowPreviewCache[it.id] }
+                        transitionIncomingBitmap = windowPreviewCache[targetWindow.id]
+                        transitionTargetWindow = targetWindow
+                        isTransitionForward = isForward
+                        transitionSequence++
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            sessionManager.switchToWindow(targetWindow.id)
+                        }
+                        return
+                    }
+
+                    val cachedCurrent = activeWin?.let { windowPreviewCache[it.id] }
+
                     fun startSwitchWithBitmap(currentBmp: Bitmap?) {
                         if (activeWin != null && currentBmp != null) {
                             windowPreviewCache[activeWin.id] = currentBmp
@@ -676,11 +698,11 @@ class CanvasActivity : ComponentActivity() {
                         transitionIncomingBitmap = windowPreviewCache[targetWindow.id]
                         transitionTargetWindow = targetWindow
                         isTransitionForward = isForward
+                        transitionSequence++
                         isSwitchTransitionActive = true
                     }
 
-                    val cachedCurrent = activeWin?.let { windowPreviewCache[it.id] }
-                    if (cachedCurrent != null) {
+                    if (WindowPreviewUtils.isFreezeFrameDimensionMatching(cachedCurrent, currentW, currentH)) {
                         startSwitchWithBitmap(cachedCurrent)
                         captureCurrentWindowPreview { freshBmp ->
                             if (activeWin != null) {
@@ -688,6 +710,8 @@ class CanvasActivity : ComponentActivity() {
                             }
                         }
                     } else {
+                        // Dimension mismatch (e.g. window was resized) or cache miss:
+                        // capture fresh freeze frame at current size so the transition never stretches
                         captureCurrentWindowPreview { currentBmp ->
                             startSwitchWithBitmap(currentBmp)
                         }
@@ -697,7 +721,11 @@ class CanvasActivity : ComponentActivity() {
                 fun performQuickSwitch() {
                     val wins = openWindows.ifEmpty { sessionManager.queryOpenWindows() }
                     if (wins.isEmpty()) return
-                    val currentIdx = wins.indexOfFirst { it.isActive }
+                    val currentIdx = if (isSwitchTransitionActive && transitionTargetWindow != null) {
+                        wins.indexOfFirst { it.id == transitionTargetWindow?.id }
+                    } else {
+                        wins.indexOfFirst { it.isActive }
+                    }
                     val nextIdx = if (currentIdx >= 0) (currentIdx + 1) % wins.size else 0
                     val target = wins[nextIdx]
                     performWindowSwitch(target, isForward = true)
@@ -724,6 +752,37 @@ class CanvasActivity : ComponentActivity() {
                     ) {
                         val canvasWidthPx = constraints.maxWidth.toFloat()
                         val canvasHeightPx = constraints.maxHeight.toFloat()
+
+                        // Debounced window resize & preview synchronization
+                        // Ensures active and background window previews match new window size without thrashing during active divider drag
+                        LaunchedEffect(canvasWidthPx, canvasHeightPx, activeWindow?.id, isSwitchTransitionActive) {
+                            if (activeWindow != null && !isSwitchTransitionActive && canvasWidthPx > 0 && canvasHeightPx > 0) {
+                                delay(250)
+                                val view = activeLorieView
+                                if (view != null && view.width > 0 && view.height > 0) {
+                                    captureCurrentWindowPreview { freshBmp ->
+                                        windowPreviewCache[activeWindow.id] = freshBmp
+                                        val targetW = freshBmp.width
+                                        val targetH = freshBmp.height
+                                        if (targetW > 0 && targetH > 0) {
+                                            lifecycleScope.launch(Dispatchers.Default) {
+                                                for ((wid, cachedBmp) in windowPreviewCache.entries.toList()) {
+                                                    if (wid != activeWindow.id && !cachedBmp.isRecycled && (cachedBmp.width != targetW || cachedBmp.height != targetH)) {
+                                                        val adapted = WindowPreviewUtils.adaptBitmapToSize(cachedBmp, targetW, targetH)
+                                                        if (adapted != null) {
+                                                            withContext(Dispatchers.Main) {
+                                                                windowPreviewCache[wid] = adapted
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         // Wallpaper Backdrop Layer (covers edge-to-edge)
                         Image(
                             bitmap = wallpaperBitmap,
@@ -824,28 +883,31 @@ class CanvasActivity : ComponentActivity() {
                                 modifier = viewportModifier
                                     .zIndex(10f)
                             ) {
-                                WindowSwitchTransitionOverlay(
-                                    outgoingBitmap = transitionOutgoingBitmap,
-                                    incomingBitmap = transitionIncomingBitmap,
-                                    targetTitle = targetTitle,
-                                    targetIcon = targetIcon,
-                                    wallpaperBitmap = wallpaperBitmap,
-                                    isForward = isTransitionForward,
-                                    onStarted = {
-                                        lifecycleScope.launch(Dispatchers.IO) {
-                                            sessionManager.switchToWindow(targetWin.id)
-                                        }
-                                    },
-                                    onTransitionFinished = {
-                                        isSwitchTransitionActive = false
-                                        lifecycleScope.launch {
-                                            kotlinx.coroutines.delay(150)
-                                            captureCurrentWindowPreview { bmp ->
-                                                windowPreviewCache[targetWin.id] = bmp
+                                androidx.compose.runtime.key(transitionSequence) {
+                                    WindowSwitchTransitionOverlay(
+                                        outgoingBitmap = transitionOutgoingBitmap,
+                                        incomingBitmap = transitionIncomingBitmap,
+                                        targetTitle = targetTitle,
+                                        targetIcon = targetIcon,
+                                        wallpaperBitmap = wallpaperBitmap,
+                                        isForward = isTransitionForward,
+                                        onStarted = {
+                                            lifecycleScope.launch(Dispatchers.IO) {
+                                                sessionManager.switchToWindow(targetWin.id)
+                                            }
+                                        },
+                                        onTransitionFinished = {
+                                            isSwitchTransitionActive = false
+                                            transitionTargetWindow = null
+                                            lifecycleScope.launch {
+                                                kotlinx.coroutines.delay(150)
+                                                captureCurrentWindowPreview { bmp ->
+                                                    windowPreviewCache[targetWin.id] = bmp
+                                                }
                                             }
                                         }
-                                    }
-                                )
+                                    )
+                                }
                             }
                         }
 
@@ -1841,6 +1903,72 @@ private fun FloatingToolbarOverlay(
     var isPinned by rememberSaveable { mutableStateOf(false) }
     var lastCollapseTimeMs by remember { mutableLongStateOf(0L) }
 
+    val toolbarResizeDebounceMs = remember(autoCollapseTimeoutMs) {
+        WindowPreviewUtils.calculateToolbarResizeDebounceMs(autoCollapseTimeoutMs)
+    }
+    var altTabClickCount by remember { mutableIntStateOf(0) }
+    var isAltTabDebouncing by remember { mutableStateOf(false) }
+    var heldDebounceWidthDp by remember { mutableStateOf(0.dp) }
+
+    val textMeasurer = rememberTextMeasurer()
+    val titleTextStyle = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+    val currentTitleNaturalWidthDp = remember(displayTitle, density) {
+        val measuredPx = textMeasurer.measure(
+            text = displayTitle,
+            style = titleTextStyle,
+            maxLines = 1,
+            softWrap = false
+        ).size.width
+        with(density) { measuredPx.toDp() }.coerceIn(90.dp, 220.dp) + 32.dp
+    }
+    val maxSafeTitleWidthDp = with(density) {
+        (canvasWidthPx - 32.dp.toPx()).coerceAtLeast(0f).toDp()
+    }
+    val safeCurrentTitleWidthDp = minOf(currentTitleNaturalWidthDp, maxSafeTitleWidthDp)
+
+    // Reset debounce timer on every Alt+Tab switcher tap
+    LaunchedEffect(altTabClickCount) {
+        if (altTabClickCount > 0) {
+            isAltTabDebouncing = true
+            delay(toolbarResizeDebounceMs)
+            isAltTabDebouncing = false
+            heldDebounceWidthDp = 0.dp
+        }
+    }
+
+    // Keep heldDebounceWidthDp at the maximum width seen during the Alt+Tab sequence
+    LaunchedEffect(isAltTabDebouncing, safeCurrentTitleWidthDp) {
+        if (isAltTabDebouncing) {
+            heldDebounceWidthDp = maxOf(heldDebounceWidthDp, safeCurrentTitleWidthDp)
+        }
+    }
+
+    LaunchedEffect(openWindowCount) {
+        if (openWindowCount <= 1) {
+            isAltTabDebouncing = false
+            heldDebounceWidthDp = 0.dp
+        }
+    }
+
+    // Target width:
+    // - For Alt+Tab switcher clicks: debounced and holds maximum width seen until 2s break expires
+    // - For other window opens / switches: immediately targets the new window width (no 2s hold)
+    // - In ALL cases: animates to target width with the spring animation
+    val targetTitleWidthDp = if (isAltTabDebouncing) {
+        minOf(maxOf(heldDebounceWidthDp, safeCurrentTitleWidthDp), maxSafeTitleWidthDp)
+    } else {
+        safeCurrentTitleWidthDp
+    }
+
+    val animatedTitleWidthDp by animateDpAsState(
+        targetValue = targetTitleWidthDp,
+        animationSpec = spring(
+            dampingRatio = SpringSlideTransition.SLIDE_DAMPING,
+            stiffness = SpringSlideTransition.SLIDE_STIFFNESS
+        ),
+        label = "ToolbarTitleWidthSpring"
+    )
+
     val interactionSignal = remember {
         MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     }
@@ -2005,6 +2133,8 @@ private fun FloatingToolbarOverlay(
                                             onClick = {
                                                 interactionSignal.tryEmit(Unit)
                                                 try { haptics.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                                                heldDebounceWidthDp = maxOf(heldDebounceWidthDp, safeCurrentTitleWidthDp)
+                                                altTabClickCount++
                                                 onQuickSwitchWindow()
                                             },
                                             onLongClick = {
@@ -2046,38 +2176,43 @@ private fun FloatingToolbarOverlay(
                             }
 
                             if (showTitle) {
-                                AnimatedContent(
-                                    targetState = Triple(displayTitle, windowIcon, windowIndex),
-                                    transitionSpec = {
-                                        val isForward = targetState.third >= initialState.third
-                                        SpringSlideTransition.createSpec<Triple<String, ImageVector, Int>>(isForward = isForward)(this)
-                                    },
-                                    label = "windowTitleSwitchTransition"
-                                ) { (currentTitle, currentIcon, _) ->
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center,
-                                        modifier = Modifier
-                                            .height(36.dp)
-                                            .padding(horizontal = 4.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = currentIcon,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp),
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
+                                Box(
+                                    modifier = Modifier.width(animatedTitleWidthDp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    AnimatedContent(
+                                        targetState = Triple(displayTitle, windowIcon, windowIndex),
+                                        transitionSpec = {
+                                            val isForward = targetState.third >= initialState.third
+                                            SpringSlideTransition.createSpec<Triple<String, ImageVector, Int>>(isForward = isForward)(this)
+                                        },
+                                        label = "windowTitleSwitchTransition"
+                                    ) { (currentTitle, currentIcon, _) ->
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center,
+                                            modifier = Modifier
+                                                .height(36.dp)
+                                                .padding(horizontal = 4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = currentIcon,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp),
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
 
-                                        Spacer(modifier = Modifier.width(6.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
 
-                                        dev.ilamparithi.aournalpp.ui.InteractiveMarqueeText(
-                                            text = currentTitle,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            minWidth = 90.dp,
-                                            maxWidth = 220.dp
-                                        )
+                                            dev.ilamparithi.aournalpp.ui.InteractiveMarqueeText(
+                                                text = currentTitle,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                minWidth = 90.dp,
+                                                maxWidth = 220.dp
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -2549,32 +2684,36 @@ private fun FloatingToolbarOverlay(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         if (showTitle) {
-                            AnimatedContent(
-                                targetState = Triple(displayTitle, windowIcon, windowIndex),
-                                transitionSpec = {
-                                    val isForward = targetState.third >= initialState.third
-                                    SpringSlideTransition.createSpec<Triple<String, ImageVector, Int>>(isForward = isForward)(this)
-                                },
-                                label = "collapsedWindowTitleSwitchTransition"
-                            ) { (currentTitle, currentIcon, _) ->
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = currentIcon,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                    Text(
-                                        text = currentTitle,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                            Box(
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AnimatedContent(
+                                    targetState = Triple(displayTitle, windowIcon, windowIndex),
+                                    transitionSpec = {
+                                        val isForward = targetState.third >= initialState.third
+                                        SpringSlideTransition.createSpec<Triple<String, ImageVector, Int>>(isForward = isForward)(this)
+                                    },
+                                    label = "collapsedWindowTitleSwitchTransition"
+                                ) { (currentTitle, currentIcon, _) ->
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = currentIcon,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            text = currentTitle,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
                                 }
                             }
                         }

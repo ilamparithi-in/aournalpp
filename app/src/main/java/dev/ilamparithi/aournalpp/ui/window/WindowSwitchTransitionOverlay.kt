@@ -114,7 +114,7 @@ fun WindowSwitchTransitionOverlay(
                     Image(
                         bitmap = displayBitmap.asImageBitmap(),
                         contentDescription = null,
-                        contentScale = ContentScale.FillBounds,
+                        contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
                 } else if (targetStep == 1) {
