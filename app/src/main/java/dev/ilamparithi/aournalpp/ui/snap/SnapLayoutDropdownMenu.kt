@@ -52,11 +52,19 @@ fun SnapLayoutToolbarButton(
     activeMode: SnapLayoutMode,
     isMirrored: Boolean,
     openWindowCount: Int,
+    isMenuOpen: Boolean = false,
+    onMenuOpenChange: (Boolean) -> Unit = {},
     onSelectMode: (SnapLayoutMode, Boolean) -> Unit,
     onToggleMirror: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var localExpanded by remember { mutableStateOf(false) }
+    val expanded = isMenuOpen || localExpanded
+
+    fun updateExpanded(newExpanded: Boolean) {
+        localExpanded = newExpanded
+        onMenuOpenChange(newExpanded)
+    }
 
     Box(modifier = modifier) {
         Surface(
@@ -71,7 +79,7 @@ fun SnapLayoutToolbarButton(
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = { expanded = true }
+                    onClick = { updateExpanded(!expanded) }
                 )
         ) {
             Box(
@@ -113,9 +121,9 @@ fun SnapLayoutToolbarButton(
             openWindowCount = openWindowCount,
             currentMode = activeMode,
             isMirrored = isMirrored,
-            onDismissRequest = { expanded = false },
+            onDismissRequest = { updateExpanded(false) },
             onSelectMode = { mode, mirrored ->
-                expanded = false
+                updateExpanded(false)
                 onSelectMode(mode, mirrored)
             },
             onToggleMirror = onToggleMirror

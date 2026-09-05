@@ -2180,14 +2180,22 @@ private fun FloatingToolbarOverlay(
         MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     }
 
-    LaunchedEffect(isHeaderExpanded, isPinned, pinButtonMode, autoCollapseTimeoutMs) {
-        if (pinButtonMode && isHeaderExpanded && !isPinned) {
+    var isSnapDropdownOpen by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isHeaderExpanded) {
+        if (!isHeaderExpanded) {
+            isSnapDropdownOpen = false
+        }
+    }
+
+    LaunchedEffect(isHeaderExpanded, isPinned, pinButtonMode, autoCollapseTimeoutMs, isSnapDropdownOpen) {
+        if (pinButtonMode && isHeaderExpanded && !isPinned && !isSnapDropdownOpen) {
             while (isActive) {
                 val triggered = withTimeoutOrNull(autoCollapseTimeoutMs.toLong()) {
                     interactionSignal.first()
                 }
                 if (triggered == null) {
-                    if (isHeaderExpanded && !isPinned) {
+                    if (isHeaderExpanded && !isPinned && !isSnapDropdownOpen) {
                         lastCollapseTimeMs = SystemClock.uptimeMillis()
                         isHeaderExpanded = false
                     }
@@ -2387,6 +2395,8 @@ private fun FloatingToolbarOverlay(
                                     activeMode = activeSnapMode,
                                     isMirrored = isSnapMirrored,
                                     openWindowCount = openWindowCount,
+                                    isMenuOpen = isSnapDropdownOpen,
+                                    onMenuOpenChange = { isSnapDropdownOpen = it },
                                     onSelectMode = { mode, mirrored ->
                                         interactionSignal.tryEmit(Unit)
                                         onSelectSnapMode(mode, mirrored)

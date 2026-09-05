@@ -629,6 +629,29 @@ struct MotifHints {
     unsigned long status;
 };
 
+static int is_maximized_state(Display *dpy, Window w) {
+    if (net_wm_state == None || net_wm_state_maximized_vert == None) return 0;
+    Atom type;
+    int format;
+    unsigned long nitems = 0, bytes_after = 0;
+    unsigned char *prop = NULL;
+    int max = 0;
+    if (XGetWindowProperty(dpy, w, net_wm_state, 0, 32, False, XA_ATOM,
+                           &type, &format, &nitems, &bytes_after, &prop) == Success && prop) {
+        if (type == XA_ATOM && format == 32) {
+            Atom *atoms = (Atom *)prop;
+            for (unsigned long i = 0; i < nitems; i++) {
+                if (atoms[i] == net_wm_state_maximized_vert || atoms[i] == net_wm_state_maximized_horz) {
+                    max = 1;
+                    break;
+                }
+            }
+        }
+        XFree(prop);
+    }
+    return max;
+}
+
 static void set_window_maximized_state(Display *dpy, Window root, Window target, int maximize) {
     if (!dpy || target == None) return;
     if (net_wm_state != None && net_wm_state_maximized_vert != None && net_wm_state_maximized_horz != None) {
@@ -649,24 +672,12 @@ static void set_window_maximized_state(Display *dpy, Window root, Window target,
 
 static void snap_window_geometry(Display *dpy, Window root, Window target, int x, int y, int w, int h) {
     if (!dpy || target == None) return;
-    set_window_maximized_state(dpy, root, target, 0);
+    if (is_maximized_state(dpy, target)) {
+        set_window_maximized_state(dpy, root, target, 0);
+    }
     int real_w = (w > 0) ? w : 1;
     int real_h = (h > 0) ? h : 1;
     XMoveResizeWindow(dpy, target, x, y, real_w, real_h);
-    if (net_moveresize_window != None) {
-        XEvent ev;
-        memset(&ev, 0, sizeof(ev));
-        ev.xclient.type = ClientMessage;
-        ev.xclient.window = target;
-        ev.xclient.message_type = net_moveresize_window;
-        ev.xclient.format = 32;
-        ev.xclient.data.l[0] = 1 | (1 << 8) | (1 << 9) | (1 << 10) | (1 << 11);
-        ev.xclient.data.l[1] = x;
-        ev.xclient.data.l[2] = y;
-        ev.xclient.data.l[3] = real_w;
-        ev.xclient.data.l[4] = real_h;
-        XSendEvent(dpy, root, False, SubstructureRedirectMask | SubstructureNotifyMask, &ev);
-    }
 }
 
 static void set_window_decorations(Display *dpy, Window target, int decorated) {
