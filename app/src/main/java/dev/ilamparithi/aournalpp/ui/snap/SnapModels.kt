@@ -173,5 +173,6 @@ data class DividerGeometry(
     val length: Int,
     val currentRatio: Float,
     val minRatio: Float,
-    val maxRatio: Float
+    val maxRatio: Float,
+    val defaultRatio: Float = 0.5f
 ) : Serializable

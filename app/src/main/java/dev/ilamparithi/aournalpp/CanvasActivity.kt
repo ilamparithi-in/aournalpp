@@ -707,7 +707,10 @@ class CanvasActivity : ComponentActivity() {
                             showSnapAssistHost = false
                             snapDividers = emptyList()
                             snapGeometries = emptyList()
-                            openWindows.forEach { currentSupervisor.setWindowDecorations(it.id, decorated = true) }
+                            openWindows.forEach {
+                                currentSupervisor.setWindowMaximized(it.id, false)
+                                currentSupervisor.setWindowDecorations(it.id, decorated = true)
+                            }
                         }
                         SnapLayoutMode.SINGLE -> {
                             showSnapAssistHost = false

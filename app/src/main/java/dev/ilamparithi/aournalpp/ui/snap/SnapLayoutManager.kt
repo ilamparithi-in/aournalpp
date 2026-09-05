@@ -187,7 +187,8 @@ class SnapLayoutManager(private val context: Context? = null) {
                     length = (endY - startY).coerceAtLeast(1),
                     currentRatio = ratio,
                     minRatio = div.minRatio,
-                    maxRatio = div.maxRatio
+                    maxRatio = div.maxRatio,
+                    defaultRatio = div.defaultRatio
                 )
             } else {
                 val y = Math.round(ratio * viewportHeight).toInt()
@@ -201,7 +202,8 @@ class SnapLayoutManager(private val context: Context? = null) {
                     length = (endX - startX).coerceAtLeast(1),
                     currentRatio = ratio,
                     minRatio = div.minRatio,
-                    maxRatio = div.maxRatio
+                    maxRatio = div.maxRatio,
+                    defaultRatio = div.defaultRatio
                 )
             }
         }

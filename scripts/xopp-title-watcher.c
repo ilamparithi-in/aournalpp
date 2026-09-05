@@ -43,6 +43,7 @@ static Atom net_wm_state_maximized_vert = None;
 static Atom net_wm_state_maximized_horz = None;
 static Atom net_moveresize_window = None;
 static Atom motif_wm_hints = None;
+static Atom ob_wm_state_undecorated = None;
 
 static void init_atoms(Display *dpy) {
     net_wm_name = XInternAtom(dpy, "_NET_WM_NAME", False);
@@ -70,6 +71,7 @@ static void init_atoms(Display *dpy) {
     net_wm_state_maximized_horz = XInternAtom(dpy, "_NET_WM_STATE_MAXIMIZED_HORZ", False);
     net_moveresize_window = XInternAtom(dpy, "_NET_MOVERESIZE_WINDOW", False);
     motif_wm_hints = XInternAtom(dpy, "_MOTIF_WM_HINTS", False);
+    ob_wm_state_undecorated = XInternAtom(dpy, "_OB_WM_STATE_UNDECORATED", False);
 }
 
 static char *case_str_search(const char *haystack, const char *needle) {
@@ -680,14 +682,32 @@ static void snap_window_geometry(Display *dpy, Window root, Window target, int x
     XMoveResizeWindow(dpy, target, x, y, real_w, real_h);
 }
 
-static void set_window_decorations(Display *dpy, Window target, int decorated) {
-    if (!dpy || target == None || motif_wm_hints == None) return;
-    struct MotifHints hints;
-    memset(&hints, 0, sizeof(hints));
-    hints.flags = 2; // MWM_HINTS_DECORATIONS
-    hints.decorations = decorated ? 1 : 0;
-    XChangeProperty(dpy, target, motif_wm_hints, motif_wm_hints, 32,
-                    PropModeReplace, (unsigned char *)&hints, 5);
+static void set_window_decorations(Display *dpy, Window root, Window target, int decorated) {
+    if (!dpy || target == None) return;
+
+    if (net_wm_state != None && ob_wm_state_undecorated != None) {
+        XEvent ev;
+        memset(&ev, 0, sizeof(ev));
+        ev.xclient.type = ClientMessage;
+        ev.xclient.window = target;
+        ev.xclient.message_type = net_wm_state;
+        ev.xclient.format = 32;
+        ev.xclient.data.l[0] = decorated ? 0 : 1; // 0 = _NET_WM_STATE_REMOVE, 1 = _NET_WM_STATE_ADD
+        ev.xclient.data.l[1] = (long)ob_wm_state_undecorated;
+        ev.xclient.data.l[2] = 0;
+        ev.xclient.data.l[3] = 1;
+        ev.xclient.data.l[4] = 0;
+        XSendEvent(dpy, root, False, SubstructureRedirectMask | SubstructureNotifyMask, &ev);
+    }
+
+    if (motif_wm_hints != None) {
+        struct MotifHints hints;
+        memset(&hints, 0, sizeof(hints));
+        hints.flags = 2; // MWM_HINTS_DECORATIONS
+        hints.decorations = decorated ? 1 : 0;
+        XChangeProperty(dpy, target, motif_wm_hints, motif_wm_hints, 32,
+                        PropModeReplace, (unsigned char *)&hints, 5);
+    }
 }
 
 static void activate_window(Display *dpy, Window root, Window target) {
@@ -780,7 +800,7 @@ static void handle_ipc_command(Display *dpy, Window root, const char *line) {
         unsigned long wid = 0;
         int decor = 0;
         if (sscanf(line + 10, "%lu %d", &wid, &decor) == 2) {
-            set_window_decorations(dpy, (Window)wid, decor);
+            set_window_decorations(dpy, root, (Window)wid, decor);
             XFlush(dpy);
         }
     } else if (strncmp(line, "ACTIVATE ", 9) == 0) {
@@ -861,7 +881,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[1], "--set-decor") == 0 && argc > 3) {
             Window target = (Window)strtoul(argv[2], NULL, 0);
             int decor = atoi(argv[3]);
-            set_window_decorations(dpy, target, decor);
+            set_window_decorations(dpy, root, target, decor);
             XFlush(dpy);
             printf("OK\n");
             XCloseDisplay(dpy);
