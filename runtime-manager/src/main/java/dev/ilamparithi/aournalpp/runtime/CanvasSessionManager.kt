@@ -347,6 +347,42 @@ class CanvasSessionManager(
     val documentTitle: kotlinx.coroutines.flow.StateFlow<String?>
         get() = supervisor.documentTitle
 
+    val openWindows: kotlinx.coroutines.flow.StateFlow<List<ProcessSupervisor.X11WindowInfo>>
+        get() = supervisor.openWindows
+
+    fun switchToWindow(windowId: String): Boolean {
+        if (!isSessionRunning) return false
+        val success = supervisor.activateWindow(windowId)
+        if (success) {
+            val wins = supervisor.openWindows.value
+            wins.find { it.id == windowId }?.let { target ->
+                ActiveSessionTracker.updateTitle(context, env, target.title)
+            }
+        }
+        return success
+    }
+
+    fun queryOpenWindows(): List<ProcessSupervisor.X11WindowInfo> {
+        return supervisor.queryOpenWindows()
+    }
+
+    fun switchToNextWindow(): ProcessSupervisor.X11WindowInfo? {
+        if (!isSessionRunning) return null
+        val wins = supervisor.queryOpenWindows()
+        if (wins.isEmpty()) return null
+        val currentIdx = wins.indexOfFirst { it.isActive }
+        val nextIdx = if (currentIdx >= 0) (currentIdx + 1) % wins.size else 0
+        val target = wins[nextIdx]
+        supervisor.activateWindow(target.id)
+        ActiveSessionTracker.updateTitle(context, env, target.title)
+        return target
+    }
+
+    fun closeSpecificWindow(windowId: String): Boolean {
+        if (!isSessionRunning) return false
+        return supervisor.closeWindow(windowId)
+    }
+
     fun setOnProcessExitListener(listener: () -> Unit) {
         supervisor.setOnXournalExitListener(listener)
     }

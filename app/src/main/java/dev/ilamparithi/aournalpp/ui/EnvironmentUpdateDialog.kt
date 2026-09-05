@@ -76,6 +76,7 @@ fun EnvironmentUpdateDialog(
     newVersion: Long,
     countdownSeconds: Int,
     diff: BootstrapDiff? = null,
+    onExpandDetails: () -> Unit = {},
     onUpdate: () -> Unit,
     onSkip: () -> Unit
 ) {
@@ -256,7 +257,13 @@ fun EnvironmentUpdateDialog(
                         Row(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .clickable { showDetails = !showDetails }
+                                .clickable {
+                                    val willShow = !showDetails
+                                    showDetails = willShow
+                                    if (willShow) {
+                                        onExpandDetails()
+                                    }
+                                }
                                 .padding(horizontal = 8.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -298,13 +305,13 @@ fun EnvironmentUpdateDialog(
                                         .padding(8.dp),
                                     verticalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    items(diff.updated) { pkg ->
+                                    items(diff.updated, key = { "upd_${it.name}" }) { pkg ->
                                         PackageRowItem(pkg.name, "${pkg.oldVersion} -> ${pkg.newVersion}", "UPD", MaterialTheme.colorScheme.primary)
                                     }
-                                    items(diff.added) { pkg ->
+                                    items(diff.added, key = { "add_${it.name}" }) { pkg ->
                                         PackageRowItem(pkg.name, pkg.newVersion ?: "", "ADD", MaterialTheme.colorScheme.secondary)
                                     }
-                                    items(diff.removed) { pkg ->
+                                    items(diff.removed, key = { "del_${it.name}" }) { pkg ->
                                         PackageRowItem(pkg.name, pkg.oldVersion ?: "", "DEL", MaterialTheme.colorScheme.error)
                                     }
                                 }

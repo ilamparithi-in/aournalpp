@@ -49,8 +49,14 @@ object X11Preferences {
     const val KEY_TOOLBAR_SHOW_TITLE = "toolbarShowTitle"
     const val KEY_TOOLBAR_SHOW_BACK = "toolbarShowBack"
     const val KEY_TOOLBAR_SHOW_CLOSE = "toolbarShowClose"
+    const val KEY_TOOLBAR_SHOW_WINDOW_SWITCHER = "toolbarShowWindowSwitcher"
     const val KEY_TOOLBAR_SHOW_DRAG_HANDLE = "toolbarShowDragHandle"
     const val KEY_TOOLBAR_CENTER_WITHIN_SAFE_AREA = "topBarCenterWithinBounds"
+
+    // Window Management & Close Behavior
+    const val KEY_CLOSE_BUTTON_BEHAVIOR = "closeButtonBehavior"
+    const val CLOSE_BEHAVIOR_FOREGROUND = "foreground"
+    const val CLOSE_BEHAVIOR_ALL_SEQUENTIAL = "all_sequential"
 
     // Pointer / Stylus
     const val KEY_FINGER_AS_STYLUS_ENABLED = "fingerAsStylusEnabled"

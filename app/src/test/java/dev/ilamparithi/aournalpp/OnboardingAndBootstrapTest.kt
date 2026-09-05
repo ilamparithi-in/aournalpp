@@ -23,6 +23,39 @@ class OnboardingAndBootstrapTest {
     }
 
     @Test
+    fun `test BootstrapState UpdatePrompt countdown cancellation sets countdownSeconds to 0`() {
+        val state = BootstrapState.UpdatePrompt(
+            installedVersion = 100L,
+            newVersion = 101L,
+            countdownSeconds = 10
+        )
+
+        val cancelledState = state.copy(countdownSeconds = 0)
+        assertEquals(0, cancelledState.countdownSeconds)
+        assertEquals(100L, cancelledState.installedVersion)
+        assertEquals(101L, cancelledState.newVersion)
+    }
+
+    @Test
+    fun `test BootstrapDiff handles large number of updated packages correctly`() {
+        val updatedPackages = (1..50).map { i ->
+            dev.ilamparithi.aournalpp.runtime.PackageChange("pkg-$i", "1.0.$i", "1.1.$i")
+        }
+        val diff = dev.ilamparithi.aournalpp.runtime.BootstrapDiff(
+            added = emptyList(),
+            updated = updatedPackages,
+            removed = emptyList(),
+            requiredSpaceBytes = 100_000_000L,
+            availableSpaceBytes = 500_000_000L,
+            hasSufficientSpace = true
+        )
+
+        assertEquals(50, diff.updated.size)
+        assertEquals(50, diff.totalChanges)
+        assertTrue(diff.hasSufficientSpace)
+    }
+
+    @Test
     fun `test BootstrapState Installing holds progress and message`() {
         val progress = InstallProgress(
             currentFile = "usr/bin/xournalpp",

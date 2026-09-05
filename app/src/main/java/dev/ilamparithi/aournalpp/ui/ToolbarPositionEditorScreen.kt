@@ -53,6 +53,7 @@ import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.Button
@@ -231,6 +232,7 @@ fun ToolbarPositionEditorScreen(
         val showTitle = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_TITLE, true) }
         val showBack = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_BACK, true) }
         val showClose = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CLOSE, true) }
+        val showWindowSwitcher = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_WINDOW_SWITCHER, true) }
         val showKeyboard = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD, true) }
         val showDragHandle = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_DRAG_HANDLE, true) }
         val showCut = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CUT, true) }
@@ -469,6 +471,28 @@ fun ToolbarPositionEditorScreen(
                                         contentDescription = null,
                                         modifier = Modifier.size(18.dp),
                                         tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        }
+
+                        if (showWindowSwitcher) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f),
+                                modifier = Modifier
+                                    .padding(horizontal = 2.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                            ) {
+                                Box(
+                                    modifier = Modifier.size(32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Layers,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer
                                     )
                                 }
                             }

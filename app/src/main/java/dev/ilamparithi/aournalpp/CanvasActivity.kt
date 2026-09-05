@@ -7,6 +7,9 @@ import android.view.KeyEvent
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
+import android.os.Handler
+import android.os.Looper
+import android.view.PixelCopy
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.BackHandler
@@ -34,11 +37,19 @@ import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.produceState
+import dev.ilamparithi.aournalpp.ui.window.WindowSwitcherGallery
+import dev.ilamparithi.aournalpp.ui.window.WindowSwitchTransitionOverlay
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ImageBitmap
 import java.text.SimpleDateFormat
@@ -86,6 +97,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Mouse
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.RestartAlt
@@ -489,6 +501,9 @@ class CanvasActivity : ComponentActivity() {
                 var showClose by remember {
                     mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CLOSE, true))
                 }
+                var showWindowSwitcher by remember {
+                    mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_WINDOW_SWITCHER, true))
+                }
                 var showKeyboard by remember {
                     mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD, true))
                 }
@@ -508,6 +523,13 @@ class CanvasActivity : ComponentActivity() {
                     mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_IMAGE, true))
                 }
                 var showImageSourceDialog by remember { mutableStateOf(false) }
+                var showWindowSwitcherGallery by remember { mutableStateOf(false) }
+                val openWindows by sessionManager.openWindows.collectAsState(initial = emptyList())
+                val windowPreviewCache = remember { mutableStateMapOf<String, Bitmap>() }
+                var transitionOutgoingBitmap by remember { mutableStateOf<Bitmap?>(null) }
+                var transitionIncomingBitmap by remember { mutableStateOf<Bitmap?>(null) }
+                var isTransitionForward by remember { mutableStateOf(true) }
+                var isSwitchTransitionActive by remember { mutableStateOf(false) }
                 var stylusHoverExpands by remember {
                     mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_STYLUS_HOVER_EXPANDS, true))
                 }
@@ -531,6 +553,8 @@ class CanvasActivity : ComponentActivity() {
                                 showBack = prefs.getBoolean(key, true)
                             X11Preferences.KEY_TOOLBAR_SHOW_CLOSE ->
                                 showClose = prefs.getBoolean(key, true)
+                            X11Preferences.KEY_TOOLBAR_SHOW_WINDOW_SWITCHER ->
+                                showWindowSwitcher = prefs.getBoolean(key, true)
                             X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD ->
                                 showKeyboard = prefs.getBoolean(key, true)
                             X11Preferences.KEY_TOOLBAR_SHOW_DRAG_HANDLE ->
@@ -573,6 +597,7 @@ class CanvasActivity : ComponentActivity() {
                         showTitle = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_TITLE, true)
                         showBack = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_BACK, true)
                         showClose = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CLOSE, true)
+                        showWindowSwitcher = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_WINDOW_SWITCHER, true)
                         showKeyboard = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD, true)
                         showDragHandle = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_DRAG_HANDLE, true)
                         showCut = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CUT, true)
@@ -588,8 +613,53 @@ class CanvasActivity : ComponentActivity() {
                     }
                 }
 
+                fun captureCurrentWindowPreview(onCaptured: (Bitmap) -> Unit) {
+                    val view = activeLorieView ?: return
+                    if (view.width <= 0 || view.height <= 0) return
+                    try {
+                        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+                        PixelCopy.request(view, bitmap, { result ->
+                            if (result == PixelCopy.SUCCESS) {
+                                onCaptured(bitmap)
+                            }
+                        }, Handler(Looper.getMainLooper()))
+                    } catch (e: Exception) {
+                        Log.w("CanvasActivity", "PixelCopy capture failed", e)
+                    }
+                }
+
+                fun performWindowSwitch(targetWindow: dev.ilamparithi.aournalpp.runtime.ProcessSupervisor.X11WindowInfo, isForward: Boolean) {
+                    val activeWin = openWindows.find { it.isActive }
+                    captureCurrentWindowPreview { currentBmp ->
+                        if (activeWin != null) {
+                            windowPreviewCache[activeWin.id] = currentBmp
+                        }
+                        transitionOutgoingBitmap = currentBmp
+                        transitionIncomingBitmap = windowPreviewCache[targetWindow.id]
+                        isTransitionForward = isForward
+                        isSwitchTransitionActive = true
+
+                        sessionManager.switchToWindow(targetWindow.id)
+                    } ?: run {
+                        sessionManager.switchToWindow(targetWindow.id)
+                    }
+                }
+
+                fun performQuickSwitch() {
+                    val wins = openWindows.ifEmpty { sessionManager.queryOpenWindows() }
+                    if (wins.isEmpty()) return
+                    val currentIdx = wins.indexOfFirst { it.isActive }
+                    val nextIdx = if (currentIdx >= 0) (currentIdx + 1) % wins.size else 0
+                    val target = wins[nextIdx]
+                    performWindowSwitch(target, isForward = true)
+                }
+
                 BackHandler(enabled = true) {
-                    handleSmartBackPress()
+                    if (showWindowSwitcherGallery) {
+                        showWindowSwitcherGallery = false
+                    } else {
+                        handleSmartBackPress()
+                    }
                 }
 
                 val wallpaperBitmap = remember {
@@ -727,6 +797,15 @@ class CanvasActivity : ComponentActivity() {
                             showTitle = showTitle,
                             showBack = showBack,
                             showClose = showClose,
+                            showWindowSwitcher = showWindowSwitcher,
+                            openWindowCount = openWindows.size.coerceAtLeast(1),
+                            onQuickSwitchWindow = { performQuickSwitch() },
+                            onOpenWindowGallery = {
+                                captureCurrentWindowPreview { bmp ->
+                                    openWindows.find { it.isActive }?.let { windowPreviewCache[it.id] = bmp }
+                                }
+                                showWindowSwitcherGallery = true
+                            },
                             showKeyboard = showKeyboard,
                             showDragHandle = showDragHandle,
                             showCut = showCut,
@@ -770,6 +849,46 @@ class CanvasActivity : ComponentActivity() {
                             },
                             isKeyboardOpen = isKeyboardOpenState.value
                         )
+
+                        // Experimental Spring Slide Window Switch Transition Overlay
+                        if (isSwitchTransitionActive) {
+                            WindowSwitchTransitionOverlay(
+                                outgoingBitmap = transitionOutgoingBitmap,
+                                incomingBitmap = transitionIncomingBitmap,
+                                isForward = isTransitionForward,
+                                onTransitionFinished = {
+                                    isSwitchTransitionActive = false
+                                    captureCurrentWindowPreview { bmp ->
+                                        openWindows.find { it.isActive }?.let { windowPreviewCache[it.id] = bmp }
+                                    }
+                                }
+                            )
+                        }
+
+                        // Window Switcher Gallery Overlay (Long-press on Window Switcher)
+                        if (showWindowSwitcherGallery) {
+                            val displayWindows = openWindows.ifEmpty {
+                                sessionManager.queryOpenWindows()
+                            }
+                            WindowSwitcherGallery(
+                                windows = displayWindows,
+                                previewCache = windowPreviewCache,
+                                onSelectWindow = { selectedWin ->
+                                    showWindowSwitcherGallery = false
+                                    val currentIdx = openWindows.indexOfFirst { it.isActive }
+                                    val targetIdx = openWindows.indexOfFirst { it.id == selectedWin.id }
+                                    performWindowSwitch(selectedWin, isForward = targetIdx >= currentIdx)
+                                },
+                                onCloseWindow = { winToClose ->
+                                    lifecycleScope.launch(Dispatchers.IO) {
+                                        sessionManager.closeSpecificWindow(winToClose.id)
+                                    }
+                                },
+                                onDismiss = {
+                                    showWindowSwitcherGallery = false
+                                }
+                            )
+                        }
 
                         // Onscreen Mouse Helper Overlay for Trackpad mode
                         val showMouseHelper = remember {
@@ -1146,10 +1265,29 @@ class CanvasActivity : ComponentActivity() {
                 sessionManager.dismissTopDialogOrModal()
                 Toast.makeText(this@CanvasActivity, "Close the open prompt to exit", Toast.LENGTH_SHORT).show()
             } else {
-                injectCtrlQDirect()
-                delay(350)
-                if (sessionManager.isModalOrDialogOpen()) {
-                    Toast.makeText(this@CanvasActivity, "Save or discard changes to exit", Toast.LENGTH_SHORT).show()
+                val prefs = X11Preferences.getPrefs(this@CanvasActivity)
+                val behavior = prefs.getString(
+                    X11Preferences.KEY_CLOSE_BUTTON_BEHAVIOR,
+                    X11Preferences.CLOSE_BEHAVIOR_FOREGROUND
+                )
+                if (behavior == X11Preferences.CLOSE_BEHAVIOR_ALL_SEQUENTIAL) {
+                    sessionManager.initiateFocusAwareSequentialClose(
+                        onAllClosed = {
+                            navigateBackToHome()
+                        },
+                        onAborted = {
+                            Toast.makeText(this@CanvasActivity, "Exit cancelled", Toast.LENGTH_SHORT).show()
+                        },
+                        onPromptBlocking = {
+                            Toast.makeText(this@CanvasActivity, "Save or discard changes to exit", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                } else {
+                    injectCtrlQDirect()
+                    delay(350)
+                    if (sessionManager.isModalOrDialogOpen()) {
+                        Toast.makeText(this@CanvasActivity, "Save or discard changes to exit", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }
@@ -1570,7 +1708,10 @@ private fun TemporarySaveCard(
     }
 }
 
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@OptIn(
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
+    androidx.compose.foundation.ExperimentalFoundationApi::class
+)
 @Composable
 private fun FloatingToolbarOverlay(
     canvasWidthPx: Float,
@@ -1595,6 +1736,10 @@ private fun FloatingToolbarOverlay(
     showTitle: Boolean,
     showBack: Boolean,
     showClose: Boolean,
+    showWindowSwitcher: Boolean = true,
+    openWindowCount: Int = 1,
+    onQuickSwitchWindow: () -> Unit = {},
+    onOpenWindowGallery: () -> Unit = {},
     showKeyboard: Boolean,
     showDragHandle: Boolean,
     showCut: Boolean,
@@ -1764,6 +1909,59 @@ private fun FloatingToolbarOverlay(
                                             modifier = Modifier.size(18.dp),
                                             tint = MaterialTheme.colorScheme.error
                                         )
+                                    }
+                                }
+                            }
+
+                            if (showWindowSwitcher) {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f),
+                                    modifier = Modifier
+                                        .padding(horizontal = 2.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .combinedClickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                            onClick = {
+                                                interactionSignal.tryEmit(Unit)
+                                                try { haptics.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                                                onQuickSwitchWindow()
+                                            },
+                                            onLongClick = {
+                                                interactionSignal.tryEmit(Unit)
+                                                try { haptics.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                                                onOpenWindowGallery()
+                                            }
+                                        )
+                                ) {
+                                    Box(
+                                        modifier = Modifier.size(32.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        BadgedBox(
+                                            badge = {
+                                                if (openWindowCount > 1) {
+                                                    Badge(
+                                                        containerColor = MaterialTheme.colorScheme.primary,
+                                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                                    ) {
+                                                        Text(
+                                                            text = "$openWindowCount",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.Bold
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Layers,
+                                                contentDescription = "Switch Note Window (Tap to cycle, Long press for gallery)",
+                                                modifier = Modifier.size(18.dp),
+                                                tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                            )
+                                        }
                                     }
                                 }
                             }

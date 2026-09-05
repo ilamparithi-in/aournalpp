@@ -240,6 +240,36 @@ class LinuxEnvironment(private val context: Context) {
     <policy>smart</policy>
     <center>yes</center>
   </placement>
+  <focus>
+    <focusNew>yes</focusNew>
+    <followMouse>no</followMouse>
+    <focusLast>yes</focusLast>
+    <underMouse>no</underMouse>
+  </focus>
+  <resize>
+    <drawContents>yes</drawContents>
+    <popupShow>Never</popupShow>
+  </resize>
+  <keyboard>
+    <keybind key="A-Tab">
+      <action name="NextWindow">
+        <dialog>none</dialog>
+        <finalactions>
+          <action name="Focus"/>
+          <action name="Raise"/>
+        </finalactions>
+      </action>
+    </keybind>
+    <keybind key="A-S-Tab">
+      <action name="PreviousWindow">
+        <dialog>none</dialog>
+        <finalactions>
+          <action name="Focus"/>
+          <action name="Raise"/>
+        </finalactions>
+      </action>
+    </keybind>
+  </keyboard>
   <applications>
     <!-- Main application windows: maximized & borderless -->
     <application class="*" type="normal">

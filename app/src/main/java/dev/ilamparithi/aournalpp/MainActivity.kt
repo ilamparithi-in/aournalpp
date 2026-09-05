@@ -243,6 +243,7 @@ class MainActivity : ComponentActivity() {
                                     newVersion = updateState.newVersion,
                                     countdownSeconds = updateState.countdownSeconds,
                                     diff = updateState.diff,
+                                    onExpandDetails = { viewModel.cancelUpdateCountdown() },
                                     onUpdate = { viewModel.startInstallOrUpgrade() },
                                     onSkip = { viewModel.skipUpdateForCurrentSession() }
                                 )

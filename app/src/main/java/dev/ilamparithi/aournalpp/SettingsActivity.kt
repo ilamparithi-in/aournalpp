@@ -70,6 +70,7 @@ import androidx.compose.material.icons.filled.Gesture
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Mouse
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PictureAsPdf
@@ -1524,6 +1525,12 @@ fun ToolbarSettingsScreen(
     var showClose by remember {
         mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CLOSE, true))
     }
+    var showWindowSwitcher by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_WINDOW_SWITCHER, true))
+    }
+    var closeButtonBehavior by remember {
+        mutableStateOf(x11Prefs.getString(X11Preferences.KEY_CLOSE_BUTTON_BEHAVIOR, X11Preferences.CLOSE_BEHAVIOR_FOREGROUND) ?: X11Preferences.CLOSE_BEHAVIOR_FOREGROUND)
+    }
     var showKeyboard by remember {
         mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD, true))
     }
@@ -1975,6 +1982,84 @@ fun ToolbarSettingsScreen(
                             showClose = it
                             x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CLOSE, it).apply()
                             X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_SHOW_CLOSE)
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    // Close Button Action Behavior
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Close Button Action", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                if (closeButtonBehavior == X11Preferences.CLOSE_BEHAVIOR_ALL_SEQUENTIAL)
+                                    "Sequentially closes all open windows"
+                                else
+                                    "Closes active/foreground window only",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        SingleChoiceSegmentedButtonRow {
+                            SegmentedButton(
+                                selected = closeButtonBehavior == X11Preferences.CLOSE_BEHAVIOR_FOREGROUND,
+                                onClick = {
+                                    closeButtonBehavior = X11Preferences.CLOSE_BEHAVIOR_FOREGROUND
+                                    x11Prefs.edit().putString(X11Preferences.KEY_CLOSE_BUTTON_BEHAVIOR, X11Preferences.CLOSE_BEHAVIOR_FOREGROUND).apply()
+                                    X11Preferences.notifyChanged(context, X11Preferences.KEY_CLOSE_BUTTON_BEHAVIOR)
+                                },
+                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                            ) {
+                                Text("Foreground", style = MaterialTheme.typography.labelSmall)
+                            }
+                            SegmentedButton(
+                                selected = closeButtonBehavior == X11Preferences.CLOSE_BEHAVIOR_ALL_SEQUENTIAL,
+                                onClick = {
+                                    closeButtonBehavior = X11Preferences.CLOSE_BEHAVIOR_ALL_SEQUENTIAL
+                                    x11Prefs.edit().putString(X11Preferences.KEY_CLOSE_BUTTON_BEHAVIOR, X11Preferences.CLOSE_BEHAVIOR_ALL_SEQUENTIAL).apply()
+                                    X11Preferences.notifyChanged(context, X11Preferences.KEY_CLOSE_BUTTON_BEHAVIOR)
+                                },
+                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                            ) {
+                                Text("All", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsSwitchListItem(
+                        headline = "Window Switcher",
+                        supporting = "Displays Alt+Tab window switcher button. Long press to open the Window Gallery.",
+                        checked = showWindowSwitcher,
+                        leadingContent = {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .alpha(if (showWindowSwitcher) 1f else 0.4f)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Layers,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                }
+                            }
+                        },
+                        onCheckedChange = {
+                            showWindowSwitcher = it
+                            x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_SHOW_WINDOW_SWITCHER, it).apply()
+                            X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_SHOW_WINDOW_SWITCHER)
                         }
                     )
 

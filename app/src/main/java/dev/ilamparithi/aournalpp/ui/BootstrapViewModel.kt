@@ -82,6 +82,16 @@ class BootstrapViewModel(application: Application) : AndroidViewModel(applicatio
         performInstallOrUpgrade()
     }
 
+    fun cancelUpdateCountdown() {
+        Log.i(TAG, "User opened package details. Cancelling environment update countdown...")
+        updateCountdownJob?.cancel()
+        updateCountdownJob = null
+        val current = _uiState.value
+        if (current is BootstrapState.UpdatePrompt && current.countdownSeconds > 0) {
+            _uiState.value = current.copy(countdownSeconds = 0)
+        }
+    }
+
     fun skipUpdateForCurrentSession() {
         Log.i(TAG, "User chose to skip environment update for this launch.")
         updateCountdownJob?.cancel()

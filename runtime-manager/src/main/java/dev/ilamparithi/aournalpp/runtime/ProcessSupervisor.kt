@@ -51,6 +51,9 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
     private val _isModalOrDialogOpen = kotlinx.coroutines.flow.MutableStateFlow(false)
     val isModalOrDialogOpen: kotlinx.coroutines.flow.StateFlow<Boolean> = _isModalOrDialogOpen
 
+    private val _openWindows = kotlinx.coroutines.flow.MutableStateFlow<List<X11WindowInfo>>(emptyList())
+    val openWindows: kotlinx.coroutines.flow.StateFlow<List<X11WindowInfo>> = _openWindows
+
     private val xournalProcesses = CopyOnWriteArrayList<Process>()
     private var onXournalExitListener: (() -> Unit)? = null
     private var onSingleProcessExitListener: ((remainingCount: Int) -> Unit)? = null
@@ -163,6 +166,29 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
         return code == 0
     }
 
+    fun closeWindow(windowId: String): Boolean {
+        val watcherFile = env.resolveExecutable("xopp-title-watcher")
+        if (watcherFile.exists() && watcherFile.canExecute()) {
+            val (code, _) = runBinary(listOf(watcherFile.absolutePath, "--close-window", windowId))
+            if (code == 0) return true
+        }
+        val xdotoolBin = env.resolveExecutable("xdotool")
+        if (xdotoolBin.exists() && xdotoolBin.canExecute()) {
+            val (code, _) = runBinary(listOf(xdotoolBin.absolutePath, "windowclose", windowId))
+            return code == 0
+        }
+        return false
+    }
+
+    fun queryOpenWindows(): List<X11WindowInfo> {
+        val current = _openWindows.value
+        if (current.isNotEmpty()) return current
+        val ids = getVisibleXournalWindowIds()
+        return ids.mapIndexed { idx, id ->
+            X11WindowInfo(id = id, title = _documentTitle.value ?: "Note ${idx + 1}", isActive = idx == 0)
+        }
+    }
+
     fun startTitleWatcher() {
         val watcherFile = env.resolveExecutable("xopp-title-watcher")
         if (!watcherFile.exists() || !watcherFile.canExecute()) {
@@ -197,6 +223,26 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
                             } else if (line.startsWith("DIALOGS:")) {
                                 val count = line.removePrefix("DIALOGS:").trim().toIntOrNull() ?: 0
                                 _isModalOrDialogOpen.value = count > 0
+                            } else if (line.startsWith("WINDOWS:")) {
+                                val payload = line.removePrefix("WINDOWS:").trim()
+                                val parts = payload.split("|")
+                                val activeId = parts.firstOrNull() ?: ""
+                                val windowList = mutableListOf<X11WindowInfo>()
+                                for (i in 1 until parts.size) {
+                                    val entry = parts[i]
+                                    val sep = entry.indexOf(':')
+                                    if (sep > 0) {
+                                        val wid = entry.substring(0, sep)
+                                        val rawTitle = entry.substring(sep + 1)
+                                        val clean = sanitizeWindowTitle(rawTitle).ifBlank {
+                                            rawTitle.replace(APP_SUFFIX_REGEX, "").replace(AUTOSAVED_REGEX, "").trim()
+                                        }.ifBlank { "Untitled Note" }
+                                        windowList.add(X11WindowInfo(id = wid, title = clean, isActive = (wid == activeId)))
+                                    }
+                                }
+                                if (windowList.isNotEmpty()) {
+                                    _openWindows.value = windowList
+                                }
                             }
                             line = reader.readLine()
                         }
@@ -241,6 +287,12 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
     fun triggerXournalExit() {
         onXournalExitListener?.invoke()
     }
+
+    data class X11WindowInfo(
+        val id: String,
+        val title: String,
+        val isActive: Boolean
+    )
 
     companion object {
         private val APP_SUFFIX_REGEX = Regex("\\s*-\\s*Xournal\\+\\+.*$", RegexOption.IGNORE_CASE)

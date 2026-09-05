@@ -533,6 +533,7 @@ static void query_managed_xournal_windows(Display *dpy, Window root,
 }
 
 static int last_emitted_dialog_count = -1;
+static char last_emitted_windows_buffer[4096] = "";
 
 static void evaluate_and_emit_status(Display *dpy, Window root) {
     evaluate_and_emit_document_title(dpy, root);
@@ -545,6 +546,44 @@ static void evaluate_and_emit_status(Display *dpy, Window root) {
     if (dialog_count != last_emitted_dialog_count) {
         last_emitted_dialog_count = dialog_count;
         printf("DIALOGS:%d\n", dialog_count);
+        fflush(stdout);
+    }
+
+    // Determine currently active window
+    Window active_win = None;
+    if (net_active != None) {
+        Atom actual_type;
+        int actual_format;
+        unsigned long nitems = 0, bytes_after = 0;
+        unsigned char *prop = NULL;
+        if (XGetWindowProperty(dpy, root, net_active, 0, 1, False, XA_WINDOW,
+                               &actual_type, &actual_format, &nitems, &bytes_after, &prop) == Success && prop) {
+            if (actual_type == XA_WINDOW && actual_format == 32 && nitems > 0) {
+                active_win = *((Window *)prop);
+            }
+            XFree(prop);
+        }
+    }
+
+    char windows_buf[4096];
+    int offset = snprintf(windows_buf, sizeof(windows_buf), "WINDOWS:%lu|", (unsigned long)active_win);
+    for (int i = 0; i < main_count; i++) {
+        char *title = get_window_title(dpy, main_wins[i]);
+        const char *clean_title = title ? title : "Untitled";
+        int written = snprintf(windows_buf + offset, sizeof(windows_buf) - offset,
+                               "%lu:%s%s", (unsigned long)main_wins[i], clean_title,
+                               (i < main_count - 1) ? "|" : "");
+        if (title) free(title);
+        if (written > 0 && offset + written < (int)sizeof(windows_buf)) {
+            offset += written;
+        } else {
+            break;
+        }
+    }
+
+    if (strcmp(windows_buf, last_emitted_windows_buffer) != 0) {
+        snprintf(last_emitted_windows_buffer, sizeof(last_emitted_windows_buffer), "%s", windows_buf);
+        printf("%s\n", windows_buf);
         fflush(stdout);
     }
 }
@@ -572,7 +611,26 @@ int main(int argc, char **argv) {
     Window root = DefaultRootWindow(dpy);
 
     if (argc > 1) {
-        if (strcmp(argv[1], "--list-dialogs") == 0 || strcmp(argv[1], "--check-dialogs") == 0) {
+        if (strcmp(argv[1], "--close-window") == 0 && argc > 2) {
+            Window target = (Window)strtoul(argv[2], NULL, 0);
+            if (target != None) {
+                Atom wm_protocols = XInternAtom(dpy, "WM_PROTOCOLS", False);
+                Atom wm_delete_window = XInternAtom(dpy, "WM_DELETE_WINDOW", False);
+                XEvent ev;
+                memset(&ev, 0, sizeof(ev));
+                ev.xclient.type = ClientMessage;
+                ev.xclient.window = target;
+                ev.xclient.message_type = wm_protocols;
+                ev.xclient.format = 32;
+                ev.xclient.data.l[0] = wm_delete_window;
+                ev.xclient.data.l[1] = CurrentTime;
+                XSendEvent(dpy, target, False, NoEventMask, &ev);
+                XFlush(dpy);
+                printf("OK\n");
+            }
+            XCloseDisplay(dpy);
+            return 0;
+        } else if (strcmp(argv[1], "--list-dialogs") == 0 || strcmp(argv[1], "--check-dialogs") == 0) {
             Window main_wins[64];
             Window dialog_wins[64];
             int main_count = 0, dialog_count = 0;
