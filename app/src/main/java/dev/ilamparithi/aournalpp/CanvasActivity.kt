@@ -307,6 +307,7 @@ class CanvasActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         instance = this
+        bindMainProcessBridge()
         enableEdgeToEdge()
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -938,17 +939,20 @@ class CanvasActivity : ComponentActivity() {
                         val canvasHeightPx = constraints.maxHeight.toFloat()
 
                         // Automatically re-adapt active snap layout on orientation/viewport dimension changes
-                        LaunchedEffect(canvasWidthPx, canvasHeightPx, activeSnapMode, isSnapMirrored) {
+                        LaunchedEffect(canvasWidthPx, canvasHeightPx, activeSnapMode, isSnapMirrored, showSnapAssistHost) {
                             if (activeSnapMode != SnapLayoutMode.SINGLE && activeSnapMode != SnapLayoutMode.UNLOCKED) {
                                 val vpW = canvasWidthPx.toInt()
                                 val vpH = canvasHeightPx.toInt()
                                 if (vpW > 0 && vpH > 0) {
                                     snapGeometries = snapLayoutManager.calculateGeometries(vpW, vpH)
                                     snapDividers = snapLayoutManager.calculateDividerGeometries(vpW, vpH)
-                                    val assignments = snapLayoutManager.buildSnapAssignments(vpW, vpH, openWindows)
-                                    snapSlotAssignments = snapLayoutManager.slotAssignments.toMap()
-                                    if (assignments.isNotEmpty() && this@CanvasActivity::supervisor.isInitialized) {
-                                        this@CanvasActivity.supervisor.snapWindowsBatch(assignments)
+                                    // Never pre-assign windows or snap batch while user is configuring slots in SnapAssistHost!
+                                    if (!showSnapAssistHost && snapLayoutManager.slotAssignments.isNotEmpty()) {
+                                        val assignments = snapLayoutManager.buildSnapAssignments(vpW, vpH, openWindows)
+                                        snapSlotAssignments = snapLayoutManager.slotAssignments.toMap()
+                                        if (assignments.isNotEmpty() && this@CanvasActivity::supervisor.isInitialized) {
+                                            this@CanvasActivity.supervisor.snapWindowsBatch(assignments)
+                                        }
                                     }
                                 }
                             }
@@ -1165,18 +1169,17 @@ class CanvasActivity : ComponentActivity() {
                                     assignedSlotMap = snapSlotAssignments,
                                     activeConfiguringSlot = activeConfiguringSlot,
                                     onSelectWindowForSlot = { slotIdx, selectedWin ->
-                                        // Remove selected window from any other slot to avoid duplicates
-                                        snapLayoutManager.slotAssignments.entries.removeAll { it.value == selectedWin.id && it.key != slotIdx }
-                                        snapLayoutManager.assignWindowToSlot(slotIdx, selectedWin.id)
+                                        val totalSlots = snapGeometries.size
+                                        val allSlotsAssigned = snapLayoutManager.assignSlotAndAutoFillNthIfExact(
+                                            slotIndex = slotIdx,
+                                            windowId = selectedWin.id,
+                                            totalSlots = totalSlots,
+                                            allOpenWindows = openWindows
+                                        )
                                         snapSlotAssignments = snapLayoutManager.slotAssignments.toMap()
 
                                         val vpW = activeLorieView?.width?.takeIf { it > 0 } ?: canvasWidthPx.toInt()
                                         val vpH = activeLorieView?.height?.takeIf { it > 0 } ?: canvasHeightPx.toInt()
-
-                                        // Complete and snap ONLY when all slots in this layout have been assigned
-                                        val allSlotsAssigned = snapGeometries.isNotEmpty() && snapGeometries.all { geo ->
-                                            snapLayoutManager.slotAssignments[geo.slotIndex]?.isNotBlank() == true
-                                        }
 
                                         if (allSlotsAssigned) {
                                             val assignments = snapLayoutManager.buildSnapAssignments(vpW, vpH, openWindows)
@@ -1196,16 +1199,14 @@ class CanvasActivity : ComponentActivity() {
                                         }
                                     },
                                     onSlotClicked = { slotIdx ->
-                                        // Tapping an assigned slot clears its assignment so user can choose another note
-                                        if (snapLayoutManager.slotAssignments.containsKey(slotIdx)) {
-                                            snapLayoutManager.slotAssignments.remove(slotIdx)
-                                            snapSlotAssignments = snapLayoutManager.slotAssignments.toMap()
-                                        }
                                         activeConfiguringSlot = slotIdx
                                     },
                                     onDismiss = {
                                         showSnapAssistHost = false
                                         activeConfiguringSlot = null
+                                        snapLayoutManager.clearAssignments()
+                                        snapSlotAssignments = emptyMap()
+                                        applySnapLayout(SnapLayoutMode.SINGLE, configureSlotsIfMultiWindow = false)
                                     }
                                 )
                             }
@@ -1636,7 +1637,7 @@ class CanvasActivity : ComponentActivity() {
 
     private fun navigateBackToHome() {
         val homeIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
         }
         startActivity(homeIntent)
     }
@@ -2026,6 +2027,13 @@ class CanvasActivity : ComponentActivity() {
             return
         }
 
+        val openPrefs = intent.getBooleanExtra(EXTRA_OPEN_PREFERENCES, false) ||
+                intent.getBooleanExtra(EXTRA_OPEN_PREFS_ALIAS, false)
+        if (openPrefs) {
+            injectKeyboardShortcut(KeyEvent.KEYCODE_COMMA, "ctrl+comma")
+            return
+        }
+
         val targetPath = intent.getStringExtra(EXTRA_NOTE_PATH)
         if (!targetPath.isNullOrBlank()) {
             val prefs = getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
@@ -2035,8 +2043,43 @@ class CanvasActivity : ComponentActivity() {
         }
     }
 
+    private var bridgeServiceConnection: android.content.ServiceConnection? = null
+
+    private fun bindMainProcessBridge() {
+        if (bridgeServiceConnection != null) return
+        val connection = object : android.content.ServiceConnection {
+            override fun onServiceConnected(name: android.content.ComponentName?, service: android.os.IBinder?) {
+                Log.d("CanvasActivity", "Connected to MainProcessBridgeService (main process protected)")
+            }
+
+            override fun onServiceDisconnected(name: android.content.ComponentName?) {
+                Log.d("CanvasActivity", "Disconnected from MainProcessBridgeService")
+            }
+        }
+        val intent = Intent(this, dev.ilamparithi.aournalpp.runtime.MainProcessBridgeService::class.java)
+        try {
+            if (bindService(intent, connection, Context.BIND_AUTO_CREATE or Context.BIND_IMPORTANT)) {
+                bridgeServiceConnection = connection
+            }
+        } catch (e: Exception) {
+            Log.w("CanvasActivity", "Failed to bind to MainProcessBridgeService", e)
+        }
+    }
+
+    private fun unbindMainProcessBridge() {
+        bridgeServiceConnection?.let {
+            try {
+                unbindService(it)
+            } catch (e: Exception) {
+                Log.w("CanvasActivity", "Failed to unbind MainProcessBridgeService", e)
+            }
+            bridgeServiceConnection = null
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        unbindMainProcessBridge()
         if (instance == this) {
             instance = null
         }

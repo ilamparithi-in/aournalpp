@@ -29,6 +29,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
+            android:resizeableActivity="true"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|fontScale">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -70,7 +71,9 @@
             android:name=".CanvasActivity"
             android:exported="true"
             android:process=":canvas"
+            android:taskAffinity="dev.ilamparithi.aournalpp.canvas"
             android:launchMode="singleTask"
+            android:resizeableActivity="true"
             android:theme="@style/Theme.Aournal"
             android:screenOrientation="unspecified"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|fontScale"
@@ -127,5 +130,9 @@
                 android:name="autoStoreLocales"
                 android:value="true" />
         </service>
+
+        <service
+            android:name=".runtime.MainProcessBridgeService"
+            android:exported="false" />
     </application>
 </manifest>

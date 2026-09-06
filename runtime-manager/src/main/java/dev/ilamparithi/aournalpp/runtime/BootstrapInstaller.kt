@@ -7,6 +7,7 @@ import androidx.core.content.pm.PackageInfoCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -116,7 +117,10 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
         const val VERSION_FLAG = "bootstrap_installed.ver"
         const val SAFETY_BUFFER_BYTES = 50L * 1024L * 1024L // 50MB buffer for runtime operations
         private val installMutex = Mutex()
+        private const val LOCK_FILE_NAME = ".bootstrap_extract.lock"
     }
+
+    private val lockFile get() = File(context.filesDir, LOCK_FILE_NAME)
 
     private fun purgeStaleDirectoriesAsync() {
         try {
@@ -152,7 +156,7 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
         }
     }
 
-    fun isExtractionInProgress(): Boolean = installMutex.isLocked
+    fun isExtractionInProgress(): Boolean = installMutex.isLocked || CrossProcessLock.isLocked(lockFile)
 
     fun getCurrentAppVersionCode(): Long {
         return try {
@@ -340,18 +344,21 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
     }
 
     suspend fun installOrUpgrade(onProgress: (InstallProgress) -> Unit): Result<Unit> = withContext(Dispatchers.IO) {
-        if (!installMutex.tryLock()) {
-            Log.w(TAG, "installOrUpgrade is already running in background. Waiting for active extraction to complete...")
-            installMutex.withLock {
-                return@withContext if (hasValidInstallation()) {
-                    Log.i(TAG, "Active extraction completed successfully.")
-                    Result.success(Unit)
-                } else {
-                    Result.failure(IllegalStateException("Active extraction failed or was incomplete"))
-                }
+        val crossLock = CrossProcessLock.tryAcquire(lockFile)
+        if (crossLock == null) {
+            Log.w(TAG, "installOrUpgrade is already being held by another window or process. Waiting for active extraction to complete...")
+            while (CrossProcessLock.isLocked(lockFile) || installMutex.isLocked) {
+                delay(200)
+            }
+            return@withContext if (hasValidInstallation()) {
+                Log.i(TAG, "Active extraction in another window/process completed successfully.")
+                Result.success(Unit)
+            } else {
+                Result.failure(IllegalStateException("Active extraction in another window/process failed or was incomplete"))
             }
         }
         try {
+            installMutex.lock()
             // 1. Storage Preflight Check: verify enough space exists before deleting or extracting
             val incomingManifest = getIncomingManifest()
             if (incomingManifest != null) {
@@ -550,7 +557,8 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
             Log.e(TAG, "Bootstrap installation/upgrade failed", e)
             Result.failure(e)
         } finally {
-            installMutex.unlock()
+            try { installMutex.unlock() } catch (_: Exception) {}
+            crossLock.release()
         }
     }
 

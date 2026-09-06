@@ -439,7 +439,10 @@ fun HomeScreen(
 
     fun startNewNote() {
         val intent = Intent(context, CanvasActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (context is android.app.Activity && context.isInMultiWindowMode) {
+                addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
+            }
         }
         val options = ActivityOptionsCompat.makeClipRevealAnimation(
             localView,
@@ -544,7 +547,10 @@ fun HomeScreen(
                                     sessionInfo = session,
                                     onClick = {
                                         val intent = Intent(context, CanvasActivity::class.java).apply {
-                                            addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            if (context is android.app.Activity && context.isInMultiWindowMode) {
+                                                addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
+                                            }
                                         }
                                         context.startActivity(intent)
                                     }

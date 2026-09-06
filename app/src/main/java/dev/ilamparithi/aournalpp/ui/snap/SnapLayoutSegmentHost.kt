@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Icon
@@ -27,7 +28,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +62,18 @@ fun SnapLayoutSegmentHost(
     if (geometries.isEmpty() || openWindows.isEmpty()) return
     val density = LocalDensity.current
 
+    var editingSlotIndex by remember { mutableStateOf<Int?>(null) }
+
+    // All windows currently assigned to any slot
+    val allAssignedWindowIds = remember(assignedSlotMap) {
+        assignedSlotMap.values.filter { it.isNotBlank() }.toSet()
+    }
+
+    // Shared gallery of unassigned windows: open windows minus all currently selected windows
+    val galleryWindows = remember(openWindows, allAssignedWindowIds) {
+        openWindows.filter { it.id !in allAssignedWindowIds }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -79,18 +95,10 @@ fun SnapLayoutSegmentHost(
         for (geo in geometries) {
             val assignedWinId = assignedSlotMap[geo.slotIndex]
             val assignedWin = openWindows.find { it.id == assignedWinId }
+            val isEditingThisSlot = editingSlotIndex == geo.slotIndex
 
             val slotWidthDp = with(density) { geo.width.toDp() }
             val slotHeightDp = with(density) { geo.height.toDp() }
-
-            // Exclude windows already selected in any OTHER slot
-            val availableWindows = remember(openWindows, assignedSlotMap, geo.slotIndex) {
-                val assignedToOtherSlots = assignedSlotMap
-                    .filter { it.key != geo.slotIndex && it.value.isNotBlank() }
-                    .values
-                    .toSet()
-                openWindows.filter { it.id !in assignedToOtherSlots }
-            }
 
             Box(
                 modifier = Modifier
@@ -100,8 +108,8 @@ fun SnapLayoutSegmentHost(
                     .clip(RoundedCornerShape(16.dp))
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
                     .border(
-                        width = if (assignedWin != null) 2.dp else 1.dp,
-                        color = if (assignedWin != null) MaterialTheme.colorScheme.primary
+                        width = if (assignedWin != null && !isEditingThisSlot) 2.dp else 1.dp,
+                        color = if (assignedWin != null && !isEditingThisSlot) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                         shape = RoundedCornerShape(16.dp)
                     )
@@ -109,7 +117,8 @@ fun SnapLayoutSegmentHost(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
                     ) {
-                        if (assignedWin != null) {
+                        if (assignedWin != null && !isEditingThisSlot) {
+                            editingSlotIndex = geo.slotIndex
                             onSlotClicked(geo.slotIndex)
                         }
                     },
@@ -124,7 +133,7 @@ fun SnapLayoutSegmentHost(
                     strength = 0.65f
                 )
 
-                if (assignedWin != null) {
+                if (assignedWin != null && !isEditingThisSlot) {
                     // Display assigned note card with preview thumbnail, slot badge, and tap-to-change action
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -217,7 +226,10 @@ fun SnapLayoutSegmentHost(
                         Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                            modifier = Modifier.clickable { onSlotClicked(geo.slotIndex) }
+                            modifier = Modifier.clickable {
+                                editingSlotIndex = geo.slotIndex
+                                onSlotClicked(geo.slotIndex)
+                            }
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -240,30 +252,70 @@ fun SnapLayoutSegmentHost(
                         }
                     }
                 } else {
-                    // Show gallery in all unassigned slots! Slot n (Waiting) is eliminated.
-                    if (availableWindows.isNotEmpty()) {
-                        WindowGalleryPicker(
-                            windows = availableWindows,
-                            previewCache = previewCache,
-                            isCompact = true,
-                            headerTitle = "Select Note for Slot ${geo.slotIndex + 1}",
-                            onSelectWindow = { win ->
-                                onSelectWindowForSlot(geo.slotIndex, win)
-                            },
-                            onCloseWindow = null
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "No open notes available for Slot ${geo.slotIndex + 1}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                    // Show unassigned gallery (or re-selecting gallery if editing this slot)
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        if (isEditingThisSlot && assignedWin != null) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+                                modifier = Modifier
+                                    .padding(top = 8.dp, bottom = 4.dp)
+                                    .clickable { editingSlotIndex = null }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Cancel",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Text(
+                                        text = "Keep: ${assignedWin.title}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+
+                        if (galleryWindows.isNotEmpty()) {
+                            WindowGalleryPicker(
+                                windows = galleryWindows,
+                                previewCache = previewCache,
+                                isCompact = true,
+                                isVerticalGrid = false,
+                                headerTitle = if (isEditingThisSlot) "Change Note for Slot ${geo.slotIndex + 1}"
+                                else "Select Note for Slot ${geo.slotIndex + 1}",
+                                onSelectWindow = { win ->
+                                    editingSlotIndex = null
+                                    onSelectWindowForSlot(geo.slotIndex, win)
+                                },
+                                onCloseWindow = null
                             )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (isEditingThisSlot) "No other open notes available"
+                                    else "No open notes available for Slot ${geo.slotIndex + 1}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }

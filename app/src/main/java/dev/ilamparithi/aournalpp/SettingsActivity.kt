@@ -1249,6 +1249,7 @@ fun MainSettingsScreen(
                         onClick = {
                             val intent = Intent(context, CanvasActivity::class.java).apply {
                                 putExtra(CanvasActivity.EXTRA_OPEN_PREFERENCES, true)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             }
                             context.startActivity(intent)
                         },

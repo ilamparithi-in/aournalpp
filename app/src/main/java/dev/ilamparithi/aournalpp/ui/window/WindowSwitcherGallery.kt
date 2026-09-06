@@ -27,6 +27,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -134,14 +137,15 @@ fun WindowSwitcherGallery(
                     scaleY = 0.88f + 0.12f * p
                     alpha = p.coerceIn(0f, 1f)
                 }
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 16.dp),
+                .fillMaxSize()
+                .padding(horizontal = 24.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             WindowGalleryPicker(
                 windows = windows,
                 previewCache = previewCache,
                 isCompact = false,
+                isVerticalGrid = true,
                 headerTitle = "Open Notes",
                 onSelectWindow = onSelectWindow,
                 onCloseWindow = onCloseWindow
@@ -159,6 +163,7 @@ fun WindowGalleryPicker(
     previewCache: Map<String, Bitmap>,
     modifier: Modifier = Modifier,
     isCompact: Boolean = false,
+    isVerticalGrid: Boolean = false,
     headerTitle: String? = "Select Note",
     onSelectWindow: (ProcessSupervisor.X11WindowInfo) -> Unit,
     onCloseWindow: ((ProcessSupervisor.X11WindowInfo) -> Unit)? = null
@@ -238,23 +243,53 @@ fun WindowGalleryPicker(
                 }
             }
 
-            // Scrollable row of window preview cards
-            LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = if (compactMode) 8.dp else 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(if (compactMode) 10.dp else 16.dp, Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                items(windows, key = { it.id }) { win ->
-                    val previewBitmap = previewCache[win.id]
-                    WindowPreviewCard(
-                        windowInfo = win,
-                        preview = previewBitmap,
-                        cardWidth = cardWidth,
-                        previewHeight = previewHeight,
-                        onSelect = { onSelectWindow(win) },
-                        onClose = onCloseWindow?.let { closeFn -> { closeFn(win) } }
-                    )
+            if (isVerticalGrid) {
+                // Multi-row grid layout for Alt-Tab switcher: overflows additional windows to the next row and scrolls up-down
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = cardWidth),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    items(windows, key = { it.id }) { win ->
+                        val previewBitmap = previewCache[win.id]
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            WindowPreviewCard(
+                                windowInfo = win,
+                                preview = previewBitmap,
+                                cardWidth = cardWidth,
+                                previewHeight = previewHeight,
+                                onSelect = { onSelectWindow(win) },
+                                onClose = onCloseWindow?.let { closeFn -> { closeFn(win) } }
+                            )
+                        }
+                    }
+                }
+            } else {
+                // Scrollable row of window preview cards for snap layouts
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = if (compactMode) 8.dp else 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(if (compactMode) 10.dp else 16.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    items(windows, key = { it.id }) { win ->
+                        val previewBitmap = previewCache[win.id]
+                        WindowPreviewCard(
+                            windowInfo = win,
+                            preview = previewBitmap,
+                            cardWidth = cardWidth,
+                            previewHeight = previewHeight,
+                            onSelect = { onSelectWindow(win) },
+                            onClose = onCloseWindow?.let { closeFn -> { closeFn(win) } }
+                        )
+                    }
                 }
             }
         }

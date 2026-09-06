@@ -25,6 +25,7 @@ import dev.ilamparithi.aournalpp.backup.queue.FileTransferQueueManager
 import dev.ilamparithi.aournalpp.backup.scanner.BackupScanner
 import dev.ilamparithi.aournalpp.backup.scanner.ScannedLocalFile
 import dev.ilamparithi.aournalpp.backup.security.CredentialsVault
+import dev.ilamparithi.aournalpp.runtime.CrossProcessLock
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.runtime.NotesHomeConfigManager
 import kotlinx.coroutines.Dispatchers
@@ -54,16 +55,49 @@ class BackupEngine(
     companion object {
         private const val TAG = "BackupEngine"
         const val COMPLETE_BACKUP_REMOTE_ROOT = "Aournalpp"
+        private const val SYNC_LOCK_FILE_NAME = ".cloud_sync.lock"
 
         fun getCompleteBackupRemoteRoot(serviceConfig: ServiceConfig): String {
             return serviceConfig.remoteBasePath.trim().trim('/').ifBlank { COMPLETE_BACKUP_REMOTE_ROOT }
         }
     }
 
+    private val syncLockFile get() = File(context.filesDir, SYNC_LOCK_FILE_NAME)
+
+    fun isSyncInProgress(): Boolean = CrossProcessLock.isLocked(syncLockFile)
+
     /**
-     * Executes backup for a specific service configuration.
+     * Executes backup for a specific service configuration with cross-process concurrency locking.
      */
     suspend fun performBackup(
+        serviceConfig: ServiceConfig,
+        concurrency: Int = 2,
+        onProgress: ((current: Int, total: Int, currentFile: String) -> Unit)? = null,
+        clearCompletedQueue: Boolean = true
+    ): BackupResult {
+        val lock = CrossProcessLock.tryAcquire(syncLockFile)
+        if (lock == null) {
+            Log.w(TAG, "Cloud sync is already active in another window or process. Skipping concurrent sync for ${serviceConfig.name}.")
+            return BackupResult(
+                serviceId = serviceConfig.id,
+                serviceName = serviceConfig.name,
+                totalFilesScanned = 0,
+                filesUploaded = 0,
+                filesSkipped = 0,
+                filesFailed = 0,
+                totalBytesTransferred = 0L,
+                durationMs = 0L,
+                errors = listOf("Sync already in progress in another window or process")
+            )
+        }
+        try {
+            return performBackupInternal(serviceConfig, concurrency, onProgress, clearCompletedQueue)
+        } finally {
+            lock.release()
+        }
+    }
+
+    private suspend fun performBackupInternal(
         serviceConfig: ServiceConfig,
         concurrency: Int = 2,
         onProgress: ((current: Int, total: Int, currentFile: String) -> Unit)? = null,
@@ -513,14 +547,23 @@ class BackupEngine(
         concurrency: Int = 2,
         onProgress: ((current: Int, total: Int, currentFile: String) -> Unit)? = null
     ): List<BackupResult> {
-        FileTransferQueueManager.clearCompleted()
-        val services = vault.getAllServices().filter { it.isEnabled }
-        val results = mutableListOf<BackupResult>()
-        for (service in services) {
-            val result = performBackup(service, concurrency, onProgress, clearCompletedQueue = false)
-            results.add(result)
+        val lock = CrossProcessLock.tryAcquire(syncLockFile)
+        if (lock == null) {
+            Log.w(TAG, "Cloud sync is already active in another window or process. Skipping concurrent multi-service sync.")
+            return emptyList()
         }
-        return results
+        try {
+            FileTransferQueueManager.clearCompleted()
+            val services = vault.getAllServices().filter { it.isEnabled }
+            val results = mutableListOf<BackupResult>()
+            for (service in services) {
+                val result = performBackupInternal(service, concurrency, onProgress, clearCompletedQueue = false)
+                results.add(result)
+            }
+            return results
+        } finally {
+            lock.release()
+        }
     }
 
     /**

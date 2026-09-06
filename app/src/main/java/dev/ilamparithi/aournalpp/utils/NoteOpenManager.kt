@@ -82,9 +82,9 @@ object NoteOpenManager {
 
         val intent = Intent(context, CanvasActivity::class.java).apply {
             putExtra(CanvasActivity.EXTRA_NOTE_PATH, targetFile.absolutePath)
-            addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-            if (context !is android.app.Activity) {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (context is android.app.Activity && context.isInMultiWindowMode) {
+                addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
             }
         }
 

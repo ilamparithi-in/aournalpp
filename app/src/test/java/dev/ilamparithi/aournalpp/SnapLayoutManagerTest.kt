@@ -516,4 +516,130 @@ class SnapLayoutManagerTest {
         assertEquals("win1", assignments[0].windowId)
         assertEquals("win2", assignments[1].windowId)
     }
+
+    @Test
+    fun testAutoFillNthSlotWhenWindowsEqualSlotsForSplitTwo() {
+        val windows = listOf(
+            ProcessSupervisor.X11WindowInfo(id = "win1", title = "Note 1", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win2", title = "Note 2", isActive = false)
+        )
+
+        // Select slot 0 -> slot 1 must auto-fill with win2
+        val completed = manager.assignSlotAndAutoFillNthIfExact(
+            slotIndex = 0,
+            windowId = "win1",
+            totalSlots = 2,
+            allOpenWindows = windows
+        )
+
+        assertTrue(completed)
+        assertEquals("win1", manager.slotAssignments[0])
+        assertEquals("win2", manager.slotAssignments[1])
+    }
+
+    @Test
+    fun testAutoFillNthSlotWhenWindowsEqualSlotsForSplitThree() {
+        val windows = listOf(
+            ProcessSupervisor.X11WindowInfo(id = "win1", title = "Note 1", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win2", title = "Note 2", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win3", title = "Note 3", isActive = false)
+        )
+
+        // Select slot 1 with win2
+        val step1 = manager.assignSlotAndAutoFillNthIfExact(
+            slotIndex = 1,
+            windowId = "win2",
+            totalSlots = 3,
+            allOpenWindows = windows
+        )
+        assertFalse(step1)
+        assertEquals("win2", manager.slotAssignments[1])
+        assertEquals(null, manager.slotAssignments[0])
+        assertEquals(null, manager.slotAssignments[2])
+
+        // Select slot 0 with win1 -> 1 slot remains (slot 2) -> auto-fill with win3
+        val step2 = manager.assignSlotAndAutoFillNthIfExact(
+            slotIndex = 0,
+            windowId = "win1",
+            totalSlots = 3,
+            allOpenWindows = windows
+        )
+        assertTrue(step2)
+        assertEquals("win1", manager.slotAssignments[0])
+        assertEquals("win2", manager.slotAssignments[1])
+        assertEquals("win3", manager.slotAssignments[2])
+    }
+
+    @Test
+    fun testAutoFillNthSlotWhenWindowsEqualSlotsForGridFour() {
+        val windows = listOf(
+            ProcessSupervisor.X11WindowInfo(id = "win1", title = "Note 1", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win2", title = "Note 2", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win3", title = "Note 3", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win4", title = "Note 4", isActive = false)
+        )
+
+        assertFalse(manager.assignSlotAndAutoFillNthIfExact(0, "win1", 4, windows))
+        assertFalse(manager.assignSlotAndAutoFillNthIfExact(2, "win3", 4, windows))
+        // 3 slots filled: 0=win1, 2=win3, 3=win4. Slot 1 must auto-fill with win2!
+        val step3 = manager.assignSlotAndAutoFillNthIfExact(3, "win4", 4, windows)
+        assertTrue(step3)
+        assertEquals("win1", manager.slotAssignments[0])
+        assertEquals("win2", manager.slotAssignments[1])
+        assertEquals("win3", manager.slotAssignments[2])
+        assertEquals("win4", manager.slotAssignments[3])
+    }
+
+    @Test
+    fun testNoAutoFillWhenWindowsGreaterThanSlots() {
+        val windows = listOf(
+            ProcessSupervisor.X11WindowInfo(id = "win1", title = "Note 1", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win2", title = "Note 2", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win3", title = "Note 3", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win4", title = "Note 4", isActive = false)
+        )
+
+        // 4 windows for a 3-slot layout
+        assertFalse(manager.assignSlotAndAutoFillNthIfExact(0, "win1", 3, windows))
+        val step2 = manager.assignSlotAndAutoFillNthIfExact(1, "win2", 3, windows)
+        // Even though 2 of 3 slots are filled, W > n, so slot 2 MUST NOT be auto-filled
+        assertFalse(step2)
+        assertEquals(null, manager.slotAssignments[2])
+
+        // The remaining unassigned gallery has openWindows - n + 1 = 4 - 3 + 1 = 2 windows
+        val assignedIds = manager.slotAssignments.values.toSet()
+        val remaining = windows.filter { it.id !in assignedIds }
+        assertEquals(2, remaining.size)
+        assertEquals(listOf("win3", "win4"), remaining.map { it.id })
+
+        // User explicitly selects the 3rd slot
+        val step3 = manager.assignSlotAndAutoFillNthIfExact(2, "win4", 3, windows)
+        assertTrue(step3)
+        assertEquals("win4", manager.slotAssignments[2])
+    }
+
+    @Test
+    fun testReassignSlotReplacesAssignmentAndFreesPrevious() {
+        val windows = listOf(
+            ProcessSupervisor.X11WindowInfo(id = "win1", title = "Note 1", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win2", title = "Note 2", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win3", title = "Note 3", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win4", title = "Note 4", isActive = false)
+        )
+
+        // Assign win1 to slot 0
+        manager.assignSlotAndAutoFillNthIfExact(0, "win1", 3, windows)
+        assertEquals("win1", manager.slotAssignments[0])
+
+        // User changes note on slot 0: select win4
+        manager.assignSlotAndAutoFillNthIfExact(0, "win4", 3, windows)
+        assertEquals("win4", manager.slotAssignments[0])
+
+        // win1 is now unassigned and available again
+        val assignedIds = manager.slotAssignments.values.toSet()
+        val remaining = windows.filter { it.id !in assignedIds }
+        assertEquals(3, remaining.size)
+        assertTrue(remaining.any { it.id == "win1" })
+        assertFalse(remaining.any { it.id == "win4" })
+    }
 }

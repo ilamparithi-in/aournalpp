@@ -126,7 +126,7 @@ class MainActivity : ComponentActivity() {
                     // No-op: Prevent dismissal during checking, update prompt, or extraction
                 }
 
-                var hasBootstrapRevealed by remember { mutableStateOf(false) }
+                var hasBootstrapRevealed by rememberSaveable { mutableStateOf(false) }
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     if (state is BootstrapState.Ready) {

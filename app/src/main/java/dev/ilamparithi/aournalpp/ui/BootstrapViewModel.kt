@@ -47,7 +47,13 @@ class BootstrapViewModel(application: Application) : AndroidViewModel(applicatio
     private val env = LinuxEnvironment(application)
     private val installer = BootstrapInstaller(application, env)
 
-    private val _uiState = MutableStateFlow<BootstrapState>(BootstrapState.Checking)
+    private val _uiState = MutableStateFlow<BootstrapState>(
+        if (env.isOnboardingCompleted() && installer.hasValidInstallation() && !installer.isUpgradeAvailable()) {
+            BootstrapState.Ready
+        } else {
+            BootstrapState.Checking
+        }
+    )
     val uiState: StateFlow<BootstrapState> = _uiState.asStateFlow()
     val state: StateFlow<BootstrapState> get() = uiState
 

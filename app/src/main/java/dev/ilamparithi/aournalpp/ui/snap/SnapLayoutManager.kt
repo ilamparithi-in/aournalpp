@@ -65,6 +65,39 @@ class SnapLayoutManager(private val context: Context? = null) {
         slotAssignments[slotIndex] = windowId
     }
 
+    /**
+     * Assigns [windowId] to [slotIndex].
+     * If total open windows equals [totalSlots], automatically assigns the nth (last remaining)
+     * slot with the single remaining unassigned window when exactly 1 slot remains unassigned.
+     *
+     * Returns true if all slots (0 until [totalSlots]) are now assigned, false otherwise.
+     */
+    fun assignSlotAndAutoFillNthIfExact(
+        slotIndex: Int,
+        windowId: String,
+        totalSlots: Int,
+        allOpenWindows: List<ProcessSupervisor.X11WindowInfo>
+    ): Boolean {
+        // Remove windowId from any other slot to avoid duplicates
+        slotAssignments.entries.removeAll { it.value == windowId && it.key != slotIndex }
+        slotAssignments[slotIndex] = windowId
+
+        // If open windows == total slots, auto-fill the nth slot if exactly 1 slot remains unassigned
+        if (allOpenWindows.size == totalSlots) {
+            val unassignedSlots = (0 until totalSlots).filter { slotAssignments[it].isNullOrBlank() }
+            if (unassignedSlots.size == 1) {
+                val lastSlot = unassignedSlots.first()
+                val assignedIds = slotAssignments.values.toSet()
+                val remainingWin = allOpenWindows.firstOrNull { it.id !in assignedIds }
+                if (remainingWin != null) {
+                    slotAssignments[lastSlot] = remainingWin.id
+                }
+            }
+        }
+
+        return (0 until totalSlots).all { !slotAssignments[it].isNullOrBlank() }
+    }
+
     fun clearAssignments() {
         slotAssignments.clear()
     }
