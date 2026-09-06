@@ -554,7 +554,7 @@ class BackupEngine(
         }
         try {
             FileTransferQueueManager.clearCompleted()
-            val services = vault.getAllServices().filter { it.isEnabled }
+            val services = vault.getActiveConfiguredServices().filter { it.isEnabled }
             val results = mutableListOf<BackupResult>()
             for (service in services) {
                 val result = performBackupInternal(service, concurrency, onProgress, clearCompletedQueue = false)
@@ -646,7 +646,7 @@ class BackupEngine(
      * Checks all enabled services for remote changes on app launch.
      */
     suspend fun checkAllServicesForRemoteChanges(): Map<String, List<dev.ilamparithi.aournalpp.backup.model.RemoteFileMetadata>> = withContext(Dispatchers.IO) {
-        val services = vault.getAllServices().filter { it.isEnabled }
+        val services = vault.getActiveConfiguredServices().filter { it.isEnabled }
         val results = mutableMapOf<String, List<dev.ilamparithi.aournalpp.backup.model.RemoteFileMetadata>>()
         for (service in services) {
             val changes = checkForRemoteChanges(service)
@@ -663,7 +663,7 @@ class BackupEngine(
      * Uses timezone-agnostic UTC UNIX epoch millisecond timestamps and SHA-256 hashes.
      */
     suspend fun detectMultiServiceConflicts(): List<FileConflictGroup> = withContext(Dispatchers.IO) {
-        val services = vault.getAllServices().filter { it.isEnabled }
+        val services = vault.getActiveConfiguredServices().filter { it.isEnabled }
         val exclusionFilter = vault.getExclusionFilter()
         val scanner = BackupScanner(env, exclusionFilter)
 

@@ -294,6 +294,17 @@ object FileTransferQueueManager {
         }
     }
 
+    fun removeForService(serviceId: String) {
+        _items.value.filter { it.serviceId == serviceId }.forEach { item ->
+            cancellationFlags[item.id] = true
+            cancellationFlags.remove(item.id)
+            pauseFlags.remove(item.id)
+            speedTrackers.remove(item.id)
+            lastProgressEmitMs.remove(item.id)
+        }
+        _items.update { list -> list.filterNot { it.serviceId == serviceId } }
+    }
+
     fun clearCompleted(serviceId: String? = null) {
         _items.update { list ->
             list.filter {

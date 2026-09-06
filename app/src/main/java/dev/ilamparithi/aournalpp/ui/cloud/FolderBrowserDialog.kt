@@ -59,7 +59,9 @@ import dev.ilamparithi.aournalpp.R
 import dev.ilamparithi.aournalpp.ui.util.a11yHeading
 import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import dev.ilamparithi.aournalpp.backup.model.ServiceConfig
+import dev.ilamparithi.aournalpp.backup.model.StorageProviderType
 import dev.ilamparithi.aournalpp.backup.provider.StorageProviderFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -322,6 +324,16 @@ fun FolderBrowserDialog(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.outline
                             )
+                            if (mode == FolderBrowserMode.REMOTE && serviceConfig?.providerType == StorageProviderType.GOOGLE_DRIVE) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = stringResource(R.string.hint_google_drive_folder_browser_scope),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                )
+                            }
                         }
                     } else {
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {

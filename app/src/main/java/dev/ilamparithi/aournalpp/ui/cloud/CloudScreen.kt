@@ -101,6 +101,8 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ReportProblem
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
@@ -109,10 +111,18 @@ import dev.ilamparithi.aournalpp.ui.promptWidth
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
@@ -217,6 +227,7 @@ fun CloudScreen(
     var showMappingSetsDialog by remember { mutableStateOf(false) }
 
     var services by remember { mutableStateOf(vault.getAllServices()) }
+    var pendingDeletedServiceIds by remember { mutableStateOf(vault.getPendingDeletedServiceIds()) }
     var exclusionFilter by remember { mutableStateOf(vault.getExclusionFilter()) }
 
     var isAutoBackupOnExit by remember { mutableStateOf(backupPrefs.isAutoBackupOnExitEnabled) }
@@ -242,6 +253,9 @@ fun CloudScreen(
 
     var showRestoreConfirmDialog by remember { mutableStateOf(false) }
     var restoreTargetService by remember { mutableStateOf<ServiceConfig?>(null) }
+
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var servicePendingDeletion by remember { mutableStateOf<ServiceConfig?>(null) }
 
     val isSyncRunningByManager by FileTransferQueueManager.isSyncRunning.collectAsStateWithLifecycle()
     var isLocalSyncRunning by remember { mutableStateOf(false) }
@@ -270,6 +284,7 @@ fun CloudScreen(
 
     fun refreshState() {
         services = vault.getAllServices()
+        pendingDeletedServiceIds = vault.getPendingDeletedServiceIds()
         exclusionFilter = vault.getExclusionFilter()
     }
 
@@ -360,12 +375,8 @@ fun CloudScreen(
                                     showServiceDialog = true
                                 },
                                 onDeleteService = {
-                                    vault.deleteService(detailService.id)
-                                    selectedDetailServiceId = null
-                                    refreshState()
-                                    coroutineScope.launch {
-                                        snackbarHostState.showSnackbar("Removed \"${detailService.name}\"")
-                                    }
+                                    servicePendingDeletion = detailService
+                                    showDeleteConfirmDialog = true
                                 },
                                 onToggleEnabled = { enabled ->
                                     val updated = detailService.copy(isEnabled = enabled)
@@ -426,8 +437,9 @@ fun CloudScreen(
                                 text = stringResource(R.string.cloud_title),
                                 fontWeight = FontWeight.Bold
                             )
-                            val enabledCount = services.count { it.isEnabled }
-                            val lastSyncEpoch = services.map { it.lastSyncedAtEpochMs }.maxOrNull() ?: 0L
+                            val nonPendingServices = services.filter { it.id !in pendingDeletedServiceIds }
+                            val enabledCount = nonPendingServices.count { it.isEnabled }
+                            val lastSyncEpoch = nonPendingServices.map { it.lastSyncedAtEpochMs }.maxOrNull() ?: 0L
                             val neverSyncedText = stringResource(R.string.cloud_never_synced)
                             val lastSyncFormatted = if (lastSyncEpoch > 0) {
                                 FormatUtils.formatDateTimeMedium(lastSyncEpoch)
@@ -438,7 +450,7 @@ fun CloudScreen(
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
                             ) {
                                 Text(
-                                    text = stringResource(R.string.cloud_services_active_summary, enabledCount, services.size, lastSyncFormatted),
+                                    text = stringResource(R.string.cloud_services_active_summary, enabledCount, nonPendingServices.size, lastSyncFormatted),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
@@ -449,7 +461,8 @@ fun CloudScreen(
                         }
                     },
                     actions = {
-                        val enabledCount = services.count { it.isEnabled }
+                        val nonPendingServices = services.filter { it.id !in pendingDeletedServiceIds }
+                        val enabledCount = nonPendingServices.count { it.isEnabled }
 
                         // 1. Sync All Active Cloud Services
                         AppIconButton(
@@ -614,11 +627,19 @@ fun CloudScreen(
             item {
                 ConfiguredServicesCarousel(
                     services = services,
+                    pendingDeletedServiceIds = pendingDeletedServiceIds,
                     onSelectService = { service -> selectedDetailServiceId = service.id },
                     onToggleEnabled = { service, enabled ->
                         val updated = service.copy(isEnabled = enabled)
                         vault.saveService(updated)
                         refreshState()
+                    },
+                    onRestoreService = { service ->
+                        vault.restorePendingDeletedService(service.id)
+                        refreshState()
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar("${context.getString(R.string.action_restore_cloud)}: \"${service.name}\"")
+                        }
                     },
                     onAddService = {
                         editingService = null
@@ -928,6 +949,62 @@ fun CloudScreen(
         )
     }
 
+    if (showDeleteConfirmDialog && servicePendingDeletion != null) {
+        val target = servicePendingDeletion!!
+        AlertDialog(
+            onDismissRequest = {
+                showDeleteConfirmDialog = false
+                servicePendingDeletion = null
+            },
+            properties = AppDialogDefaults.Properties,
+            modifier = Modifier.promptWidth(),
+            icon = { Icon(Icons.Default.DeleteOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text(stringResource(R.string.dialog_delete_cloud_title, target.name), fontWeight = FontWeight.Bold) },
+            text = {
+                Text(stringResource(R.string.dialog_delete_cloud_message, target.name))
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirmDialog = false
+                        val targetService = target
+                        servicePendingDeletion = null
+                        vault.markServicePendingDeletion(targetService.id)
+                        selectedDetailServiceId = null
+                        refreshState()
+                        coroutineScope.launch {
+                            val result = snackbarHostState.showSnackbar(
+                                message = context.getString(R.string.label_cloud_pending_deletion),
+                                actionLabel = context.getString(R.string.action_restore_cloud),
+                                duration = SnackbarDuration.Long
+                            )
+                            if (result == SnackbarResult.ActionPerformed) {
+                                vault.restorePendingDeletedService(targetService.id)
+                                refreshState()
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) {
+                    Text(stringResource(R.string.action_delete_cloud_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirmDialog = false
+                        servicePendingDeletion = null
+                    }
+                ) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+
     if (showConflictDialog && detectedConflicts.isNotEmpty()) {
         MultiServiceConflictDialog(
             conflictGroups = detectedConflicts,
@@ -991,8 +1068,10 @@ fun EmptyServicesCard(onAddService: () -> Unit) {
 @Composable
 fun ConfiguredServicesCarousel(
     services: List<ServiceConfig>,
+    pendingDeletedServiceIds: Set<String> = emptySet(),
     onSelectService: (ServiceConfig) -> Unit,
     onToggleEnabled: (ServiceConfig, Boolean) -> Unit,
+    onRestoreService: (ServiceConfig) -> Unit,
     onAddService: () -> Unit
 ) {
     Column(
@@ -1020,12 +1099,14 @@ fun ConfiguredServicesCarousel(
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.width(8.dp))
+                val nonPendingCount = services.count { it.id !in pendingDeletedServiceIds }
+                val activeCount = services.count { it.isEnabled && it.id !in pendingDeletedServiceIds }
                 Surface(
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.secondaryContainer
                 ) {
                     Text(
-                        text = "${services.count { it.isEnabled }}/${services.size} active",
+                        text = "$activeCount/$nonPendingCount active",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
@@ -1052,10 +1133,17 @@ fun ConfiguredServicesCarousel(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 items(services, key = { it.id }) { service ->
+                    val isPending = service.id in pendingDeletedServiceIds
                     CloudServiceCarouselCard(
                         service = service,
-                        onClick = { onSelectService(service) },
-                        onToggleEnabled = { enabled -> onToggleEnabled(service, enabled) }
+                        isPendingDeletion = isPending,
+                        onClick = {
+                            if (!isPending) {
+                                onSelectService(service)
+                            }
+                        },
+                        onToggleEnabled = { enabled -> onToggleEnabled(service, enabled) },
+                        onRestore = { onRestoreService(service) }
                     )
                 }
 
@@ -1070,152 +1158,277 @@ fun ConfiguredServicesCarousel(
 @Composable
 fun CloudServiceCarouselCard(
     service: ServiceConfig,
+    isPendingDeletion: Boolean = false,
     onClick: () -> Unit,
-    onToggleEnabled: (Boolean) -> Unit
+    onToggleEnabled: (Boolean) -> Unit,
+    onRestore: () -> Unit = {}
 ) {
     val lastSyncFormatted = if (service.lastSyncedAtEpochMs > 0) {
         FormatUtils.formatDateTimeMedium(service.lastSyncedAtEpochMs)
     } else stringResource(R.string.cloud_never_synced)
 
+    val dotColor = MaterialTheme.colorScheme.error.copy(alpha = 0.28f)
+    val dashedBorderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.55f)
+
     Card(
         modifier = Modifier
             .width(260.dp)
             .height(175.dp)
-            .clickable(onClick = onClick),
+            .drawBehind {
+                if (isPendingDeletion) {
+                    val stepPx = 14.dp.toPx()
+                    val dotRadius = 1.25.dp.toPx()
+                    var x = stepPx / 2
+                    while (x < size.width) {
+                        var y = stepPx / 2
+                        while (y < size.height) {
+                            drawCircle(
+                                color = dotColor,
+                                radius = dotRadius,
+                                center = Offset(x, y)
+                            )
+                            y += stepPx
+                        }
+                        x += stepPx
+                    }
+                    drawRoundRect(
+                        color = dashedBorderColor,
+                        style = Stroke(
+                            width = 1.5.dp.toPx(),
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f), 0f)
+                        ),
+                        cornerRadius = CornerRadius(20.dp.toPx(), 20.dp.toPx())
+                    )
+                }
+            }
+            .clickable(enabled = !isPendingDeletion, onClick = onClick),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (service.isEnabled) {
+            containerColor = if (isPendingDeletion) {
+                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.12f)
+            } else if (service.isEnabled) {
                 MaterialTheme.colorScheme.surfaceContainer
             } else {
                 MaterialTheme.colorScheme.surfaceContainerLow
             }
         ),
-        border = if (service.isEnabled) {
+        border = if (isPendingDeletion) {
+            null
+        } else if (service.isEnabled) {
             androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         } else null
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            // Header: Provider icon + Service Name + Switch
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+        if (isPendingDeletion) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
+                // Header: Provider icon + Service Name + Pending deletion badge
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    CloudProviderIcon(
-                        providerType = service.providerType,
-                        size = 34.dp
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        InteractiveMarqueeText(
-                            text = service.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Text(
-                            text = service.providerType.displayName,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                Switch(
-                    checked = service.isEnabled,
-                    onCheckedChange = onToggleEnabled,
-                    modifier = Modifier.scale(0.85f)
-                )
-            }
-
-            // Middle: Host / URL & Badges
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                val endpoint = if (service.serverUrl.isNotBlank()) service.serverUrl else service.host
-                if (endpoint.isNotBlank()) {
-                    Text(
-                        text = endpoint,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = if (service.isCompleteBackupEnabled) {
-                            MaterialTheme.colorScheme.secondaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.surfaceContainerHighest
-                        }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Text(
-                            text = if (service.isCompleteBackupEnabled) "Complete: On" else "Complete: Off",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (service.isCompleteBackupEnabled) {
-                                MaterialTheme.colorScheme.onSecondaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.outline
-                            },
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        CloudProviderIcon(
+                            providerType = service.providerType,
+                            size = 34.dp
                         )
-                    }
-
-                    if (service.customMappings.isNotEmpty()) {
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainerHighest
-                        ) {
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            InteractiveMarqueeText(
+                                text = service.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                                modifier = Modifier.fillMaxWidth()
+                            )
                             Text(
-                                text = pluralStringResource(
-                                    R.plurals.cloud_custom_mappings_count,
-                                    service.customMappings.size,
-                                    service.customMappings.size
-                                ),
+                                text = service.providerType.displayName,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
                             )
                         }
                     }
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    ) {
+                        Text(
+                            text = stringResource(R.string.label_cloud_pending_deletion),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                        )
+                    }
+                }
+
+                // Middle notice
+                Text(
+                    text = stringResource(R.string.desc_cloud_pending_deletion),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                // Footer: Restore Button
+                FilledTonalButton(
+                    onClick = onRestore,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(38.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Restore,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.action_restore_cloud),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
-
-            // Footer: Last Synced + Arrow affordance
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    text = "Synced: $lastSyncFormatted",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
+                // Header: Provider icon + Service Name + Switch
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        CloudProviderIcon(
+                            providerType = service.providerType,
+                            size = 34.dp
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            InteractiveMarqueeText(
+                                text = service.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Text(
+                                text = service.providerType.displayName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
 
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
-                    contentDescription = stringResource(R.string.action_details),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(14.dp)
-                )
+                    Switch(
+                        checked = service.isEnabled,
+                        onCheckedChange = onToggleEnabled,
+                        modifier = Modifier.scale(0.85f)
+                    )
+                }
+
+                // Middle: Host / URL & Badges
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    val endpoint = if (service.serverUrl.isNotBlank()) service.serverUrl else service.host
+                    if (endpoint.isNotBlank()) {
+                        Text(
+                            text = endpoint,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (service.isCompleteBackupEnabled) {
+                                MaterialTheme.colorScheme.secondaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerHighest
+                            }
+                        ) {
+                            Text(
+                                text = if (service.isCompleteBackupEnabled) "Complete: On" else "Complete: Off",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (service.isCompleteBackupEnabled) {
+                                    MaterialTheme.colorScheme.onSecondaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.outline
+                                },
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+
+                        if (service.customMappings.isNotEmpty()) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerHighest
+                            ) {
+                                Text(
+                                    text = pluralStringResource(
+                                        R.plurals.cloud_custom_mappings_count,
+                                        service.customMappings.size,
+                                        service.customMappings.size
+                                    ),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Footer: Last Synced + Arrow affordance
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Synced: $lastSyncFormatted",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                        contentDescription = stringResource(R.string.action_details),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
             }
         }
     }

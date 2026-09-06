@@ -66,17 +66,50 @@ class GoogleDriveProvider(
             if (currentAccessToken.isEmpty()) {
                 error("Google Drive OAuth2 Access Token is missing. Please authorize or configure token.")
             }
+            // Use files.list endpoint with pageSize=1, which is fully supported under drive.file scope
             val request = addAuth(
                 Request.Builder()
-                    .url("$DRIVE_API_BASE/about?fields=user(displayName,emailAddress)")
+                    .url("$DRIVE_API_BASE/files?pageSize=1&fields=files(id)")
                     .get()
             ).build()
 
-            httpClient.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
+            var response = httpClient.newCall(request).execute()
+
+            // If token expired (401), attempt to refresh once and retry
+            if (response.code == 401 && config.refreshToken.isNotBlank()) {
+                response.close()
+                val refreshResult = GoogleOAuthManager.refreshAccessToken(config.refreshToken)
+                if (refreshResult.isSuccess) {
+                    currentAccessToken = refreshResult.getOrNull()?.accessToken ?: ""
+                    val retryRequest = addAuth(
+                        Request.Builder()
+                            .url("$DRIVE_API_BASE/files?pageSize=1&fields=files(id)")
+                            .get()
+                    ).build()
+                    response = httpClient.newCall(retryRequest).execute()
+                }
+            }
+
+            response.use { resp ->
+                if (resp.isSuccessful) {
                     true
                 } else {
-                    error("Google Drive connection test failed: HTTP ${response.code} ${response.message}")
+                    val rawBody = resp.body?.string() ?: ""
+                    Log.e(TAG, "testConnection failed HTTP ${resp.code}: $rawBody")
+                    val detailedMessage = try {
+                        val json = JSONObject(rawBody)
+                        val errObj = json.optJSONObject("error")
+                        val msg = errObj?.optString("message")
+                        val reason = errObj?.optJSONArray("errors")?.optJSONObject(0)?.optString("reason")
+                        if (!reason.isNullOrBlank() && msg != null && !msg.contains(reason)) {
+                            "$msg (reason: $reason)"
+                        } else {
+                            msg ?: rawBody
+                        }
+                    } catch (e: Exception) {
+                        rawBody.ifBlank { resp.message }
+                    }
+                    error("Google Drive test failed (${resp.code}): $detailedMessage")
                 }
             }
         }

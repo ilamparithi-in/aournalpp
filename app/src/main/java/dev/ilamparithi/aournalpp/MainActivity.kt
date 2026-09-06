@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import dev.ilamparithi.aournalpp.backup.security.CredentialsVault
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
@@ -110,6 +111,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Purge any cloud services marked for deletion from previous app sessions
+        CredentialsVault(this).purgePendingDeletedServices(this)
 
         BackupScheduler.updateSchedules(this)
 
@@ -305,7 +309,10 @@ class MainActivity : ComponentActivity() {
         val action = intent.action
 
         // 1. Google OAuth2 Redirect Handler
-        if (uri.scheme == "dev.ilamparithi.aournalpp" && uri.host == "oauth2redirect") {
+        val isOAuthRedirect = (uri.scheme == "dev.ilamparithi.aournalpp" ||
+                uri.scheme?.startsWith("com.googleusercontent.apps.") == true) &&
+                (uri.host == "oauth2redirect" || uri.path?.contains("oauth2redirect") == true)
+        if (isOAuthRedirect) {
             lifecycleScope.launch {
                 try {
                     val result = dev.ilamparithi.aournalpp.backup.security.GoogleOAuthManager.handleRedirectUri(uri)
@@ -313,18 +320,22 @@ class MainActivity : ComponentActivity() {
                         val tokenResponse = result.getOrThrow()
                         val vault = dev.ilamparithi.aournalpp.backup.security.CredentialsVault(this@MainActivity)
                         val existingGdrive = vault.getAllServices().firstOrNull { it.providerType == dev.ilamparithi.aournalpp.backup.model.StorageProviderType.GOOGLE_DRIVE }
-                        val serviceToSave = (existingGdrive ?: dev.ilamparithi.aournalpp.backup.model.ServiceConfig(
-                            id = java.util.UUID.randomUUID().toString(),
-                            name = "Google Drive",
-                            providerType = dev.ilamparithi.aournalpp.backup.model.StorageProviderType.GOOGLE_DRIVE
-                        )).copy(
-                            authToken = tokenResponse.accessToken,
-                            refreshToken = tokenResponse.refreshToken ?: existingGdrive?.refreshToken ?: "",
-                            accountIdentifier = tokenResponse.userEmail ?: existingGdrive?.accountIdentifier ?: "Google Account",
-                            isEnabled = true
-                        )
-                        vault.saveService(serviceToSave)
+                        if (existingGdrive != null) {
+                            val updated = existingGdrive.copy(
+                                authToken = tokenResponse.accessToken,
+                                refreshToken = tokenResponse.refreshToken ?: existingGdrive.refreshToken,
+                                accountIdentifier = tokenResponse.userEmail ?: existingGdrive.accountIdentifier
+                            )
+                            vault.saveService(updated)
+                        }
                         Log.i(TAG, "Successfully authenticated Google Drive for ${tokenResponse.userEmail}")
+                        withContext(Dispatchers.Main) {
+                            android.widget.Toast.makeText(
+                                this@MainActivity,
+                                "Google Drive connected: ${tokenResponse.userEmail ?: "Authorized"}",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
                     } else {
                         Log.e(TAG, "Google OAuth token exchange failed: ${result.exceptionOrNull()?.message}")
                     }

@@ -1310,4 +1310,17 @@
         <item quantity="one">Uploaded %1$d file</item>
         <item quantity="other">Uploaded %1$d files</item>
     </plurals>
+
+    <!-- Informational note for Google Drive in custom mapping dialog -->
+    <string name="note_google_drive_scope_custom_mapping">Google Drive Note: Aournal++ uses the secure \'drive.file\' scope. It can create new remote folders and sync notes uploaded by this app, but cannot access pre-existing files created outside Aournal++.</string>
+    <!-- Informational hint in remote folder browser for Google Drive -->
+    <string name="hint_google_drive_folder_browser_scope">Only folders created by Aournal++ are visible under Google Drive file permissions</string>
+
+    <!-- Cloud service deletion confirmation prompt -->
+    <string name="dialog_delete_cloud_title">Delete Cloud Service?</string>
+    <string name="dialog_delete_cloud_message">Are you sure you want to delete \"%1$s\"? Your already uploaded data and notes on the cloud server will NOT be deleted. Only the connection and local sync configuration will be removed.</string>
+    <string name="action_delete_cloud_confirm">Delete</string>
+    <string name="action_restore_cloud">Restore</string>
+    <string name="label_cloud_pending_deletion">Marked for deletion</string>
+    <string name="desc_cloud_pending_deletion">Will be permanently deleted when the app is restarted</string>
 </resources>

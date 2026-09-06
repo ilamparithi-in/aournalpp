@@ -182,6 +182,7 @@ android {
         checkReleaseBuilds = true
     }
     androidResources {
+        generateLocaleConfig = true
         noCompress += listOf("xz", "tar.xz")
     }
     buildFeatures {

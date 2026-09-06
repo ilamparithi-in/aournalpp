@@ -8,6 +8,8 @@ import android.util.Log
 import androidx.browser.customtabs.CustomTabsIntent
 import dev.ilamparithi.aournalpp.backup.model.ServiceConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
@@ -36,12 +38,13 @@ object GoogleOAuthManager {
 
     // Default public client ID for Aournal++ Google Drive integration
     // Users can also supply their own client ID and client secret if desired.
-    const val DEFAULT_CLIENT_ID = "619728257049-7m1a8u5km5bkg0t1qg4km1j79jflq00l.apps.googleusercontent.com"
+    const val DEFAULT_CLIENT_ID = "489108723699-9qk7433ucbcerqlpnbc7aim02nmmutlc.apps.googleusercontent.com"
     const val REDIRECT_URI = "dev.ilamparithi.aournalpp:/oauth2redirect"
     private const val AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
     private const val TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
     private const val USERINFO_ENDPOINT = "https://www.googleapis.com/oauth2/v3/userinfo"
-    private const val SCOPES = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email"
+    private const val SCOPES =
+        "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email"
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -52,6 +55,13 @@ object GoogleOAuthManager {
     private var pendingCodeVerifier: String? = null
     private var pendingClientId: String? = null
     private var pendingClientSecret: String? = null
+
+    private val _authResponseFlow = MutableStateFlow<OAuthTokenResponse?>(null)
+    val authResponseFlow = _authResponseFlow.asStateFlow()
+
+    fun clearAuthResponse() {
+        _authResponseFlow.value = null
+    }
 
     /**
      * Starts the browser-based OAuth2 authorization code flow with PKCE.
@@ -133,10 +143,10 @@ object GoogleOAuthManager {
 
             val json = JSONObject(body)
             val accessToken = json.getString("access_token")
-            val refreshToken = json.optString("refresh_token", null)
+            val refreshToken = json.optString("refresh_token").ifEmpty { null }
             val expiresIn = json.optLong("expires_in", 3600L)
             val tokenType = json.optString("token_type", "Bearer")
-            val scope = json.optString("scope", null)
+            val scope = json.optString("scope").ifEmpty { null }
 
             // Fetch user info email
             val email = fetchUserEmail(accessToken)
@@ -145,7 +155,7 @@ object GoogleOAuthManager {
             pendingClientId = null
             pendingClientSecret = null
 
-            OAuthTokenResponse(
+            val tokenResponse = OAuthTokenResponse(
                 accessToken = accessToken,
                 refreshToken = refreshToken,
                 expiresInSeconds = expiresIn,
@@ -153,6 +163,8 @@ object GoogleOAuthManager {
                 scope = scope,
                 userEmail = email
             )
+            _authResponseFlow.value = tokenResponse
+            tokenResponse
         }
     }
 
@@ -216,7 +228,7 @@ object GoogleOAuthManager {
             val response = httpClient.newCall(request).execute()
             if (response.isSuccessful) {
                 val json = JSONObject(response.body?.string() ?: "{}")
-                json.optString("email", null)
+                json.optString("email").ifEmpty { null }
             } else null
         } catch (_: Exception) {
             null

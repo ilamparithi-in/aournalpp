@@ -94,6 +94,20 @@ class CustomMappingRepository(
     }
 
     /**
+     * Removes all saved custom folder mappings for a specific cloud service.
+     */
+    fun removeMappingsForService(serviceId: String) {
+        synchronized(lock) {
+            val root = readJsonRoot()
+            val servicesObj = root.optJSONObject("services") ?: return
+            if (servicesObj.has(serviceId)) {
+                servicesObj.remove(serviceId)
+                writeJsonRoot(root)
+            }
+        }
+    }
+
+    /**
      * Retrieves all saved reusable mapping sets (templates).
      */
     fun getAllMappingSets(): List<MappingSet> {

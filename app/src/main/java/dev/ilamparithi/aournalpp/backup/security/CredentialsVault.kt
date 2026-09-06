@@ -10,6 +10,10 @@ import dev.ilamparithi.aournalpp.backup.model.ServiceConfig
 import dev.ilamparithi.aournalpp.backup.model.StorageProviderType
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import dev.ilamparithi.aournalpp.backup.worker.BackupScheduler
 
 /**
  * Hardware-backed encrypted credential vault for storing remote cloud credentials,
@@ -23,6 +27,7 @@ class CredentialsVault(context: Context) {
         private const val KEY_SERVICES = "configured_services_json"
         private const val KEY_ACTIVE_SERVICE_ID = "active_service_id"
         private const val KEY_EXCLUSION_FILTER = "exclusion_filter_json"
+        private const val KEY_PENDING_DELETIONS = "pending_deleted_service_ids"
     }
 
     private val masterKey = MasterKey.Builder(context)
@@ -82,6 +87,103 @@ class CredentialsVault(context: Context) {
         persistServices(current)
         if (getActiveServiceId() == serviceId) {
             setActiveServiceId(current.firstOrNull()?.id)
+        }
+    }
+
+    @Synchronized
+    fun getPendingDeletedServiceIds(): Set<String> {
+        return securePrefs.getStringSet(KEY_PENDING_DELETIONS, emptySet())?.toSet() ?: emptySet()
+    }
+
+    @Synchronized
+    fun markServicePendingDeletion(serviceId: String) {
+        val current = getPendingDeletedServiceIds().toMutableSet()
+        current.add(serviceId)
+        securePrefs.edit().putStringSet(KEY_PENDING_DELETIONS, current).apply()
+    }
+
+    @Synchronized
+    fun restorePendingDeletedService(serviceId: String) {
+        val current = getPendingDeletedServiceIds().toMutableSet()
+        current.remove(serviceId)
+        securePrefs.edit().putStringSet(KEY_PENDING_DELETIONS, current).apply()
+    }
+
+    @Synchronized
+    fun isServicePendingDeletion(serviceId: String): Boolean {
+        return getPendingDeletedServiceIds().contains(serviceId)
+    }
+
+    @Synchronized
+    fun getActiveConfiguredServices(): List<ServiceConfig> {
+        val pending = getPendingDeletedServiceIds()
+        return getAllServices().filterNot { it.id in pending }
+    }
+
+    /**
+     * Permanently purges a cloud service from the device, including:
+     * 1. Removal from CredentialsVault (services JSON and active service ID).
+     * 2. Deletion of all Room database sync_metadata checksum records.
+     * 3. Deletion of all custom folder mappings in CustomMappingRepository.
+     * 4. Cancellation and clearing of file transfers in FileTransferQueueManager.
+     * 5. Updating WorkManager backup schedules.
+     */
+    fun purgeServicePermanently(serviceId: String, context: Context) {
+        // 1. Remove from vault
+        deleteService(serviceId)
+
+        // Also remove from pending deletions set
+        val pending = getPendingDeletedServiceIds().toMutableSet()
+        if (pending.remove(serviceId)) {
+            securePrefs.edit().putStringSet(KEY_PENDING_DELETIONS, pending).apply()
+        }
+
+        // 2. Delete Room database metadata
+        try {
+            val syncDb = dev.ilamparithi.aournalpp.backup.db.SyncDatabase.getInstance(context)
+            CoroutineScope(Dispatchers.IO).launch {
+                syncDb.syncMetadataDao().deleteAllForService(serviceId)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to delete Room sync metadata for $serviceId", e)
+        }
+
+        // 3. Remove custom mappings
+        try {
+            val mappingRepo = CustomMappingRepository(context)
+            mappingRepo.removeMappingsForService(serviceId)
+            val env = dev.ilamparithi.aournalpp.runtime.LinuxEnvironment(context)
+            mappingRepo.syncToNotesHome(env.getNotesDirectory())
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to remove custom mappings for $serviceId", e)
+        }
+
+        // 4. Cancel & clear transfers
+        try {
+            dev.ilamparithi.aournalpp.backup.queue.FileTransferQueueManager.removeForService(serviceId)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to clear transfer queue for $serviceId", e)
+        }
+
+        // 5. Update schedules
+        try {
+            BackupScheduler.updateSchedules(context)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update backup schedules after purging $serviceId", e)
+        }
+    }
+
+    /**
+     * Purges all services marked as pending deletion from previous app sessions.
+     * Called on application startup.
+     */
+    fun purgePendingDeletedServices(context: Context) {
+        val pendingIds = getPendingDeletedServiceIds()
+        if (pendingIds.isNotEmpty()) {
+            Log.i(TAG, "Purging ${pendingIds.size} pending deleted cloud service(s) on startup: $pendingIds")
+            for (id in pendingIds) {
+                purgeServicePermanently(id, context)
+            }
         }
     }
 

@@ -15,9 +15,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -41,6 +43,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -105,6 +109,40 @@ fun ServiceConfigDialog(
     var showQrScannerDialog by remember { mutableStateOf(false) }
 
     val coroutineScope = rememberCoroutineScope()
+
+    val latestOAuthResponse by GoogleOAuthManager.authResponseFlow.collectAsState()
+    LaunchedEffect(latestOAuthResponse) {
+        latestOAuthResponse?.let { response ->
+            if (selectedType == StorageProviderType.GOOGLE_DRIVE) {
+                authToken = response.accessToken
+                if (!response.refreshToken.isNullOrBlank()) {
+                    refreshToken = response.refreshToken
+                }
+                if (!response.userEmail.isNullOrBlank()) {
+                    accountIdentifier = response.userEmail
+                    if (name.isBlank() || name == "Google Drive") {
+                        name = "Google Drive (${response.userEmail})"
+                    }
+                }
+                testResultSuccess = true
+                testResultMessage = "Signed in as ${response.userEmail ?: "Google Account"}"
+            }
+        }
+    }
+
+    LaunchedEffect(selectedType) {
+        if (selectedType == StorageProviderType.GOOGLE_DRIVE && authToken.isBlank() && refreshToken.isBlank() && initialService == null) {
+            val existingGdrive = existingServices.firstOrNull { it.providerType == StorageProviderType.GOOGLE_DRIVE }
+            if (existingGdrive != null && (existingGdrive.authToken.isNotBlank() || existingGdrive.refreshToken.isNotBlank())) {
+                authToken = existingGdrive.authToken
+                refreshToken = existingGdrive.refreshToken
+                accountIdentifier = existingGdrive.accountIdentifier
+                if (name.isBlank()) {
+                    name = existingGdrive.name
+                }
+            }
+        }
+    }
 
     fun buildCurrentConfig(): ServiceConfig {
         val id = initialService?.id ?: UUID.randomUUID().toString()
@@ -321,9 +359,15 @@ fun ServiceConfigDialog(
                     }
 
                     StorageProviderType.GOOGLE_DRIVE -> {
+                        val isGoogleLoggedIn = authToken.isNotBlank() || refreshToken.isNotBlank() || accountIdentifier.isNotBlank()
+
                         Surface(
                             shape = MaterialTheme.shapes.medium,
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                            color = if (isGoogleLoggedIn) {
+                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                            } else {
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                            },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.padding(14.dp)) {
@@ -332,41 +376,80 @@ fun ServiceConfigDialog(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.AccountCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Google OAuth2 Sign-In", fontWeight = FontWeight.Bold)
-                                    }
-                                    FilledTonalButton(
-                                        onClick = { GoogleOAuthManager.startOAuthFlow(context) }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f, fill = false)
                                     ) {
-                                        Text("Sign in with Google")
+                                        Icon(
+                                            imageVector = if (isGoogleLoggedIn) Icons.Default.CheckCircle else Icons.Default.AccountCircle,
+                                            contentDescription = null,
+                                            tint = if (isGoogleLoggedIn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Text(
+                                                text = if (isGoogleLoggedIn) "Google Account Connected" else "Google OAuth2 Sign-In",
+                                                fontWeight = FontWeight.Bold,
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                            if (isGoogleLoggedIn && accountIdentifier.isNotBlank()) {
+                                                Text(
+                                                    text = accountIdentifier,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(8.dp))
+
+                                    if (isGoogleLoggedIn) {
+                                        OutlinedButton(
+                                            onClick = { GoogleOAuthManager.startOAuthFlow(context) }
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Refresh,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Switch Account")
+                                        }
+                                    } else {
+                                        FilledTonalButton(
+                                            onClick = { GoogleOAuthManager.startOAuthFlow(context) }
+                                        ) {
+                                            Text("Sign in with Google")
+                                        }
                                     }
                                 }
 
-                                if (accountIdentifier.isNotBlank() || authToken.isNotBlank()) {
-                                    Spacer(modifier = Modifier.height(8.dp))
+                                if (!isGoogleLoggedIn) {
+                                    Spacer(modifier = Modifier.height(6.dp))
                                     Text(
-                                        text = "Authorized Account: ${accountIdentifier.ifBlank { "Google User" }}",
+                                        text = "Tap above to authorize access to your Google Drive backup files.",
                                         style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.primary
+                                        color = MaterialTheme.colorScheme.outline
                                     )
                                 }
                             }
                         }
 
-                        OutlinedTextField(
-                            value = authToken.ifBlank { passwordOrSecret },
-                            onValueChange = {
-                                authToken = it
-                                passwordOrSecret = it
-                            },
-                            label = { Text("Access Token / Token String") },
-                            placeholder = { Text("ya29.a0...") },
-                            supportingText = { Text("Sign in above or paste an OAuth token") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        // Hide manual token entry when logged in via OAuth
+                        if (!isGoogleLoggedIn) {
+                            OutlinedTextField(
+                                value = authToken.ifBlank { passwordOrSecret },
+                                onValueChange = {
+                                    authToken = it
+                                    passwordOrSecret = it
+                                },
+                                label = { Text("Access Token / Token String") },
+                                placeholder = { Text("ya29.a0...") },
+                                supportingText = { Text("Sign in above or paste an OAuth token") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
 
                     StorageProviderType.SFTP -> {
