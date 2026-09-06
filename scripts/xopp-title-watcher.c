@@ -5,6 +5,8 @@
 #include <ctype.h>
 #include <unistd.h>
 #include <poll.h>
+#include <fcntl.h>
+#include <errno.h>
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
@@ -680,6 +682,7 @@ static void snap_window_geometry(Display *dpy, Window root, Window target, int x
     int real_w = (w > 0) ? w : 1;
     int real_h = (h > 0) ? h : 1;
     XMoveResizeWindow(dpy, target, x, y, real_w, real_h);
+    XRaiseWindow(dpy, target);
 }
 
 static void set_window_decorations(Display *dpy, Window root, Window target, int decorated) {
@@ -742,32 +745,94 @@ static void close_window_graceful(Display *dpy, Window target) {
     XSendEvent(dpy, target, False, NoEventMask, &ev);
 }
 
-static void process_snap_batch_token(Display *dpy, Window root, char *token) {
-    unsigned long wid = 0;
-    int x = 0, y = 0, w = 0, h = 0;
-    if (sscanf(token, "%lu:%d,%d,%d,%d", &wid, &x, &y, &w, &h) == 5 ||
-        sscanf(token, "%lu %d %d %d %d", &wid, &x, &y, &w, &h) == 5) {
-        if (wid != 0) {
-            snap_window_geometry(dpy, root, (Window)wid, x, y, w, h);
-        }
-    }
-}
-
 static void process_snap_batch(Display *dpy, Window root, const char *batch_str) {
     if (!batch_str || !*batch_str) return;
     char *copy = strdup(batch_str);
     if (!copy) return;
+    Window batch_windows[32];
+    int batch_count = 0;
     char *saveptr = NULL;
     char *token = strtok_r(copy, "|;", &saveptr);
     while (token) {
         while (*token == ' ') token++;
         if (*token) {
-            process_snap_batch_token(dpy, root, token);
+            unsigned long wid = 0;
+            int x = 0, y = 0, w = 0, h = 0;
+            if (sscanf(token, "%lu:%d,%d,%d,%d", &wid, &x, &y, &w, &h) == 5 ||
+                sscanf(token, "%lu %d %d %d %d", &wid, &x, &y, &w, &h) == 5) {
+                if (wid != 0) {
+                    snap_window_geometry(dpy, root, (Window)wid, x, y, w, h);
+                    if (batch_count < 32) {
+                        batch_windows[batch_count++] = (Window)wid;
+                    }
+                }
+            }
         }
         token = strtok_r(NULL, "|;", &saveptr);
     }
     free(copy);
-    XFlush(dpy);
+
+    // Raise all batch windows in reverse order so slot 0 ends up on top
+    for (int i = batch_count - 1; i >= 0; i--) {
+        XRaiseWindow(dpy, batch_windows[i]);
+    }
+
+    // Determine currently active window
+    Window current_active = None;
+    if (net_active != None) {
+        Atom actual_type;
+        int actual_format;
+        unsigned long nitems = 0, bytes_after = 0;
+        unsigned char *prop = NULL;
+        if (XGetWindowProperty(dpy, root, net_active, 0, 1, False, XA_WINDOW,
+                               &actual_type, &actual_format, &nitems, &bytes_after, &prop) == Success && prop) {
+            if (actual_type == XA_WINDOW && actual_format == 32 && nitems > 0) {
+                current_active = *((Window *)prop);
+            }
+            XFree(prop);
+        }
+    }
+
+    int active_in_batch = 0;
+    if (current_active != None) {
+        for (int i = 0; i < batch_count; i++) {
+            if (batch_windows[i] == current_active) {
+                active_in_batch = 1;
+                break;
+            }
+        }
+    }
+
+    // Focus and raise the active window, or the primary window (slot 0) if none was active
+    if (active_in_batch && current_active != None) {
+        activate_window(dpy, root, current_active);
+    } else if (batch_count > 0) {
+        activate_window(dpy, root, batch_windows[0]);
+    }
+
+    XSync(dpy, False);
+}
+
+static void handle_ipc_command(Display *dpy, Window root, const char *line);
+
+static char ipc_accum[8192];
+static size_t ipc_accum_len = 0;
+
+static void process_ipc_stream(Display *dpy, Window root) {
+    while (1) {
+        char *nl = (char *)memchr(ipc_accum, '\n', ipc_accum_len);
+        if (!nl) {
+            break;
+        }
+        *nl = '\0';
+        if (nl > ipc_accum && *(nl - 1) == '\r') {
+            *(nl - 1) = '\0';
+        }
+        handle_ipc_command(dpy, root, ipc_accum);
+        size_t line_len = (size_t)((nl - ipc_accum) + 1);
+        memmove(ipc_accum, ipc_accum + line_len, ipc_accum_len - line_len);
+        ipc_accum_len -= line_len;
+    }
 }
 
 static void handle_ipc_command(Display *dpy, Window root, const char *line) {
@@ -924,9 +989,13 @@ int main(int argc, char **argv) {
     XSelectInput(dpy, root, PropertyChangeMask | SubstructureNotifyMask);
     evaluate_and_emit_status(dpy, root);
 
+    int stdin_flags = fcntl(STDIN_FILENO, F_GETFL, 0);
+    if (stdin_flags >= 0) {
+        fcntl(STDIN_FILENO, F_SETFL, stdin_flags | O_NONBLOCK);
+    }
+
     int x11_fd = ConnectionNumber(dpy);
     XEvent ev;
-    char stdin_buf[4096];
 
     while (1) {
         int need_update = 0;
@@ -965,12 +1034,28 @@ int main(int argc, char **argv) {
 
         int ret = poll(pfds, 2, 400); // 400ms periodic refresh & poll
         if (ret > 0) {
-            if (pfds[1].revents & POLLIN) {
-                if (fgets(stdin_buf, sizeof(stdin_buf), stdin)) {
-                    handle_ipc_command(dpy, root, stdin_buf);
+            if (pfds[1].revents & (POLLIN | POLLHUP)) {
+                while (1) {
+                    if (ipc_accum_len >= sizeof(ipc_accum) - 1) {
+                        ipc_accum_len = 0;
+                    }
+                    ssize_t n = read(STDIN_FILENO, ipc_accum + ipc_accum_len, sizeof(ipc_accum) - 1 - ipc_accum_len);
+                    if (n > 0) {
+                        ipc_accum_len += (size_t)n;
+                        ipc_accum[ipc_accum_len] = '\0';
+                        process_ipc_stream(dpy, root);
+                    } else if (n < 0) {
+                        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                            break;
+                        }
+                        break;
+                    } else {
+                        // EOF on stdin
+                        break;
+                    }
                 }
             }
-            if (pfds[1].revents & POLLHUP) {
+            if ((pfds[1].revents & POLLHUP) && ipc_accum_len == 0) {
                 break;
             }
         } else if (ret == 0) {

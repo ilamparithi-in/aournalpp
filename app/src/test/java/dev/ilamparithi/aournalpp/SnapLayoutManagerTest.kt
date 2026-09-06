@@ -642,4 +642,133 @@ class SnapLayoutManagerTest {
         assertTrue(remaining.any { it.id == "win1" })
         assertFalse(remaining.any { it.id == "win4" })
     }
+
+    @Test
+    fun testRapidConsecutiveWindowClosuresFromGridFourToSingle() {
+        manager.setMode(SnapLayoutMode.GRID_FOUR)
+        manager.assignWindowToSlot(0, "win1")
+        manager.assignWindowToSlot(1, "win2")
+        manager.assignWindowToSlot(2, "win3")
+        manager.assignWindowToSlot(3, "win4")
+
+        // 1. Rapid close win4 -> drops to SPLIT_THREE
+        val openAfterWin4 = listOf(
+            ProcessSupervisor.X11WindowInfo(id = "win1", title = "Note 1", isActive = true),
+            ProcessSupervisor.X11WindowInfo(id = "win2", title = "Note 2", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win3", title = "Note 3", isActive = false)
+        )
+        val res1 = manager.handleWindowClosed(openAfterWin4)
+        assertTrue(res1.modeChanged)
+        assertEquals(SnapLayoutMode.SPLIT_THREE, res1.newMode)
+        assertEquals(SnapLayoutMode.SPLIT_THREE, manager.activeMode)
+        assertEquals(mapOf(0 to "win1", 1 to "win2", 2 to "win3"), manager.slotAssignments)
+
+        // 2. Rapid close win3 immediately -> drops to SPLIT_TWO
+        val openAfterWin3 = listOf(
+            ProcessSupervisor.X11WindowInfo(id = "win1", title = "Note 1", isActive = true),
+            ProcessSupervisor.X11WindowInfo(id = "win2", title = "Note 2", isActive = false)
+        )
+        val res2 = manager.handleWindowClosed(openAfterWin3)
+        assertTrue(res2.modeChanged)
+        assertEquals(SnapLayoutMode.SPLIT_TWO, res2.newMode)
+        assertEquals(SnapLayoutMode.SPLIT_TWO, manager.activeMode)
+        assertEquals(mapOf(0 to "win1", 1 to "win2"), manager.slotAssignments)
+
+        // 3. Rapid close win2 immediately -> drops to SINGLE
+        val openAfterWin2 = listOf(
+            ProcessSupervisor.X11WindowInfo(id = "win1", title = "Note 1", isActive = true)
+        )
+        val res3 = manager.handleWindowClosed(openAfterWin2)
+        assertTrue(res3.modeChanged)
+        assertEquals(SnapLayoutMode.SINGLE, res3.newMode)
+        assertEquals(SnapLayoutMode.SINGLE, manager.activeMode)
+        assertEquals("win1", manager.slotAssignments[0])
+    }
+
+    @Test
+    fun testRapidMultiWindowClosureFromGridFourToSplitTwo() {
+        manager.setMode(SnapLayoutMode.GRID_FOUR)
+        manager.assignWindowToSlot(0, "win1")
+        manager.assignWindowToSlot(1, "win2")
+        manager.assignWindowToSlot(2, "win3")
+        manager.assignWindowToSlot(3, "win4")
+
+        // win3 and win4 close simultaneously -> only win1 and win2 remain
+        val remaining = listOf(
+            ProcessSupervisor.X11WindowInfo(id = "win1", title = "Note 1", isActive = true),
+            ProcessSupervisor.X11WindowInfo(id = "win2", title = "Note 2", isActive = false)
+        )
+
+        val res = manager.handleWindowClosed(remaining)
+        assertTrue(res.modeChanged)
+        assertEquals(SnapLayoutMode.SPLIT_TWO, res.newMode)
+        assertEquals(SnapLayoutMode.SPLIT_TWO, manager.activeMode)
+        assertEquals(mapOf(0 to "win1", 1 to "win2"), manager.slotAssignments)
+
+        val assignments = manager.buildSnapAssignments(1000, 1000, remaining)
+        assertEquals(2, assignments.size)
+        assertEquals("win1", assignments[0].windowId)
+        assertEquals("win2", assignments[1].windowId)
+    }
+
+    @Test
+    fun testRapidMultiWindowClosureFromSplitThreeToSingle() {
+        manager.setMode(SnapLayoutMode.SPLIT_THREE)
+        manager.assignWindowToSlot(0, "win1")
+        manager.assignWindowToSlot(1, "win2")
+        manager.assignWindowToSlot(2, "win3")
+
+        // win2 and win3 close simultaneously
+        val remaining = listOf(
+            ProcessSupervisor.X11WindowInfo(id = "win1", title = "Note 1", isActive = true)
+        )
+
+        val res = manager.handleWindowClosed(remaining)
+        assertTrue(res.modeChanged)
+        assertEquals(SnapLayoutMode.SINGLE, res.newMode)
+        assertEquals(SnapLayoutMode.SINGLE, manager.activeMode)
+        assertEquals("win1", manager.slotAssignments[0])
+    }
+
+    @Test
+    fun testSlotAssignmentsPurgesStaleIndicesAndClosedWindows() {
+        manager.setMode(SnapLayoutMode.SPLIT_TWO)
+        // Manually introduce stale slots from a prior layout
+        manager.assignWindowToSlot(0, "win1")
+        manager.assignWindowToSlot(1, "win2")
+        manager.assignWindowToSlot(2, "win3")
+        manager.assignWindowToSlot(3, "win4")
+
+        val openWindows = listOf(
+            ProcessSupervisor.X11WindowInfo(id = "win1", title = "Note 1", isActive = true),
+            ProcessSupervisor.X11WindowInfo(id = "win2", title = "Note 2", isActive = false)
+        )
+
+        val assignments = manager.buildSnapAssignments(1000, 1000, openWindows)
+        assertEquals(2, assignments.size)
+        assertFalse(manager.slotAssignments.containsKey(2))
+        assertFalse(manager.slotAssignments.containsKey(3))
+        assertEquals(mapOf(0 to "win1", 1 to "win2"), manager.slotAssignments)
+    }
+
+    @Test
+    fun testDesynchronizedWindowCountRecovery() {
+        // Active mode is SPLIT_THREE, but only 2 windows exist
+        manager.setMode(SnapLayoutMode.SPLIT_THREE)
+        manager.assignWindowToSlot(0, "win1")
+        manager.assignWindowToSlot(1, "win2")
+        manager.assignWindowToSlot(2, "win3")
+
+        val openWindows = listOf(
+            ProcessSupervisor.X11WindowInfo(id = "win1", title = "Note 1", isActive = true),
+            ProcessSupervisor.X11WindowInfo(id = "win2", title = "Note 2", isActive = false)
+        )
+
+        val res = manager.handleWindowClosed(openWindows)
+        assertTrue(res.modeChanged)
+        assertEquals(SnapLayoutMode.SPLIT_TWO, res.newMode)
+        assertEquals(SnapLayoutMode.SPLIT_TWO, manager.activeMode)
+        assertEquals(mapOf(0 to "win1", 1 to "win2"), manager.slotAssignments)
+    }
 }
+

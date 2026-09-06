@@ -725,8 +725,8 @@ class CanvasActivity : ComponentActivity() {
                 ) {
                     val currentSupervisor = if (this@CanvasActivity::supervisor.isInitialized) this@CanvasActivity.supervisor else return
                     val lorie = activeLorieView
-                    val vpW = lorie?.width?.takeIf { it > 0 } ?: 0
-                    val vpH = lorie?.height?.takeIf { it > 0 } ?: 0
+                    val vpW = lorie?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+                    val vpH = lorie?.height?.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
 
                     activeSnapMode = mode
                     isSnapMirrored = mirrored
@@ -781,6 +781,15 @@ class CanvasActivity : ComponentActivity() {
                                     snapSlotAssignments = snapLayoutManager.slotAssignments.toMap()
                                     if (assignments.isNotEmpty()) {
                                         currentSupervisor.snapWindowsBatch(assignments)
+                                        val activeId = openWindows.find { it.isActive }?.id
+                                        val targetToActivate = if (activeId != null && assignments.any { it.windowId == activeId }) {
+                                            activeId
+                                        } else {
+                                            assignments.firstOrNull()?.windowId
+                                        }
+                                        if (targetToActivate != null) {
+                                            currentSupervisor.activateWindow(targetToActivate)
+                                        }
                                     }
                                 }
                                 showSnapAssistHost = false
@@ -893,7 +902,12 @@ class CanvasActivity : ComponentActivity() {
                         }
                     }
 
-                    if (closedIds.isNotEmpty() && activeSnapMode != SnapLayoutMode.UNLOCKED) {
+                    val needsDegradation = openWindows.isNotEmpty() &&
+                        activeSnapMode != SnapLayoutMode.SINGLE &&
+                        activeSnapMode != SnapLayoutMode.UNLOCKED &&
+                        openWindows.size < activeSnapMode.minWindows
+
+                    if ((closedIds.isNotEmpty() || needsDegradation) && activeSnapMode != SnapLayoutMode.UNLOCKED) {
                         val resolution = snapLayoutManager.handleWindowClosed(
                             currentOpenWindows = openWindows,
                             mruOrder = windowMruList.toList()
@@ -910,12 +924,21 @@ class CanvasActivity : ComponentActivity() {
                             // Window count >= n: replace closed window with immediate background window
                             snapSlotAssignments = snapLayoutManager.slotAssignments.toMap()
                             val lorie = activeLorieView
-                            val vpW = lorie?.width?.takeIf { it > 0 } ?: 0
-                            val vpH = lorie?.height?.takeIf { it > 0 } ?: 0
+                            val vpW = lorie?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+                            val vpH = lorie?.height?.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
                             if (vpW > 0 && vpH > 0 && this@CanvasActivity::supervisor.isInitialized) {
                                 val assignments = snapLayoutManager.buildSnapAssignments(vpW, vpH, openWindows)
                                 if (assignments.isNotEmpty()) {
                                     this@CanvasActivity.supervisor.snapWindowsBatch(assignments)
+                                    val activeId = openWindows.find { it.isActive }?.id
+                                    val targetToActivate = if (activeId != null && assignments.any { it.windowId == activeId }) {
+                                        activeId
+                                    } else {
+                                        assignments.firstOrNull()?.windowId
+                                    }
+                                    if (targetToActivate != null) {
+                                        this@CanvasActivity.supervisor.activateWindow(targetToActivate)
+                                    }
                                 }
                             }
                         } else {
@@ -952,6 +975,15 @@ class CanvasActivity : ComponentActivity() {
                                         snapSlotAssignments = snapLayoutManager.slotAssignments.toMap()
                                         if (assignments.isNotEmpty() && this@CanvasActivity::supervisor.isInitialized) {
                                             this@CanvasActivity.supervisor.snapWindowsBatch(assignments)
+                                            val activeId = openWindows.find { it.isActive }?.id
+                                            val targetToActivate = if (activeId != null && assignments.any { it.windowId == activeId }) {
+                                                activeId
+                                            } else {
+                                                assignments.firstOrNull()?.windowId
+                                            }
+                                            if (targetToActivate != null) {
+                                                this@CanvasActivity.supervisor.activateWindow(targetToActivate)
+                                            }
                                         }
                                     }
                                 }
@@ -1185,6 +1217,15 @@ class CanvasActivity : ComponentActivity() {
                                             val assignments = snapLayoutManager.buildSnapAssignments(vpW, vpH, openWindows)
                                             if (assignments.isNotEmpty() && this@CanvasActivity::supervisor.isInitialized) {
                                                 this@CanvasActivity.supervisor.snapWindowsBatch(assignments)
+                                                val activeId = openWindows.find { it.isActive }?.id
+                                                val targetToActivate = if (activeId != null && assignments.any { it.windowId == activeId }) {
+                                                    activeId
+                                                } else {
+                                                    assignments.firstOrNull()?.windowId
+                                                }
+                                                if (targetToActivate != null) {
+                                                    this@CanvasActivity.supervisor.activateWindow(targetToActivate)
+                                                }
                                             }
                                             showSnapAssistHost = false
                                             activeConfiguringSlot = null

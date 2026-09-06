@@ -284,6 +284,9 @@ class SnapLayoutManager(private val context: Context? = null) {
         val result = mutableListOf<ProcessSupervisor.WindowSnapAssignment>()
 
         val openWindowMap = openWindows.associateBy { it.id }
+        // Clean up any stale slot indices beyond current geometry count or closed windows
+        slotAssignments.keys.filter { it >= geometries.size }.toList().forEach { slotAssignments.remove(it) }
+        slotAssignments.entries.removeAll { it.value !in openWindowMap }
         val remainingWindows = openWindows.toMutableList()
         val assignedWindowIds = mutableSetOf<String>()
 
@@ -432,6 +435,11 @@ class SnapLayoutManager(private val context: Context? = null) {
         for ((slotIdx, winId) in survivingSlots) {
             slotAssignments[slotIdx] = winId
         }
+
+        // Clean up any stale slot assignments outside activeMode's slot bounds or closed windows
+        val maxSlots = activeMode.minWindows
+        slotAssignments.keys.filter { it >= maxSlots }.toList().forEach { slotAssignments.remove(it) }
+        slotAssignments.entries.removeAll { it.value !in currentOpenWindowIds }
 
         return WindowCloseResolution(
             newMode = activeMode,
