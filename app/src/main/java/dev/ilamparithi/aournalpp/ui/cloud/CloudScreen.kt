@@ -30,7 +30,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Deselect
 import androidx.compose.ui.res.pluralStringResource
 import dev.ilamparithi.aournalpp.ui.util.AppIconButton
-import dev.ilamparithi.aournalpp.ui.util.AppFilledTonalIconButton
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -184,6 +183,7 @@ import dev.ilamparithi.aournalpp.backup.security.CredentialsVault
 import dev.ilamparithi.aournalpp.backup.worker.BackupPreferences
 import dev.ilamparithi.aournalpp.backup.worker.BackupScheduler
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
+import dev.ilamparithi.aournalpp.ui.InteractiveMarqueeText
 import dev.ilamparithi.aournalpp.ui.SpeedDialActionItem
 import dev.ilamparithi.aournalpp.utils.FormatUtils
 import kotlinx.coroutines.Dispatchers
@@ -410,26 +410,134 @@ fun CloudScreen(
             topBar = {
                 TopAppBar(
                     title = {
-                        Text(
-                            text = stringResource(R.string.cloud_title),
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.cloud_title),
+                                fontWeight = FontWeight.Bold
+                            )
+                            val enabledCount = services.count { it.isEnabled }
+                            val lastSyncEpoch = services.map { it.lastSyncedAtEpochMs }.maxOrNull() ?: 0L
+                            val neverSyncedText = stringResource(R.string.cloud_never_synced)
+                            val lastSyncFormatted = if (lastSyncEpoch > 0) {
+                                FormatUtils.formatDateTimeMedium(lastSyncEpoch)
+                            } else neverSyncedText
+
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.cloud_services_active_summary, enabledCount, services.size, lastSyncFormatted),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
                     },
                     actions = {
-                        IconButton(onClick = { currentSubpage = CloudSubpage.MAPPING_SETS }) {
+                        val enabledCount = services.count { it.isEnabled }
+
+                        // 1. Sync All Active Cloud Services
+                        AppIconButton(
+                            onClick = {
+                                val netCheck = NetworkUtils.checkSyncNetworkPreconditions(context, wifiOnly = isWifiOnly)
+                                if (!netCheck.canSync) {
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar(
+                                            message = netCheck.errorMessage ?: "Network not available",
+                                            duration = androidx.compose.material3.SnackbarDuration.Short
+                                        )
+                                    }
+                                } else {
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar("Synchronization queued in background...")
+                                    }
+                                    BackupScheduler.triggerImmediateSync(context, wifiOnly = isWifiOnly)
+                                }
+                            },
+                            tooltip = stringResource(R.string.cloud_sync_all_button),
+                            enabled = !isGlobalSyncRunning && enabledCount > 0
+                        ) {
+                            if (isGlobalSyncRunning) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = stringResource(R.string.cloud_sync_all_button)
+                                )
+                            }
+                        }
+
+                        // 2. Check Conflicts
+                        AppIconButton(
+                            onClick = {
+                                isCheckingConflicts = true
+                                coroutineScope.launch {
+                                    try {
+                                        val conflicts = engine.detectMultiServiceConflicts()
+                                        detectedConflicts = conflicts
+                                        if (conflicts.isNotEmpty()) {
+                                            showConflictDialog = true
+                                        } else {
+                                            snackbarHostState.showSnackbar("All cloud files and local notes are up to date with zero conflicts!")
+                                        }
+                                    } catch (e: Exception) {
+                                        snackbarHostState.showSnackbar("Conflict check failed: ${e.message}")
+                                    } finally {
+                                        isCheckingConflicts = false
+                                    }
+                                }
+                            },
+                            tooltip = stringResource(R.string.cd_cloud_check_conflicts),
+                            enabled = !isCheckingConflicts
+                        ) {
+                            if (isCheckingConflicts) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Tune,
+                                    contentDescription = stringResource(R.string.cd_cloud_check_conflicts)
+                                )
+                            }
+                        }
+
+                        // 3. Mapping Sets
+                        AppIconButton(
+                            onClick = { currentSubpage = CloudSubpage.MAPPING_SETS },
+                            tooltip = stringResource(R.string.title_mapping_sets)
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.Bookmark,
                                 contentDescription = stringResource(R.string.title_mapping_sets)
                             )
                         }
-                        BadgedBox(
-                            badge = {
-                                if (activeTransfers.isNotEmpty()) {
-                                    Badge { Text(activeTransfers.size.toString()) }
-                                }
-                            }
+
+                        // 4. Transfer Queue
+                        AppIconButton(
+                            onClick = { currentSubpage = CloudSubpage.TRANSFER_QUEUE },
+                            tooltip = stringResource(R.string.cloud_tab_queue)
                         ) {
-                            IconButton(onClick = { currentSubpage = CloudSubpage.TRANSFER_QUEUE }) {
+                            BadgedBox(
+                                badge = {
+                                    if (activeTransfers.isNotEmpty()) {
+                                        Badge { Text(activeTransfers.size.toString()) }
+                                    }
+                                }
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.CloudSync,
                                     contentDescription = stringResource(R.string.cloud_tab_queue)
@@ -450,49 +558,6 @@ fun CloudScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-            item {
-                OverviewCard(
-                    services = services,
-                    isSyncRunning = isGlobalSyncRunning,
-                    isCheckingConflicts = isCheckingConflicts,
-                    onCheckConflicts = {
-                        isCheckingConflicts = true
-                        coroutineScope.launch {
-                            try {
-                                val conflicts = engine.detectMultiServiceConflicts()
-                                detectedConflicts = conflicts
-                                if (conflicts.isNotEmpty()) {
-                                    showConflictDialog = true
-                                } else {
-                                    snackbarHostState.showSnackbar("All cloud files and local notes are up to date with zero conflicts!")
-                                }
-                            } catch (e: Exception) {
-                                snackbarHostState.showSnackbar("Conflict check failed: ${e.message}")
-                            } finally {
-                                isCheckingConflicts = false
-                            }
-                        }
-                    },
-                    onSyncAll = {
-                        val netCheck = NetworkUtils.checkSyncNetworkPreconditions(context, wifiOnly = isWifiOnly)
-                        if (!netCheck.canSync) {
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar(
-                                    message = netCheck.errorMessage ?: "Network not available",
-                                    duration = androidx.compose.material3.SnackbarDuration.Short
-                                )
-                            }
-                        } else {
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar("Synchronization queued in background...")
-                            }
-                            BackupScheduler.triggerImmediateSync(context, wifiOnly = isWifiOnly)
-                        }
-                    },
-                    onOpenQueue = { currentSubpage = CloudSubpage.TRANSFER_QUEUE },
-                    onOpenMappingSets = { currentSubpage = CloudSubpage.MAPPING_SETS }
-                )
-            }
 
             if (detectedConflicts.isNotEmpty()) {
                 item {
@@ -868,123 +933,6 @@ fun CloudScreen(
     }
 }
 
-@Composable
-fun OverviewCard(
-    services: List<ServiceConfig>,
-    isSyncRunning: Boolean,
-    isCheckingConflicts: Boolean,
-    onCheckConflicts: () -> Unit,
-    onSyncAll: () -> Unit,
-    onOpenQueue: () -> Unit,
-    onOpenMappingSets: () -> Unit
-) {
-    val enabledCount = services.count { it.isEnabled }
-    val lastSyncEpoch = services.map { it.lastSyncedAtEpochMs }.maxOrNull() ?: 0L
-    val neverSyncedText = stringResource(R.string.cloud_never_synced)
-    val lastSyncFormatted = if (lastSyncEpoch > 0) {
-        FormatUtils.formatDateTimeMedium(lastSyncEpoch)
-    } else neverSyncedText
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
-    ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.cloud_sync_hub_title),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Text(
-                        text = stringResource(R.string.cloud_services_active_summary, enabledCount, services.size, lastSyncFormatted),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                    )
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    AppFilledTonalIconButton(
-                        onClick = onOpenMappingSets,
-                        tooltip = stringResource(R.string.cd_cloud_mapping_sets),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Bookmark,
-                            contentDescription = stringResource(R.string.cd_cloud_mapping_sets),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    AppFilledTonalIconButton(
-                        onClick = onCheckConflicts,
-                        tooltip = stringResource(R.string.cd_cloud_check_conflicts),
-                        shape = RoundedCornerShape(10.dp),
-                        enabled = !isCheckingConflicts
-                    ) {
-                        if (isCheckingConflicts) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Tune,
-                                contentDescription = stringResource(R.string.cd_cloud_check_conflicts),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-
-                    AppFilledTonalIconButton(
-                        onClick = onOpenQueue,
-                        tooltip = stringResource(R.string.cd_cloud_transfer_queue),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CloudQueue,
-                            contentDescription = stringResource(R.string.cd_cloud_transfer_queue),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Button(
-                onClick = onSyncAll,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                enabled = !isSyncRunning && enabledCount > 0
-            ) {
-                if (isSyncRunning) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(stringResource(R.string.cloud_syncing_progress))
-                } else {
-                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(stringResource(R.string.cloud_sync_all_button))
-                }
-            }
-        }
-    }
-}
 
 @Composable
 fun EmptyServicesCard(onAddService: () -> Unit) {
@@ -1154,12 +1102,12 @@ fun CloudServiceCarouselCard(
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
+                        InteractiveMarqueeText(
                             text = service.name,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.fillMaxWidth()
                         )
                         Text(
                             text = service.providerType.displayName,

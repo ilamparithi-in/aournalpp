@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.LocalTextStyle
@@ -74,25 +75,26 @@ fun InteractiveMarqueeText(
     val animOffset = remember { Animatable(0f) }
 
     val startMarqueeSequence = {
-        if (!isInteracted) {
-            val textWidth = if (actualTextWidthPx >= 0) {
-                actualTextWidthPx
-            } else {
-                val measured = textMeasurer.measure(
-                    text = text,
-                    style = if (fontWeight != null) style.copy(fontWeight = fontWeight) else style,
-                    maxLines = 1,
-                    softWrap = false
-                ).size.width
-                actualTextWidthPx = measured
-                measured
-            }
+        val textWidth = if (actualTextWidthPx >= 0) {
+            actualTextWidthPx
+        } else {
+            val measured = textMeasurer.measure(
+                text = text,
+                style = if (fontWeight != null) style.copy(fontWeight = fontWeight) else style,
+                maxLines = 1,
+                softWrap = false
+            ).size.width
+            actualTextWidthPx = measured
+            measured
+        }
 
-            val maxScrollPx = (textWidth - containerWidthPx).coerceAtLeast(0)
-            if (maxScrollPx > 0) {
-                isInteracted = true
-                animJob?.cancel()
-                animJob = coroutineScope.launch {
+        val effectiveContainerWidth = if (containerWidthPx > 0) containerWidthPx else textWidth
+        val maxScrollPx = (textWidth - effectiveContainerWidth).coerceAtLeast(0)
+        if (maxScrollPx > 0) {
+            isInteracted = true
+            animJob?.cancel()
+            animJob = coroutineScope.launch {
+                try {
                     val scrollDistanceDp = with(density) { maxScrollPx.toDp().value }
                     val forwardDurationMs = ((scrollDistanceDp / 50f) * 1000f).toInt().coerceAtLeast(100)
 
@@ -113,6 +115,7 @@ fun InteractiveMarqueeText(
                     )
 
                     delay(100L)
+                } finally {
                     isInteracted = false
                 }
             }
@@ -143,20 +146,29 @@ fun InteractiveMarqueeText(
                 }
             }
             .pointerInput(text) {
+                // Stylus / Mouse Hover Detection
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
-                        if (!isInteracted) {
-                            val hasInitialTouch = event.changes.any { it.pressed && !it.previousPressed }
-                            if (hasInitialTouch ||
-                                event.type == PointerEventType.Enter ||
-                                event.type == PointerEventType.Press
-                            ) {
+                        if (event.type == PointerEventType.Enter || event.type == PointerEventType.Move) {
+                            val isHover = event.changes.any { !it.pressed }
+                            if (isHover && !isInteracted) {
                                 startMarqueeSequence()
                             }
                         }
                     }
                 }
+            }
+            .pointerInput(text) {
+                // Touch / Tap Gesture Detection (consumes tap on the text so parent Card doesn't trigger onClick)
+                detectTapGestures(
+                    onPress = {
+                        startMarqueeSequence()
+                    },
+                    onTap = {
+                        startMarqueeSequence()
+                    }
+                )
             },
         contentAlignment = Alignment.CenterStart
     ) {
