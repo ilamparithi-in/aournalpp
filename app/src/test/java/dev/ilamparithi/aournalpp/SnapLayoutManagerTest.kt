@@ -298,4 +298,222 @@ class SnapLayoutManagerTest {
         assertTrue(modes.contains(SnapLayoutMode.SPLIT_THREE))
         assertTrue(modes.contains(SnapLayoutMode.GRID_FOUR))
     }
+
+    @Test
+    fun testGridFourWindowCloseWithBackgroundWindowReplacesSlot() {
+        manager.setMode(SnapLayoutMode.GRID_FOUR)
+        manager.assignWindowToSlot(0, "win1")
+        manager.assignWindowToSlot(1, "win2")
+        manager.assignWindowToSlot(2, "win3")
+        manager.assignWindowToSlot(3, "win4")
+
+        // 5 open windows: win1..win4 in slots, win5 in background
+        // win2 is closed -> remaining windows: win1, win3, win4, win5 (count = 4 >= 4)
+        val remaining = listOf(
+            ProcessSupervisor.X11WindowInfo(id = "win1", title = "Note 1", isActive = true),
+            ProcessSupervisor.X11WindowInfo(id = "win3", title = "Note 3", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win4", title = "Note 4", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win5", title = "Note 5", isActive = false)
+        )
+
+        val resolution = manager.handleWindowClosed(remaining)
+        assertFalse(resolution.modeChanged)
+        assertEquals(SnapLayoutMode.GRID_FOUR, resolution.newMode)
+        assertEquals(1, resolution.replacedSlotIndex)
+        assertEquals("win5", resolution.replacementWindowId)
+
+        // Slot 1 got win5, other slots unchanged
+        assertEquals("win1", manager.slotAssignments[0])
+        assertEquals("win5", manager.slotAssignments[1])
+        assertEquals("win3", manager.slotAssignments[2])
+        assertEquals("win4", manager.slotAssignments[3])
+    }
+
+    @Test
+    fun testWindowCloseWithMultipleBackgroundWindowsRespectsMruOrder() {
+        manager.setMode(SnapLayoutMode.GRID_FOUR)
+        manager.assignWindowToSlot(0, "win1")
+        manager.assignWindowToSlot(1, "win2")
+        manager.assignWindowToSlot(2, "win3")
+        manager.assignWindowToSlot(3, "win4")
+
+        // 6 windows: win5 and win6 in background.
+        // MRU order indicates win6 was focused more recently than win5
+        val mru = listOf("win2", "win4", "win1", "win3", "win6", "win5")
+        val remaining = listOf(
+            ProcessSupervisor.X11WindowInfo(id = "win1", title = "Note 1", isActive = true),
+            ProcessSupervisor.X11WindowInfo(id = "win3", title = "Note 3", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win4", title = "Note 4", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win5", title = "Note 5", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win6", title = "Note 6", isActive = false)
+        )
+
+        val resolution = manager.handleWindowClosed(remaining, mruOrder = mru)
+        assertFalse(resolution.modeChanged)
+        assertEquals(SnapLayoutMode.GRID_FOUR, resolution.newMode)
+        assertEquals(1, resolution.replacedSlotIndex)
+        assertEquals("win6", resolution.replacementWindowId)
+        assertEquals("win6", manager.slotAssignments[1])
+    }
+
+    @Test
+    fun testGridFourDropsToSplitThreeWhenCountDropsBelowFour() {
+        manager.setMode(SnapLayoutMode.GRID_FOUR)
+        manager.assignWindowToSlot(0, "win1")
+        manager.assignWindowToSlot(1, "win2")
+        manager.assignWindowToSlot(2, "win3")
+        manager.assignWindowToSlot(3, "win4")
+
+        // win2 is closed, total count drops to 3 (< 4)
+        val remaining = listOf(
+            ProcessSupervisor.X11WindowInfo(id = "win1", title = "Note 1", isActive = true),
+            ProcessSupervisor.X11WindowInfo(id = "win3", title = "Note 3", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win4", title = "Note 4", isActive = false)
+        )
+
+        val resolution = manager.handleWindowClosed(remaining)
+        assertTrue(resolution.modeChanged)
+        assertEquals(SnapLayoutMode.SPLIT_THREE, resolution.newMode)
+        assertEquals(SnapLayoutMode.SPLIT_THREE, manager.activeMode)
+
+        // Surviving windows win1, win3, win4 fill slots 0, 1, 2 of SPLIT_THREE
+        assertEquals("win1", manager.slotAssignments[0])
+        assertEquals("win3", manager.slotAssignments[1])
+        assertEquals("win4", manager.slotAssignments[2])
+    }
+
+    @Test
+    fun testSplitThreeWindowCloseWithBackgroundWindowReplacesSlot() {
+        manager.setMode(SnapLayoutMode.SPLIT_THREE)
+        manager.assignWindowToSlot(0, "win1")
+        manager.assignWindowToSlot(1, "win2")
+        manager.assignWindowToSlot(2, "win3")
+
+        // 4 windows total, win1 in slot 0 closes, win4 in background
+        val remaining = listOf(
+            ProcessSupervisor.X11WindowInfo(id = "win2", title = "Note 2", isActive = true),
+            ProcessSupervisor.X11WindowInfo(id = "win3", title = "Note 3", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win4", title = "Note 4", isActive = false)
+        )
+
+        val resolution = manager.handleWindowClosed(remaining)
+        assertFalse(resolution.modeChanged)
+        assertEquals(SnapLayoutMode.SPLIT_THREE, resolution.newMode)
+        assertEquals(0, resolution.replacedSlotIndex)
+        assertEquals("win4", resolution.replacementWindowId)
+
+        assertEquals("win4", manager.slotAssignments[0])
+        assertEquals("win2", manager.slotAssignments[1])
+        assertEquals("win3", manager.slotAssignments[2])
+    }
+
+    @Test
+    fun testSplitThreeDropsToSplitTwoWhenCountDropsBelowThree() {
+        manager.setMode(SnapLayoutMode.SPLIT_THREE)
+        manager.assignWindowToSlot(0, "win1")
+        manager.assignWindowToSlot(1, "win2")
+        manager.assignWindowToSlot(2, "win3")
+
+        // win2 closes, count drops to 2 (< 3)
+        val remaining = listOf(
+            ProcessSupervisor.X11WindowInfo(id = "win1", title = "Note 1", isActive = true),
+            ProcessSupervisor.X11WindowInfo(id = "win3", title = "Note 3", isActive = false)
+        )
+
+        val resolution = manager.handleWindowClosed(remaining)
+        assertTrue(resolution.modeChanged)
+        assertEquals(SnapLayoutMode.SPLIT_TWO, resolution.newMode)
+        assertEquals(SnapLayoutMode.SPLIT_TWO, manager.activeMode)
+
+        // Surviving windows win1 and win3 fill slots 0 and 1
+        assertEquals("win1", manager.slotAssignments[0])
+        assertEquals("win3", manager.slotAssignments[1])
+    }
+
+    @Test
+    fun testSplitTwoWindowCloseWithBackgroundWindowReplacesSlot() {
+        manager.setMode(SnapLayoutMode.SPLIT_TWO)
+        manager.assignWindowToSlot(0, "win1")
+        manager.assignWindowToSlot(1, "win2")
+
+        // 3 windows, win1 in slot 0 closes, win3 in background
+        val remaining = listOf(
+            ProcessSupervisor.X11WindowInfo(id = "win2", title = "Note 2", isActive = true),
+            ProcessSupervisor.X11WindowInfo(id = "win3", title = "Note 3", isActive = false)
+        )
+
+        val resolution = manager.handleWindowClosed(remaining)
+        assertFalse(resolution.modeChanged)
+        assertEquals(SnapLayoutMode.SPLIT_TWO, resolution.newMode)
+        assertEquals(0, resolution.replacedSlotIndex)
+        assertEquals("win3", resolution.replacementWindowId)
+
+        assertEquals("win3", manager.slotAssignments[0])
+        assertEquals("win2", manager.slotAssignments[1])
+    }
+
+    @Test
+    fun testSplitTwoDropsToSingleWhenCountDropsBelowTwo() {
+        manager.setMode(SnapLayoutMode.SPLIT_TWO)
+        manager.assignWindowToSlot(0, "win1")
+        manager.assignWindowToSlot(1, "win2")
+
+        // win1 closes, count drops to 1 (< 2)
+        val remaining = listOf(
+            ProcessSupervisor.X11WindowInfo(id = "win2", title = "Note 2", isActive = true)
+        )
+
+        val resolution = manager.handleWindowClosed(remaining)
+        assertTrue(resolution.modeChanged)
+        assertEquals(SnapLayoutMode.SINGLE, resolution.newMode)
+        assertEquals(SnapLayoutMode.SINGLE, manager.activeMode)
+        assertEquals("win2", manager.slotAssignments[0])
+    }
+
+    @Test
+    fun testBackgroundWindowCloseLeavesSlottedWindowsIntact() {
+        manager.setMode(SnapLayoutMode.GRID_FOUR)
+        manager.assignWindowToSlot(0, "win1")
+        manager.assignWindowToSlot(1, "win2")
+        manager.assignWindowToSlot(2, "win3")
+        manager.assignWindowToSlot(3, "win4")
+
+        // win5 (background) closes, count drops to 4 (>= 4)
+        val remaining = listOf(
+            ProcessSupervisor.X11WindowInfo(id = "win1", title = "Note 1", isActive = true),
+            ProcessSupervisor.X11WindowInfo(id = "win2", title = "Note 2", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win3", title = "Note 3", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win4", title = "Note 4", isActive = false)
+        )
+
+        val resolution = manager.handleWindowClosed(remaining)
+        assertFalse(resolution.modeChanged)
+        assertEquals(SnapLayoutMode.GRID_FOUR, resolution.newMode)
+        assertEquals(null, resolution.replacedSlotIndex)
+        assertEquals(null, resolution.replacementWindowId)
+
+        assertEquals("win1", manager.slotAssignments[0])
+        assertEquals("win2", manager.slotAssignments[1])
+        assertEquals("win3", manager.slotAssignments[2])
+        assertEquals("win4", manager.slotAssignments[3])
+    }
+
+    @Test
+    fun testBuildSnapAssignmentsTwoPassStability() {
+        manager.setMode(SnapLayoutMode.SPLIT_TWO)
+        manager.assignWindowToSlot(0, "win1")
+        manager.assignWindowToSlot(1, "win2")
+
+        val windows = listOf(
+            ProcessSupervisor.X11WindowInfo(id = "win1", title = "Note 1", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win2", title = "Note 2", isActive = true),
+            ProcessSupervisor.X11WindowInfo(id = "win3", title = "Note 3", isActive = false)
+        )
+
+        val assignments = manager.buildSnapAssignments(1000, 1000, windows)
+        assertEquals(2, assignments.size)
+        // slot 0 remains win1, slot 1 remains win2 even though win2 is active
+        assertEquals("win1", assignments[0].windowId)
+        assertEquals("win2", assignments[1].windowId)
+    }
 }

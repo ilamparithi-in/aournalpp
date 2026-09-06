@@ -48,6 +48,7 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.produceState
 import dev.ilamparithi.aournalpp.ui.window.WindowSwitcherGallery
@@ -776,6 +777,7 @@ class CanvasActivity : ComponentActivity() {
                             } else {
                                 if (vpW > 0 && vpH > 0) {
                                     val assignments = snapLayoutManager.buildSnapAssignments(vpW, vpH, openWindows)
+                                    snapSlotAssignments = snapLayoutManager.slotAssignments.toMap()
                                     if (assignments.isNotEmpty()) {
                                         currentSupervisor.snapWindowsBatch(assignments)
                                     }
@@ -868,11 +870,55 @@ class CanvasActivity : ComponentActivity() {
                     }
                 }
 
-                // Fall back to SINGLE mode if remaining open windows is less than layout's requirement
-                LaunchedEffect(openWindows.size) {
-                    if (activeSnapMode != SnapLayoutMode.SINGLE && activeSnapMode != SnapLayoutMode.UNLOCKED) {
-                        if (openWindows.size < activeSnapMode.minWindows) {
-                            applySnapLayout(SnapLayoutMode.SINGLE)
+                // Track previous window IDs and MRU order for immediate background replacement
+                var previousWindowIds by remember { mutableStateOf(openWindows.map { it.id }.toSet()) }
+                val windowMruList = remember { mutableStateListOf<String>() }
+
+                LaunchedEffect(activeWindow?.id) {
+                    val id = activeWindow?.id ?: return@LaunchedEffect
+                    windowMruList.remove(id)
+                    windowMruList.add(0, id)
+                }
+
+                // Dynamic window replacement & step-down degradation when a window is closed in snap layouts
+                LaunchedEffect(openWindows) {
+                    val currentIds = openWindows.map { it.id }.toSet()
+                    val closedIds = previousWindowIds.minus(currentIds)
+                    previousWindowIds = currentIds
+                    windowMruList.removeAll { it !in currentIds }
+                    for (win in openWindows) {
+                        if (win.id !in windowMruList) {
+                            windowMruList.add(win.id)
+                        }
+                    }
+
+                    if (closedIds.isNotEmpty() && activeSnapMode != SnapLayoutMode.UNLOCKED) {
+                        val resolution = snapLayoutManager.handleWindowClosed(
+                            currentOpenWindows = openWindows,
+                            mruOrder = windowMruList.toList()
+                        )
+
+                        if (resolution.modeChanged) {
+                            // Window count dropped below n: drop to n-1 snap layout
+                            applySnapLayout(
+                                mode = resolution.newMode,
+                                mirrored = snapLayoutManager.isMirrored,
+                                configureSlotsIfMultiWindow = false
+                            )
+                        } else if (resolution.replacedSlotIndex != null) {
+                            // Window count >= n: replace closed window with immediate background window
+                            snapSlotAssignments = snapLayoutManager.slotAssignments.toMap()
+                            val lorie = activeLorieView
+                            val vpW = lorie?.width?.takeIf { it > 0 } ?: 0
+                            val vpH = lorie?.height?.takeIf { it > 0 } ?: 0
+                            if (vpW > 0 && vpH > 0 && this@CanvasActivity::supervisor.isInitialized) {
+                                val assignments = snapLayoutManager.buildSnapAssignments(vpW, vpH, openWindows)
+                                if (assignments.isNotEmpty()) {
+                                    this@CanvasActivity.supervisor.snapWindowsBatch(assignments)
+                                }
+                            }
+                        } else {
+                            snapSlotAssignments = snapLayoutManager.slotAssignments.toMap()
                         }
                     }
                 }
@@ -900,6 +946,7 @@ class CanvasActivity : ComponentActivity() {
                                     snapGeometries = snapLayoutManager.calculateGeometries(vpW, vpH)
                                     snapDividers = snapLayoutManager.calculateDividerGeometries(vpW, vpH)
                                     val assignments = snapLayoutManager.buildSnapAssignments(vpW, vpH, openWindows)
+                                    snapSlotAssignments = snapLayoutManager.slotAssignments.toMap()
                                     if (assignments.isNotEmpty() && this@CanvasActivity::supervisor.isInitialized) {
                                         this@CanvasActivity.supervisor.snapWindowsBatch(assignments)
                                     }

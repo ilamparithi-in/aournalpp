@@ -250,25 +250,41 @@ class SnapLayoutManager(private val context: Context? = null) {
         val geometries = calculateGeometries(viewportWidth, viewportHeight)
         val result = mutableListOf<ProcessSupervisor.WindowSnapAssignment>()
 
+        val openWindowMap = openWindows.associateBy { it.id }
         val remainingWindows = openWindows.toMutableList()
-        val activeWin = openWindows.find { it.isActive }
+        val assignedWindowIds = mutableSetOf<String>()
 
+        // Pass 1: Retain existing valid slot assignments
         for (geo in geometries) {
             val assignedWinId = slotAssignments[geo.slotIndex]
-            val win = if (assignedWinId != null) {
-                remainingWindows.find { it.id == assignedWinId } ?: remainingWindows.firstOrNull()
-            } else if (geo.slotIndex == 0 && activeWin != null && remainingWindows.contains(activeWin)) {
-                activeWin
-            } else {
-                remainingWindows.firstOrNull()
+            if (assignedWinId != null && openWindowMap.containsKey(assignedWinId)) {
+                assignedWindowIds.add(assignedWinId)
+                remainingWindows.removeAll { it.id == assignedWinId }
+            }
+        }
+
+        // Pass 2: For slots without a valid assigned window, fill from remaining unassigned windows
+        val activeWin = openWindows.find { it.isActive }
+        for (geo in geometries) {
+            var winId = slotAssignments[geo.slotIndex]
+            if (winId == null || !openWindowMap.containsKey(winId)) {
+                val candidate = if (geo.slotIndex == 0 && activeWin != null && remainingWindows.contains(activeWin)) {
+                    activeWin
+                } else {
+                    remainingWindows.firstOrNull()
+                }
+                if (candidate != null) {
+                    winId = candidate.id
+                    slotAssignments[geo.slotIndex] = winId
+                    remainingWindows.remove(candidate)
+                    assignedWindowIds.add(winId)
+                }
             }
 
-            if (win != null) {
-                remainingWindows.remove(win)
-                slotAssignments[geo.slotIndex] = win.id
+            if (winId != null && openWindowMap.containsKey(winId)) {
                 result.add(
                     ProcessSupervisor.WindowSnapAssignment(
-                        windowId = win.id,
+                        windowId = winId,
                         x = geo.x,
                         y = geo.y,
                         width = geo.width,
@@ -279,5 +295,117 @@ class SnapLayoutManager(private val context: Context? = null) {
         }
 
         return result
+    }
+
+    data class WindowCloseResolution(
+        val newMode: SnapLayoutMode,
+        val modeChanged: Boolean,
+        val replacedSlotIndex: Int?,
+        val replacementWindowId: String?,
+        val updatedAssignments: Map<Int, String>
+    )
+
+    fun handleWindowClosed(
+        currentOpenWindows: List<ProcessSupervisor.X11WindowInfo>,
+        mruOrder: List<String> = emptyList()
+    ): WindowCloseResolution {
+        val currentCount = currentOpenWindows.size
+        val currentOpenWindowIds = currentOpenWindows.map { it.id }.toSet()
+
+        if (activeMode == SnapLayoutMode.UNLOCKED) {
+            return WindowCloseResolution(
+                newMode = SnapLayoutMode.UNLOCKED,
+                modeChanged = false,
+                replacedSlotIndex = null,
+                replacementWindowId = null,
+                updatedAssignments = emptyMap()
+            )
+        }
+
+        val n = activeMode.minWindows
+        val closedSlots = slotAssignments.filter { it.value !in currentOpenWindowIds }
+        val survivingSlots = slotAssignments.filter { it.value in currentOpenWindowIds }
+
+        // Case 1: When window count drops below n -> drop to n-1 snap layout
+        if (currentCount < n) {
+            val newMode = when {
+                currentCount >= 4 -> SnapLayoutMode.GRID_FOUR
+                currentCount == 3 -> SnapLayoutMode.SPLIT_THREE
+                currentCount == 2 -> SnapLayoutMode.SPLIT_TWO
+                else -> SnapLayoutMode.SINGLE
+            }
+            activeMode = newMode
+
+            slotAssignments.clear()
+            if (newMode == SnapLayoutMode.SINGLE) {
+                val survivingWin = currentOpenWindows.find { it.isActive } ?: currentOpenWindows.firstOrNull()
+                if (survivingWin != null) {
+                    slotAssignments[0] = survivingWin.id
+                }
+            } else {
+                val targetSlotCount = newMode.minWindows
+                // Preserve surviving windows in their relative order
+                val orderedWindows = survivingSlots.entries.sortedBy { it.key }.map { it.value }.toMutableList()
+                for (win in currentOpenWindows) {
+                    if (win.id !in orderedWindows) {
+                        orderedWindows.add(win.id)
+                    }
+                }
+                for (i in 0 until minOf(targetSlotCount, orderedWindows.size)) {
+                    slotAssignments[i] = orderedWindows[i]
+                }
+            }
+
+            return WindowCloseResolution(
+                newMode = newMode,
+                modeChanged = true,
+                replacedSlotIndex = null,
+                replacementWindowId = null,
+                updatedAssignments = slotAssignments.toMap()
+            )
+        }
+
+        // Case 2: Window count is >= n (till window count is n)
+        // If an assigned slot had its window closed, replace it with the window in the immediate background
+        var replacedSlot: Int? = null
+        var replacementId: String? = null
+
+        if (closedSlots.isNotEmpty()) {
+            val assignedIds = survivingSlots.values.toSet()
+            val candidateBackground = currentOpenWindows.filter { it.id !in assignedIds }
+            val sortedBackground = if (mruOrder.isNotEmpty()) {
+                candidateBackground.sortedBy { win ->
+                    val idx = mruOrder.indexOf(win.id)
+                    if (idx >= 0) idx else Int.MAX_VALUE
+                }
+            } else {
+                candidateBackground
+            }
+
+            var bgIdx = 0
+            for ((slotIdx, _) in closedSlots) {
+                if (bgIdx < sortedBackground.size) {
+                    val bgWin = sortedBackground[bgIdx++]
+                    slotAssignments[slotIdx] = bgWin.id
+                    replacedSlot = slotIdx
+                    replacementId = bgWin.id
+                } else {
+                    slotAssignments.remove(slotIdx)
+                }
+            }
+        }
+
+        // Ensure surviving slots are intact
+        for ((slotIdx, winId) in survivingSlots) {
+            slotAssignments[slotIdx] = winId
+        }
+
+        return WindowCloseResolution(
+            newMode = activeMode,
+            modeChanged = false,
+            replacedSlotIndex = replacedSlot,
+            replacementWindowId = replacementId,
+            updatedAssignments = slotAssignments.toMap()
+        )
     }
 }
