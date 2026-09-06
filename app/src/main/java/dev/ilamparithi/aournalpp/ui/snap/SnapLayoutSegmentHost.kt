@@ -1,6 +1,8 @@
 package dev.ilamparithi.aournalpp.ui.snap
 
 import android.graphics.Bitmap
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,11 +10,19 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -22,8 +32,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -59,24 +72,24 @@ fun SnapLayoutSegmentHost(
             modifier = Modifier.fillMaxSize(),
             accentColor = MaterialTheme.colorScheme.primary,
             progress = 1f,
-            alpha = 0.5f,
-            strength = 0.45f
+            alpha = 0.35f,
+            strength = 0.35f
         )
-
-        val targetConfiguringSlot = activeConfiguringSlot ?: geometries.indices.firstOrNull { assignedSlotMap[it] == null } ?: 0
 
         for (geo in geometries) {
             val assignedWinId = assignedSlotMap[geo.slotIndex]
             val assignedWin = openWindows.find { it.id == assignedWinId }
-            val isCurrentConfiguring = geo.slotIndex == targetConfiguringSlot
 
             val slotWidthDp = with(density) { geo.width.toDp() }
             val slotHeightDp = with(density) { geo.height.toDp() }
 
+            // Exclude windows already selected in any OTHER slot
             val availableWindows = remember(openWindows, assignedSlotMap, geo.slotIndex) {
-                openWindows.filter { win ->
-                    assignedSlotMap.entries.none { it.key != geo.slotIndex && it.value == win.id }
-                }
+                val assignedToOtherSlots = assignedSlotMap
+                    .filter { it.key != geo.slotIndex && it.value.isNotBlank() }
+                    .values
+                    .toSet()
+                openWindows.filter { it.id !in assignedToOtherSlots }
             }
 
             Box(
@@ -87,64 +100,171 @@ fun SnapLayoutSegmentHost(
                     .clip(RoundedCornerShape(16.dp))
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
                     .border(
-                        width = if (isCurrentConfiguring) 2.dp else 1.dp,
-                        color = if (isCurrentConfiguring) MaterialTheme.colorScheme.primary
+                        width = if (assignedWin != null) 2.dp else 1.dp,
+                        color = if (assignedWin != null) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                         shape = RoundedCornerShape(16.dp)
                     )
-                    .clickable {
-                        onSlotClicked(geo.slotIndex)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        if (assignedWin != null) {
+                            onSlotClicked(geo.slotIndex)
+                        }
                     },
                 contentAlignment = Alignment.Center
             ) {
-                if (isCurrentConfiguring) {
-                    WindowGalleryPicker(
-                        windows = if (availableWindows.isNotEmpty()) availableWindows else openWindows,
-                        previewCache = previewCache,
-                        isCompact = true,
-                        headerTitle = "Select Note for Slot ${geo.slotIndex + 1}",
-                        onSelectWindow = { win ->
-                            onSelectWindowForSlot(geo.slotIndex, win)
-                        },
-                        onCloseWindow = null
-                    )
-                } else if (assignedWin != null) {
+                // Muted dreamy stars background animation inside each slot while configuring
+                DreamyStarsBackground(
+                    modifier = Modifier.fillMaxSize(),
+                    accentColor = MaterialTheme.colorScheme.primary,
+                    progress = 1f,
+                    alpha = 0.65f,
+                    strength = 0.65f
+                )
+
+                if (assignedWin != null) {
+                    // Display assigned note card with preview thumbnail, slot badge, and tap-to-change action
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
-                        modifier = Modifier.padding(12.dp)
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp)
                     ) {
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f),
-                            modifier = Modifier.padding(bottom = 8.dp)
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.95f),
+                            tonalElevation = 3.dp,
+                            shadowElevation = 4.dp,
+                            modifier = Modifier.padding(bottom = 12.dp)
                         ) {
-                            Text(
-                                text = "Slot ${geo.slotIndex + 1}: ${assignedWin.title}",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "Slot ${geo.slotIndex + 1}: ${assignedWin.title}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
-                        Text(
-                            text = "Tap to change note",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        )
+
+                        val previewBmp = previewCache[assignedWin.id]
+                        val previewCardW = (slotWidthDp * 0.65f).coerceIn(140.dp, 260.dp)
+                        val previewCardH = (slotHeightDp * 0.45f).coerceIn(80.dp, 160.dp)
+
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)),
+                            modifier = Modifier
+                                .size(previewCardW, previewCardH)
+                                .clip(RoundedCornerShape(14.dp))
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (previewBmp != null && !previewBmp.isRecycled) {
+                                    Image(
+                                        bitmap = previewBmp.asImageBitmap(),
+                                        contentDescription = assignedWin.title,
+                                        contentScale = ContentScale.Fit,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(4.dp)
+                                    )
+                                } else {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center,
+                                        modifier = Modifier.padding(8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Description,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                                            modifier = Modifier.size(36.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = assignedWin.title,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.clickable { onSlotClicked(geo.slotIndex) }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Text(
+                                    text = "Tap to change note",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 } else {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Text(
-                            text = "Slot ${geo.slotIndex + 1} (Waiting)",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    // Show gallery in all unassigned slots! Slot n (Waiting) is eliminated.
+                    if (availableWindows.isNotEmpty()) {
+                        WindowGalleryPicker(
+                            windows = availableWindows,
+                            previewCache = previewCache,
+                            isCompact = true,
+                            headerTitle = "Select Note for Slot ${geo.slotIndex + 1}",
+                            onSelectWindow = { win ->
+                                onSelectWindowForSlot(geo.slotIndex, win)
+                            },
+                            onCloseWindow = null
                         )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No open notes available for Slot ${geo.slotIndex + 1}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }

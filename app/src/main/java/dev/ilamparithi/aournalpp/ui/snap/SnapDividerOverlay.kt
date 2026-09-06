@@ -2,9 +2,8 @@ package dev.ilamparithi.aournalpp.ui.snap
 
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -71,14 +70,14 @@ fun SnapDividerOverlay(
             val interactionSource = remember(div.id) { MutableInteractionSource() }
             val isHovered by interactionSource.collectIsHoveredAsState()
             var isDragging by remember(div.id) { mutableStateOf(false) }
-            var isSpringAnimating by remember(div.id) { mutableStateOf(false) }
+            var isResetAnimating by remember(div.id) { mutableStateOf(false) }
             var currentLiveRatio by remember(div.id) { mutableFloatStateOf(div.currentRatio) }
             var rawDragRatio by remember(div.id) { mutableFloatStateOf(div.currentRatio) }
             var isMagneticallySnapped by remember(div.id) { mutableStateOf(false) }
             val animRatio = remember(div.id) { Animatable(div.currentRatio) }
 
             LaunchedEffect(div.currentRatio) {
-                if (!isDragging && !isSpringAnimating) {
+                if (!isDragging && !isResetAnimating) {
                     currentLiveRatio = div.currentRatio
                     rawDragRatio = div.currentRatio
                     animRatio.snapTo(div.currentRatio)
@@ -86,7 +85,7 @@ fun SnapDividerOverlay(
             }
 
             val animatedAlpha by animateFloatAsState(
-                targetValue = if (isDragging || isSpringAnimating) 1.0f else if (isHovered) 0.85f else 0.0f,
+                targetValue = if (isDragging || isResetAnimating) 1.0f else if (isHovered) 0.85f else 0.0f,
                 animationSpec = tween(durationMillis = 200),
                 label = "handleAlpha_${div.id}"
             )
@@ -100,7 +99,8 @@ fun SnapDividerOverlay(
                 Box(
                     modifier = Modifier
                         .offset {
-                            val effRatio = if (isSpringAnimating) animRatio.value else if (isDragging) currentLiveRatio else currentDiv.currentRatio
+                            val effRatio =
+                                if (isResetAnimating) animRatio.value else if (isDragging) currentLiveRatio else currentDiv.currentRatio
                             val handleX = Math.round(effRatio * viewportWidth).toInt()
                             val handleLeftPx = handleX - (hitThicknessPx / 2f).toInt()
                             IntOffset(handleLeftPx, currentDiv.y)
@@ -111,22 +111,25 @@ fun SnapDividerOverlay(
                         .pointerInput(div.id, viewportWidth) {
                             detectTapGestures(
                                 onDoubleTap = {
-                                    isSpringAnimating = true
-                                    try { view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK) } catch (_: Exception) {}
+                                    isResetAnimating = true
+                                    try {
+                                        view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                                    } catch (_: Exception) {
+                                    }
                                     coroutineScope.launch {
                                         animRatio.snapTo(currentLiveRatio)
                                         animRatio.animateTo(
                                             targetValue = currentDiv.defaultRatio,
-                                            animationSpec = spring(
-                                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                stiffness = Spring.StiffnessMediumLow
+                                            animationSpec = tween(
+                                                durationMillis = 280,
+                                                easing = FastOutSlowInEasing
                                             )
                                         ) {
                                             currentLiveRatio = value
                                             rawDragRatio = value
                                             currentOnUpdateRatio(currentDiv.id, value)
                                         }
-                                        isSpringAnimating = false
+                                        isResetAnimating = false
                                         currentOnDragEnd()
                                     }
                                 }
@@ -136,17 +139,23 @@ fun SnapDividerOverlay(
                             detectDragGestures(
                                 onDragStart = {
                                     isDragging = true
-                                    isSpringAnimating = false
+                                    isResetAnimating = false
                                     coroutineScope.launch { animRatio.stop() }
                                     rawDragRatio = currentDiv.currentRatio
                                     currentLiveRatio = currentDiv.currentRatio
                                     isMagneticallySnapped = kotlin.math.abs(currentDiv.currentRatio - 0.5f) < 0.005f
-                                    try { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) } catch (_: Exception) {}
+                                    try {
+                                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                    } catch (_: Exception) {
+                                    }
                                 },
                                 onDragEnd = {
                                     isDragging = false
                                     isMagneticallySnapped = false
-                                    try { view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) } catch (_: Exception) {}
+                                    try {
+                                        view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                                    } catch (_: Exception) {
+                                    }
                                     currentOnDragEnd()
                                 },
                                 onDragCancel = {
@@ -157,14 +166,19 @@ fun SnapDividerOverlay(
                                 onDrag = { change, dragAmount ->
                                     change.consume()
                                     val deltaRatio = dragAmount.x / viewportWidth.toFloat()
-                                    rawDragRatio = (rawDragRatio + deltaRatio).coerceIn(currentDiv.minRatio, currentDiv.maxRatio)
+                                    rawDragRatio =
+                                        (rawDragRatio + deltaRatio).coerceIn(currentDiv.minRatio, currentDiv.maxRatio)
                                     val distToCenter = kotlin.math.abs(rawDragRatio - 0.5f)
                                     val snapThreshold = 0.024f
                                     val releaseThreshold = 0.038f
-                                    val shouldSnap = if (isMagneticallySnapped) distToCenter < releaseThreshold else distToCenter < snapThreshold
+                                    val shouldSnap =
+                                        if (isMagneticallySnapped) distToCenter < releaseThreshold else distToCenter < snapThreshold
 
                                     if (!isMagneticallySnapped && shouldSnap) {
-                                        try { view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK) } catch (_: Exception) {}
+                                        try {
+                                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                        } catch (_: Exception) {
+                                        }
                                     }
                                     isMagneticallySnapped = shouldSnap
 
@@ -195,7 +209,8 @@ fun SnapDividerOverlay(
                 Box(
                     modifier = Modifier
                         .offset {
-                            val effRatio = if (isSpringAnimating) animRatio.value else if (isDragging) currentLiveRatio else currentDiv.currentRatio
+                            val effRatio =
+                                if (isResetAnimating) animRatio.value else if (isDragging) currentLiveRatio else currentDiv.currentRatio
                             val handleY = Math.round(effRatio * viewportHeight).toInt()
                             val handleTopPx = handleY - (hitThicknessPx / 2f).toInt()
                             IntOffset(currentDiv.x, handleTopPx)
@@ -206,22 +221,25 @@ fun SnapDividerOverlay(
                         .pointerInput(div.id, viewportHeight) {
                             detectTapGestures(
                                 onDoubleTap = {
-                                    isSpringAnimating = true
-                                    try { view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK) } catch (_: Exception) {}
+                                    isResetAnimating = true
+                                    try {
+                                        view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                                    } catch (_: Exception) {
+                                    }
                                     coroutineScope.launch {
                                         animRatio.snapTo(currentLiveRatio)
                                         animRatio.animateTo(
                                             targetValue = currentDiv.defaultRatio,
-                                            animationSpec = spring(
-                                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                stiffness = Spring.StiffnessMediumLow
+                                            animationSpec = tween(
+                                                durationMillis = 280,
+                                                easing = FastOutSlowInEasing
                                             )
                                         ) {
                                             currentLiveRatio = value
                                             rawDragRatio = value
                                             currentOnUpdateRatio(currentDiv.id, value)
                                         }
-                                        isSpringAnimating = false
+                                        isResetAnimating = false
                                         currentOnDragEnd()
                                     }
                                 }
@@ -231,17 +249,23 @@ fun SnapDividerOverlay(
                             detectDragGestures(
                                 onDragStart = {
                                     isDragging = true
-                                    isSpringAnimating = false
+                                    isResetAnimating = false
                                     coroutineScope.launch { animRatio.stop() }
                                     rawDragRatio = currentDiv.currentRatio
                                     currentLiveRatio = currentDiv.currentRatio
                                     isMagneticallySnapped = kotlin.math.abs(currentDiv.currentRatio - 0.5f) < 0.005f
-                                    try { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) } catch (_: Exception) {}
+                                    try {
+                                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                    } catch (_: Exception) {
+                                    }
                                 },
                                 onDragEnd = {
                                     isDragging = false
                                     isMagneticallySnapped = false
-                                    try { view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) } catch (_: Exception) {}
+                                    try {
+                                        view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                                    } catch (_: Exception) {
+                                    }
                                     currentOnDragEnd()
                                 },
                                 onDragCancel = {
@@ -252,14 +276,19 @@ fun SnapDividerOverlay(
                                 onDrag = { change, dragAmount ->
                                     change.consume()
                                     val deltaRatio = dragAmount.y / viewportHeight.toFloat()
-                                    rawDragRatio = (rawDragRatio + deltaRatio).coerceIn(currentDiv.minRatio, currentDiv.maxRatio)
+                                    rawDragRatio =
+                                        (rawDragRatio + deltaRatio).coerceIn(currentDiv.minRatio, currentDiv.maxRatio)
                                     val distToCenter = kotlin.math.abs(rawDragRatio - 0.5f)
                                     val snapThreshold = 0.024f
                                     val releaseThreshold = 0.038f
-                                    val shouldSnap = if (isMagneticallySnapped) distToCenter < releaseThreshold else distToCenter < snapThreshold
+                                    val shouldSnap =
+                                        if (isMagneticallySnapped) distToCenter < releaseThreshold else distToCenter < snapThreshold
 
                                     if (!isMagneticallySnapped && shouldSnap) {
-                                        try { view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK) } catch (_: Exception) {}
+                                        try {
+                                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                        } catch (_: Exception) {
+                                        }
                                     }
                                     isMagneticallySnapped = shouldSnap
 

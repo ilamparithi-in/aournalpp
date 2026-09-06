@@ -444,7 +444,6 @@ class CanvasActivity : ComponentActivity() {
                 val liveTitle by sessionManager.documentTitle.collectAsState()
                 val openWindows by sessionManager.openWindows.collectAsState(initial = emptyList())
                 val windowPreviewCache = remember { mutableStateMapOf<String, Bitmap>() }
-                val fullScreenCache = remember { mutableStateMapOf<String, Bitmap>() }
                 var transitionOutgoingBitmap by remember { mutableStateOf<Bitmap?>(null) }
                 var transitionIncomingBitmap by remember { mutableStateOf<Bitmap?>(null) }
                 var transitionTargetWindow by remember { mutableStateOf<dev.ilamparithi.aournalpp.runtime.ProcessSupervisor.X11WindowInfo?>(null) }
@@ -566,6 +565,7 @@ class CanvasActivity : ComponentActivity() {
                 var isSnapMirrored by remember { mutableStateOf(snapLayoutManager.isMirrored) }
                 var showSnapAssistHost by remember { mutableStateOf(false) }
                 var activeConfiguringSlot by remember { mutableStateOf<Int?>(null) }
+                var snapSlotAssignments by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
                 var snapDividers by remember { mutableStateOf<List<DividerGeometry>>(emptyList()) }
                 var snapGeometries by remember { mutableStateOf<List<WindowSlotGeometry>>(emptyList()) }
                 var showKeyboard by remember {
@@ -674,34 +674,18 @@ class CanvasActivity : ComponentActivity() {
                     }
                 }
 
-                fun captureCurrentWindowPreview(onCaptured: ((Bitmap?) -> Unit)? = null) {
-                    val view = activeLorieView ?: run {
-                        onCaptured?.invoke(null)
-                        return
-                    }
-                    if (view.width <= 0 || view.height <= 0) {
-                        onCaptured?.invoke(null)
-                        return
-                    }
-                    // Do not capture while overlays are active (Snap Assist, Gallery, or transitions)
-                    // as they occlude window contents and cause corrupted thumbnails
-                    if (showSnapAssistHost || showWindowSwitcherGallery || isSwitchTransitionActive) {
-                        onCaptured?.invoke(null)
-                        return
-                    }
-
+                fun captureCurrentWindowPreview(onCaptured: ((Bitmap) -> Unit)? = null) {
+                    val view = activeLorieView ?: return
+                    if (view.width <= 0 || view.height <= 0) return
                     try {
                         val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
                         PixelCopy.request(view, bitmap, { result ->
                             if (result == PixelCopy.SUCCESS) {
                                 onCaptured?.invoke(bitmap)
-                            } else {
-                                onCaptured?.invoke(null)
                             }
                         }, Handler(Looper.getMainLooper()))
                     } catch (e: Exception) {
                         Log.w("CanvasActivity", "PixelCopy capture failed", e)
-                        onCaptured?.invoke(null)
                     }
                 }
 
@@ -750,6 +734,8 @@ class CanvasActivity : ComponentActivity() {
                     when (mode) {
                         SnapLayoutMode.UNLOCKED -> {
                             showSnapAssistHost = false
+                            snapSlotAssignments = emptyMap()
+                            snapLayoutManager.clearAssignments()
                             snapDividers = emptyList()
                             snapGeometries = emptyList()
                             openWindows.forEach {
@@ -759,6 +745,8 @@ class CanvasActivity : ComponentActivity() {
                         }
                         SnapLayoutMode.SINGLE -> {
                             showSnapAssistHost = false
+                            snapSlotAssignments = emptyMap()
+                            snapLayoutManager.clearAssignments()
                             snapDividers = emptyList()
                             snapGeometries = emptyList()
                             val wins = openWindows.ifEmpty { currentSupervisor.queryOpenWindows() }
@@ -782,8 +770,9 @@ class CanvasActivity : ComponentActivity() {
 
                             if (configureSlotsIfMultiWindow && openWindows.size >= mode.minWindows) {
                                 snapLayoutManager.clearAssignments()
+                                snapSlotAssignments = emptyMap()
                                 showSnapAssistHost = true
-                                activeConfiguringSlot = 0
+                                activeConfiguringSlot = null
                             } else {
                                 if (vpW > 0 && vpH > 0) {
                                     val assignments = snapLayoutManager.buildSnapAssignments(vpW, vpH, openWindows)
@@ -799,12 +788,9 @@ class CanvasActivity : ComponentActivity() {
 
                 fun performWindowSwitch(targetWindow: dev.ilamparithi.aournalpp.runtime.ProcessSupervisor.X11WindowInfo, isForward: Boolean) {
                     val activeWin = openWindows.find { it.isActive }
-                    if (activeWin != null && targetWindow.id == activeWin.id) return
-
                     val view = activeLorieView
                     val currentW = view?.width ?: 0
                     val currentH = view?.height ?: 0
-                    val currentSupervisor = if (this@CanvasActivity::supervisor.isInitialized) this@CanvasActivity.supervisor else null
 
                     if (activeSnapMode != SnapLayoutMode.SINGLE && activeSnapMode != SnapLayoutMode.UNLOCKED) {
                         lifecycleScope.launch(Dispatchers.IO) {
@@ -817,40 +803,45 @@ class CanvasActivity : ComponentActivity() {
                         // Rapid switching / spamming: advance immediately to the next target
                         val previousTarget = transitionTargetWindow
                         transitionOutgoingBitmap = transitionIncomingBitmap
-                            ?: previousTarget?.let { fullScreenCache[it.id] }
-                            ?: activeWin?.let { fullScreenCache[it.id] }
-                        transitionIncomingBitmap = fullScreenCache[targetWindow.id]
+                            ?: previousTarget?.let { windowPreviewCache[it.id] }
+                            ?: activeWin?.let { windowPreviewCache[it.id] }
+                        transitionIncomingBitmap = windowPreviewCache[targetWindow.id]
                         transitionTargetWindow = targetWindow
                         isTransitionForward = isForward
                         transitionSequence++
                         lifecycleScope.launch(Dispatchers.IO) {
-                            if (activeSnapMode == SnapLayoutMode.SINGLE) {
-                                currentSupervisor?.setWindowMaximized(targetWindow.id, true)
-                            }
                             sessionManager.switchToWindow(targetWindow.id)
                         }
                         return
                     }
 
+                    val cachedCurrent = activeWin?.let { windowPreviewCache[it.id] }
+
                     fun startSwitchWithBitmap(currentBmp: Bitmap?) {
                         if (activeWin != null && currentBmp != null) {
-                            fullScreenCache[activeWin.id] = currentBmp
-                            if (activeSnapMode == SnapLayoutMode.SINGLE || activeSnapMode == SnapLayoutMode.UNLOCKED || snapGeometries.isEmpty()) {
-                                windowPreviewCache[activeWin.id] = currentBmp
-                            }
+                            windowPreviewCache[activeWin.id] = currentBmp
                         }
-                        transitionOutgoingBitmap = currentBmp ?: activeWin?.let { fullScreenCache[it.id] }
-                        transitionIncomingBitmap = fullScreenCache[targetWindow.id]
+                        transitionOutgoingBitmap = currentBmp ?: activeWin?.let { windowPreviewCache[it.id] }
+                        transitionIncomingBitmap = windowPreviewCache[targetWindow.id]
                         transitionTargetWindow = targetWindow
                         isTransitionForward = isForward
                         transitionSequence++
                         isSwitchTransitionActive = true
                     }
 
-                    captureCurrentWindowPreview { liveBmp ->
-                        val cachedCurrent = activeWin?.let { fullScreenCache[it.id] }
-                        val bitmapToUse = liveBmp ?: cachedCurrent
-                        startSwitchWithBitmap(bitmapToUse)
+                    if (WindowPreviewUtils.isFreezeFrameDimensionMatching(cachedCurrent, currentW, currentH)) {
+                        startSwitchWithBitmap(cachedCurrent)
+                        captureCurrentWindowPreview { freshBmp ->
+                            if (activeWin != null) {
+                                windowPreviewCache[activeWin.id] = freshBmp
+                            }
+                        }
+                    } else {
+                        // Dimension mismatch (e.g. window was resized) or cache miss:
+                        // capture fresh freeze frame at current size so the transition never stretches
+                        captureCurrentWindowPreview { currentBmp ->
+                            startSwitchWithBitmap(currentBmp)
+                        }
                     }
                 }
 
@@ -925,8 +916,9 @@ class CanvasActivity : ComponentActivity() {
                                 val view = activeLorieView
                                 if (view != null && view.width > 0 && view.height > 0) {
                                     captureCurrentWindowPreview { freshBmp ->
-                                        if (freshBmp != null) {
-                                            fullScreenCache[currentId] = freshBmp
+                                        if (activeSnapMode == SnapLayoutMode.SINGLE || activeSnapMode == SnapLayoutMode.UNLOCKED || snapGeometries.isEmpty()) {
+                                            windowPreviewCache[currentId] = freshBmp
+                                        } else {
                                             updateSlotPreviewsFromScreen(freshBmp)
                                         }
                                     }
@@ -1029,6 +1021,9 @@ class CanvasActivity : ComponentActivity() {
                             val targetWin = transitionTargetWindow!!
                             val targetTitle = targetWin.title.ifBlank { "Note" }
                             val targetIcon = remember(targetTitle) { WindowTitleHelper.resolveWindowIcon(targetTitle) }
+                            val isTargetActive = remember(targetWin.id, openWindows) {
+                                openWindows.any { it.id == targetWin.id && it.isActive }
+                            }
 
                             Box(
                                 modifier = viewportModifier
@@ -1044,26 +1039,16 @@ class CanvasActivity : ComponentActivity() {
                                         isForward = isTransitionForward,
                                         onStarted = {
                                             lifecycleScope.launch(Dispatchers.IO) {
-                                                if (activeSnapMode == SnapLayoutMode.SINGLE) {
-                                                    val currentSupervisor = if (this@CanvasActivity::supervisor.isInitialized) this@CanvasActivity.supervisor else null
-                                                    currentSupervisor?.setWindowMaximized(targetWin.id, true)
-                                                }
                                                 sessionManager.switchToWindow(targetWin.id)
                                             }
                                         },
                                         onTransitionFinished = {
                                             isSwitchTransitionActive = false
                                             transitionTargetWindow = null
-                                            val finishedWinId = targetWin.id
                                             lifecycleScope.launch {
-                                                kotlinx.coroutines.delay(200)
+                                                kotlinx.coroutines.delay(150)
                                                 captureCurrentWindowPreview { bmp ->
-                                                    if (bmp != null) {
-                                                        fullScreenCache[finishedWinId] = bmp
-                                                        if (activeSnapMode == SnapLayoutMode.SINGLE || activeSnapMode == SnapLayoutMode.UNLOCKED || snapGeometries.isEmpty()) {
-                                                            windowPreviewCache[finishedWinId] = bmp
-                                                        }
-                                                    }
+                                                    windowPreviewCache[targetWin.id] = bmp
                                                 }
                                             }
                                         }
@@ -1130,70 +1115,45 @@ class CanvasActivity : ComponentActivity() {
                                     geometries = snapGeometries,
                                     openWindows = openWindows,
                                     previewCache = windowPreviewCache,
-                                    assignedSlotMap = snapLayoutManager.slotAssignments,
+                                    assignedSlotMap = snapSlotAssignments,
                                     activeConfiguringSlot = activeConfiguringSlot,
                                     onSelectWindowForSlot = { slotIdx, selectedWin ->
+                                        // Remove selected window from any other slot to avoid duplicates
                                         snapLayoutManager.slotAssignments.entries.removeAll { it.value == selectedWin.id && it.key != slotIdx }
                                         snapLayoutManager.assignWindowToSlot(slotIdx, selectedWin.id)
+                                        snapSlotAssignments = snapLayoutManager.slotAssignments.toMap()
+
                                         val vpW = activeLorieView?.width?.takeIf { it > 0 } ?: canvasWidthPx.toInt()
                                         val vpH = activeLorieView?.height?.takeIf { it > 0 } ?: canvasHeightPx.toInt()
 
-                                         val totalSlots = snapGeometries.size
-                                         val totalWindows = openWindows.size
-                                         val assignedMap = snapLayoutManager.slotAssignments.filter { it.value.isNotBlank() }
-                                         val unassignedSlotIndices = snapGeometries.indices.filter { !assignedMap.containsKey(it) }
+                                        // Complete and snap ONLY when all slots in this layout have been assigned
+                                        val allSlotsAssigned = snapGeometries.isNotEmpty() && snapGeometries.all { geo ->
+                                            snapLayoutManager.slotAssignments[geo.slotIndex]?.isNotBlank() == true
+                                        }
 
-                                         if (totalWindows > totalSlots) {
-                                             // More windows than slots: wait till notes for all slots are chosen
-                                             if (unassignedSlotIndices.isNotEmpty()) {
-                                                 activeConfiguringSlot = unassignedSlotIndices.first()
-                                             } else {
-                                                 val assignments = snapLayoutManager.buildSnapAssignments(vpW, vpH, openWindows)
-                                                 if (assignments.isNotEmpty() && this@CanvasActivity::supervisor.isInitialized) {
-                                                     this@CanvasActivity.supervisor.snapWindowsBatch(assignments)
-                                                 }
-                                                 showSnapAssistHost = false
-                                                 activeConfiguringSlot = null
-                                                  lifecycleScope.launch {
-                                                      delay(200)
-                                                      captureCurrentWindowPreview { freshBmp ->
-                                                          if (freshBmp != null) {
-                                                              updateSlotPreviewsFromScreen(freshBmp)
-                                                          }
-                                                      }
-                                                  }
-                                             }
-                                         } else {
-                                             // totalWindows <= totalSlots: wait till n - 1 slots are chosen before closing note selection
-                                             if (unassignedSlotIndices.size <= 1) {
-                                                 if (unassignedSlotIndices.size == 1) {
-                                                     val lastSlot = unassignedSlotIndices.first()
-                                                     val assignedWinIds = assignedMap.values.toSet()
-                                                     val remainingWin = openWindows.firstOrNull { !assignedWinIds.contains(it.id) }
-                                                     if (remainingWin != null) {
-                                                         snapLayoutManager.assignWindowToSlot(lastSlot, remainingWin.id)
-                                                     }
-                                                 }
-                                                 val assignments = snapLayoutManager.buildSnapAssignments(vpW, vpH, openWindows)
-                                                 if (assignments.isNotEmpty() && this@CanvasActivity::supervisor.isInitialized) {
-                                                     this@CanvasActivity.supervisor.snapWindowsBatch(assignments)
-                                                 }
-                                                 showSnapAssistHost = false
-                                                 activeConfiguringSlot = null
-                                                  lifecycleScope.launch {
-                                                      delay(200)
-                                                      captureCurrentWindowPreview { freshBmp ->
-                                                          if (freshBmp != null) {
-                                                              updateSlotPreviewsFromScreen(freshBmp)
-                                                          }
-                                                      }
-                                                  }
-                                             } else {
-                                                 activeConfiguringSlot = unassignedSlotIndices.first()
-                                             }
-                                         }
-                                     },
+                                        if (allSlotsAssigned) {
+                                            val assignments = snapLayoutManager.buildSnapAssignments(vpW, vpH, openWindows)
+                                            if (assignments.isNotEmpty() && this@CanvasActivity::supervisor.isInitialized) {
+                                                this@CanvasActivity.supervisor.snapWindowsBatch(assignments)
+                                            }
+                                            showSnapAssistHost = false
+                                            activeConfiguringSlot = null
+                                            lifecycleScope.launch {
+                                                delay(200)
+                                                captureCurrentWindowPreview { freshBmp ->
+                                                    if (freshBmp != null) {
+                                                        updateSlotPreviewsFromScreen(freshBmp)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
                                     onSlotClicked = { slotIdx ->
+                                        // Tapping an assigned slot clears its assignment so user can choose another note
+                                        if (snapLayoutManager.slotAssignments.containsKey(slotIdx)) {
+                                            snapLayoutManager.slotAssignments.remove(slotIdx)
+                                            snapSlotAssignments = snapLayoutManager.slotAssignments.toMap()
+                                        }
                                         activeConfiguringSlot = slotIdx
                                     },
                                     onDismiss = {
@@ -1256,7 +1216,6 @@ class CanvasActivity : ComponentActivity() {
                                 val currentActiveId = openWindows.find { it.isActive }?.id
                                 captureCurrentWindowPreview { bmp ->
                                     if (currentActiveId != null && bmp != null) {
-                                        fullScreenCache[currentActiveId] = bmp
                                         windowPreviewCache[currentActiveId] = bmp
                                     }
                                     showWindowSwitcherGallery = true
