@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="art/logo.svg" width="128" height="128" alt="Aournal++ Logo" />
+</p>
+
 # Aournal++
 
 > **Aournal++** is a modern Android companion and wrapper for [Xournal++](https://xournalpp.github.io/), powered by an embedded Termux & X11 environment with enhanced pen/stylus support, Material You (M3) UX, and optimized low-latency note-taking workflows.

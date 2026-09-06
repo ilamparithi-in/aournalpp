@@ -56,3 +56,10 @@ scripts/*.o
 scripts/keys/
 *.gpg
 
+# Dynamically generated launcher mipmaps & raster artwork (built from art/logo.svg)
+app/src/main/res/mipmap-*/ic_launcher.webp
+app/src/main/res/mipmap-*/ic_launcher_round.webp
+app/src/main/res/mipmap-*/ic_launcher.png
+app/src/main/res/mipmap-*/ic_launcher_round.png
+art/*.png
+

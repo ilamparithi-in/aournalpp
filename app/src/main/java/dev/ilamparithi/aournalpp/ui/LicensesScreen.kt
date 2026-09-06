@@ -264,11 +264,15 @@ fun LicensesScreen(onBack: (() -> Unit)? = null) {
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.licenses_title),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AppLogoBadge(size = 28.dp)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.licenses_title),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 },
                 navigationIcon = {
                     if (onBack != null) {

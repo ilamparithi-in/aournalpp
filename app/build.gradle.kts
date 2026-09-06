@@ -327,6 +327,23 @@ val generateBootstrap = tasks.register("generateBootstrap") {
     dependsOn("generateBootstrapArm64", "generateBootstrapX86_64")
 }
 
+val generateAppIcons = tasks.register<Exec>("generateAppIcons") {
+    description = "Dynamically generates launcher mipmaps and store assets from art/logo.svg"
+    group = "build"
+    workingDir = rootDir
+    commandLine("python3", rootDir.resolve("scripts/generate_app_icons.py").absolutePath)
+    inputs.file(rootDir.resolve("art/logo.svg"))
+    outputs.files(
+        fileTree(projectDir.resolve("src/main/res")) {
+            include("mipmap-*/ic_launcher*.webp")
+        }
+    )
+}
+
+tasks.named("preBuild") {
+    dependsOn(generateAppIcons)
+}
+
 androidComponents.onVariants { variant ->
     val flavorName = variant.flavorName ?: return@onVariants
     val capitalizedFlavor = flavorName.replaceFirstChar { it.uppercase() }
