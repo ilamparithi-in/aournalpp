@@ -148,7 +148,10 @@ class BackupScanner(
         skipSubdirName: String? = null
     ) {
         val files = rootDir.walkTopDown()
-            .onEnter { dir -> skipSubdirName == null || dir.name != skipSubdirName }
+            .onEnter { dir ->
+                (skipSubdirName == null || dir.name != skipSubdirName) &&
+                (exclusionFilter.syncTrash || dir.name != ".Trash")
+            }
             .filter { it.isFile }
             .toList()
         for (file in files) {
@@ -192,14 +195,14 @@ class BackupScanner(
     }
 
     /**
-     * Evaluates file against exclusion filters and transient patterns.
+     * Evaluates file against exclusion filters, whitelist rules, and transient patterns.
      */
     fun shouldExcludeFile(file: File, rootDir: File): Boolean {
         val name = file.name
         val extension = file.extension.lowercase()
         val path = file.absolutePath
 
-        // 1. Transient and lock files
+        // 1. Transient and lock files (always excluded to protect data integrity)
         if (exclusionFilter.skipDefaultTransient) {
             if (name.endsWith(".autosave.xopp") || name.endsWith(".xopp~") || name.endsWith(".tmp") || name.endsWith(".swp") || name.endsWith(".sock")) {
                 return true
@@ -213,26 +216,50 @@ class BackupScanner(
             }
         }
 
-        // 2. Excluded extensions
-        if (extension in exclusionFilter.excludedExtensions) {
-            return true
-        }
-
-        // 3. Excluded folder paths
-        for (excludedFolder in exclusionFilter.excludedFolderPaths) {
-            if (path.startsWith(excludedFolder)) {
+        // 2. Trash directory exclusion if syncTrash is disabled
+        if (!exclusionFilter.syncTrash) {
+            if (path.contains("/.Trash/") || path.endsWith("/.Trash") || file.parentFile?.name == ".Trash") {
                 return true
             }
         }
 
-        // 4. Custom regex patterns
-        for (pattern in compiledRegexes) {
-            if (pattern.matcher(name).find() || pattern.matcher(path).find()) {
+        // 3. Whitelist vs Blacklist Mode
+        if (exclusionFilter.isWhitelistMode) {
+            val hasExtensionFilter = exclusionFilter.excludedExtensions.isNotEmpty()
+            val hasFolderFilter = exclusionFilter.excludedFolderPaths.isNotEmpty()
+            val hasRegexFilter = compiledRegexes.isNotEmpty()
+
+            // If no whitelist filters are defined at all, everything non-transient is allowed by default
+            if (!hasExtensionFilter && !hasFolderFilter && !hasRegexFilter) {
+                return false
+            }
+
+            val matchesExt = hasExtensionFilter && extension in exclusionFilter.excludedExtensions
+            val matchesFolder = hasFolderFilter && exclusionFilter.excludedFolderPaths.any { path.startsWith(it) }
+            val matchesRegex = hasRegexFilter && compiledRegexes.any { it.matcher(name).find() || it.matcher(path).find() }
+
+            val isWhitelisted = matchesExt || matchesFolder || matchesRegex
+            return !isWhitelisted // Exclude if not matching the whitelist
+        } else {
+            // Blacklist Mode: Exclude matching items
+            if (extension in exclusionFilter.excludedExtensions) {
                 return true
             }
-        }
 
-        return false
+            for (excludedFolder in exclusionFilter.excludedFolderPaths) {
+                if (path.startsWith(excludedFolder)) {
+                    return true
+                }
+            }
+
+            for (pattern in compiledRegexes) {
+                if (pattern.matcher(name).find() || pattern.matcher(path).find()) {
+                    return true
+                }
+            }
+
+            return false
+        }
     }
 
     private fun calculateSha256(file: File): String = BackupScanner.calculateSha256(file)

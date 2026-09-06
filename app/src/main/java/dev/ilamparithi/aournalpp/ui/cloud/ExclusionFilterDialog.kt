@@ -47,6 +47,9 @@ import androidx.compose.ui.window.DialogProperties
 import dev.ilamparithi.aournalpp.R
 import dev.ilamparithi.aournalpp.ui.util.a11yHeading
 import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import dev.ilamparithi.aournalpp.backup.model.ExclusionFilterConfig
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -56,6 +59,8 @@ fun ExclusionFilterDialog(
     onDismissRequest: () -> Unit,
     onSaveFilter: (ExclusionFilterConfig) -> Unit
 ) {
+    var isWhitelistMode by remember { mutableStateOf(initialConfig.isWhitelistMode) }
+    var syncTrash by remember { mutableStateOf(initialConfig.syncTrash) }
     var skipDefaultTransient by remember { mutableStateOf(initialConfig.skipDefaultTransient) }
     var regexList by remember { mutableStateOf(initialConfig.regexPatterns) }
     var excludedExtSet by remember { mutableStateOf(initialConfig.excludedExtensions) }
@@ -73,7 +78,7 @@ fun ExclusionFilterDialog(
             .padding(vertical = 16.dp),
         title = {
             Text(
-                text = "Configure Exclusion Filters",
+                text = "Configure File Filters",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.a11yHeading()
@@ -86,6 +91,56 @@ fun ExclusionFilterDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                // Filter Mode Selector (Blacklist vs Whitelist)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Filter Strategy", fontWeight = FontWeight.SemiBold)
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        SegmentedButton(
+                            selected = !isWhitelistMode,
+                            onClick = { isWhitelistMode = false },
+                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                        ) {
+                            Text("Blacklist")
+                        }
+                        SegmentedButton(
+                            selected = isWhitelistMode,
+                            onClick = { isWhitelistMode = true },
+                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                        ) {
+                            Text("Whitelist")
+                        }
+                    }
+                    Text(
+                        text = if (isWhitelistMode) {
+                            "Whitelist mode: Only files matching the rules below will be backed up. All other files are skipped."
+                        } else {
+                            "Blacklist mode: All files are backed up except those matching the rules below."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // Trash files toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Sync Trash Folder", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Includes deleted notes in ~/.Trash when backing up to the cloud",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = syncTrash,
+                        onCheckedChange = { syncTrash = it }
+                    )
+                }
+
                 // Transient files toggle
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -95,7 +150,7 @@ fun ExclusionFilterDialog(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Ignore Transient & Lock Files", fontWeight = FontWeight.SemiBold)
                         Text(
-                            "Skips *.autosave.xopp, .X0-lock, .sock, and swap files",
+                            "Always skips *.autosave.xopp, .X0-lock, .sock, and swap files",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -107,7 +162,10 @@ fun ExclusionFilterDialog(
                 }
 
                 // Regex Patterns
-                Text("Filename Regex Patterns", fontWeight = FontWeight.SemiBold)
+                Text(
+                    text = if (isWhitelistMode) "Allowed Regex Patterns" else "Filename Regex Patterns",
+                    fontWeight = FontWeight.SemiBold
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -155,8 +213,11 @@ fun ExclusionFilterDialog(
                     }
                 }
 
-                // Excluded Extensions
-                Text("Excluded Extensions", fontWeight = FontWeight.SemiBold)
+                // Extensions
+                Text(
+                    text = if (isWhitelistMode) "Allowed Extensions" else "Excluded Extensions",
+                    fontWeight = FontWeight.SemiBold
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -165,7 +226,7 @@ fun ExclusionFilterDialog(
                     OutlinedTextField(
                         value = newExtInput,
                         onValueChange = { newExtInput = it },
-                        placeholder = { Text("bak, tmp, log") },
+                        placeholder = { Text(if (isWhitelistMode) "xopp, pdf" else "bak, tmp, log") },
                         singleLine = true,
                         modifier = Modifier.weight(1f)
                     )
@@ -205,8 +266,11 @@ fun ExclusionFilterDialog(
                     }
                 }
 
-                // Excluded Folder Paths
-                Text("Excluded Folder Paths", fontWeight = FontWeight.SemiBold)
+                // Folder Paths
+                Text(
+                    text = if (isWhitelistMode) "Allowed Folder Paths" else "Excluded Folder Paths",
+                    fontWeight = FontWeight.SemiBold
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -215,7 +279,7 @@ fun ExclusionFilterDialog(
                     OutlinedTextField(
                         value = newFolderInput,
                         onValueChange = { newFolderInput = it },
-                        placeholder = { Text("/path/to/ignore") },
+                        placeholder = { Text(if (isWhitelistMode) "/path/to/include" else "/path/to/ignore") },
                         singleLine = true,
                         modifier = Modifier.weight(1f)
                     )
@@ -259,6 +323,8 @@ fun ExclusionFilterDialog(
             Button(
                 onClick = {
                     val config = ExclusionFilterConfig(
+                        isWhitelistMode = isWhitelistMode,
+                        syncTrash = syncTrash,
                         regexPatterns = regexList,
                         excludedExtensions = excludedExtSet,
                         excludedFolderPaths = excludedFolderSet,
@@ -276,6 +342,8 @@ fun ExclusionFilterDialog(
                 ResetDefaultsButton(
                     onReset = {
                         val def = ExclusionFilterConfig.DEFAULT
+                        isWhitelistMode = def.isWhitelistMode
+                        syncTrash = def.syncTrash
                         skipDefaultTransient = def.skipDefaultTransient
                         regexList = def.regexPatterns
                         excludedExtSet = def.excludedExtensions

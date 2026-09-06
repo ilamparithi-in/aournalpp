@@ -132,6 +132,8 @@ data class FolderValidationResult(
  * Configurable exclusion filter for scanning local files.
  */
 data class ExclusionFilterConfig(
+    val isWhitelistMode: Boolean = false,
+    val syncTrash: Boolean = false,
     val regexPatterns: List<String> = emptyList(),
     val excludedExtensions: Set<String> = emptySet(),
     val includedExtensions: Set<String>? = null, // null means all allowed by scope
@@ -140,6 +142,8 @@ data class ExclusionFilterConfig(
 ) {
     companion object {
         val DEFAULT = ExclusionFilterConfig(
+            isWhitelistMode = false,
+            syncTrash = false,
             regexPatterns = listOf(
                 "^\\..*\\.autosave\\.xopp$",
                 "^\\..*\\.xopp~$",

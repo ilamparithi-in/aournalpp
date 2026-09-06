@@ -50,6 +50,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -117,6 +118,8 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
+import dev.ilamparithi.aournalpp.utils.NetworkUtils
 import java.io.File
 import java.util.UUID
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -240,7 +243,9 @@ fun CloudScreen(
     var showRestoreConfirmDialog by remember { mutableStateOf(false) }
     var restoreTargetService by remember { mutableStateOf<ServiceConfig?>(null) }
 
-    var isGlobalSyncRunning by remember { mutableStateOf(false) }
+    val isSyncRunningByManager by FileTransferQueueManager.isSyncRunning.collectAsStateWithLifecycle()
+    var isLocalSyncRunning by remember { mutableStateOf(false) }
+    val isGlobalSyncRunning = isSyncRunningByManager || isLocalSyncRunning
 
     // Multi-service Conflict States
     var detectedConflicts by remember { mutableStateOf<List<FileConflictGroup>>(emptyList()) }
@@ -469,24 +474,19 @@ fun CloudScreen(
                         }
                     },
                     onSyncAll = {
-                        isGlobalSyncRunning = true
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Starting synchronization across all active clouds...")
-                            try {
-                                val results = engine.performMultiServiceBackup(concurrency = concurrencyWorkers)
-                                val totalUploaded = results.sumOf { it.filesUploaded }
-                                val totalFailed = results.sumOf { it.filesFailed }
-                                refreshState()
-                                if (totalFailed == 0) {
-                                    snackbarHostState.showSnackbar("Backup complete: $totalUploaded files uploaded")
-                                } else {
-                                    snackbarHostState.showSnackbar("Backup finished with $totalFailed errors")
-                                }
-                            } catch (e: Exception) {
-                                snackbarHostState.showSnackbar("Sync failed: ${e.message}")
-                            } finally {
-                                isGlobalSyncRunning = false
+                        val netCheck = NetworkUtils.checkSyncNetworkPreconditions(context, wifiOnly = isWifiOnly)
+                        if (!netCheck.canSync) {
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(
+                                    message = netCheck.errorMessage ?: "Network not available",
+                                    duration = androidx.compose.material3.SnackbarDuration.Short
+                                )
                             }
+                        } else {
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar("Synchronization queued in background...")
+                            }
+                            BackupScheduler.triggerImmediateSync(context, wifiOnly = isWifiOnly)
                         }
                     },
                     onOpenQueue = { currentSubpage = CloudSubpage.TRANSFER_QUEUE },
@@ -539,40 +539,19 @@ fun CloudScreen(
             }
 
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "${stringResource(R.string.cloud_services_header)} (${services.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            if (services.isEmpty()) {
-                item {
-                    EmptyServicesCard(
-                        onAddService = {
-                            editingService = null
-                            showServiceDialog = true
-                        }
-                    )
-                }
-            } else {
-                items(services, key = { it.id }) { service ->
-                    CompactCloudServiceCard(
-                        service = service,
-                        onClick = { selectedDetailServiceId = service.id },
-                        onToggleEnabled = { enabled ->
-                            val updated = service.copy(isEnabled = enabled)
-                            vault.saveService(updated)
-                            refreshState()
-                        }
-                    )
-                }
+                ConfiguredServicesCarousel(
+                    services = services,
+                    onSelectService = { service -> selectedDetailServiceId = service.id },
+                    onToggleEnabled = { service, enabled ->
+                        val updated = service.copy(isEnabled = enabled)
+                        vault.saveService(updated)
+                        refreshState()
+                    },
+                    onAddService = {
+                        editingService = null
+                        showServiceDialog = true
+                    }
+                )
             }
 
             item {
@@ -588,6 +567,11 @@ fun CloudScreen(
             item {
                 ExclusionFiltersCard(
                     filter = exclusionFilter,
+                    onFilterUpdated = { updated ->
+                        vault.saveExclusionFilter(updated)
+                        backupPrefs.isSyncTrashEnabled = updated.syncTrash
+                        refreshState()
+                    },
                     onConfigure = { showExclusionDialog = true }
                 )
             }
@@ -794,6 +778,7 @@ fun CloudScreen(
             onDismissRequest = { showExclusionDialog = false },
             onSaveFilter = { config ->
                 vault.saveExclusionFilter(config)
+                backupPrefs.isSyncTrashEnabled = config.syncTrash
                 refreshState()
                 coroutineScope.launch {
                     snackbarHostState.showSnackbar("Updated exclusion filters")
@@ -1042,7 +1027,86 @@ fun EmptyServicesCard(onAddService: () -> Unit) {
 }
 
 @Composable
-fun CompactCloudServiceCard(
+fun ConfiguredServicesCarousel(
+    services: List<ServiceConfig>,
+    onSelectService: (ServiceConfig) -> Unit,
+    onToggleEnabled: (ServiceConfig, Boolean) -> Unit,
+    onAddService: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Cloud,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.cloud_services_header),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.secondaryContainer
+                ) {
+                    Text(
+                        text = "${services.count { it.isEnabled }}/${services.size} active",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            TextButton(
+                onClick = onAddService,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(stringResource(R.string.action_add_cloud_service), style = MaterialTheme.typography.labelMedium)
+            }
+        }
+
+        if (services.isEmpty()) {
+            EmptyServicesCard(onAddService = onAddService)
+        } else {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(horizontal = 4.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(services, key = { it.id }) { service ->
+                    CloudServiceCarouselCard(
+                        service = service,
+                        onClick = { onSelectService(service) },
+                        onToggleEnabled = { enabled -> onToggleEnabled(service, enabled) }
+                    )
+                }
+
+                item {
+                    AddServiceCarouselCard(onClick = onAddService)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CloudServiceCarouselCard(
     service: ServiceConfig,
     onClick: () -> Unit,
     onToggleEnabled: (Boolean) -> Unit
@@ -1053,69 +1117,98 @@ fun CompactCloudServiceCard(
 
     Card(
         modifier = Modifier
-            .fillMaxWidth()
+            .width(260.dp)
+            .height(175.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (service.isEnabled) {
+                MaterialTheme.colorScheme.surfaceContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerLow
+            }
+        ),
+        border = if (service.isEnabled) {
+            androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        } else null
     ) {
-        Row(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxSize()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(44.dp)
+            // Header: Provider icon + Service Name + Switch
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = when (service.providerType) {
-                            StorageProviderType.GOOGLE_DRIVE -> Icons.Default.Cloud
-                            StorageProviderType.NEXTCLOUD -> Icons.Default.Storage
-                            StorageProviderType.WEBDAV -> Icons.Default.CloudSync
-                            StorageProviderType.SFTP -> Icons.Default.Storage
-                            StorageProviderType.SMB3 -> Icons.Default.Folder
-                            StorageProviderType.FTP -> Icons.Default.CloudUpload
-                        },
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(24.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    CloudProviderIcon(
+                        providerType = service.providerType,
+                        size = 34.dp
                     )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = service.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = service.providerType.displayName,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
+
+                Switch(
+                    checked = service.isEnabled,
+                    onCheckedChange = onToggleEnabled,
+                    modifier = Modifier.scale(0.85f)
+                )
             }
 
-            Spacer(modifier = Modifier.width(14.dp))
+            // Middle: Host / URL & Badges
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                val endpoint = if (service.serverUrl.isNotBlank()) service.serverUrl else service.host
+                if (endpoint.isNotBlank()) {
+                    Text(
+                        text = endpoint,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
 
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = service.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "${service.providerType.displayName} • ${if (service.serverUrl.isNotBlank()) service.serverUrl else service.host}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(6.dp))
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
                         shape = RoundedCornerShape(6.dp),
-                        color = if (service.isCompleteBackupEnabled) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest
+                        color = if (service.isCompleteBackupEnabled) {
+                            MaterialTheme.colorScheme.secondaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHighest
+                        }
                     ) {
                         Text(
                             text = if (service.isCompleteBackupEnabled) "Complete: On" else "Complete: Off",
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (service.isCompleteBackupEnabled) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.outline,
+                            color = if (service.isCompleteBackupEnabled) {
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.outline
+                            },
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
@@ -1136,20 +1229,82 @@ fun CompactCloudServiceCard(
                 }
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            // Footer: Last Synced + Arrow affordance
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Synced: $lastSyncFormatted",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
 
-            Switch(
-                checked = service.isEnabled,
-                onCheckedChange = onToggleEnabled
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                    contentDescription = stringResource(R.string.action_details),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun AddServiceCarouselCard(onClick: () -> Unit) {
+    OutlinedCard(
+        modifier = Modifier
+            .width(160.dp)
+            .height(175.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.5f)
+        ),
+        border = androidx.compose.foundation.BorderStroke(
+            1.5.dp,
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(44.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = stringResource(R.string.action_add_cloud_service),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = stringResource(R.string.action_add_cloud_service),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
-
-            Spacer(modifier = Modifier.width(4.dp))
-
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
-                contentDescription = stringResource(R.string.action_details),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(16.dp)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "Drive, Nextcloud, etc.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
         }
     }
@@ -1318,17 +1473,24 @@ fun ServiceDetailSubpage(
             } else {
                 TopAppBar(
                     title = {
-                        Column {
-                            Text(
-                                text = service.name,
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CloudProviderIcon(
+                                providerType = service.providerType,
+                                size = 32.dp
                             )
-                            Text(
-                                text = "${service.providerType.displayName} • ${if (service.serverUrl.isNotBlank()) service.serverUrl else service.host}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = service.name,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "${service.providerType.displayName} • ${if (service.serverUrl.isNotBlank()) service.serverUrl else service.host}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     },
                     navigationIcon = {
@@ -2161,6 +2323,7 @@ fun ConflictPolicyCard(
 @Composable
 fun ExclusionFiltersCard(
     filter: dev.ilamparithi.aournalpp.backup.model.ExclusionFilterConfig,
+    onFilterUpdated: (dev.ilamparithi.aournalpp.backup.model.ExclusionFilterConfig) -> Unit,
     onConfigure: () -> Unit
 ) {
     Card(
@@ -2179,11 +2342,18 @@ fun ExclusionFiltersCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.FilterList, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = stringResource(R.string.cloud_exclusion_card_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Column {
+                        Text(
+                            text = stringResource(R.string.cloud_exclusion_card_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (filter.isWhitelistMode) "Mode: Whitelist (Include only matches)" else "Mode: Blacklist (Exclude matches)",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (filter.isWhitelistMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
                 TextButton(onClick = onConfigure) {
@@ -2191,12 +2361,74 @@ fun ExclusionFiltersCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Switch 1: Whitelist vs Blacklist Mode
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Whitelist Mode",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = if (filter.isWhitelistMode) {
+                            "Only notes matching configured extensions or folders will sync"
+                        } else {
+                            "Notes matching configured extensions or folders are skipped"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Switch(
+                    checked = filter.isWhitelistMode,
+                    onCheckedChange = { onFilterUpdated(filter.copy(isWhitelistMode = it)) }
+                )
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            // Switch 2: Sync Trash Folder
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Sync Trash Folder (.Trash)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = if (filter.syncTrash) {
+                            "Deleted notes in .Trash folder will be uploaded"
+                        } else {
+                            "Deleted notes in .Trash are excluded from cloud sync"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Switch(
+                    checked = filter.syncTrash,
+                    onCheckedChange = { onFilterUpdated(filter.copy(syncTrash = it)) }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
             val transientPrefix = if (filter.skipDefaultTransient) "Transient & lock files ignored • " else ""
             Text(
                 text = stringResource(R.string.cloud_exclusion_card_summary, transientPrefix, filter.regexPatterns.size, filter.excludedExtensions.size),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.outline
             )
         }
     }

@@ -18,9 +18,17 @@ object FileTransferQueueManager {
     private val _items = MutableStateFlow<List<TransferItem>>(emptyList())
     val items: StateFlow<List<TransferItem>> = _items.asStateFlow()
 
+    private val _isSyncRunning = MutableStateFlow(false)
+    val isSyncRunning: StateFlow<Boolean> = _isSyncRunning.asStateFlow()
+
     private val cancellationFlags = ConcurrentHashMap<String, Boolean>()
     private val pauseFlags = ConcurrentHashMap<String, Boolean>()
     private val speedTrackers = ConcurrentHashMap<String, Pair<Long, Long>>() // id -> (lastBytes, lastTimestampMs)
+    private val lastProgressEmitMs = ConcurrentHashMap<String, Long>()
+
+    fun setSyncActive(active: Boolean) {
+        _isSyncRunning.value = active
+    }
 
     fun enqueue(item: TransferItem) {
         cancellationFlags[item.id] = false
@@ -46,12 +54,14 @@ object FileTransferQueueManager {
         cancellationFlags[id] = false
         pauseFlags[id] = false
         speedTrackers[id] = 0L to System.currentTimeMillis()
+        lastProgressEmitMs[id] = 0L
         _items.update { list ->
             list.map {
                 if (it.id == id) {
                     it.copy(
                         status = TransferStatus.IN_PROGRESS,
-                        startedAtEpochMs = System.currentTimeMillis()
+                        startedAtEpochMs = System.currentTimeMillis(),
+                        errorMessage = null
                     )
                 } else it
             }
@@ -60,6 +70,17 @@ object FileTransferQueueManager {
 
     fun updateProgress(id: String, transferred: Long, total: Long) {
         val now = System.currentTimeMillis()
+        val lastEmit = lastProgressEmitMs[id] ?: 0L
+        val isFinished = total > 0 && transferred >= total
+
+        // Throttle progress updates to UI state flow at ~10 Hz (every 100ms) per transfer
+        // to prevent Compose recomposition storms and Main Looper starvation.
+        // Initial progress update (lastEmit == 0L) and completion (isFinished) always emit immediately.
+        if (!isFinished && lastEmit != 0L && (now - lastEmit) < 100) {
+            return
+        }
+        lastProgressEmitMs[id] = now
+
         val prev = speedTrackers[id]
         var speed = 0L
         if (prev != null) {
@@ -91,6 +112,7 @@ object FileTransferQueueManager {
 
     fun markCompleted(id: String) {
         speedTrackers.remove(id)
+        lastProgressEmitMs.remove(id)
         _items.update { list ->
             list.map {
                 if (it.id == id) {
@@ -108,6 +130,7 @@ object FileTransferQueueManager {
 
     fun markFailed(id: String, error: String) {
         speedTrackers.remove(id)
+        lastProgressEmitMs.remove(id)
         _items.update { list ->
             list.map {
                 if (it.id == id) {
@@ -124,6 +147,7 @@ object FileTransferQueueManager {
 
     fun markSkipped(id: String) {
         speedTrackers.remove(id)
+        lastProgressEmitMs.remove(id)
         _items.update { list ->
             list.map {
                 if (it.id == id) {
@@ -264,6 +288,7 @@ object FileTransferQueueManager {
         cancellationFlags.remove(id)
         pauseFlags.remove(id)
         speedTrackers.remove(id)
+        lastProgressEmitMs.remove(id)
         _items.update { list ->
             list.filterNot { it.id == id }
         }
@@ -288,6 +313,7 @@ object FileTransferQueueManager {
         cancellationFlags.clear()
         pauseFlags.clear()
         speedTrackers.clear()
+        lastProgressEmitMs.clear()
         _items.value = emptyList()
     }
 }

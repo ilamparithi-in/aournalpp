@@ -117,8 +117,12 @@ class CredentialsVault(context: Context) {
             val folderSet = (0 until folderArray.length()).map { folderArray.getString(it) }.toSet()
 
             val skipDefault = obj.optBoolean("skipDefaultTransient", true)
+            val isWhitelist = obj.optBoolean("isWhitelistMode", false)
+            val syncTrash = obj.optBoolean("syncTrash", false)
 
             ExclusionFilterConfig(
+                isWhitelistMode = isWhitelist,
+                syncTrash = syncTrash,
                 regexPatterns = regexList,
                 excludedExtensions = extSet,
                 includedExtensions = incSet,
@@ -135,6 +139,8 @@ class CredentialsVault(context: Context) {
     fun saveExclusionFilter(config: ExclusionFilterConfig) {
         try {
             val obj = JSONObject()
+            obj.put("isWhitelistMode", config.isWhitelistMode)
+            obj.put("syncTrash", config.syncTrash)
             obj.put("regexPatterns", JSONArray(config.regexPatterns))
             obj.put("excludedExtensions", JSONArray(config.excludedExtensions))
             config.includedExtensions?.let { obj.put("includedExtensions", JSONArray(it)) }

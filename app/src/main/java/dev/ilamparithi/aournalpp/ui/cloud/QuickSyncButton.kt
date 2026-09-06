@@ -52,13 +52,13 @@ fun QuickSyncButton(
     val haptics = LocalHapticFeedback.current
 
     val vault = remember { CredentialsVault(context) }
-    val engine = remember { BackupEngine(context) }
+    val prefs = remember { dev.ilamparithi.aournalpp.backup.worker.BackupPreferences(context) }
+    val isSyncRunningByManager by FileTransferQueueManager.isSyncRunning.collectAsStateWithLifecycle()
 
     val queueItems by FileTransferQueueManager.items.collectAsStateWithLifecycle()
     val activeCount = queueItems.count { it.status == TransferStatus.IN_PROGRESS || it.status == TransferStatus.QUEUED }
-    var isManualSyncActive by remember { mutableStateOf(false) }
 
-    val isSyncing = activeCount > 0 || isManualSyncActive
+    val isSyncing = activeCount > 0 || isSyncRunningByManager
 
     // Smooth spinning animation when syncing
     val infiniteTransition = rememberInfiniteTransition(label = "quickSyncSpin")
@@ -88,23 +88,20 @@ fun QuickSyncButton(
                         return@IconButton
                     }
 
-                    isManualSyncActive = true
-                    coroutineScope.launch {
-                        try {
-                            val results = engine.performMultiServiceBackup()
-                            val uploaded = results.sumOf { it.filesUploaded }
-                            val failed = results.sumOf { it.filesFailed }
-                            if (failed == 0) {
-                                onSyncFinished?.invoke("Synced: $uploaded files uploaded")
-                            } else {
-                                onSyncFinished?.invoke("Sync completed with $failed errors")
-                            }
-                        } catch (e: Exception) {
-                            onSyncFinished?.invoke("Sync failed: ${e.message}")
-                        } finally {
-                            isManualSyncActive = false
-                        }
+                    val netCheck = dev.ilamparithi.aournalpp.utils.NetworkUtils.checkSyncNetworkPreconditions(
+                        context,
+                        wifiOnly = prefs.isWifiOnlyEnabled
+                    )
+                    if (!netCheck.canSync) {
+                        onSyncFinished?.invoke(netCheck.errorMessage ?: "Network not available")
+                        return@IconButton
                     }
+
+                    dev.ilamparithi.aournalpp.backup.worker.BackupScheduler.triggerImmediateSync(
+                        context,
+                        wifiOnly = prefs.isWifiOnlyEnabled
+                    )
+                    onSyncFinished?.invoke("Synchronization queued in background...")
                 }
             },
             modifier = modifier.minTouchTarget()

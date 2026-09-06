@@ -76,6 +76,9 @@ import dev.ilamparithi.aournalpp.backup.model.TransferItem
 import dev.ilamparithi.aournalpp.backup.model.TransferStatus
 import dev.ilamparithi.aournalpp.backup.queue.FileTransferQueueManager
 import dev.ilamparithi.aournalpp.utils.FormatUtils
+import androidx.compose.ui.platform.LocalContext
+import dev.ilamparithi.aournalpp.backup.model.StorageProviderType
+import dev.ilamparithi.aournalpp.backup.security.CredentialsVault
 import kotlinx.coroutines.launch
 
 enum class QueueFilter {
@@ -93,12 +96,17 @@ fun TransferQueueSubpage(
     engine: BackupEngine? = null,
     onNavigateBack: () -> Unit
 ) {
+    val context = LocalContext.current
+    val vault = remember { CredentialsVault(context) }
     val items: List<TransferItem> by FileTransferQueueManager.items.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
 
     // Multi-cloud detection & filtering
     val cloudServices = remember(items) {
         items.map { it.serviceId to it.serviceName }.distinct()
+    }
+    val serviceProviderMap = remember(cloudServices) {
+        vault.getAllServices().associate { it.id to it.providerType }
     }
     var selectedServiceId by remember { mutableStateOf<String?>(null) }
 
@@ -343,11 +351,15 @@ fun TransferQueueSubpage(
                     }
                     items(cloudServices, key = { it.first }) { (svcId, svcName) ->
                         val count = items.count { it.serviceId == svcId }
+                        val providerType = serviceProviderMap[svcId]
                         FilterChip(
                             selected = selectedServiceId == svcId,
                             onClick = { selectedServiceId = svcId },
                             leadingIcon = {
-                                Icon(Icons.Default.Cloud, contentDescription = null, modifier = Modifier.size(16.dp))
+                                CloudProviderIcon(
+                                    providerType = providerType ?: StorageProviderType.WEBDAV,
+                                    size = 16.dp
+                                )
                             },
                             label = { Text("$svcName ($count)") }
                         )

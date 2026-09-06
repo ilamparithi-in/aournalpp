@@ -164,6 +164,9 @@ fun ServiceConfigDialog(
                         onValueChange = {},
                         readOnly = true,
                         label = { Text("Storage Provider / Protocol") },
+                        leadingIcon = {
+                            CloudProviderIcon(providerType = selectedType, modifier = Modifier.size(24.dp))
+                        },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isTypeDropdownExpanded) },
                         modifier = Modifier
                             .menuAnchor()
@@ -189,6 +192,9 @@ fun ServiceConfigDialog(
                             }
                             DropdownMenuItem(
                                 text = { Text(type.displayName) },
+                                leadingIcon = {
+                                    CloudProviderIcon(providerType = type, modifier = Modifier.size(22.dp))
+                                },
                                 onClick = {
                                     selectedType = type
                                     port = type.defaultPort ?: 443

@@ -13,6 +13,8 @@ import androidx.work.WorkerParameters
 import dev.ilamparithi.aournalpp.R
 import dev.ilamparithi.aournalpp.backup.engine.BackupEngine
 
+import dev.ilamparithi.aournalpp.backup.queue.FileTransferQueueManager
+
 /**
  * Background WorkManager worker executing automated or on-demand multi-service sync
  * with live foreground progress notifications.
@@ -31,26 +33,26 @@ class BackupWorker(
     private val notificationManager =
         appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-    override suspend fun doWork(): Result {
-        Log.i(TAG, "Starting background cloud backup worker...")
+    override suspend fun getForegroundInfo(): ForegroundInfo {
         createNotificationChannel()
-
         val initialNotification = buildNotification("Preparing cloud backup...", 0, 0, true)
-        val foregroundInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                ForegroundInfo(NOTIFICATION_ID, initialNotification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-            } else {
-                ForegroundInfo(NOTIFICATION_ID, initialNotification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-            }
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ForegroundInfo(NOTIFICATION_ID, initialNotification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
             ForegroundInfo(NOTIFICATION_ID, initialNotification)
         }
+    }
 
+    override suspend fun doWork(): Result {
+        Log.i(TAG, "Starting background cloud backup worker...")
+        FileTransferQueueManager.setSyncActive(true)
         try {
-            setForeground(foregroundInfo)
-        } catch (e: Exception) {
-            Log.w(TAG, "Unable to run as foreground service, continuing as regular worker", e)
-        }
+            val foregroundInfo = getForegroundInfo()
+            try {
+                setForeground(foregroundInfo)
+            } catch (e: Exception) {
+                Log.w(TAG, "Unable to run as foreground service, continuing as regular worker", e)
+            }
 
         val prefs = BackupPreferences(appContext)
         val engine = BackupEngine(appContext)
@@ -96,6 +98,9 @@ class BackupWorker(
         notificationManager.notify(NOTIFICATION_ID, completeNotification)
 
         return Result.success()
+        } finally {
+            FileTransferQueueManager.setSyncActive(false)
+        }
     }
 
     private fun buildNotification(contentText: String, current: Int, total: Int, indeterminate: Boolean): android.app.Notification {

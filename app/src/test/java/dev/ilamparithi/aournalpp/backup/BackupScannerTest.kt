@@ -141,4 +141,76 @@ class BackupScannerTest {
         org.junit.Assert.assertEquals(1, scanned.size)
         org.junit.Assert.assertEquals("precomputed_mock_sha256_hash", scanned[0].sha256)
     }
+
+    @Test
+    fun testWhitelistModeExclusions() {
+        val whitelistFilter = ExclusionFilterConfig(
+            isWhitelistMode = true,
+            excludedExtensions = setOf("xopp", "pdf"),
+            skipDefaultTransient = true
+        )
+
+        val scanner = BackupScanner(
+            env = null,
+            exclusionFilter = whitelistFilter
+        )
+
+        val xoppNote = File(rootDir, "ValidNote.xopp")
+        val pdfDoc = File(rootDir, "Document.pdf")
+        val txtFile = File(rootDir, "Readme.txt")
+        val docxFile = File(rootDir, "Essay.docx")
+        val autosave = File(rootDir, ".ValidNote.autosave.xopp")
+
+        // In whitelist mode:
+        // Matching extensions should NOT be excluded (return false)
+        assertFalse(scanner.shouldExcludeFile(xoppNote, rootDir))
+        assertFalse(scanner.shouldExcludeFile(pdfDoc, rootDir))
+
+        // Non-matching extensions should BE excluded (return true)
+        assertTrue(scanner.shouldExcludeFile(txtFile, rootDir))
+        assertTrue(scanner.shouldExcludeFile(docxFile, rootDir))
+
+        // Safety invariant: transient lock files are ALWAYS excluded even if matching extension
+        assertTrue(scanner.shouldExcludeFile(autosave, rootDir))
+    }
+
+    @Test
+    fun testTrashFolderSyncSetting() {
+        val trashDir = File(rootDir, ".Trash").apply { mkdirs() }
+        val trashFile = File(trashDir, "DeletedNote.xopp").apply { writeText("deleted note") }
+        val normalFile = File(rootDir, "ActiveNote.xopp").apply { writeText("active note") }
+
+        val mapping = dev.ilamparithi.aournalpp.backup.model.CustomFolderMapping(
+            id = "test_mapping",
+            serviceId = "test_service",
+            localFolderPath = rootDir.absolutePath,
+            remoteFolderPath = "BackupTest",
+            isEnabled = true
+        )
+
+        // 1. syncTrash = false (default)
+        val defaultScanner = BackupScanner(
+            env = null,
+            exclusionFilter = ExclusionFilterConfig(syncTrash = false)
+        )
+        assertTrue(defaultScanner.shouldExcludeFile(trashFile, rootDir))
+        assertFalse(defaultScanner.shouldExcludeFile(normalFile, rootDir))
+
+        val scannedDefault = defaultScanner.scanCustomMapping(mapping)
+        assertTrue(scannedDefault.none { it.file.absolutePath.contains(".Trash") })
+        assertTrue(scannedDefault.any { it.file.name == "ActiveNote.xopp" })
+
+        // 2. syncTrash = true
+        val syncTrashScanner = BackupScanner(
+            env = null,
+            exclusionFilter = ExclusionFilterConfig(syncTrash = true)
+        )
+        assertFalse(syncTrashScanner.shouldExcludeFile(trashFile, rootDir))
+        assertFalse(syncTrashScanner.shouldExcludeFile(normalFile, rootDir))
+
+        val scannedWithTrash = syncTrashScanner.scanCustomMapping(mapping)
+        assertTrue(scannedWithTrash.any { it.file.name == "DeletedNote.xopp" })
+        assertTrue(scannedWithTrash.any { it.file.name == "ActiveNote.xopp" })
+    }
 }
+

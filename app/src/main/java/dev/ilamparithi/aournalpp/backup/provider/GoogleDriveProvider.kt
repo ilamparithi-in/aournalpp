@@ -26,7 +26,8 @@ import java.util.concurrent.TimeUnit
  * Fully compatible with FOSS, microG, and de-Googled devices without requiring Google Play Services.
  */
 class GoogleDriveProvider(
-    private val config: ServiceConfig
+    private val config: ServiceConfig,
+    private val httpClient: OkHttpClient = StorageProviderFactory.sharedHttpClient
 ) : CloudStorageProvider {
 
     companion object {
@@ -37,12 +38,6 @@ class GoogleDriveProvider(
     }
 
     override val providerType: StorageProviderType = StorageProviderType.GOOGLE_DRIVE
-
-    private val httpClient: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
-        .build()
 
     // Cache of remotePath -> folderId
     private val folderIdCache = ConcurrentHashMap<String, String>()

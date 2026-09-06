@@ -20,6 +20,7 @@ class BackupPreferences(context: Context) {
         private const val KEY_WIFI_ONLY = "wifi_only"
         private const val KEY_CONCURRENCY_WORKERS = "concurrency_workers"
         private const val KEY_CONFLICT_POLICY = "conflict_policy"
+        private const val KEY_SYNC_TRASH = "sync_trash"
     }
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -62,4 +63,8 @@ class BackupPreferences(context: Context) {
             return ConflictResolutionPolicy.fromId(id)
         }
         set(value) = prefs.edit().putString(KEY_CONFLICT_POLICY, value.id).apply()
+
+    var isSyncTrashEnabled: Boolean
+        get() = prefs.getBoolean(KEY_SYNC_TRASH, false)
+        set(value) = prefs.edit().putBoolean(KEY_SYNC_TRASH, value).apply()
 }

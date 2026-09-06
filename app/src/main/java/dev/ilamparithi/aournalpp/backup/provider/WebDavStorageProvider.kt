@@ -27,7 +27,8 @@ import java.util.concurrent.TimeUnit
  * Storage provider for Nextcloud and Generic WebDAV servers using HTTP WebDAV extensions over OkHttp.
  */
 class WebDavStorageProvider(
-    private val config: ServiceConfig
+    private val config: ServiceConfig,
+    private val httpClient: OkHttpClient = StorageProviderFactory.sharedHttpClient
 ) : CloudStorageProvider {
 
     companion object {
@@ -42,12 +43,6 @@ class WebDavStorageProvider(
     }
 
     override val providerType: StorageProviderType = config.providerType
-
-    private val httpClient: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
-        .build()
 
     internal val baseUrl: String = buildBaseUrl()
 
