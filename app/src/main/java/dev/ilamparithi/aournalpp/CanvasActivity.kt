@@ -55,6 +55,7 @@ import dev.ilamparithi.aournalpp.ui.window.WindowSwitchTransitionOverlay
 import dev.ilamparithi.aournalpp.ui.animation.SpringSlideTransition
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.zIndex
 import dev.ilamparithi.aournalpp.utils.WindowPreviewUtils
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -443,6 +444,7 @@ class CanvasActivity : ComponentActivity() {
                 val liveTitle by sessionManager.documentTitle.collectAsState()
                 val openWindows by sessionManager.openWindows.collectAsState(initial = emptyList())
                 val windowPreviewCache = remember { mutableStateMapOf<String, Bitmap>() }
+                val fullScreenCache = remember { mutableStateMapOf<String, Bitmap>() }
                 var transitionOutgoingBitmap by remember { mutableStateOf<Bitmap?>(null) }
                 var transitionIncomingBitmap by remember { mutableStateOf<Bitmap?>(null) }
                 var transitionTargetWindow by remember { mutableStateOf<dev.ilamparithi.aournalpp.runtime.ProcessSupervisor.X11WindowInfo?>(null) }
@@ -672,42 +674,61 @@ class CanvasActivity : ComponentActivity() {
                     }
                 }
 
-                fun captureCurrentWindowPreview(onCaptured: ((Bitmap) -> Unit)? = null) {
-                    val view = activeLorieView ?: return
-                    if (view.width <= 0 || view.height <= 0) return
+                fun captureCurrentWindowPreview(onCaptured: ((Bitmap?) -> Unit)? = null) {
+                    val view = activeLorieView ?: run {
+                        onCaptured?.invoke(null)
+                        return
+                    }
+                    if (view.width <= 0 || view.height <= 0) {
+                        onCaptured?.invoke(null)
+                        return
+                    }
+                    // Do not capture while overlays are active (Snap Assist, Gallery, or transitions)
+                    // as they occlude window contents and cause corrupted thumbnails
+                    if (showSnapAssistHost || showWindowSwitcherGallery || isSwitchTransitionActive) {
+                        onCaptured?.invoke(null)
+                        return
+                    }
+
                     try {
                         val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
                         PixelCopy.request(view, bitmap, { result ->
                             if (result == PixelCopy.SUCCESS) {
-                                if (activeSnapMode == SnapLayoutMode.SINGLE) {
-                                    val activeWin = openWindows.find { it.isActive } ?: openWindows.firstOrNull()
-                                    if (activeWin != null) {
-                                        windowPreviewCache[activeWin.id] = bitmap
-                                    }
-                                } else if (snapGeometries.isNotEmpty()) {
-                                    for (geo in snapGeometries) {
-                                        val winId = snapLayoutManager.slotAssignments[geo.slotIndex]
-                                        if (winId != null) {
-                                            val cropX = geo.x.coerceIn(0, bitmap.width - 1)
-                                            val cropY = geo.y.coerceIn(0, bitmap.height - 1)
-                                            val cropW = geo.width.coerceAtMost(bitmap.width - cropX)
-                                            val cropH = geo.height.coerceAtMost(bitmap.height - cropY)
-                                            if (cropW > 20 && cropH > 20) {
-                                                try {
-                                                    val cropped = Bitmap.createBitmap(bitmap, cropX, cropY, cropW, cropH)
-                                                    windowPreviewCache[winId] = cropped
-                                                } catch (e: Exception) {
-                                                    Log.w("CanvasActivity", "Failed to crop slot thumbnail", e)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
                                 onCaptured?.invoke(bitmap)
+                            } else {
+                                onCaptured?.invoke(null)
                             }
                         }, Handler(Looper.getMainLooper()))
                     } catch (e: Exception) {
                         Log.w("CanvasActivity", "PixelCopy capture failed", e)
+                        onCaptured?.invoke(null)
+                    }
+                }
+
+                fun updateSlotPreviewsFromScreen(bmp: Bitmap) {
+                    if (activeSnapMode == SnapLayoutMode.SINGLE || activeSnapMode == SnapLayoutMode.UNLOCKED || snapGeometries.isEmpty()) {
+                        val activeWin = openWindows.find { it.isActive }
+                        if (activeWin != null) {
+                            windowPreviewCache[activeWin.id] = bmp
+                        }
+                    } else {
+                        for (geo in snapGeometries) {
+                            val winId = snapLayoutManager.slotAssignments[geo.slotIndex]
+                            if (winId != null) {
+                                val cropX = geo.x.coerceIn(0, bmp.width - 1)
+                                val cropY = geo.y.coerceIn(0, bmp.height - 1)
+                                val cropW = geo.width.coerceAtMost(bmp.width - cropX)
+                                val cropH = geo.height.coerceAtMost(bmp.height - cropY)
+                                if (cropW > 20 && cropH > 20) {
+                                    try {
+                                        val cropped = Bitmap.createBitmap(bmp, cropX, cropY, cropW, cropH)
+                                        windowPreviewCache[winId] = cropped
+                                    } catch (e: Exception) {
+                                        Log.w("CanvasActivity", "Failed to crop slot thumbnail", e)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -740,10 +761,14 @@ class CanvasActivity : ComponentActivity() {
                             showSnapAssistHost = false
                             snapDividers = emptyList()
                             snapGeometries = emptyList()
-                            openWindows.forEach { currentSupervisor.setWindowDecorations(it.id, decorated = false) }
-                            val activeWin = openWindows.find { it.isActive } ?: openWindows.firstOrNull()
+                            val wins = openWindows.ifEmpty { currentSupervisor.queryOpenWindows() }
+                            wins.forEach { win ->
+                                currentSupervisor.setWindowDecorations(win.id, decorated = false)
+                                currentSupervisor.setWindowMaximized(win.id, true)
+                            }
+                            val activeWin = wins.find { it.isActive } ?: wins.firstOrNull()
                             if (activeWin != null) {
-                                currentSupervisor.setWindowMaximized(activeWin.id, true)
+                                currentSupervisor.activateWindow(activeWin.id)
                             }
                         }
                         SnapLayoutMode.SPLIT_TWO, SnapLayoutMode.SPLIT_THREE, SnapLayoutMode.GRID_FOUR -> {
@@ -756,7 +781,6 @@ class CanvasActivity : ComponentActivity() {
                             }
 
                             if (configureSlotsIfMultiWindow && openWindows.size >= mode.minWindows) {
-                                captureCurrentWindowPreview()
                                 snapLayoutManager.clearAssignments()
                                 showSnapAssistHost = true
                                 activeConfiguringSlot = 0
@@ -775,9 +799,12 @@ class CanvasActivity : ComponentActivity() {
 
                 fun performWindowSwitch(targetWindow: dev.ilamparithi.aournalpp.runtime.ProcessSupervisor.X11WindowInfo, isForward: Boolean) {
                     val activeWin = openWindows.find { it.isActive }
+                    if (activeWin != null && targetWindow.id == activeWin.id) return
+
                     val view = activeLorieView
                     val currentW = view?.width ?: 0
                     val currentH = view?.height ?: 0
+                    val currentSupervisor = if (this@CanvasActivity::supervisor.isInitialized) this@CanvasActivity.supervisor else null
 
                     if (activeSnapMode != SnapLayoutMode.SINGLE && activeSnapMode != SnapLayoutMode.UNLOCKED) {
                         lifecycleScope.launch(Dispatchers.IO) {
@@ -790,45 +817,40 @@ class CanvasActivity : ComponentActivity() {
                         // Rapid switching / spamming: advance immediately to the next target
                         val previousTarget = transitionTargetWindow
                         transitionOutgoingBitmap = transitionIncomingBitmap
-                            ?: previousTarget?.let { windowPreviewCache[it.id] }
-                            ?: activeWin?.let { windowPreviewCache[it.id] }
-                        transitionIncomingBitmap = windowPreviewCache[targetWindow.id]
+                            ?: previousTarget?.let { fullScreenCache[it.id] }
+                            ?: activeWin?.let { fullScreenCache[it.id] }
+                        transitionIncomingBitmap = fullScreenCache[targetWindow.id]
                         transitionTargetWindow = targetWindow
                         isTransitionForward = isForward
                         transitionSequence++
                         lifecycleScope.launch(Dispatchers.IO) {
+                            if (activeSnapMode == SnapLayoutMode.SINGLE) {
+                                currentSupervisor?.setWindowMaximized(targetWindow.id, true)
+                            }
                             sessionManager.switchToWindow(targetWindow.id)
                         }
                         return
                     }
 
-                    val cachedCurrent = activeWin?.let { windowPreviewCache[it.id] }
-
                     fun startSwitchWithBitmap(currentBmp: Bitmap?) {
                         if (activeWin != null && currentBmp != null) {
-                            windowPreviewCache[activeWin.id] = currentBmp
+                            fullScreenCache[activeWin.id] = currentBmp
+                            if (activeSnapMode == SnapLayoutMode.SINGLE || activeSnapMode == SnapLayoutMode.UNLOCKED || snapGeometries.isEmpty()) {
+                                windowPreviewCache[activeWin.id] = currentBmp
+                            }
                         }
-                        transitionOutgoingBitmap = currentBmp ?: activeWin?.let { windowPreviewCache[it.id] }
-                        transitionIncomingBitmap = windowPreviewCache[targetWindow.id]
+                        transitionOutgoingBitmap = currentBmp ?: activeWin?.let { fullScreenCache[it.id] }
+                        transitionIncomingBitmap = fullScreenCache[targetWindow.id]
                         transitionTargetWindow = targetWindow
                         isTransitionForward = isForward
                         transitionSequence++
                         isSwitchTransitionActive = true
                     }
 
-                    if (WindowPreviewUtils.isFreezeFrameDimensionMatching(cachedCurrent, currentW, currentH)) {
-                        startSwitchWithBitmap(cachedCurrent)
-                        captureCurrentWindowPreview { freshBmp ->
-                            if (activeWin != null) {
-                                windowPreviewCache[activeWin.id] = freshBmp
-                            }
-                        }
-                    } else {
-                        // Dimension mismatch (e.g. window was resized) or cache miss:
-                        // capture fresh freeze frame at current size so the transition never stretches
-                        captureCurrentWindowPreview { currentBmp ->
-                            startSwitchWithBitmap(currentBmp)
-                        }
+                    captureCurrentWindowPreview { liveBmp ->
+                        val cachedCurrent = activeWin?.let { fullScreenCache[it.id] }
+                        val bitmapToUse = liveBmp ?: cachedCurrent
+                        startSwitchWithBitmap(bitmapToUse)
                     }
                 }
 
@@ -897,29 +919,15 @@ class CanvasActivity : ComponentActivity() {
                         // Debounced window resize & preview synchronization
                         // Ensures active and background window previews match new window size without thrashing during active divider drag
                         LaunchedEffect(canvasWidthPx, canvasHeightPx, activeWindow?.id, isSwitchTransitionActive) {
-                            if (activeWindow != null && !isSwitchTransitionActive && canvasWidthPx > 0 && canvasHeightPx > 0) {
-                                delay(250)
+                            if (activeWindow != null && !isSwitchTransitionActive && !showSnapAssistHost && !showWindowSwitcherGallery && canvasWidthPx > 0 && canvasHeightPx > 0) {
+                                delay(300)
+                                val currentId = activeWindow.id
                                 val view = activeLorieView
                                 if (view != null && view.width > 0 && view.height > 0) {
                                     captureCurrentWindowPreview { freshBmp ->
-                                        if (activeSnapMode == SnapLayoutMode.SINGLE) {
-                                            windowPreviewCache[activeWindow.id] = freshBmp
-                                            val targetW = freshBmp.width
-                                            val targetH = freshBmp.height
-                                            if (targetW > 0 && targetH > 0) {
-                                                lifecycleScope.launch(Dispatchers.Default) {
-                                                    for ((wid, cachedBmp) in windowPreviewCache.entries.toList()) {
-                                                        if (wid != activeWindow.id && !cachedBmp.isRecycled && (cachedBmp.width != targetW || cachedBmp.height != targetH)) {
-                                                            val adapted = WindowPreviewUtils.adaptBitmapToSize(cachedBmp, targetW, targetH)
-                                                            if (adapted != null) {
-                                                                withContext(Dispatchers.Main) {
-                                                                    windowPreviewCache[wid] = adapted
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
+                                        if (freshBmp != null) {
+                                            fullScreenCache[currentId] = freshBmp
+                                            updateSlotPreviewsFromScreen(freshBmp)
                                         }
                                     }
                                 }
@@ -1036,16 +1044,26 @@ class CanvasActivity : ComponentActivity() {
                                         isForward = isTransitionForward,
                                         onStarted = {
                                             lifecycleScope.launch(Dispatchers.IO) {
+                                                if (activeSnapMode == SnapLayoutMode.SINGLE) {
+                                                    val currentSupervisor = if (this@CanvasActivity::supervisor.isInitialized) this@CanvasActivity.supervisor else null
+                                                    currentSupervisor?.setWindowMaximized(targetWin.id, true)
+                                                }
                                                 sessionManager.switchToWindow(targetWin.id)
                                             }
                                         },
                                         onTransitionFinished = {
                                             isSwitchTransitionActive = false
                                             transitionTargetWindow = null
+                                            val finishedWinId = targetWin.id
                                             lifecycleScope.launch {
-                                                kotlinx.coroutines.delay(150)
+                                                kotlinx.coroutines.delay(200)
                                                 captureCurrentWindowPreview { bmp ->
-                                                    windowPreviewCache[targetWin.id] = bmp
+                                                    if (bmp != null) {
+                                                        fullScreenCache[finishedWinId] = bmp
+                                                        if (activeSnapMode == SnapLayoutMode.SINGLE || activeSnapMode == SnapLayoutMode.UNLOCKED || snapGeometries.isEmpty()) {
+                                                            windowPreviewCache[finishedWinId] = bmp
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -1091,7 +1109,11 @@ class CanvasActivity : ComponentActivity() {
                                     onDragEnd = {
                                         lifecycleScope.launch {
                                             delay(150)
-                                            captureCurrentWindowPreview()
+                                            captureCurrentWindowPreview { freshBmp ->
+                                                if (freshBmp != null) {
+                                                    updateSlotPreviewsFromScreen(freshBmp)
+                                                }
+                                            }
                                         }
                                     }
                                 )
@@ -1132,10 +1154,14 @@ class CanvasActivity : ComponentActivity() {
                                                  }
                                                  showSnapAssistHost = false
                                                  activeConfiguringSlot = null
-                                                 lifecycleScope.launch {
-                                                     delay(200)
-                                                     captureCurrentWindowPreview()
-                                                 }
+                                                  lifecycleScope.launch {
+                                                      delay(200)
+                                                      captureCurrentWindowPreview { freshBmp ->
+                                                          if (freshBmp != null) {
+                                                              updateSlotPreviewsFromScreen(freshBmp)
+                                                          }
+                                                      }
+                                                  }
                                              }
                                          } else {
                                              // totalWindows <= totalSlots: wait till n - 1 slots are chosen before closing note selection
@@ -1154,10 +1180,14 @@ class CanvasActivity : ComponentActivity() {
                                                  }
                                                  showSnapAssistHost = false
                                                  activeConfiguringSlot = null
-                                                 lifecycleScope.launch {
-                                                     delay(200)
-                                                     captureCurrentWindowPreview()
-                                                 }
+                                                  lifecycleScope.launch {
+                                                      delay(200)
+                                                      captureCurrentWindowPreview { freshBmp ->
+                                                          if (freshBmp != null) {
+                                                              updateSlotPreviewsFromScreen(freshBmp)
+                                                          }
+                                                      }
+                                                  }
                                              } else {
                                                  activeConfiguringSlot = unassignedSlotIndices.first()
                                              }
@@ -1223,8 +1253,14 @@ class CanvasActivity : ComponentActivity() {
                             openWindowCount = openWindows.size.coerceAtLeast(1),
                             onQuickSwitchWindow = { performQuickSwitch() },
                             onOpenWindowGallery = {
-                                captureCurrentWindowPreview()
-                                showWindowSwitcherGallery = true
+                                val currentActiveId = openWindows.find { it.isActive }?.id
+                                captureCurrentWindowPreview { bmp ->
+                                    if (currentActiveId != null && bmp != null) {
+                                        fullScreenCache[currentActiveId] = bmp
+                                        windowPreviewCache[currentActiveId] = bmp
+                                    }
+                                    showWindowSwitcherGallery = true
+                                }
                             },
                             showKeyboard = showKeyboard,
                             showDragHandle = showDragHandle,

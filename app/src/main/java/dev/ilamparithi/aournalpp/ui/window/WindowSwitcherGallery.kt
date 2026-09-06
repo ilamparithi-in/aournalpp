@@ -273,8 +273,10 @@ fun WindowPreviewCard(
     val context = LocalContext.current
     var fallbackThumbnail by remember(windowInfo.id, windowInfo.title) { mutableStateOf<ImageBitmap?>(null) }
 
-    LaunchedEffect(windowInfo.id, windowInfo.title, preview) {
-        if (preview == null && fallbackThumbnail == null) {
+    // Always fetch the document vector thumbnail in the background so background windows
+    // and invalid/leaked previews always have a clean, high-fidelity fallback
+    LaunchedEffect(windowInfo.id, windowInfo.title) {
+        if (fallbackThumbnail == null) {
             withContext(Dispatchers.IO) {
                 try {
                     val repo = dev.ilamparithi.aournalpp.data.DocumentRepository(context)
@@ -390,6 +392,7 @@ fun WindowPreviewCard(
                 contentAlignment = Alignment.Center
             ) {
                 val currentFallback = fallbackThumbnail
+
                 if (preview != null && !preview.isRecycled) {
                     Image(
                         bitmap = preview.asImageBitmap(),

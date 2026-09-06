@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -14,48 +15,57 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.zIndex
 import dev.ilamparithi.aournalpp.ui.animation.SpringSlideTransition
 import kotlinx.coroutines.delay
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-
 /**
- * Transition overlay that displays the sliding spring animation between windows in CanvasActivity.
+ * Transition overlay that displays the sliding spring animation between screens in CanvasActivity.
  * Reuses the standardized spring slide and fade animation matching MainActivity.
- * The background is rendered with the desktop background according to settings, hiding
- * the Openbox-side window switch occurring on the live surface underneath.
+ * The transition slides the full old screen out and the full new screen in, edge-to-edge.
+ * The background is rendered with the desktop background according to settings.
  */
 @Composable
 fun WindowSwitchTransitionOverlay(
     outgoingBitmap: Bitmap?,
     incomingBitmap: Bitmap?,
     targetTitle: String,
-    targetIcon: ImageVector,
     wallpaperBitmap: ImageBitmap,
     isForward: Boolean,
     onStarted: () -> Unit,
-    onTransitionFinished: () -> Unit
+    onTransitionFinished: () -> Unit,
+    targetIcon: ImageVector? = null
 ) {
     // Current step in the 2-state transition: 0 = outgoing, 1 = incoming
     var animationState by remember { mutableStateOf(0) }
     val transition = updateTransition(targetState = animationState, label = "WindowSwitchSpringSlide")
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var incomingFallbackThumbnail by remember(targetTitle) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(targetTitle, incomingBitmap) {
+        if (incomingBitmap == null) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    val repo = dev.ilamparithi.aournalpp.data.DocumentRepository(context)
+                    val doc = repo.findNoteDocumentByTitle(targetTitle)
+                    if (doc != null) {
+                        val thumb = dev.ilamparithi.aournalpp.utils.ThumbnailManager.getOrCreateThumbnailBitmap(context, doc.file, null, doc.lastModifiedMs)
+                        if (thumb != null) {
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                incomingFallbackThumbnail = thumb
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         // Allow the overlay and wallpaper backdrop to render on screen first, safely covering LorieView
@@ -67,6 +77,7 @@ fun WindowSwitchTransitionOverlay(
     // Await natural completion of the spring animation (including full rebound and settling)
     LaunchedEffect(transition.currentState, transition.targetState) {
         if (transition.currentState == 1 && transition.targetState == 1) {
+            delay(50)
             onTransitionFinished()
         }
     }
@@ -117,43 +128,21 @@ fun WindowSwitchTransitionOverlay(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
-                } else if (targetStep == 1) {
-                    // Fallback preview card if target window hasn't been cached yet
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        tonalElevation = 6.dp,
-                        shadowElevation = 8.dp,
+                } else if (targetStep == 1 && incomingFallbackThumbnail != null) {
+                    Image(
+                        bitmap = incomingFallbackThumbnail!!,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(24.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(16.dp),
-                                modifier = Modifier.padding(24.dp)
-                            ) {
-                                Icon(
-                                    imageVector = targetIcon,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(56.dp),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Text(
-                                    text = targetTitle,
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
+                            .background(Color.White)
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.White)
+                    )
                 }
             }
         }
