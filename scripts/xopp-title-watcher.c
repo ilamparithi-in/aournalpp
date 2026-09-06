@@ -566,6 +566,7 @@ static void query_managed_xournal_windows(Display *dpy, Window root,
 }
 
 static int last_emitted_dialog_count = -1;
+static char last_emitted_prompt[1024] = "";
 static char last_emitted_windows_buffer[4096] = "";
 
 static void evaluate_and_emit_status(Display *dpy, Window root) {
@@ -599,6 +600,49 @@ static void evaluate_and_emit_status(Display *dpy, Window root) {
     if (dialog_count != last_emitted_dialog_count) {
         last_emitted_dialog_count = dialog_count;
         printf("DIALOGS:%d\n", dialog_count);
+        fflush(stdout);
+    }
+
+    char current_prompt[1024] = "";
+    if (dialog_count > 0) {
+        Window target_dialog = None;
+        if (active_win != None) {
+            for (int i = 0; i < dialog_count; i++) {
+                if (dialog_wins[i] == active_win) {
+                    target_dialog = active_win;
+                    break;
+                }
+            }
+        }
+        if (target_dialog == None) {
+            target_dialog = dialog_wins[dialog_count - 1];
+        }
+        char *d_title = get_window_title(dpy, target_dialog);
+        if (d_title) {
+            char *nl = strchr(d_title, '\n');
+            if (nl) *nl = '\0';
+            nl = strchr(d_title, '\r');
+            if (nl) *nl = '\0';
+            char *start = d_title;
+            while (isspace((unsigned char)*start)) start++;
+            char *end = start + strlen(start);
+            while (end > start && isspace((unsigned char)*(end - 1))) end--;
+            *end = '\0';
+
+            char *suffix = case_str_search(start, "- xournal++");
+            if (suffix) {
+                while (suffix > start && isspace((unsigned char)*(suffix - 1))) suffix--;
+                *suffix = '\0';
+            }
+
+            snprintf(current_prompt, sizeof(current_prompt), "%s", start);
+            free(d_title);
+        }
+    }
+
+    if (strcmp(current_prompt, last_emitted_prompt) != 0) {
+        snprintf(last_emitted_prompt, sizeof(last_emitted_prompt), "%s", current_prompt);
+        printf("PROMPT:%s\n", current_prompt);
         fflush(stdout);
     }
 

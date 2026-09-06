@@ -444,6 +444,7 @@ class CanvasActivity : ComponentActivity() {
                 }
 
                 val liveTitle by sessionManager.documentTitle.collectAsState()
+                val activePromptTitle by sessionManager.activePromptTitle.collectAsState()
                 val openWindows by sessionManager.openWindows.collectAsState(initial = emptyList())
                 val windowPreviewCache = remember { mutableStateMapOf<String, Bitmap>() }
                 var transitionOutgoingBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -492,7 +493,7 @@ class CanvasActivity : ComponentActivity() {
                 val baseDocumentName = remember(targetPath, initialTitle) {
                     targetPath?.let { File(it).nameWithoutExtension } ?: (initialTitle ?: "New Note")
                 }
-                val displayTitle = remember(openWindows, currentDisplayWindow, liveTitle, alwaysShowFileName, openPreferences, baseDocumentName, initialTitle) {
+                val displayTitle = remember(openWindows, currentDisplayWindow, liveTitle, activePromptTitle, alwaysShowFileName, openPreferences, baseDocumentName, initialTitle) {
                     val raw = when {
                         currentDisplayWindow != null && currentDisplayWindow.title.isNotBlank() && currentDisplayWindow.title != "Xournal++" -> currentDisplayWindow.title
                         !liveTitle.isNullOrBlank() && liveTitle != "Xournal++" -> liveTitle!!
@@ -500,16 +501,25 @@ class CanvasActivity : ComponentActivity() {
                         else -> initialTitle ?: "New Note"
                     }
 
-                    if (alwaysShowFileName) {
+                    val fileName = if (alwaysShowFileName) {
+                        val isDirty = raw.startsWith("*") || raw.endsWith("*")
                         val clean = raw.removePrefix("*").trim()
-                        if (clean.equals("New Note", ignoreCase = true) || clean.equals("Unsaved Document", ignoreCase = true) || clean.equals("Preferences", ignoreCase = true)) {
+                        val base = if (clean.equals("New Note", ignoreCase = true) || clean.equals("Unsaved Document", ignoreCase = true) || clean.equals("Preferences", ignoreCase = true)) {
                             clean
                         } else {
                             val nameWithoutExt = File(clean).nameWithoutExtension
                             if (nameWithoutExt.isNotBlank()) nameWithoutExt else clean
                         }
+                        if (isDirty) "*$base" else base
                     } else {
                         raw
+                    }
+
+                    val prompt = activePromptTitle?.trim()
+                    if (!prompt.isNullOrBlank()) {
+                        "$fileName - $prompt"
+                    } else {
+                        fileName
                     }
                 }
 
@@ -732,6 +742,11 @@ class CanvasActivity : ComponentActivity() {
                     isSnapMirrored = mirrored
                     snapLayoutManager.setMode(mode, mirrored)
                     x11Prefs.edit().putString(X11Preferences.KEY_ACTIVE_SNAP_LAYOUT, mode.id).apply()
+
+                    val isSnapActive = (mode != SnapLayoutMode.SINGLE)
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        currentSupervisor.updateOpenboxSnapMode(isSnapActive)
+                    }
 
                     when (mode) {
                         SnapLayoutMode.UNLOCKED -> {
@@ -2604,18 +2619,21 @@ private fun FloatingToolbarOverlay(
                             }
 
                             if (showTitle) {
+                                val cleanDisplayTitle = remember(displayTitle) { displayTitle.removePrefix("*").trim() }
+                                val isDirty = displayTitle.startsWith("*")
                                 Box(
                                     modifier = Modifier.width(animatedTitleWidthDp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     AnimatedContent(
-                                        targetState = Triple(displayTitle, windowIcon, windowIndex),
+                                        targetState = Triple(cleanDisplayTitle, windowIcon, windowIndex),
                                         transitionSpec = {
                                             val isForward = targetState.third >= initialState.third
                                             SpringSlideTransition.createSpec<Triple<String, ImageVector, Int>>(isForward = isForward)(this)
                                         },
                                         label = "windowTitleSwitchTransition"
-                                    ) { (currentTitle, currentIcon, _) ->
+                                    ) { (currentCleanTitle, currentIcon, _) ->
+                                        val titleText = if (isDirty) "*$currentCleanTitle" else currentCleanTitle
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.Center,
@@ -2633,7 +2651,7 @@ private fun FloatingToolbarOverlay(
                                             Spacer(modifier = Modifier.width(6.dp))
 
                                             dev.ilamparithi.aournalpp.ui.InteractiveMarqueeText(
-                                                text = currentTitle,
+                                                text = titleText,
                                                 style = MaterialTheme.typography.titleSmall,
                                                 fontWeight = FontWeight.SemiBold,
                                                 color = MaterialTheme.colorScheme.onSurface,
@@ -3112,17 +3130,20 @@ private fun FloatingToolbarOverlay(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         if (showTitle) {
+                            val cleanDisplayTitle = remember(displayTitle) { displayTitle.removePrefix("*").trim() }
+                            val isDirty = displayTitle.startsWith("*")
                             Box(
                                 contentAlignment = Alignment.Center
                             ) {
                                 AnimatedContent(
-                                    targetState = Triple(displayTitle, windowIcon, windowIndex),
+                                    targetState = Triple(cleanDisplayTitle, windowIcon, windowIndex),
                                     transitionSpec = {
                                         val isForward = targetState.third >= initialState.third
                                         SpringSlideTransition.createSpec<Triple<String, ImageVector, Int>>(isForward = isForward)(this)
                                     },
                                     label = "collapsedWindowTitleSwitchTransition"
-                                ) { (currentTitle, currentIcon, _) ->
+                                ) { (currentCleanTitle, currentIcon, _) ->
+                                    val titleText = if (isDirty) "*$currentCleanTitle" else currentCleanTitle
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -3134,7 +3155,7 @@ private fun FloatingToolbarOverlay(
                                             tint = MaterialTheme.colorScheme.primary
                                         )
                                         Text(
-                                            text = currentTitle,
+                                            text = titleText,
                                             style = MaterialTheme.typography.labelMedium,
                                             fontWeight = FontWeight.Medium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,

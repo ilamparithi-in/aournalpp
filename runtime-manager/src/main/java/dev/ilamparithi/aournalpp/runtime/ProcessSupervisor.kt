@@ -11,7 +11,7 @@ import java.io.File
 import java.io.InputStreamReader
 import java.util.concurrent.CopyOnWriteArrayList
 
-class ProcessSupervisor(private val env: LinuxEnvironment) {
+class ProcessSupervisor(val env: LinuxEnvironment) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val activeProcesses = CopyOnWriteArrayList<Process>()
 
@@ -50,6 +50,9 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
 
     private val _isModalOrDialogOpen = kotlinx.coroutines.flow.MutableStateFlow(false)
     val isModalOrDialogOpen: kotlinx.coroutines.flow.StateFlow<Boolean> = _isModalOrDialogOpen
+
+    private val _activePromptTitle = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    val activePromptTitle: kotlinx.coroutines.flow.StateFlow<String?> = _activePromptTitle
 
     private val _openWindows = kotlinx.coroutines.flow.MutableStateFlow<List<X11WindowInfo>>(emptyList())
     val openWindows: kotlinx.coroutines.flow.StateFlow<List<X11WindowInfo>> = _openWindows
@@ -224,6 +227,20 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
         return false
     }
 
+    fun reconfigureOpenbox(): Boolean {
+        val openboxBin = env.resolveExecutable("openbox")
+        if (openboxBin.exists() && openboxBin.canExecute()) {
+            val (code, _) = runBinary(listOf(openboxBin.absolutePath, "--reconfigure"))
+            return code == 0
+        }
+        return false
+    }
+
+    fun updateOpenboxSnapMode(snapLayoutActive: Boolean) {
+        env.updateOpenboxSnapMode(snapLayoutActive)
+        reconfigureOpenbox()
+    }
+
     fun activateWindow(windowId: String): Boolean {
         val activated = if (sendWatcherCommand("ACTIVATE $windowId")) {
             true
@@ -319,6 +336,12 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
                             } else if (line.startsWith("DIALOGS:")) {
                                 val count = line.removePrefix("DIALOGS:").trim().toIntOrNull() ?: 0
                                 _isModalOrDialogOpen.value = count > 0
+                                if (count == 0) {
+                                    _activePromptTitle.value = null
+                                }
+                            } else if (line.startsWith("PROMPT:")) {
+                                val prompt = line.removePrefix("PROMPT:").trim()
+                                _activePromptTitle.value = prompt.ifBlank { null }
                             } else if (line.startsWith("WINDOWS:")) {
                                 val payload = line.removePrefix("WINDOWS:").trim()
                                 val parts = payload.split("|")
@@ -386,6 +409,7 @@ class ProcessSupervisor(private val env: LinuxEnvironment) {
 
     fun resetDocumentTitle(title: String? = null) {
         _documentTitle.value = title
+        _activePromptTitle.value = null
     }
 
     fun triggerXournalExit() {

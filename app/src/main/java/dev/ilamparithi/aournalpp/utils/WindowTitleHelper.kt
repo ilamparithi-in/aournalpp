@@ -3,14 +3,17 @@ package dev.ilamparithi.aournalpp.utils
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FontDownload
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
@@ -36,14 +39,21 @@ object WindowTitleHelper {
             // Fonts & Typography
             lower.contains("font") || lower.contains("select font") || lower.contains("font selection") -> Icons.Default.FontDownload
 
+            // Image Selection / Chooser
+            lower.contains("image") || lower.contains("choose image") || lower.contains("picture") -> Icons.Default.Image
+
+            // Print
+            lower.contains("print") -> Icons.Default.Print
+
             // Color Selection & Palette
             lower.contains("color") || lower.contains("select color") || lower.contains("color selection") || lower.contains("choose color") -> Icons.Default.Palette
 
             // Plugins & Extensions
             lower.contains("plugin") || lower.contains("manage plugins") || lower.contains("plugin manager") -> Icons.Default.Extension
 
-            // PDF Documents & PDF Export
-            lower.contains("export as pdf") || lower.contains("export pdf") || lower.endsWith(".pdf") -> Icons.Default.PictureAsPdf
+            // PDF Documents & PDF Export & Annotate
+            lower.contains("export as pdf") || lower.contains("export pdf") || lower.contains("export") || lower.endsWith(".pdf") -> Icons.Default.PictureAsPdf
+            lower.contains("annotate") -> Icons.Default.EditNote
 
             // File Open & Storage Browsing
             lower.contains("open document") || lower.contains("open file") || lower.contains("choose folder") || lower.contains("select folder") || lower.startsWith("open") -> Icons.Default.FolderOpen

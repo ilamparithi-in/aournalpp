@@ -217,20 +217,144 @@ class LinuxEnvironment(private val context: Context) {
         ensureGtkBookmarks()
     }
 
-    fun ensureDirectoryTree() {
-        val dirs = listOf(
-            rootDir, usrDir, binDir, libDir, shareDir, tmpDir, homeDir, configDir, xournalConfigDir, openboxConfigDir
-        )
-        dirs.forEach {
-            if (!it.exists()) {
-                it.mkdirs()
-            }
+    fun generateOpenboxConfig(snapLayoutActive: Boolean = false): String {
+        val fullscreenRules = if (!snapLayoutActive) {
+            """
+    <!-- Fullscreen-marked windows in single window mode (borderless fullscreen) -->
+    <application class="*" title="*Choose*Image*">
+      <decor>no</decor>
+      <maximized>true</maximized>
+      <focus>yes</focus>
+    </application>
+    <application class="*" title="*Choose*image*">
+      <decor>no</decor>
+      <maximized>true</maximized>
+      <focus>yes</focus>
+    </application>
+    <application class="*" title="*choose*image*">
+      <decor>no</decor>
+      <maximized>true</maximized>
+      <focus>yes</focus>
+    </application>
+    <application class="*" title="*Export*">
+      <decor>no</decor>
+      <maximized>true</maximized>
+      <focus>yes</focus>
+    </application>
+    <application class="*" title="*export*">
+      <decor>no</decor>
+      <maximized>true</maximized>
+      <focus>yes</focus>
+    </application>
+    <application class="*" title="*Annotate*">
+      <decor>no</decor>
+      <maximized>true</maximized>
+      <focus>yes</focus>
+    </application>
+    <application class="*" title="*annotate*">
+      <decor>no</decor>
+      <maximized>true</maximized>
+      <focus>yes</focus>
+    </application>
+    <application class="*" title="*Print*">
+      <decor>no</decor>
+      <maximized>true</maximized>
+      <focus>yes</focus>
+    </application>
+    <application class="*" title="*print*">
+      <decor>no</decor>
+      <maximized>true</maximized>
+      <focus>yes</focus>
+    </application>
+            """.trimIndent()
+        } else {
+            """
+    <!-- Fullscreen-marked windows in active snap layouts (movable windows with titlebars enabled) -->
+    <application class="*" title="*Choose*Image*">
+      <decor>yes</decor>
+      <maximized>no</maximized>
+      <focus>yes</focus>
+      <position force="no">
+        <x>center</x>
+        <y>center</y>
+      </position>
+    </application>
+    <application class="*" title="*Choose*image*">
+      <decor>yes</decor>
+      <maximized>no</maximized>
+      <focus>yes</focus>
+      <position force="no">
+        <x>center</x>
+        <y>center</y>
+      </position>
+    </application>
+    <application class="*" title="*choose*image*">
+      <decor>yes</decor>
+      <maximized>no</maximized>
+      <focus>yes</focus>
+      <position force="no">
+        <x>center</x>
+        <y>center</y>
+      </position>
+    </application>
+    <application class="*" title="*Export*">
+      <decor>yes</decor>
+      <maximized>no</maximized>
+      <focus>yes</focus>
+      <position force="no">
+        <x>center</x>
+        <y>center</y>
+      </position>
+    </application>
+    <application class="*" title="*export*">
+      <decor>yes</decor>
+      <maximized>no</maximized>
+      <focus>yes</focus>
+      <position force="no">
+        <x>center</x>
+        <y>center</y>
+      </position>
+    </application>
+    <application class="*" title="*Annotate*">
+      <decor>yes</decor>
+      <maximized>no</maximized>
+      <focus>yes</focus>
+      <position force="no">
+        <x>center</x>
+        <y>center</y>
+      </position>
+    </application>
+    <application class="*" title="*annotate*">
+      <decor>yes</decor>
+      <maximized>no</maximized>
+      <focus>yes</focus>
+      <position force="no">
+        <x>center</x>
+        <y>center</y>
+      </position>
+    </application>
+    <application class="*" title="*Print*">
+      <decor>yes</decor>
+      <maximized>no</maximized>
+      <focus>yes</focus>
+      <position force="no">
+        <x>center</x>
+        <y>center</y>
+      </position>
+    </application>
+    <application class="*" title="*print*">
+      <decor>yes</decor>
+      <maximized>no</maximized>
+      <focus>yes</focus>
+      <position force="no">
+        <x>center</x>
+        <y>center</y>
+      </position>
+    </application>
+            """.trimIndent()
         }
 
-        // Provision Openbox kiosk auto-maximization rules (normal windows maximized, dialogs with borders and center placement)
-        val rcFile = File(openboxConfigDir, "rc.xml")
-        rcFile.writeText(
-            """<?xml version="1.0" encoding="UTF-8"?>
+        return """<?xml version="1.0" encoding="UTF-8"?>
 <openbox_config xmlns="http://openbox.org/3.4/rc">
   <theme>
     <name>Clearlooks</name>
@@ -277,20 +401,75 @@ class LinuxEnvironment(private val context: Context) {
       <maximized>true</maximized>
       <focus>yes</focus>
     </application>
-    <!-- Dialogs & message boxes: centered with standard dialog decorations -->
+    <!-- Dialogs & message prompts: centered with titlebar removed, original size -->
     <application class="*" type="dialog">
-      <decor>yes</decor>
+      <decor>no</decor>
       <maximized>no</maximized>
       <focus>yes</focus>
+      <position force="no">
+        <x>center</x>
+        <y>center</y>
+      </position>
     </application>
     <application class="*" type="splash">
       <decor>no</decor>
       <maximized>no</maximized>
     </application>
+    <!-- Select font: titlebar removed, original size, centered -->
+    <application class="*" title="*Select*Font*">
+      <decor>no</decor>
+      <maximized>no</maximized>
+      <focus>yes</focus>
+      <position force="no">
+        <x>center</x>
+        <y>center</y>
+      </position>
+    </application>
+    <application class="*" title="*Select*font*">
+      <decor>no</decor>
+      <maximized>no</maximized>
+      <focus>yes</focus>
+      <position force="no">
+        <x>center</x>
+        <y>center</y>
+      </position>
+    </application>
+    <!-- Toolbar customization dialog: non-modal, movable with titlebar, centered -->
+    <application class="*" title="*Customize Toolbar*">
+      <decor>yes</decor>
+      <maximized>no</maximized>
+      <focus>yes</focus>
+      <position force="no">
+        <x>center</x>
+        <y>center</y>
+      </position>
+    </application>
+    $fullscreenRules
   </applications>
 </openbox_config>
 """.trimIndent()
+    }
+
+    fun updateOpenboxSnapMode(snapLayoutActive: Boolean) {
+        if (!openboxConfigDir.exists()) {
+            openboxConfigDir.mkdirs()
+        }
+        val rcFile = File(openboxConfigDir, "rc.xml")
+        rcFile.writeText(generateOpenboxConfig(snapLayoutActive))
+    }
+
+    fun ensureDirectoryTree() {
+        val dirs = listOf(
+            rootDir, usrDir, binDir, libDir, shareDir, tmpDir, homeDir, configDir, xournalConfigDir, openboxConfigDir
         )
+        dirs.forEach {
+            if (!it.exists()) {
+                it.mkdirs()
+            }
+        }
+
+        // Provision Openbox kiosk auto-maximization rules (normal windows maximized, dialogs with borders and center placement)
+        updateOpenboxSnapMode(false)
         // Symlink xournalpp share assets into homeDir for runtime lookup
         val xoppShareDir = File(shareDir, "xournalpp")
         if (xoppShareDir.exists()) {
@@ -833,6 +1012,7 @@ class LinuxEnvironment(private val context: Context) {
                     <settings>
                       <property name="defaultSaveDir" value="$defaultNotesPath"/>
                       <property name="defaultOpenDir" value="$defaultNotesPath"/>
+                      <property name="lastImagePath" value="$defaultNotesPath"/>
                       <property name="autoloadMostRecent" value="false"/>
                     </settings>
                 """.trimIndent()
@@ -888,6 +1068,20 @@ class LinuxEnvironment(private val context: Context) {
                     }
                 } else if (content.contains("</settings>")) {
                     content = content.replace("</settings>", "  <property name=\"lastOpenPath\" value=\"$defaultNotesPath\"/>\n</settings>")
+                    modified = true
+                }
+
+                val imagePathRegex = Regex("""<property\b(?=[^>]*\bname\s*=\s*["']lastImagePath["'])(?=[^>]*\bvalue\s*=\s*["']([^"']*)["'])[^>]*/>""")
+                val imagePathMatch = imagePathRegex.find(content)
+                if (imagePathMatch != null) {
+                    val currentImagePath = imagePathMatch.groupValues[1].trim()
+                    val imageDir = File(currentImagePath)
+                    if (!imageDir.exists() || currentImagePath.contains("/data/data/") || currentImagePath.contains("/data/user/")) {
+                        content = content.replace(imagePathMatch.value, "<property name=\"lastImagePath\" value=\"$defaultNotesPath\"/>")
+                        modified = true
+                    }
+                } else if (content.contains("</settings>")) {
+                    content = content.replace("</settings>", "  <property name=\"lastImagePath\" value=\"$defaultNotesPath\"/>\n</settings>")
                     modified = true
                 }
 
