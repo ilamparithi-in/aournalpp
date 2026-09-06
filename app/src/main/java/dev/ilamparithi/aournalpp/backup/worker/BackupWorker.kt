@@ -82,9 +82,10 @@ class BackupWorker(
         val totalFailed = results.sumOf { it.filesFailed }
 
         val completionText = if (totalFailed == 0) {
-            if (totalUploaded > 0) "Successfully uploaded $totalUploaded files" else "All cloud files are up-to-date"
+            if (totalUploaded > 0) appContext.resources.getQuantityString(R.plurals.backup_worker_success_files, totalUploaded, totalUploaded) else "All cloud files are up-to-date"
         } else {
-            "Uploaded $totalUploaded files ($totalFailed failed)"
+            val uploadedPart = appContext.resources.getQuantityString(R.plurals.backup_worker_uploaded_files, totalUploaded, totalUploaded)
+            "$uploadedPart ($totalFailed failed)"
         }
 
         val completeNotification = NotificationCompat.Builder(appContext, CHANNEL_ID)

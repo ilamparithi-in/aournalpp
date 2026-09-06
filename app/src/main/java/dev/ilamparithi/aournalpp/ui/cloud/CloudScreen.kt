@@ -308,7 +308,15 @@ fun CloudScreen(
                         mappingRepo.syncToNotesHome(env.getNotesDirectory())
                         refreshState()
                         coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Applied \"${set.name}\" to ${targetService.name} (${set.items.size} mappings)")
+                            snackbarHostState.showSnackbar(
+                                context.resources.getQuantityString(
+                                    R.plurals.msg_mapping_set_applied,
+                                    set.items.size,
+                                    set.name,
+                                    targetService.name,
+                                    set.items.size
+                                )
+                            )
                         }
                     },
                     onShowSnackbar = { msg ->
@@ -581,7 +589,7 @@ fun CloudScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = stringResource(R.string.cloud_conflicts_detected, detectedConflicts.size),
+                                    text = pluralStringResource(R.plurals.cloud_conflicts_detected, detectedConflicts.size, detectedConflicts.size),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onErrorContainer
@@ -890,7 +898,13 @@ fun CloudScreen(
                                 )
                                 refreshState()
                                 if (result.isSuccess) {
-                                    snackbarHostState.showSnackbar("Restore complete: ${result.filesRestored} files restored")
+                                    snackbarHostState.showSnackbar(
+                                        context.resources.getQuantityString(
+                                            R.plurals.msg_restore_files_complete,
+                                            result.filesRestored,
+                                            result.filesRestored
+                                        )
+                                    )
                                 } else {
                                     snackbarHostState.showSnackbar("Restore errors: ${result.errors.firstOrNull() ?: "failed"}")
                                 }
@@ -1167,7 +1181,11 @@ fun CloudServiceCarouselCard(
                             color = MaterialTheme.colorScheme.surfaceContainerHighest
                         ) {
                             Text(
-                                text = "${service.customMappings.size} mappings",
+                                text = pluralStringResource(
+                                    R.plurals.cloud_custom_mappings_count,
+                                    service.customMappings.size,
+                                    service.customMappings.size
+                                ),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -1278,6 +1296,7 @@ fun ServiceDetailSubpage(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val hapticFeedback = LocalHapticFeedback.current
+    val context = LocalContext.current
 
     var searchQuery by remember { mutableStateOf("") }
     var currentPage by remember { mutableIntStateOf(0) }
@@ -1535,7 +1554,13 @@ fun ServiceDetailSubpage(
                                     if (selectedMappingIds.contains(it.id)) it.copy(isEnabled = false) else it
                                 }
                                 onMappingsUpdated(updated)
-                                onShowSnackbar("Disabled $count mapping(s)")
+                                onShowSnackbar(
+                                    context.resources.getQuantityString(
+                                        R.plurals.msg_mappings_disabled,
+                                        count,
+                                        count
+                                    )
+                                )
                             },
                             tooltip = stringResource(R.string.action_batch_disable)
                         ) {
@@ -1556,7 +1581,13 @@ fun ServiceDetailSubpage(
                                     if (selectedMappingIds.contains(it.id)) it.copy(isEnabled = true) else it
                                 }
                                 onMappingsUpdated(updated)
-                                onShowSnackbar("Enabled $count mapping(s)")
+                                onShowSnackbar(
+                                    context.resources.getQuantityString(
+                                        R.plurals.msg_mappings_enabled,
+                                        count,
+                                        count
+                                    )
+                                )
                             },
                             tooltip = stringResource(R.string.action_batch_enable)
                         ) {
@@ -1911,7 +1942,15 @@ fun ServiceDetailSubpage(
         AlertDialog(
             onDismissRequest = { showBatchDeleteConfirm = false },
             title = { Text(stringResource(R.string.dialog_delete_multi_title), fontWeight = FontWeight.Bold) },
-            text = { Text("Are you sure you want to delete ${selectedMappingIds.size} selected folder mapping(s)? This action cannot be undone.") },
+            text = {
+                Text(
+                    pluralStringResource(
+                        R.plurals.dialog_delete_mappings_confirm,
+                        selectedMappingIds.size,
+                        selectedMappingIds.size
+                    )
+                )
+            },
             confirmButton = {
                 Button(
                     onClick = {
@@ -1921,7 +1960,13 @@ fun ServiceDetailSubpage(
                         selectedMappingIds.clear()
                         isBatchMode = false
                         showBatchDeleteConfirm = false
-                        onShowSnackbar("Deleted $count mapping(s)")
+                        onShowSnackbar(
+                            context.resources.getQuantityString(
+                                R.plurals.msg_mappings_deleted,
+                                count,
+                                count
+                            )
+                        )
                     },
                     colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
@@ -2038,7 +2083,11 @@ fun ServiceDetailSubpage(
                 if (isNewSet) {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
-                            text = "Create a new mapping set with the ${selectedMappingIds.size} selected mapping(s):",
+                            text = pluralStringResource(
+                                R.plurals.dialog_create_mapping_set_with_count,
+                                selectedMappingIds.size,
+                                selectedMappingIds.size
+                            ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -2060,7 +2109,11 @@ fun ServiceDetailSubpage(
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(
-                            text = "Check sets to include these ${selectedMappingIds.size} mapping(s). Unchecking removes them:",
+                            text = pluralStringResource(
+                                R.plurals.dialog_check_sets_include_count,
+                                selectedMappingIds.size,
+                                selectedMappingIds.size
+                            ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -2111,10 +2164,11 @@ fun ServiceDetailSubpage(
                                             )
                                             val totalItems = existing.items.size
                                             val matchCount = existing.items.count { item -> selectedLocalPaths.contains(item.localFolderPath) }
+                                            val itemsLabel = pluralStringResource(R.plurals.queue_items_count, totalItems, totalItems)
                                             val subtitle = when {
-                                                matchCount == selectedMappings.size -> "$totalItems items • Contains all selected"
-                                                matchCount > 0 -> "$totalItems items • Contains $matchCount of ${selectedMappings.size} selected"
-                                                else -> "$totalItems items"
+                                                matchCount == selectedMappings.size -> "$itemsLabel • Contains all selected"
+                                                matchCount > 0 -> "$itemsLabel • Contains $matchCount of ${selectedMappings.size} selected"
+                                                else -> itemsLabel
                                             }
                                             Text(
                                                 text = subtitle,
@@ -2180,8 +2234,8 @@ fun ServiceDetailSubpage(
                             showBatchSaveSetDialog = false
                             val msg = when {
                                 addedCount > 0 && removedCount > 0 -> "Updated sets: added to $addedCount, removed from $removedCount"
-                                addedCount > 0 -> "Added mappings to $addedCount set(s)"
-                                removedCount > 0 -> "Removed mappings from $removedCount set(s)"
+                                addedCount > 0 -> context.resources.getQuantityString(R.plurals.msg_mappings_added_to_sets, addedCount, addedCount)
+                                removedCount > 0 -> context.resources.getQuantityString(R.plurals.msg_mappings_removed_from_sets, removedCount, removedCount)
                                 else -> "Mapping sets unchanged"
                             }
                             onShowSnackbar(msg)
@@ -2373,8 +2427,10 @@ fun ExclusionFiltersCard(
 
             Spacer(modifier = Modifier.height(6.dp))
             val transientPrefix = if (filter.skipDefaultTransient) "Transient & lock files ignored • " else ""
+            val regexFormatted = pluralStringResource(R.plurals.cloud_exclusion_regex_patterns_count, filter.regexPatterns.size, filter.regexPatterns.size)
+            val extFormatted = pluralStringResource(R.plurals.cloud_exclusion_extensions_count, filter.excludedExtensions.size, filter.excludedExtensions.size)
             Text(
-                text = stringResource(R.string.cloud_exclusion_card_summary, transientPrefix, filter.regexPatterns.size, filter.excludedExtensions.size),
+                text = stringResource(R.string.cloud_exclusion_card_summary, transientPrefix, regexFormatted, extFormatted),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline
             )
@@ -2579,7 +2635,7 @@ fun AutomationCard(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = stringResource(R.string.cloud_concurrency_workers_label, concurrency),
+                    text = pluralStringResource(R.plurals.cloud_concurrency_workers_label, concurrency, concurrency),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary

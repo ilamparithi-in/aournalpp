@@ -295,7 +295,10 @@
     <!-- Toast message when mapping set is saved. %1$s is set name -->
     <string name="msg_set_saved">Saved mapping set \"%1$s\"</string>
     <!-- Toast message when mapping set is applied. %1$d is count, %2$s is set name -->
-    <string name="msg_set_applied">Applied %1$d mappings from \"%2$s\"</string>
+    <plurals name="msg_set_applied">
+        <item quantity="one">Applied %1$d mapping from \"%2$s\"</item>
+        <item quantity="other">Applied %1$d mappings from \"%2$s\"</item>
+    </plurals>
     <!-- Toast message when mapping set is deleted. %1$s is set name -->
     <string name="msg_set_deleted">Deleted mapping set \"%1$s\"</string>
     <!-- Action button to toggle batch selection mode -->
@@ -333,7 +336,10 @@
     <!-- Radio option to append to existing mappings -->
     <string name="label_append_mappings">Append to existing mappings</string>
     <!-- Message when mapping set is applied. %1$s is set name, %2$s is service name, %3$d is mappings count -->
-    <string name="msg_mapping_set_applied">Applied \"%1$s\" to %2$s (%3$d mappings)</string>
+    <plurals name="msg_mapping_set_applied">
+        <item quantity="one">Applied \"%1$s\" to %2$s (%3$d mapping)</item>
+        <item quantity="other">Applied \"%1$s\" to %2$s (%3$d mappings)</item>
+    </plurals>
     <!-- Message when mapping set is saved. %1$s is set name -->
     <string name="msg_mapping_set_saved">Saved mapping set \"%1$s\"</string>
     <!-- Message when mapping set is deleted. %1$s is set name -->
@@ -451,6 +457,35 @@
     <plurals name="home_stat_folders_count">
         <item quantity="one">%1$d Folder</item>
         <item quantity="other">%1$d Folders</item>
+    </plurals>
+    <!-- Folder notes subtitle count. %1$d is count -->
+    <plurals name="hub_folder_notes_count">
+        <item quantity="one">%1$d note</item>
+        <item quantity="other">%1$d notes</item>
+    </plurals>
+    <!-- Recent notes counter in hub. %1$d is count -->
+    <plurals name="hub_recent_notes_count">
+        <item quantity="one">%1$d recent</item>
+        <item quantity="other">%1$d recent</item>
+    </plurals>
+    <!-- Selection summary notes count. %1$d is count -->
+    <plurals name="hub_selected_notes_count">
+        <item quantity="one">%1$d note</item>
+        <item quantity="other">%1$d notes</item>
+    </plurals>
+    <!-- Selection summary PDFs count. %1$d is count -->
+    <plurals name="hub_selected_pdfs_count">
+        <item quantity="one">%1$d PDF</item>
+        <item quantity="other">%1$d PDFs</item>
+    </plurals>
+    <!-- Share intent chooser titles -->
+    <plurals name="title_share_notes">
+        <item quantity="one">Share %1$d Note</item>
+        <item quantity="other">Share %1$d Notes</item>
+    </plurals>
+    <plurals name="title_share_pdfs">
+        <item quantity="one">Share %1$d PDF</item>
+        <item quantity="other">Share %1$d PDFs</item>
     </plurals>
     <!-- Emergency crash recovery dialog title -->
     <string name="emergency_dialog_title">Crash Session Recovered</string>
@@ -704,7 +739,10 @@
     <!-- Sync in progress label -->
     <string name="cloud_syncing_progress">Synchronizing Across Active Clouds…</string>
     <!-- Banner when conflicts are detected. %1$d is conflict count -->
-    <string name="cloud_conflicts_detected">%1$d File Conflicts Detected</string>
+    <plurals name="cloud_conflicts_detected">
+        <item quantity="one">%1$d File Conflict Detected</item>
+        <item quantity="other">%1$d File Conflicts Detected</item>
+    </plurals>
     <!-- Banner description for detected conflicts -->
     <string name="cloud_conflicts_desc">Tap to review differing versions across cloud endpoints</string>
     <!-- Section header: Configured Cloud Endpoints -->
@@ -724,7 +762,15 @@
     <!-- Chip label for complete mirror sync scope -->
     <string name="cloud_complete_mirror_chip">Complete Mirror (~/Notes &amp; ~/.config)</string>
     <!-- Chip label for custom mappings sync scope. %1$d is mapping count -->
-    <string name="cloud_custom_mappings_chip">%1$d Custom Mapping(s)</string>
+    <plurals name="cloud_custom_mappings_chip">
+        <item quantity="one">%1$d Custom Mapping</item>
+        <item quantity="other">%1$d Custom Mappings</item>
+    </plurals>
+    <!-- Custom mappings count in service card. %1$d is count -->
+    <plurals name="cloud_custom_mappings_count">
+        <item quantity="one">%1$d mapping</item>
+        <item quantity="other">%1$d mappings</item>
+    </plurals>
     <!-- Restore button label -->
     <string name="cloud_restore_button">Restore</string>
     <!-- Restore confirmation dialog title. %1$s is service name -->
@@ -741,8 +787,16 @@
     <string name="cloud_policy_card_desc">Controls how incoming cloud files resolve collisions with existing local files.</string>
     <!-- Exclusion filters card title -->
     <string name="cloud_exclusion_card_title">Exclusion Filters</string>
-    <!-- Exclusion filters card summary. %1$s is transient status, %2$d is regex count, %3$d is extension count -->
-    <string name="cloud_exclusion_card_summary">%1$s%2$d regex pattern(s) • %3$d excluded extension(s)</string>
+    <!-- Exclusion filters card summary. %1$s is transient status, %2$s is formatted regex count, %3$s is formatted extension count -->
+    <string name="cloud_exclusion_card_summary">%1$s%2$s • %3$s</string>
+    <plurals name="cloud_exclusion_regex_patterns_count">
+        <item quantity="one">%1$d regex pattern</item>
+        <item quantity="other">%1$d regex patterns</item>
+    </plurals>
+    <plurals name="cloud_exclusion_extensions_count">
+        <item quantity="one">%1$d excluded extension</item>
+        <item quantity="other">%1$d excluded extensions</item>
+    </plurals>
     <!-- Automation card title -->
     <string name="cloud_automation_card_title">Automation &amp; Performance</string>
     <!-- Check on launch title -->
@@ -779,7 +833,10 @@
     <!-- Concurrency description -->
     <string name="cloud_concurrency_desc">Accelerates differential uploads and downloads on high-bandwidth connections</string>
     <!-- Concurrency workers count. %1$d is count -->
-    <string name="cloud_concurrency_workers_label">%1$d parallel worker(s)</string>
+    <plurals name="cloud_concurrency_workers_label">
+        <item quantity="one">%1$d parallel worker</item>
+        <item quantity="other">%1$d parallel workers</item>
+    </plurals>
     <!-- Service status: Connected -->
     <string name="cloud_service_status_connected">Connected</string>
     <!-- Service status: Disconnected -->
@@ -815,7 +872,10 @@
     <!-- Transfer concurrency preference title -->
     <string name="pref_sync_concurrency_title">Parallel Transfer Concurrency</string>
     <!-- Transfer concurrency preference description. %1$d is worker count -->
-    <string name="pref_sync_concurrency_desc">%1$d concurrent file transfer workers.</string>
+    <plurals name="pref_sync_concurrency_desc">
+        <item quantity="one">%1$d concurrent file transfer worker.</item>
+        <item quantity="other">%1$d concurrent file transfer workers.</item>
+    </plurals>
     <!-- Service Config Dialog: Add title -->
     <string name="dialog_add_service_title">Add Cloud Storage</string>
     <!-- Service Config Dialog: Edit title -->
@@ -1151,5 +1211,103 @@
     <plurals name="hub_section_notes_count">
         <item quantity="one">%1$d Document</item>
         <item quantity="other">%1$d Documents</item>
+    </plurals>
+
+    <!-- Plural strings for file movement snackbars -->
+    <plurals name="msg_moved_notes_to_folder">
+        <item quantity="one">Moved %1$d note to \"%2$s\"</item>
+        <item quantity="other">Moved %1$d notes to \"%2$s\"</item>
+    </plurals>
+    <plurals name="msg_moved_notes_to_root">
+        <item quantity="one">Moved %1$d note to Notes Root</item>
+        <item quantity="other">Moved %1$d notes to Notes Root</item>
+    </plurals>
+    <plurals name="msg_moved_notes_to_trash">
+        <item quantity="one">Moved %1$d note to Trash</item>
+        <item quantity="other">Moved %1$d notes to Trash</item>
+    </plurals>
+    <plurals name="msg_permanently_deleted_items">
+        <item quantity="one">Permanently deleted %1$d item</item>
+        <item quantity="other">Permanently deleted %1$d items</item>
+    </plurals>
+    <plurals name="msg_restored_items_from_trash">
+        <item quantity="one">Restored %1$d item from Trash</item>
+        <item quantity="other">Restored %1$d items from Trash</item>
+    </plurals>
+    <plurals name="msg_rendering_pdfs">
+        <item quantity="one">Rendering %1$d PDF…</item>
+        <item quantity="other">Rendering %1$d PDFs…</item>
+    </plurals>
+
+    <!-- Plural strings for cloud custom mappings actions -->
+    <plurals name="msg_mappings_disabled">
+        <item quantity="one">Disabled %1$d mapping</item>
+        <item quantity="other">Disabled %1$d mappings</item>
+    </plurals>
+    <plurals name="msg_mappings_enabled">
+        <item quantity="one">Enabled %1$d mapping</item>
+        <item quantity="other">Enabled %1$d mappings</item>
+    </plurals>
+    <plurals name="msg_mappings_deleted">
+        <item quantity="one">Deleted %1$d mapping</item>
+        <item quantity="other">Deleted %1$d mappings</item>
+    </plurals>
+    <plurals name="dialog_delete_mappings_confirm">
+        <item quantity="one">Are you sure you want to delete %1$d selected folder mapping? This action cannot be undone.</item>
+        <item quantity="other">Are you sure you want to delete %1$d selected folder mappings? This action cannot be undone.</item>
+    </plurals>
+    <plurals name="dialog_create_mapping_set_with_count">
+        <item quantity="one">Create a new mapping set with the %1$d selected mapping:</item>
+        <item quantity="other">Create a new mapping set with the %1$d selected mappings:</item>
+    </plurals>
+    <plurals name="dialog_check_sets_include_count">
+        <item quantity="one">Check sets to include this %1$d mapping. Unchecking removes it:</item>
+        <item quantity="other">Check sets to include these %1$d mappings. Unchecking removes them:</item>
+    </plurals>
+    <plurals name="msg_mappings_added_to_sets">
+        <item quantity="one">Added mappings to %1$d set</item>
+        <item quantity="other">Added mappings to %1$d sets</item>
+    </plurals>
+    <plurals name="msg_mappings_removed_from_sets">
+        <item quantity="one">Removed mappings from %1$d set</item>
+        <item quantity="other">Removed mappings from %1$d sets</item>
+    </plurals>
+    <plurals name="msg_restore_files_complete">
+        <item quantity="one">Restore complete: %1$d file restored</item>
+        <item quantity="other">Restore complete: %1$d files restored</item>
+    </plurals>
+
+    <!-- Plural strings for transfer queue, conflicts, and backup -->
+    <plurals name="queue_items_count">
+        <item quantity="one">%1$d item</item>
+        <item quantity="other">%1$d items</item>
+    </plurals>
+    <plurals name="conflict_subtitle_config_files">
+        <item quantity="one">%1$d configuration file differs between local storage and cloud</item>
+        <item quantity="other">%1$d configuration files differ between local storage and cloud</item>
+    </plurals>
+    <plurals name="conflict_subtitle_notes">
+        <item quantity="one">%1$d note has conflicting versions across storage endpoints</item>
+        <item quantity="other">%1$d notes have conflicting versions across storage endpoints</item>
+    </plurals>
+    <plurals name="mapping_set_folders_count">
+        <item quantity="one">%1$d mapped folder</item>
+        <item quantity="other">%1$d mapped folders</item>
+    </plurals>
+    <plurals name="msg_backup_exported_configs">
+        <item quantity="one">Exported %1$d configuration file to backup ZIP</item>
+        <item quantity="other">Exported %1$d configuration files to backup ZIP</item>
+    </plurals>
+    <plurals name="msg_backup_restored_configs">
+        <item quantity="one">Successfully restored %1$d config file from ZIP archive</item>
+        <item quantity="other">Successfully restored %1$d config files from ZIP archive</item>
+    </plurals>
+    <plurals name="backup_worker_success_files">
+        <item quantity="one">Successfully uploaded %1$d file</item>
+        <item quantity="other">Successfully uploaded %1$d files</item>
+    </plurals>
+    <plurals name="backup_worker_uploaded_files">
+        <item quantity="one">Uploaded %1$d file</item>
+        <item quantity="other">Uploaded %1$d files</item>
     </plurals>
 </resources>

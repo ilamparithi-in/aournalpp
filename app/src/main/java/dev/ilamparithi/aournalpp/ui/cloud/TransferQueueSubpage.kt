@@ -64,6 +64,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -163,8 +164,13 @@ fun TransferQueueSubpage(
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
+                        val itemsLabel = pluralStringResource(
+                            R.plurals.queue_items_count,
+                            filteredItems.size,
+                            filteredItems.size
+                        )
                         Text(
-                            text = "${filteredItems.size} items • ${formatSpeedRate(totalActiveSpeed)}",
+                            text = "$itemsLabel • ${formatSpeedRate(totalActiveSpeed)}",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

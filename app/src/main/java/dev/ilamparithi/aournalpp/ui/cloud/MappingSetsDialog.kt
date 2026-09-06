@@ -41,6 +41,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -332,8 +333,9 @@ private fun MappingSetCard(
                         )
                     }
                     Spacer(modifier = Modifier.height(2.dp))
+                    val mappedFoldersLabel = pluralStringResource(R.plurals.mapping_set_folders_count, set.items.size, set.items.size)
                     Text(
-                        text = "${set.items.size} mapped folders • Created ${FormatUtils.formatDateMedium(set.createdAtEpochMs)}",
+                        text = "$mappedFoldersLabel • Created ${FormatUtils.formatDateMedium(set.createdAtEpochMs)}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline
                     )

@@ -10,6 +10,7 @@ import dev.ilamparithi.aournalpp.model.FolderItem
 import dev.ilamparithi.aournalpp.model.NoteDocument
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
+import dev.ilamparithi.aournalpp.R
 import dev.ilamparithi.aournalpp.utils.FormatUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -1260,7 +1261,8 @@ class DocumentRepository(private val context: Context) {
                 putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            context.startActivity(Intent.createChooser(intent, "Share ${docs.size} Notes"))
+            val chooserTitle = context.resources.getQuantityString(R.plurals.title_share_notes, docs.size, docs.size)
+            context.startActivity(Intent.createChooser(intent, chooserTitle))
         }
     }
 
@@ -1340,7 +1342,8 @@ class DocumentRepository(private val context: Context) {
                         putParcelableArrayListExtra(Intent.EXTRA_STREAM, pdfUris)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
-                    context.startActivity(Intent.createChooser(intent, "Share ${docs.size} PDFs"))
+                    val chooserTitle = context.resources.getQuantityString(R.plurals.title_share_pdfs, docs.size, docs.size)
+                    context.startActivity(Intent.createChooser(intent, chooserTitle))
                 }
             }
             Unit

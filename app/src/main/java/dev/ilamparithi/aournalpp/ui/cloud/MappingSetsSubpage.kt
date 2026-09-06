@@ -53,6 +53,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -278,7 +279,7 @@ fun MappingSetsSubpage(
                                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                                 ) {
                                     Text(
-                                        text = "${set.items.size} ${if (set.items.size == 1) "folder" else "folders"}",
+                                        text = pluralStringResource(R.plurals.mapping_set_folders_count, set.items.size, set.items.size),
                                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                                     )
                                 }

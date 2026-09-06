@@ -1120,7 +1120,14 @@ fun MainSettingsScreen(
                     val result = configManager.exportFullBackupZip(context, uri)
                     scope.launch {
                         if (result.isSuccess) {
-                            snackbarHostState.showSnackbar("Exported ${result.getOrNull()} configuration files to backup ZIP")
+                            val count = result.getOrNull() ?: 0
+                            snackbarHostState.showSnackbar(
+                                context.resources.getQuantityString(
+                                    R.plurals.msg_backup_exported_configs,
+                                    count,
+                                    count
+                                )
+                            )
                         } else {
                             snackbarHostState.showSnackbar("ZIP export failed: ${result.exceptionOrNull()?.message}")
                         }
@@ -1138,7 +1145,13 @@ fun MainSettingsScreen(
                             val result = configManager.importFullBackupZip(context, uri)
                             if (result.isSuccess) {
                                 val count = result.getOrNull() ?: 0
-                                snackbarHostState.showSnackbar("Successfully restored $count config files from ZIP archive")
+                                snackbarHostState.showSnackbar(
+                                    context.resources.getQuantityString(
+                                        R.plurals.msg_backup_restored_configs,
+                                        count,
+                                        count
+                                    )
+                                )
                             } else {
                                 snackbarHostState.showSnackbar("ZIP restore failed: ${result.exceptionOrNull()?.message}")
                             }

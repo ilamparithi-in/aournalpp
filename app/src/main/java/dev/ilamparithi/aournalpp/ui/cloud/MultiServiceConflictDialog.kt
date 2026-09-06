@@ -54,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -177,12 +178,21 @@ fun MultiServiceConflictDialog(
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.a11yHeading()
                             )
+                            val defaultSubtitle = if (mode == ConflictDialogMode.CONFIG_CONFLICT) {
+                                pluralStringResource(
+                                    R.plurals.conflict_subtitle_config_files,
+                                    conflictGroups.size,
+                                    conflictGroups.size
+                                )
+                            } else {
+                                pluralStringResource(
+                                    R.plurals.conflict_subtitle_notes,
+                                    conflictGroups.size,
+                                    conflictGroups.size
+                                )
+                            }
                             Text(
-                                text = subtitle ?: (if (mode == ConflictDialogMode.CONFIG_CONFLICT) {
-                                    "${conflictGroups.size} configuration files differ between local storage and cloud"
-                                } else {
-                                    "${conflictGroups.size} notes have conflicting versions across storage endpoints"
-                                }),
+                                text = subtitle ?: defaultSubtitle,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

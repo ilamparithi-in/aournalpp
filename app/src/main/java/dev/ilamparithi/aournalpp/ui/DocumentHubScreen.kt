@@ -608,8 +608,8 @@ fun DocumentHubScreen(
                             val pdfCount = selectedDocs.count { it.fileType == NoteFileType.PDF }
                             val noteCount = selectedDocs.size - pdfCount
                             val summary = listOfNotNull(
-                                "$noteCount note${if (noteCount != 1) "s" else ""}".takeIf { noteCount > 0 },
-                                "$pdfCount PDF${if (pdfCount != 1) "s" else ""}".takeIf { pdfCount > 0 }
+                                pluralStringResource(dev.ilamparithi.aournalpp.R.plurals.hub_selected_notes_count, noteCount, noteCount).takeIf { noteCount > 0 },
+                                pluralStringResource(dev.ilamparithi.aournalpp.R.plurals.hub_selected_pdfs_count, pdfCount, pdfCount).takeIf { pdfCount > 0 }
                             ).joinToString(", ")
 
                             if (summary.isNotBlank()) {
@@ -1443,7 +1443,14 @@ fun DocumentHubScreen(
                                                 isSelectionMode = false
                                                 selectedNotePaths = emptySet()
                                                 loadContentNow()
-                                                snackbarHostState.showSnackbar("Moved $count note(s) to \"${dest.name}\"")
+                                                snackbarHostState.showSnackbar(
+                                                    context.resources.getQuantityString(
+                                                        dev.ilamparithi.aournalpp.R.plurals.msg_moved_notes_to_folder,
+                                                        count,
+                                                        count,
+                                                        dest.name
+                                                    )
+                                                )
                                             }
                                         }
                                     }
@@ -1470,7 +1477,13 @@ fun DocumentHubScreen(
                                                     isSelectionMode = false
                                                     selectedNotePaths = emptySet()
                                                     loadContentNow()
-                                                    snackbarHostState.showSnackbar("Moved $count note(s) to Notes Root")
+                                                    snackbarHostState.showSnackbar(
+                                                        context.resources.getQuantityString(
+                                                            dev.ilamparithi.aournalpp.R.plurals.msg_moved_notes_to_root,
+                                                            count,
+                                                            count
+                                                        )
+                                                    )
                                                 }
                                             }
                                     ) {
@@ -1499,7 +1512,14 @@ fun DocumentHubScreen(
                                                     isSelectionMode = false
                                                     selectedNotePaths = emptySet()
                                                     loadContentNow()
-                                                    snackbarHostState.showSnackbar("Moved $count note(s) to \"${folder.name}\"")
+                                                    snackbarHostState.showSnackbar(
+                                                        context.resources.getQuantityString(
+                                                            dev.ilamparithi.aournalpp.R.plurals.msg_moved_notes_to_folder,
+                                                            count,
+                                                            count,
+                                                            folder.name
+                                                        )
+                                                    )
                                                 }
                                             }
                                     ) {
@@ -1513,7 +1533,7 @@ fun DocumentHubScreen(
                                             Text(folder.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                                             Text(
                                                 androidx.compose.ui.res.pluralStringResource(
-                                                    dev.ilamparithi.aournalpp.R.plurals.home_stat_notes_count,
+                                                    dev.ilamparithi.aournalpp.R.plurals.hub_folder_notes_count,
                                                     folder.itemCount,
                                                     folder.itemCount
                                                 ),
@@ -1650,7 +1670,13 @@ fun DocumentHubScreen(
                 icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                 title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_delete_permanent_title), fontWeight = FontWeight.Bold) },
                 text = {
-                    Text("Permanently delete ${selectedDocs.size} item(s)? This action cannot be undone.")
+                    Text(
+                        pluralStringResource(
+                            dev.ilamparithi.aournalpp.R.plurals.dialog_delete_multi_body,
+                            selectedDocs.size,
+                            selectedDocs.size
+                        )
+                    )
                 },
                 confirmButton = {
                     Button(
@@ -1662,7 +1688,13 @@ fun DocumentHubScreen(
                                 isSelectionMode = false
                                 selectedNotePaths = emptySet()
                                 loadContentNow()
-                                snackbarHostState.showSnackbar("Permanently deleted $count item(s)")
+                                snackbarHostState.showSnackbar(
+                                    context.resources.getQuantityString(
+                                        dev.ilamparithi.aournalpp.R.plurals.msg_permanently_deleted_items,
+                                        count,
+                                        count
+                                    )
+                                )
                             }
                         }
                     ) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_delete_permanent)) }
@@ -2335,7 +2367,11 @@ fun DocumentHubScreen(
                                             }
                                         }
                                         Text(
-                                            text = "${folder.itemCount} notes",
+                                            text = pluralStringResource(
+                                                dev.ilamparithi.aournalpp.R.plurals.hub_folder_notes_count,
+                                                folder.itemCount,
+                                                folder.itemCount
+                                            ),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -2627,7 +2663,13 @@ fun DocumentHubScreen(
                                         isSelectionMode = false
                                         selectedNotePaths = emptySet()
                                         loadContentNow()
-                                        snackbarHostState.showSnackbar("Restored $count item(s) from Trash")
+                                        snackbarHostState.showSnackbar(
+                                            context.resources.getQuantityString(
+                                                dev.ilamparithi.aournalpp.R.plurals.msg_restored_items_from_trash,
+                                                count,
+                                                count
+                                            )
+                                        )
                                     }
                                 },
                                 shape = RoundedCornerShape(14.dp),
@@ -2731,7 +2773,11 @@ fun DocumentHubScreen(
                             AppIconButton(
                                 onClick = {
                                     isPdfConverting = true
-                                    convertingMessage = "Rendering ${selectedDocs.size} PDFs..."
+                                    convertingMessage = context.resources.getQuantityString(
+                                        dev.ilamparithi.aournalpp.R.plurals.msg_rendering_pdfs,
+                                        selectedDocs.size,
+                                        selectedDocs.size
+                                    )
                                     scope.launch {
                                         val result = repository.shareMultipleNotesAsPdf(context, selectedDocs, pdfExportManager)
                                         isPdfConverting = false
@@ -2775,7 +2821,13 @@ fun DocumentHubScreen(
                                         isSelectionMode = false
                                         selectedNotePaths = emptySet()
                                         loadContentNow()
-                                        snackbarHostState.showSnackbar("Moved $count note(s) to Trash")
+                                        snackbarHostState.showSnackbar(
+                                            context.resources.getQuantityString(
+                                                dev.ilamparithi.aournalpp.R.plurals.msg_moved_notes_to_trash,
+                                                count,
+                                                count
+                                            )
+                                        )
                                     }
                                 },
                                 tooltip = deleteLabel
@@ -3640,7 +3692,7 @@ fun DynamicRecentsCarousel(
                 )
             }
             Text(
-                "${recentNotes.size} recent",
+                pluralStringResource(dev.ilamparithi.aournalpp.R.plurals.hub_recent_notes_count, recentNotes.size, recentNotes.size),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
