@@ -378,7 +378,6 @@ fun DocumentHubScreen(
     // Progress & Dialog States
     var isPdfConverting by remember { mutableStateOf(false) }
     var convertingMessage by remember { mutableStateOf("") }
-    var pendingExportNote by remember { mutableStateOf<NoteDocument?>(null) }
 
     // Dialog states
     var noteToRename by remember { mutableStateOf<NoteDocument?>(null) }
@@ -414,12 +413,16 @@ fun DocumentHubScreen(
     // Autoload override conflict notification state
     var showAutoloadOverrideDialog by remember { mutableStateOf(false) }
 
-    data class SingleFileActionPrompt(
+    data class PendingSingleExport(
         val note: NoteDocument,
-        val actionType: FileActionPromptType,
-        val defaultName: String
+        val format: dev.ilamparithi.aournalpp.data.DocumentRepository.ShareExportFormat,
+        val customName: String
     )
-    var activeFilePrompt by remember { mutableStateOf<SingleFileActionPrompt?>(null) }
+    var shareExportNote by remember { mutableStateOf<NoteDocument?>(null) }
+    var pendingSingleExport by remember { mutableStateOf<PendingSingleExport?>(null) }
+    var showBatchShareExportDialog by remember { mutableStateOf(false) }
+    var pendingBatchExportFormat by remember { mutableStateOf<dev.ilamparithi.aournalpp.data.DocumentRepository.ShareExportFormat?>(null) }
+    var pendingBatchExportDocs by remember { mutableStateOf<List<NoteDocument>>(emptyList()) }
 
     val aournalPrefs = remember { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
     val reduceAnimations = remember { aournalPrefs.getBoolean(LinuxEnvironment.PREF_KEY_REDUCE_ANIMATIONS, false) }
@@ -443,22 +446,65 @@ fun DocumentHubScreen(
         hasPermission = hasStoragePermission(context)
     }
 
-    // SAF PDF Export Launcher
-    val exportPdfLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/pdf")
+    // Unified SAF Single Save Launcher
+    val singleSaveLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("*/*")
     ) { uri ->
-        val note = pendingExportNote
-        pendingExportNote = null
-        if (uri != null && note != null) {
+        val pending = pendingSingleExport
+        pendingSingleExport = null
+        if (uri != null && pending != null) {
             isPdfConverting = true
-            convertingMessage = "Exporting \"${note.title}\" to PDF..."
+            convertingMessage = "Saving \"${pending.customName}\"..."
             scope.launch {
-                val result = pdfExportManager.exportPdfToUri(context, note.file, uri)
+                val result = repository.exportDocumentToUri(
+                    context = context,
+                    doc = pending.note,
+                    format = pending.format,
+                    destUri = uri,
+                    pdfExportManager = pdfExportManager
+                )
                 isPdfConverting = false
                 if (result.isSuccess) {
-                    snackbarHostState.showSnackbar("Exported ${note.title}.pdf successfully")
+                    val ext = if (pending.format == dev.ilamparithi.aournalpp.data.DocumentRepository.ShareExportFormat.PDF) "pdf" else "xopp"
+                    snackbarHostState.showSnackbar(context.getString(dev.ilamparithi.aournalpp.R.string.msg_exported_success, "${pending.customName}.$ext"))
                 } else {
-                    snackbarHostState.showSnackbar("PDF Export failed: ${result.exceptionOrNull()?.message}")
+                    snackbarHostState.showSnackbar("Export failed: ${result.exceptionOrNull()?.message}")
+                }
+            }
+        }
+    }
+
+    // Unified SAF Batch Save Launcher
+    val batchSaveLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        val format = pendingBatchExportFormat
+        val docs = pendingBatchExportDocs
+        pendingBatchExportFormat = null
+        pendingBatchExportDocs = emptyList()
+
+        if (uri != null && format != null && docs.isNotEmpty()) {
+            isPdfConverting = true
+            convertingMessage = "Saving ${docs.size} files to folder..."
+            scope.launch {
+                val result = repository.exportDocumentsToDirectory(
+                    context = context,
+                    docs = docs,
+                    format = format,
+                    treeUri = uri,
+                    pdfExportManager = pdfExportManager,
+                    onProgress = { current, total, name ->
+                        convertingMessage = context.getString(dev.ilamparithi.aournalpp.R.string.msg_batch_exporting_progress, current, total, name)
+                    }
+                )
+                isPdfConverting = false
+                if (result.isSuccess) {
+                    val count = result.getOrThrow()
+                    snackbarHostState.showSnackbar(context.getString(dev.ilamparithi.aournalpp.R.string.msg_batch_exported_success, count))
+                    selectedNotePaths = emptySet()
+                    isSelectionMode = false
+                } else {
+                    snackbarHostState.showSnackbar("Batch export failed: ${result.exceptionOrNull()?.message}")
                 }
             }
         }
@@ -1100,72 +1146,96 @@ fun DocumentHubScreen(
             )
         }
 
-        // Single-File Action Name Prompt Dialog (Export as PDF, Share as PDF, Share as XOPP)
-        activeFilePrompt?.let { prompt ->
-            val title: String
-            val subtitle: String
-            val ext: String
-            val icon: androidx.compose.ui.graphics.vector.ImageVector
-            val btnText: String
-
-            when (prompt.actionType) {
-                FileActionPromptType.EXPORT_PDF -> {
-                    title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_export_pdf)
-                    subtitle = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_export_pdf_subtitle)
-                    ext = ".pdf"
-                    icon = Icons.Default.FileDownload
-                    btnText = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_export_button)
-                }
-                FileActionPromptType.SHARE_PDF -> {
-                    title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_pdf_title)
-                    subtitle = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_pdf_subtitle)
-                    ext = ".pdf"
-                    icon = Icons.Default.PictureAsPdf
-                    btnText = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share)
-                }
-                FileActionPromptType.SHARE_XOPP -> {
-                    title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_note_title)
-                    subtitle = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_note_subtitle)
-                    ext = ".xopp"
-                    icon = Icons.Default.Share
-                    btnText = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share)
-                }
+        // Single Document Share/Export Dialog
+        shareExportNote?.let { note ->
+            val defaultName = remember(note.file.path) {
+                note.file.nameWithoutExtension
             }
-
-            FileNamePromptDialog(
-                title = title,
-                subtitle = subtitle,
-                extension = ext,
-                icon = icon,
-                initialName = prompt.defaultName,
-                confirmButtonText = btnText,
-                onDismiss = { activeFilePrompt = null },
-                onConfirm = { customName ->
-                    val note = prompt.note
-                    val actionType = prompt.actionType
-                    activeFilePrompt = null
-                    when (actionType) {
-                        FileActionPromptType.EXPORT_PDF -> {
-                            pendingExportNote = note
-                            exportPdfLauncher.launch("$customName.pdf")
-                        }
-                        FileActionPromptType.SHARE_PDF -> {
-                            isPdfConverting = true
-                            convertingMessage = "Rendering PDF for sharing..."
-                            scope.launch {
-                                val result = repository.shareNoteAsPdf(context, note, pdfExportManager, customName = customName)
-                                isPdfConverting = false
-                                if (result.isFailure) {
-                                    snackbarHostState.showSnackbar("Failed to share PDF: ${result.exceptionOrNull()?.message}")
-                                }
-                            }
-                        }
-                        FileActionPromptType.SHARE_XOPP -> {
-                            repository.shareNoteAsXopp(context, note, customName = customName)
+            SingleShareExportDialog(
+                note = note,
+                initialName = defaultName,
+                onDismiss = { shareExportNote = null },
+                onSave = { sanitizedName, format ->
+                    shareExportNote = null
+                    if (isSelectionMode) {
+                        isSelectionMode = false
+                        selectedNotePaths = emptySet()
+                    }
+                    pendingSingleExport = PendingSingleExport(note, format, sanitizedName)
+                    val ext = if (format == dev.ilamparithi.aournalpp.data.DocumentRepository.ShareExportFormat.PDF) "pdf" else "xopp"
+                    singleSaveLauncher.launch("$sanitizedName.$ext")
+                },
+                onShare = { sanitizedName, format ->
+                    shareExportNote = null
+                    if (isSelectionMode) {
+                        isSelectionMode = false
+                        selectedNotePaths = emptySet()
+                    }
+                    isPdfConverting = true
+                    convertingMessage = "Preparing to share \"$sanitizedName\"..."
+                    scope.launch {
+                        val result = repository.shareUnifiedDocuments(
+                            context = context,
+                            docs = listOf(note),
+                            format = format,
+                            customNameForSingle = sanitizedName,
+                            pdfExportManager = pdfExportManager
+                        )
+                        isPdfConverting = false
+                        if (result.isFailure) {
+                            snackbarHostState.showSnackbar("Failed to share: ${result.exceptionOrNull()?.message}")
                         }
                     }
                 }
             )
+        }
+
+        // Batch Documents Share/Export Dialog (only for 2+ documents)
+        if (showBatchShareExportDialog && selectedNotePaths.isNotEmpty()) {
+            val currentDisplayNotes = if (isViewingTrash) trashedNotes else notes
+            val batchSelectedDocs = currentDisplayNotes.filter { selectedNotePaths.contains(it.path) }
+            if (batchSelectedDocs.size == 1) {
+                showBatchShareExportDialog = false
+                shareExportNote = batchSelectedDocs.first()
+            } else if (batchSelectedDocs.size > 1) {
+                BatchShareExportDialog(
+                    selectedNotes = batchSelectedDocs,
+                    onDismiss = { showBatchShareExportDialog = false },
+                    onSaveBatch = { format ->
+                        showBatchShareExportDialog = false
+                        if (isSelectionMode) {
+                            isSelectionMode = false
+                            selectedNotePaths = emptySet()
+                        }
+                        pendingBatchExportFormat = format
+                        pendingBatchExportDocs = batchSelectedDocs
+                        batchSaveLauncher.launch(null)
+                    },
+                    onShareBatch = { format ->
+                        showBatchShareExportDialog = false
+                        if (isSelectionMode) {
+                            isSelectionMode = false
+                            selectedNotePaths = emptySet()
+                        }
+                        isPdfConverting = true
+                        convertingMessage = "Preparing ${batchSelectedDocs.size} documents to share..."
+                        scope.launch {
+                            val result = repository.shareUnifiedDocuments(
+                                context = context,
+                                docs = batchSelectedDocs,
+                                format = format,
+                                pdfExportManager = pdfExportManager
+                            )
+                            isPdfConverting = false
+                            if (result.isFailure) {
+                                snackbarHostState.showSnackbar("Failed to share: ${result.exceptionOrNull()?.message}")
+                            }
+                        }
+                    }
+                )
+            } else {
+                showBatchShareExportDialog = false
+            }
         }
 
         // 1. Storage Permission Prompt Dialog
@@ -1207,28 +1277,9 @@ fun DocumentHubScreen(
             )
         }
 
-        // 2. M3 Standard Progress Dialog during PDF Export/Share
+        // 2. M3 Expressive Progress Dialog during PDF Export/Share
         if (isPdfConverting) {
-            AlertDialog(
-                onDismissRequest = {},
-                properties = AppDialogDefaults.Properties,
-                modifier = Modifier.promptWidth(),
-                icon = {
-                    CircularProgressIndicator(modifier = Modifier.size(36.dp), strokeWidth = 3.dp)
-                },
-                title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.title_processing_document), fontWeight = FontWeight.Bold) },
-                text = {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(convertingMessage, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    }
-                },
-                confirmButton = {}
-            )
+            PdfConversionProgressDialog(message = convertingMessage)
         }
 
         // 3. Create Folder Dialog (Modular)
@@ -2150,29 +2201,8 @@ fun DocumentHubScreen(
                                     repository.togglePinNote(note.file.absolutePath)
                                     loadContent()
                                 },
-                                onSharePdf = { note ->
-                                    val defaultName = FileNameTemplateEngine.evaluate(
-                                        FileNameTemplateEngine.getSharePdfTemplate(context),
-                                        context,
-                                        note.file
-                                    )
-                                    activeFilePrompt = SingleFileActionPrompt(note, FileActionPromptType.SHARE_PDF, defaultName)
-                                },
-                                onShareXopp = { note ->
-                                    val defaultName = FileNameTemplateEngine.evaluate(
-                                        FileNameTemplateEngine.getShareXoppTemplate(context),
-                                        context,
-                                        note.file
-                                    )
-                                    activeFilePrompt = SingleFileActionPrompt(note, FileActionPromptType.SHARE_XOPP, defaultName)
-                                },
-                                onExportPdf = { note ->
-                                    val defaultName = FileNameTemplateEngine.evaluate(
-                                        FileNameTemplateEngine.getExportPdfTemplate(context),
-                                        context,
-                                        note.file
-                                    )
-                                    activeFilePrompt = SingleFileActionPrompt(note, FileActionPromptType.EXPORT_PDF, defaultName)
+                                onShareExport = { note ->
+                                    shareExportNote = note
                                 },
                                 onDuplicate = { note ->
                                     scope.launch {
@@ -2542,29 +2572,8 @@ fun DocumentHubScreen(
                                     repository.togglePinNote(note.file.absolutePath)
                                     loadContent()
                                 },
-                                onExportPdf = {
-                                    val defaultName = FileNameTemplateEngine.evaluate(
-                                        FileNameTemplateEngine.getExportPdfTemplate(context),
-                                        context,
-                                        note.file
-                                    )
-                                    activeFilePrompt = SingleFileActionPrompt(note, FileActionPromptType.EXPORT_PDF, defaultName)
-                                },
-                                onSharePdf = {
-                                    val defaultName = FileNameTemplateEngine.evaluate(
-                                        FileNameTemplateEngine.getSharePdfTemplate(context),
-                                        context,
-                                        note.file
-                                    )
-                                    activeFilePrompt = SingleFileActionPrompt(note, FileActionPromptType.SHARE_PDF, defaultName)
-                                },
-                                onShareXopp = {
-                                    val defaultName = FileNameTemplateEngine.evaluate(
-                                        FileNameTemplateEngine.getShareXoppTemplate(context),
-                                        context,
-                                        note.file
-                                    )
-                                    activeFilePrompt = SingleFileActionPrompt(note, FileActionPromptType.SHARE_XOPP, defaultName)
+                                onShareExport = {
+                                    shareExportNote = note
                                 },
                                 onRename = {
                                     noteToRename = note
@@ -2768,46 +2777,22 @@ fun DocumentHubScreen(
                                 }
                             }
 
-                            // Share as PDF Action
-                            val exportPdfLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_export_pdf)
+                            // Unified Share / Export Action
+                            val shareExportLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_export)
                             AppIconButton(
                                 onClick = {
-                                    isPdfConverting = true
-                                    convertingMessage = context.resources.getQuantityString(
-                                        dev.ilamparithi.aournalpp.R.plurals.msg_rendering_pdfs,
-                                        selectedDocs.size,
-                                        selectedDocs.size
-                                    )
-                                    scope.launch {
-                                        val result = repository.shareMultipleNotesAsPdf(context, selectedDocs, pdfExportManager)
-                                        isPdfConverting = false
-                                        if (result.isFailure) {
-                                            snackbarHostState.showSnackbar("Batch share failed: ${result.exceptionOrNull()?.message}")
-                                        }
+                                    if (selectedDocs.size == 1) {
+                                        shareExportNote = selectedDocs.first()
+                                    } else if (selectedDocs.size > 1) {
+                                        showBatchShareExportDialog = true
                                     }
                                 },
-                                tooltip = exportPdfLabel
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(
-                                        Icons.Default.PictureAsPdf,
-                                        contentDescription = exportPdfLabel
-                                    )
-                                }
-                            }
-
-                            // Share as Notes Action
-                            val shareLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share)
-                            AppIconButton(
-                                onClick = {
-                                    repository.shareMultipleNotesAsXopp(context, selectedDocs)
-                                },
-                                tooltip = shareLabel
+                                tooltip = shareExportLabel
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Icon(
                                         Icons.Default.Share,
-                                        contentDescription = shareLabel
+                                        contentDescription = shareExportLabel
                                     )
                                 }
                             }
@@ -2879,9 +2864,10 @@ fun ExpressiveNoteCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onTogglePin: () -> Unit,
-    onExportPdf: () -> Unit,
-    onSharePdf: () -> Unit,
-    onShareXopp: () -> Unit,
+    onShareExport: (() -> Unit)? = null,
+    onExportPdf: (() -> Unit)? = null,
+    onSharePdf: (() -> Unit)? = null,
+    onShareXopp: (() -> Unit)? = null,
     onRename: () -> Unit,
     onDuplicate: () -> Unit,
     onDelete: () -> Unit,
@@ -2906,6 +2892,7 @@ fun ExpressiveNoteCard(
 
     val openActionLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_open_note)
     val pinActionLabel = if (note.isPinned) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_unpin_note) else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_pin_note)
+    val shareExportActionLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_export)
     val exportPdfActionLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_export_pdf)
     val shareActionLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_note)
     val renameActionLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_rename)
@@ -2918,8 +2905,12 @@ fun ExpressiveNoteCard(
             add(CustomAccessibilityAction(openActionLabel) { onClick(); true })
             if (!isSelectionMode) {
                 add(CustomAccessibilityAction(pinActionLabel) { onTogglePin(); true })
-                add(CustomAccessibilityAction(exportPdfActionLabel) { onExportPdf(); true })
-                add(CustomAccessibilityAction(shareActionLabel) { onShareXopp(); true })
+                if (onShareExport != null) {
+                    add(CustomAccessibilityAction(shareExportActionLabel) { onShareExport(); true })
+                } else {
+                    onExportPdf?.let { add(CustomAccessibilityAction(exportPdfActionLabel) { it(); true }) }
+                    onShareXopp?.let { add(CustomAccessibilityAction(shareActionLabel) { it(); true }) }
+                }
                 add(CustomAccessibilityAction(renameActionLabel) { onRename(); true })
                 add(CustomAccessibilityAction(duplicateActionLabel) { onDuplicate(); true })
                 add(CustomAccessibilityAction(deleteActionLabel) { onDelete(); true })
@@ -3120,6 +3111,7 @@ fun ExpressiveNoteCard(
                                     isPinned = note.isPinned,
                                     onDismiss = { showMenu = false },
                                     onTogglePin = onTogglePin,
+                                    onShareExport = onShareExport,
                                     onExportPdf = onExportPdf,
                                     onSharePdf = onSharePdf,
                                     onShareXopp = onShareXopp,
@@ -3250,6 +3242,7 @@ fun ExpressiveNoteCard(
                             isPinned = note.isPinned,
                             onDismiss = { showMenu = false },
                             onTogglePin = onTogglePin,
+                            onShareExport = onShareExport,
                             onExportPdf = onExportPdf,
                             onSharePdf = onSharePdf,
                             onShareXopp = onShareXopp,
@@ -3652,9 +3645,10 @@ fun DynamicRecentsCarousel(
     pdfExportManager: PdfExportManager,
     onOpenNote: (NoteDocument) -> Unit,
     onTogglePin: (NoteDocument) -> Unit,
-    onExportPdf: (NoteDocument) -> Unit,
-    onSharePdf: (NoteDocument) -> Unit,
-    onShareXopp: (NoteDocument) -> Unit,
+    onShareExport: ((NoteDocument) -> Unit)? = null,
+    onExportPdf: ((NoteDocument) -> Unit)? = null,
+    onSharePdf: ((NoteDocument) -> Unit)? = null,
+    onShareXopp: ((NoteDocument) -> Unit)? = null,
     onDuplicate: ((NoteDocument) -> Unit)? = null,
     onDeleteNote: (NoteDocument) -> Unit,
     onRenameNote: (NoteDocument) -> Unit
@@ -3718,9 +3712,10 @@ fun DynamicRecentsCarousel(
                         pdfExportManager = pdfExportManager,
                         onClick = { onOpenNote(note) },
                         onTogglePin = { onTogglePin(note) },
-                        onExportPdf = { onExportPdf(note) },
-                        onSharePdf = { onSharePdf(note) },
-                        onShareXopp = { onShareXopp(note) },
+                        onShareExport = onShareExport?.let { { it(note) } },
+                        onExportPdf = onExportPdf?.let { { it(note) } },
+                        onSharePdf = onSharePdf?.let { { it(note) } },
+                        onShareXopp = onShareXopp?.let { { it(note) } },
                         onRename = { onRenameNote(note) },
                         onDuplicate = onDuplicate?.let { { it(note) } },
                         onDelete = { onDeleteNote(note) }

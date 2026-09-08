@@ -383,38 +383,43 @@ fun HomeScreen(
         }
     }
 
-    data class SingleFileActionPrompt(
+    data class PendingSingleExport(
         val note: NoteDocument,
-        val actionType: FileActionPromptType,
-        val defaultName: String
+        val format: dev.ilamparithi.aournalpp.data.DocumentRepository.ShareExportFormat,
+        val customName: String
     )
-    var activeFilePrompt by remember { mutableStateOf<SingleFileActionPrompt?>(null) }
+    var shareExportNote by remember { mutableStateOf<NoteDocument?>(null) }
+    var pendingSingleExport by remember { mutableStateOf<PendingSingleExport?>(null) }
 
-    val onShareXopp: (NoteDocument) -> Unit = { note ->
-        val defaultName = FileNameTemplateEngine.evaluate(
-            FileNameTemplateEngine.getShareXoppTemplate(context),
-            context,
-            note.file
-        )
-        activeFilePrompt = SingleFileActionPrompt(note, FileActionPromptType.SHARE_XOPP, defaultName)
+    val singleSaveLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("*/*")
+    ) { uri ->
+        val pending = pendingSingleExport
+        pendingSingleExport = null
+        if (uri != null && pending != null) {
+            isPdfConverting = true
+            convertingMessage = "Saving \"${pending.customName}\"..."
+            scope.launch {
+                val result = repository.exportDocumentToUri(
+                    context = context,
+                    doc = pending.note,
+                    format = pending.format,
+                    destUri = uri,
+                    pdfExportManager = pdfExportManager
+                )
+                isPdfConverting = false
+                if (result.isSuccess) {
+                    val ext = if (pending.format == dev.ilamparithi.aournalpp.data.DocumentRepository.ShareExportFormat.PDF) "pdf" else "xopp"
+                    snackbarHostState.showSnackbar(context.getString(dev.ilamparithi.aournalpp.R.string.msg_exported_success, "${pending.customName}.$ext"))
+                } else {
+                    snackbarHostState.showSnackbar("Export failed: ${result.exceptionOrNull()?.message}")
+                }
+            }
+        }
     }
 
-    val onSharePdf: (NoteDocument) -> Unit = { note ->
-        val defaultName = FileNameTemplateEngine.evaluate(
-            FileNameTemplateEngine.getSharePdfTemplate(context),
-            context,
-            note.file
-        )
-        activeFilePrompt = SingleFileActionPrompt(note, FileActionPromptType.SHARE_PDF, defaultName)
-    }
-
-    val onExportPdf: (NoteDocument) -> Unit = { note ->
-        val defaultName = FileNameTemplateEngine.evaluate(
-            FileNameTemplateEngine.getExportPdfTemplate(context),
-            context,
-            note.file
-        )
-        activeFilePrompt = SingleFileActionPrompt(note, FileActionPromptType.EXPORT_PDF, defaultName)
+    val onShareExport: (NoteDocument) -> Unit = { note ->
+        shareExportNote = note
     }
 
     val onRename: (NoteDocument) -> Unit = { note ->
@@ -859,9 +864,7 @@ fun HomeScreen(
                                 onNewNoteClick = { promptNewNote() },
                                 refreshSeed = refreshSeed,
                                 onTogglePin = onTogglePin,
-                                onExportPdf = onExportPdf,
-                                onSharePdf = onSharePdf,
-                                onShareXopp = onShareXopp,
+                                onShareExport = onShareExport,
                                 onRename = onRename,
                                 onDuplicate = onDuplicate,
                                 onDelete = onDelete
@@ -878,9 +881,7 @@ fun HomeScreen(
                                     }
                                 },
                                 onTogglePin = onTogglePin,
-                                onExportPdf = onExportPdf,
-                                onSharePdf = onSharePdf,
-                                onShareXopp = onShareXopp,
+                                onShareExport = onShareExport,
                                 onRename = onRename,
                                 onDuplicate = onDuplicate,
                                 onDelete = onDelete
@@ -1332,24 +1333,7 @@ fun HomeScreen(
 
     // PDF Converting Progress Dialog
     if (isPdfConverting) {
-        AlertDialog(
-            onDismissRequest = {},
-            properties = AppDialogDefaults.Properties,
-            modifier = Modifier.promptWidth(),
-            icon = { CircularProgressIndicator(modifier = Modifier.size(36.dp), strokeWidth = 3.dp) },
-            title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.title_processing_document), fontWeight = FontWeight.Bold) },
-            text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(convertingMessage, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                }
-            },
-            confirmButton = {}
-        )
+        PdfConversionProgressDialog(message = convertingMessage)
     }
 
     // Rename Note Dialog
@@ -1448,80 +1432,36 @@ fun HomeScreen(
         )
     }
 
-    // Single-File Action Name Prompt Dialog (Export as PDF, Share as PDF, Share as XOPP)
-    activeFilePrompt?.let { prompt ->
-        val title: String
-        val subtitle: String
-        val ext: String
-        val icon: androidx.compose.ui.graphics.vector.ImageVector
-        val btnText: String
-
-        when (prompt.actionType) {
-            FileActionPromptType.EXPORT_PDF -> {
-                title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_export_pdf)
-                subtitle = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_export_pdf_subtitle)
-                ext = ".pdf"
-                icon = Icons.Default.FileDownload
-                btnText = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_export_button)
-            }
-            FileActionPromptType.SHARE_PDF -> {
-                title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_pdf_title)
-                subtitle = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_pdf_subtitle)
-                ext = ".pdf"
-                icon = Icons.Default.PictureAsPdf
-                btnText = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share)
-            }
-            FileActionPromptType.SHARE_XOPP -> {
-                title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_note_title)
-                subtitle = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_note_subtitle)
-                ext = ".xopp"
-                icon = Icons.Default.Share
-                btnText = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share)
-            }
+    // Single Document Share/Export Dialog
+    shareExportNote?.let { note ->
+        val defaultName = remember(note.file.path) {
+            note.file.nameWithoutExtension
         }
-
-        FileNamePromptDialog(
-            title = title,
-            subtitle = subtitle,
-            extension = ext,
-            icon = icon,
-            initialName = prompt.defaultName,
-            confirmButtonText = btnText,
-            onDismiss = { activeFilePrompt = null },
-            onConfirm = { customName ->
-                val note = prompt.note
-                val actionType = prompt.actionType
-                activeFilePrompt = null
-                when (actionType) {
-                    FileActionPromptType.EXPORT_PDF -> {
-                        scope.launch {
-                            isPdfConverting = true
-                            convertingMessage = "Exporting \"$customName\" to PDF..."
-                            val exportDir = File(repository.getRootNotesDirectory(), "Exports").apply { mkdirs() }
-                            val destPdf = File(exportDir, "$customName.pdf")
-                            val result = pdfExportManager.convertXoppToPdf(note.file, destPdf)
-                            isPdfConverting = false
-                            if (result.isSuccess) {
-                                val pdfFile = result.getOrThrow()
-                                snackbarHostState.showSnackbar("Exported to Exports/${pdfFile.name}")
-                            } else {
-                                snackbarHostState.showSnackbar("PDF Export failed: ${result.exceptionOrNull()?.message}")
-                            }
-                        }
-                    }
-                    FileActionPromptType.SHARE_PDF -> {
-                        scope.launch {
-                            isPdfConverting = true
-                            convertingMessage = "Rendering PDF for \"$customName\"..."
-                            val result = repository.shareNoteAsPdf(context, note, pdfExportManager, customName = customName)
-                            isPdfConverting = false
-                            if (result.isFailure) {
-                                snackbarHostState.showSnackbar("PDF Export failed: ${result.exceptionOrNull()?.message}")
-                            }
-                        }
-                    }
-                    FileActionPromptType.SHARE_XOPP -> {
-                        repository.shareNoteAsXopp(context, note, customName = customName)
+        SingleShareExportDialog(
+            note = note,
+            initialName = defaultName,
+            onDismiss = { shareExportNote = null },
+            onSave = { sanitizedName, format ->
+                shareExportNote = null
+                pendingSingleExport = PendingSingleExport(note, format, sanitizedName)
+                val ext = if (format == dev.ilamparithi.aournalpp.data.DocumentRepository.ShareExportFormat.PDF) "pdf" else "xopp"
+                singleSaveLauncher.launch("$sanitizedName.$ext")
+            },
+            onShare = { sanitizedName, format ->
+                shareExportNote = null
+                isPdfConverting = true
+                convertingMessage = "Preparing to share \"$sanitizedName\"..."
+                scope.launch {
+                    val result = repository.shareUnifiedDocuments(
+                        context = context,
+                        docs = listOf(note),
+                        format = format,
+                        customNameForSingle = sanitizedName,
+                        pdfExportManager = pdfExportManager
+                    )
+                    isPdfConverting = false
+                    if (result.isFailure) {
+                        snackbarHostState.showSnackbar("Failed to share: ${result.exceptionOrNull()?.message}")
                     }
                 }
             }
@@ -1767,6 +1707,7 @@ private fun NormalHomeGalleryView(
     pdfExportManager: PdfExportManager,
     onNoteClick: (NoteDocument) -> Unit,
     onTogglePin: ((NoteDocument) -> Unit)? = null,
+    onShareExport: ((NoteDocument) -> Unit)? = null,
     onExportPdf: ((NoteDocument) -> Unit)? = null,
     onSharePdf: ((NoteDocument) -> Unit)? = null,
     onShareXopp: ((NoteDocument) -> Unit)? = null,
@@ -1821,6 +1762,7 @@ private fun NormalHomeGalleryView(
                                     pdfExportManager = pdfExportManager,
                                     onClick = { onNoteClick(note) },
                                     onTogglePin = onTogglePin?.let { { it(note) } },
+                                    onShareExport = onShareExport?.let { { it(note) } },
                                     onExportPdf = onExportPdf?.let { { it(note) } },
                                     onSharePdf = onSharePdf?.let { { it(note) } },
                                     onShareXopp = onShareXopp?.let { { it(note) } },
@@ -1868,6 +1810,7 @@ private fun NormalHomeGalleryView(
                                     pdfExportManager = pdfExportManager,
                                     onClick = { onNoteClick(note) },
                                     onTogglePin = onTogglePin?.let { { it(note) } },
+                                    onShareExport = onShareExport?.let { { it(note) } },
                                     onExportPdf = onExportPdf?.let { { it(note) } },
                                     onSharePdf = onSharePdf?.let { { it(note) } },
                                     onShareXopp = onShareXopp?.let { { it(note) } },

@@ -2172,17 +2172,6 @@ private fun OnboardingExtractionBottomPill(
         }
     }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "syncRotation")
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "syncSpin"
-    )
-
     AnimatedVisibility(
         visible = !isReadyDismissed,
         enter = fadeIn() + expandVertically(),
@@ -2226,13 +2215,10 @@ private fun OnboardingExtractionBottomPill(
                                 modifier = Modifier.size(18.dp)
                             )
                         } else {
-                            Icon(
-                                imageVector = Icons.Default.Sync,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier
-                                    .size(18.dp)
-                                    .rotate(rotation)
+                            ExpressiveHeroSpinner(
+                                size = 20.dp,
+                                icon = Icons.Default.Sync,
+                                iconDescription = null
                             )
                         }
 

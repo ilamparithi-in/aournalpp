@@ -108,6 +108,7 @@ fun StandardNoteCard(
     onLongClick: (() -> Unit)? = null,
     // Context Action Handlers
     onTogglePin: (() -> Unit)? = null,
+    onShareExport: (() -> Unit)? = null,
     onExportPdf: (() -> Unit)? = null,
     onSharePdf: (() -> Unit)? = null,
     onShareXopp: (() -> Unit)? = null,
@@ -138,11 +139,12 @@ fun StandardNoteCard(
         }
     } ?: MaterialTheme.colorScheme.primary
 
-    val hasActions = onTogglePin != null || onExportPdf != null || onSharePdf != null ||
+    val hasActions = onTogglePin != null || onShareExport != null || onExportPdf != null || onSharePdf != null ||
             onShareXopp != null || onRename != null || onDuplicate != null || onDelete != null
 
     val openActionLabel = stringResource(dev.ilamparithi.aournalpp.R.string.action_open_note)
     val pinActionLabel = if (note.isPinned) stringResource(dev.ilamparithi.aournalpp.R.string.action_unpin_note) else stringResource(dev.ilamparithi.aournalpp.R.string.action_pin_note)
+    val shareExportActionLabel = stringResource(dev.ilamparithi.aournalpp.R.string.action_share_export)
     val exportPdfActionLabel = stringResource(dev.ilamparithi.aournalpp.R.string.action_export_pdf)
     val shareActionLabel = stringResource(dev.ilamparithi.aournalpp.R.string.action_share_note)
     val renameActionLabel = stringResource(dev.ilamparithi.aournalpp.R.string.action_rename)
@@ -152,18 +154,22 @@ fun StandardNoteCard(
 
     val customActionsList = remember(
         note, isTrashMode, isSelectionMode,
-        onTogglePin, onExportPdf, onShareXopp, onRename, onDuplicate, onDelete, onRestore
+        onTogglePin, onShareExport, onExportPdf, onShareXopp, onRename, onDuplicate, onDelete, onRestore
     ) {
         buildList {
             add(CustomAccessibilityAction(openActionLabel) { onClick(); true })
             if (onTogglePin != null && !isSelectionMode) {
                 add(CustomAccessibilityAction(pinActionLabel) { onTogglePin(); true })
             }
-            if (onExportPdf != null && !isSelectionMode) {
-                add(CustomAccessibilityAction(exportPdfActionLabel) { onExportPdf(); true })
-            }
-            if (onShareXopp != null && !isSelectionMode) {
-                add(CustomAccessibilityAction(shareActionLabel) { onShareXopp(); true })
+            if (onShareExport != null && !isSelectionMode) {
+                add(CustomAccessibilityAction(shareExportActionLabel) { onShareExport(); true })
+            } else {
+                if (onExportPdf != null && !isSelectionMode) {
+                    add(CustomAccessibilityAction(exportPdfActionLabel) { onExportPdf(); true })
+                }
+                if (onShareXopp != null && !isSelectionMode) {
+                    add(CustomAccessibilityAction(shareActionLabel) { onShareXopp(); true })
+                }
             }
             if (onRename != null && !isSelectionMode) {
                 add(CustomAccessibilityAction(renameActionLabel) { onRename(); true })
@@ -350,6 +356,7 @@ fun StandardNoteCard(
                         isPinned = note.isPinned,
                         onDismiss = { showMenu = false },
                         onTogglePin = onTogglePin,
+                        onShareExport = onShareExport,
                         onExportPdf = onExportPdf,
                         onSharePdf = onSharePdf,
                         onShareXopp = onShareXopp,
@@ -499,6 +506,7 @@ fun StandardNoteActionDropdown(
     isPinned: Boolean = false,
     onDismiss: () -> Unit,
     onTogglePin: (() -> Unit)? = null,
+    onShareExport: (() -> Unit)? = null,
     onExportPdf: (() -> Unit)? = null,
     onSharePdf: (() -> Unit)? = null,
     onShareXopp: (() -> Unit)? = null,
@@ -526,26 +534,34 @@ fun StandardNoteActionDropdown(
             )
             HorizontalDivider()
         }
-        if (onExportPdf != null) {
+        if (onShareExport != null) {
             DropdownMenuItem(
-                text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_export_pdf)) },
-                leadingIcon = { Icon(Icons.Default.FileDownload, contentDescription = null) },
-                onClick = { onDismiss(); onExportPdf() }
-            )
-        }
-        if (onSharePdf != null) {
-            DropdownMenuItem(
-                text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share)) },
-                leadingIcon = { Icon(Icons.Default.PictureAsPdf, contentDescription = null) },
-                onClick = { onDismiss(); onSharePdf() }
-            )
-        }
-        if (onShareXopp != null) {
-            DropdownMenuItem(
-                text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_note)) },
+                text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_export)) },
                 leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
-                onClick = { onDismiss(); onShareXopp() }
+                onClick = { onDismiss(); onShareExport() }
             )
+        } else {
+            if (onExportPdf != null) {
+                DropdownMenuItem(
+                    text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_export_pdf)) },
+                    leadingIcon = { Icon(Icons.Default.FileDownload, contentDescription = null) },
+                    onClick = { onDismiss(); onExportPdf() }
+                )
+            }
+            if (onSharePdf != null) {
+                DropdownMenuItem(
+                    text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share)) },
+                    leadingIcon = { Icon(Icons.Default.PictureAsPdf, contentDescription = null) },
+                    onClick = { onDismiss(); onSharePdf() }
+                )
+            }
+            if (onShareXopp != null) {
+                DropdownMenuItem(
+                    text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_note)) },
+                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                    onClick = { onDismiss(); onShareXopp() }
+                )
+            }
         }
         if (onRename != null) {
             HorizontalDivider()

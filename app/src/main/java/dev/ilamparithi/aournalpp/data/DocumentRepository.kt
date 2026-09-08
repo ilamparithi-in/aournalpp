@@ -3,6 +3,7 @@ package dev.ilamparithi.aournalpp.data
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.util.Log
 import androidx.core.content.FileProvider
 import dev.ilamparithi.aournalpp.model.AutosaveInfo
@@ -1344,6 +1345,132 @@ class DocumentRepository(private val context: Context) {
                     }
                     val chooserTitle = context.resources.getQuantityString(R.plurals.title_share_pdfs, docs.size, docs.size)
                     context.startActivity(Intent.createChooser(intent, chooserTitle))
+                }
+            }
+            Unit
+        }
+    }
+
+    enum class ShareExportFormat {
+        PDF,
+        XOPP,
+        ORIGINAL
+    }
+
+    suspend fun exportDocumentToUri(
+        context: Context,
+        doc: NoteDocument,
+        format: ShareExportFormat,
+        destUri: Uri,
+        pdfExportManager: PdfExportManager
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            when (format) {
+                ShareExportFormat.PDF -> {
+                    if (doc.file.extension.equals("pdf", ignoreCase = true)) {
+                        context.contentResolver.openOutputStream(destUri)?.use { out ->
+                            doc.file.inputStream().use { it.copyTo(out) }
+                        } ?: error("Failed to open destination URI for PDF export")
+                    } else {
+                        pdfExportManager.exportPdfToUri(context, doc.file, destUri).getOrThrow()
+                    }
+                }
+                ShareExportFormat.XOPP,
+                ShareExportFormat.ORIGINAL -> {
+                    context.contentResolver.openOutputStream(destUri)?.use { out ->
+                        doc.file.inputStream().use { it.copyTo(out) }
+                    } ?: error("Failed to open destination URI for note export")
+                }
+            }
+            Unit
+        }
+    }
+
+    suspend fun exportDocumentsToDirectory(
+        context: Context,
+        docs: List<NoteDocument>,
+        format: ShareExportFormat,
+        treeUri: Uri,
+        pdfExportManager: PdfExportManager,
+        onProgress: ((current: Int, total: Int, name: String) -> Unit)? = null
+    ): Result<Int> = withContext(Dispatchers.IO) {
+        runCatching {
+            val treeDocId = DocumentsContract.getTreeDocumentId(treeUri)
+            val parentDocUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocId)
+            var count = 0
+
+            docs.forEachIndexed { index, doc ->
+                onProgress?.invoke(index + 1, docs.size, doc.title)
+                val targetExt = when (format) {
+                    ShareExportFormat.PDF -> "pdf"
+                    ShareExportFormat.XOPP -> "xopp"
+                    ShareExportFormat.ORIGINAL -> doc.file.extension.ifEmpty { "xopp" }
+                }
+                val mimeType = when (targetExt.lowercase()) {
+                    "pdf" -> "application/pdf"
+                    "xopp" -> "application/x-xopp"
+                    "xoj" -> "application/x-xoj"
+                    else -> "application/octet-stream"
+                }
+                val cleanFileName = "${doc.title}.$targetExt"
+                val newDocUri = DocumentsContract.createDocument(
+                    context.contentResolver,
+                    parentDocUri,
+                    mimeType,
+                    cleanFileName
+                ) ?: error("Failed to create document $cleanFileName in destination folder")
+
+                exportDocumentToUri(context, doc, format, newDocUri, pdfExportManager).getOrThrow()
+                count++
+            }
+            count
+        }
+    }
+
+    suspend fun shareUnifiedDocuments(
+        context: Context,
+        docs: List<NoteDocument>,
+        format: ShareExportFormat,
+        customNameForSingle: String? = null,
+        pdfExportManager: PdfExportManager
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            if (docs.isEmpty()) return@runCatching
+
+            if (docs.size == 1) {
+                val doc = docs.first()
+                when (format) {
+                    ShareExportFormat.PDF -> {
+                        shareNoteAsPdf(context, doc, pdfExportManager, customNameForSingle).getOrThrow()
+                    }
+                    ShareExportFormat.XOPP,
+                    ShareExportFormat.ORIGINAL -> {
+                        shareNoteAsXopp(context, doc, customNameForSingle)
+                    }
+                }
+            } else {
+                when (format) {
+                    ShareExportFormat.PDF -> {
+                        shareMultipleNotesAsPdf(context, docs, pdfExportManager).getOrThrow()
+                    }
+                    ShareExportFormat.XOPP -> {
+                        shareMultipleNotesAsXopp(context, docs.filter { it.file.extension.equals("xopp", ignoreCase = true) })
+                    }
+                    ShareExportFormat.ORIGINAL -> {
+                        val uris = ArrayList<Uri>()
+                        for (doc in docs) {
+                            uris.add(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", doc.file))
+                        }
+                        withContext(Dispatchers.Main) {
+                            val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                                type = "*/*"
+                                putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            val chooserTitle = context.resources.getQuantityString(R.plurals.title_share_notes, docs.size, docs.size)
+                            context.startActivity(Intent.createChooser(intent, chooserTitle))
+                        }
+                    }
                 }
             }
             Unit
