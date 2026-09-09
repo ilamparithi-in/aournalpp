@@ -43,8 +43,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.ilamparithi.aournalpp.R
-import dev.ilamparithi.aournalpp.ui.util.a11yHeading
-import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
+import dev.ilamparithi.aournalpp.utils.a11yHeading
+import dev.ilamparithi.aournalpp.utils.minTouchTarget
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -77,8 +77,8 @@ import com.google.zxing.MultiFormatReader
 import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.common.HybridBinarizer
 import dev.ilamparithi.aournalpp.R
-import dev.ilamparithi.aournalpp.ui.util.a11yHeading
-import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
+import dev.ilamparithi.aournalpp.utils.a11yHeading
+import dev.ilamparithi.aournalpp.utils.minTouchTarget
 import java.util.concurrent.Executors
 
 @Composable

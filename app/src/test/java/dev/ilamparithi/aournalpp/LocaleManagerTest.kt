@@ -1,7 +1,7 @@
 package dev.ilamparithi.aournalpp
 
 import dev.ilamparithi.aournalpp.runtime.LinuxLocaleManager
-import dev.ilamparithi.aournalpp.util.AppLocaleHelper
+import dev.ilamparithi.aournalpp.utils.AppLocaleHelper
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue

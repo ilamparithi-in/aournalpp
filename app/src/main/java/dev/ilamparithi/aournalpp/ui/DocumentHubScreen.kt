@@ -1,5 +1,6 @@
 package dev.ilamparithi.aournalpp.ui
 
+import dev.ilamparithi.aournalpp.ui.dialog.AutosaveResolutionDialog
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -74,11 +75,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import dev.ilamparithi.aournalpp.ui.util.AccessibilityUtils
-import dev.ilamparithi.aournalpp.ui.util.a11yHeading
-import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
-import dev.ilamparithi.aournalpp.ui.util.AppIconButton
-import dev.ilamparithi.aournalpp.ui.util.AppTooltipBox
+import dev.ilamparithi.aournalpp.utils.AccessibilityUtils
+import dev.ilamparithi.aournalpp.utils.a11yHeading
+import dev.ilamparithi.aournalpp.utils.minTouchTarget
+import dev.ilamparithi.aournalpp.ui.common.AppIconButton
+import dev.ilamparithi.aournalpp.ui.common.AppTooltipBox
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -328,11 +329,11 @@ fun DocumentHubScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val repository = remember { DocumentRepository(context) }
+    val repository = remember { dev.ilamparithi.aournalpp.data.DocumentRepository.getInstance(context) }
     val env = remember { repository.getLinuxEnvironment() }
     val supervisor = remember { ProcessSupervisor(env) }
     val pdfExportManager = remember { PdfExportManager(env, supervisor) }
-    val prefs = remember { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
+    val prefs = remember { dev.ilamparithi.aournalpp.data.AppPreferences.getGeneral(context) }
 
     var hasPermission by remember { mutableStateOf(hasStoragePermission(context)) }
     var showPermissionDialog by remember { mutableStateOf(!hasPermission) }
@@ -432,11 +433,7 @@ fun DocumentHubScreen(
 
     // Speed Dial FAB State
     var isFabExpanded by remember { mutableStateOf(false) }
-    val fabRotation by animateFloatAsState(
-        targetValue = if (isFabExpanded) 135f else 0f,
-        animationSpec = if (reduceAnimations) snap() else spring(dampingRatio = 0.65f, stiffness = 300f),
-        label = "fabRotation"
-    )
+    val fabRotation by dev.ilamparithi.aournalpp.ui.animation.rememberFabRotation(isFabExpanded, reduceAnimations)
 
     // New Note dialog state
     var showNewNoteDialog by remember { mutableStateOf(false) }
@@ -2048,46 +2045,21 @@ fun DocumentHubScreen(
 
         // 8b. Save Emergency Recovery Name Dialog
         if (showEmergencySaveNameDialog && quarantinedEmergencySave != null) {
-            val file = quarantinedEmergencySave!!
-            val allAvailableFolders by produceState<List<FolderItem>>(emptyList(), showEmergencySaveNameDialog) {
-                value = repository.getAllFolders()
-            }
-
-            SaveAsNoteDialog(
-                title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_save_recovered_title),
-                subtitle = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_save_recovered_subtitle),
-                icon = Icons.Default.Emergency,
+            dev.ilamparithi.aournalpp.ui.dialog.EmergencySaveNameDialog(
+                file = quarantinedEmergencySave!!,
                 initialName = emergencySaveNameInput,
                 initialFolder = emergencySaveTargetFolder,
-                availableFolders = allAvailableFolders,
-                rootFolder = repository.getRootNotesDirectory(),
+                repository = repository,
                 onDismiss = { showEmergencySaveNameDialog = false },
-                onSave = { name, targetFolder ->
+                onSaveSuccess = { savedFile ->
                     showEmergencySaveNameDialog = false
-                    val savedFile = repository.saveEmergencyRecoveryToNotes(
-                        file,
-                        name,
-                        targetFolder
-                    )
                     quarantinedEmergencySave = null
                     loadContent()
                     scope.launch {
                         snackbarHostState.showSnackbar("Saved recovered note as \"${savedFile.name}\"")
                     }
                 },
-                onCreateFolder = { name, colorHex, iconEmoji, iconType ->
-                    val result = repository.createFolder(
-                        parentDir = repository.getRootNotesDirectory(),
-                        name = name,
-                        colorHex = colorHex,
-                        iconEmoji = iconEmoji,
-                        iconType = iconType
-                    )
-                    if (result.isSuccess) {
-                        loadContent()
-                    }
-                    result
-                }
+                onFolderCreated = { loadContent() }
             )
         }
 
@@ -3539,153 +3511,6 @@ fun NoteActionDropdown(
             onClick = { onDismiss(); onDelete() }
         )
     }
-}
-
-@Composable
-fun AutosaveResolutionDialog(
-    note: NoteDocument,
-    autosaveInfo: dev.ilamparithi.aournalpp.model.AutosaveInfo,
-    onDismiss: () -> Unit,
-    onReplaceWithAutosave: () -> Unit,
-    onKeepBoth: () -> Unit,
-    onKeepExisting: () -> Unit
-) {
-    val isNewer = autosaveInfo.isAutosaveNewer
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        properties = AppDialogDefaults.Properties,
-        modifier = Modifier.promptWidth(),
-        icon = {
-            Icon(
-                imageVector = Icons.Default.History,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(32.dp)
-            )
-        },
-        title = {
-            Text(
-                text = "Autosave Detected",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = "An autosaved version was found for \"${note.title}\".",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (isNewer) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
-                    contentColor = if (isNewer) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isNewer) Icons.Default.Check else Icons.Default.WarningAmber,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = autosaveInfo.timeDiffFormatted,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("Current Note", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                            Text("${autosaveInfo.mainModifiedFormatted} (${autosaveInfo.mainSizeFormatted})", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-
-                        HorizontalDivider()
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("Autosave", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = if (isNewer) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
-                            Text("${autosaveInfo.autosaveModifiedFormatted} (${autosaveInfo.autosaveSizeFormatted})", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            if (isNewer) {
-                Button(
-                    onClick = onReplaceWithAutosave,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    )
-                ) {
-                    Text("Replace with Autosave", fontWeight = FontWeight.SemiBold)
-                }
-            } else {
-                Button(
-                    onClick = onKeepExisting,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    )
-                ) {
-                    Text("Keep Existing", fontWeight = FontWeight.SemiBold)
-                }
-            }
-        },
-        dismissButton = {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TextButton(onClick = onKeepBoth) {
-                    Text("Keep Both")
-                }
-                if (isNewer) {
-                    TextButton(onClick = onKeepExisting) {
-                        Text("Keep Existing")
-                    }
-                } else {
-                    OutlinedButton(
-                        onClick = onReplaceWithAutosave,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Text("Replace with Autosave", color = MaterialTheme.colorScheme.error)
-                    }
-                }
-            }
-        }
-    )
 }
 
 fun Modifier.notesGridDragSelect(

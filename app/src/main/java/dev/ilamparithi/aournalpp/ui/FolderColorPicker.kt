@@ -66,7 +66,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.ilamparithi.aournalpp.R
-import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
+import dev.ilamparithi.aournalpp.utils.minTouchTarget
 import java.util.Locale
 
 val DEFAULT_PRESET_FOLDER_COLORS = listOf(

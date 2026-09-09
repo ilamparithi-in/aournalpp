@@ -1,4 +1,4 @@
-package dev.ilamparithi.aournalpp.ui.util
+package dev.ilamparithi.aournalpp.ui.common
 
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import dev.ilamparithi.aournalpp.utils.minTouchTarget
 import kotlinx.coroutines.launch
 
 /**
@@ -212,4 +213,3 @@ fun AppFilledTonalIconButton(
         }
     }
 }
-

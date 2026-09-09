@@ -40,8 +40,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.res.stringResource
-import dev.ilamparithi.aournalpp.ui.util.a11yHeading
-import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
+import dev.ilamparithi.aournalpp.utils.a11yHeading
+import dev.ilamparithi.aournalpp.utils.minTouchTarget
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.Icons
@@ -146,8 +146,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.ui.res.stringResource
 import dev.ilamparithi.aournalpp.runtime.LinuxLocaleManager
 import dev.ilamparithi.aournalpp.runtime.LinuxLocaleInfo
-import dev.ilamparithi.aournalpp.util.AppLocaleHelper
-import dev.ilamparithi.aournalpp.util.AppLanguageInfo
+import dev.ilamparithi.aournalpp.utils.AppLocaleHelper
+import dev.ilamparithi.aournalpp.utils.AppLanguageInfo
 import dev.ilamparithi.aournalpp.data.X11Preferences
 import dev.ilamparithi.aournalpp.runtime.ConfigFileType
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
@@ -1198,7 +1198,7 @@ fun MainSettingsScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            ConfigFileType.values().forEach { type ->
+                            ConfigFileType.entries.forEach { type ->
                                 Surface(
                                     modifier = Modifier
                                         .fillMaxWidth()

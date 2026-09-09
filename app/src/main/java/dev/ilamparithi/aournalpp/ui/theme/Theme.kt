@@ -108,7 +108,7 @@ fun rememberAppDarkTheme(context: Context = LocalContext.current): Boolean {
 }
 
 @Composable
-fun AournalTheme(
+fun AournalppTheme(
     useDarkTheme: Boolean = rememberAppDarkTheme(),
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,
@@ -139,3 +139,11 @@ fun AournalTheme(
         }
     }
 }
+
+@Composable
+fun AournalTheme(
+    useDarkTheme: Boolean = rememberAppDarkTheme(),
+    dynamicColor: Boolean = true,
+    content: @Composable () -> Unit
+) = AournalppTheme(useDarkTheme = useDarkTheme, dynamicColor = dynamicColor, content = content)
+

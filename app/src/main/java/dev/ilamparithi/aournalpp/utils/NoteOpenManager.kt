@@ -37,16 +37,15 @@ enum class NoteOpenAction(val value: String, val displayName: String) {
 object NoteOpenManager {
 
     const val PREF_KEY_DEFAULT_OPEN_ACTION = "pref_default_open_action"
-    private const val PREFS_NAME = "aournal_prefs"
 
     fun getDefaultAction(context: Context): NoteOpenAction {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = dev.ilamparithi.aournalpp.data.AppPreferences.getGeneral(context)
         val raw = prefs.getString(PREF_KEY_DEFAULT_OPEN_ACTION, NoteOpenAction.ASK.value)
         return NoteOpenAction.fromValue(raw)
     }
 
     fun setDefaultAction(context: Context, action: NoteOpenAction) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = dev.ilamparithi.aournalpp.data.AppPreferences.getGeneral(context)
         prefs.edit().putString(PREF_KEY_DEFAULT_OPEN_ACTION, action.value).apply()
     }
 
@@ -76,7 +75,7 @@ object NoteOpenManager {
 
         try {
             repository?.recordNoteOpened(targetFile.absolutePath) ?: run {
-                DocumentRepository(context).recordNoteOpened(targetFile.absolutePath)
+                DocumentRepository.getInstance(context).recordNoteOpened(targetFile.absolutePath)
             }
         } catch (_: Exception) {}
 
@@ -117,7 +116,7 @@ object NoteOpenManager {
         try {
             if (!file.absolutePath.contains("staged_imports") && !file.absolutePath.contains("/cache/")) {
                 repository?.recordNoteOpened(file.absolutePath) ?: run {
-                    DocumentRepository(context).recordNoteOpened(file.absolutePath)
+                    DocumentRepository.getInstance(context).recordNoteOpened(file.absolutePath)
                 }
             }
         } catch (_: Exception) {}

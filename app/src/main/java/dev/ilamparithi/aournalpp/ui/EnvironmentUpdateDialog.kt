@@ -66,8 +66,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.ilamparithi.aournalpp.R
 import dev.ilamparithi.aournalpp.runtime.BootstrapDiff
-import dev.ilamparithi.aournalpp.ui.util.a11yHeading
-import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
+import dev.ilamparithi.aournalpp.utils.a11yHeading
+import dev.ilamparithi.aournalpp.utils.minTouchTarget
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable

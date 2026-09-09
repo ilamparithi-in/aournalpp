@@ -25,7 +25,7 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.GZIPOutputStream
 
-class DocumentRepository(private val context: Context) {
+class DocumentRepository private constructor(private val context: Context) {
 
     companion object {
         val SUPPORTED_EXTENSIONS = setOf("xopp", "xoj", "pdf")
@@ -36,57 +36,90 @@ class DocumentRepository(private val context: Context) {
         const val EMERGENCY_SAVES_DEFAULT_ICON = "emergency"
         val DEFAULT_VIRTUALLY_PINNED_ROLES = setOf("emergency", "import", "imported")
 
-        private val directoryCache = ConcurrentHashMap<String, Pair<List<FolderItem>, List<NoteDocument>>>()
-        private val homeNotesCache = ConcurrentHashMap<Int, List<NoteDocument>>()
-        private val recentNotesCache = ConcurrentHashMap<Int, List<NoteDocument>>()
-        private val folderMetaCache = ConcurrentHashMap<String, Pair<Long, FolderMetaData>>()
-
-        @Volatile private var cachedContinueNote: NoteDocument? = null
-        @Volatile private var cachedTotalNotesCount: Int? = null
-        @Volatile private var cachedTotalFoldersCount: Int? = null
+        private val cache = DocumentCache()
         private val repoScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
-        @Volatile private var cachedPinnedNotes: List<String>? = null
-        @Volatile private var cachedPinnedNotesSet: Set<String>? = null
-        @Volatile private var cachedPinnedFolders: List<String>? = null
-        @Volatile private var cachedUnpinnedSpecialRoles: Set<String>? = null
-        @Volatile private var cachedOpenedNotesHistory: List<String>? = null
-        @Volatile private var cachedOpenedNotesTimestamps: Map<String, Long>? = null
+
+        @Volatile
+        private var INSTANCE: DocumentRepository? = null
+
+        fun init(appContext: Context) {
+            if (INSTANCE == null) {
+                synchronized(this) {
+                    if (INSTANCE == null) {
+                        INSTANCE = DocumentRepository(appContext.applicationContext)
+                    }
+                }
+            }
+        }
+
+        fun getInstance(context: Context): DocumentRepository {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: DocumentRepository(context.applicationContext).also { INSTANCE = it }
+            }
+        }
 
         fun invalidateAllCaches() {
-            directoryCache.clear()
-            homeNotesCache.clear()
-            recentNotesCache.clear()
-            folderMetaCache.clear()
-            cachedContinueNote = null
-            cachedTotalNotesCount = null
-            cachedTotalFoldersCount = null
-            cachedPinnedNotes = null
-            cachedPinnedNotesSet = null
-            cachedPinnedFolders = null
-            cachedUnpinnedSpecialRoles = null
-            cachedOpenedNotesHistory = null
-            cachedOpenedNotesTimestamps = null
+            cache.invalidateAll()
         }
+
+        // Internal accessors delegating to DocumentCache
+        private var cachedPinnedNotes: List<String>?
+            get() = cache.cachedPinnedNotes
+            set(value) { cache.cachedPinnedNotes = value }
+
+        private var cachedPinnedNotesSet: Set<String>?
+            get() = cache.cachedPinnedNotesSet
+            set(value) { cache.cachedPinnedNotesSet = value }
+
+        private var cachedPinnedFolders: List<String>?
+            get() = cache.cachedPinnedFolders
+            set(value) { cache.cachedPinnedFolders = value }
+
+        private var cachedUnpinnedSpecialRoles: Set<String>?
+            get() = cache.cachedUnpinnedSpecialRoles
+            set(value) { cache.cachedUnpinnedSpecialRoles = value }
+
+        private var cachedOpenedNotesHistory: List<String>?
+            get() = cache.cachedOpenedNotesHistory
+            set(value) { cache.cachedOpenedNotesHistory = value }
+
+        private var cachedOpenedNotesTimestamps: Map<String, Long>?
+            get() = cache.cachedOpenedNotesTimestamps
+            set(value) { cache.cachedOpenedNotesTimestamps = value }
+
+        private var cachedContinueNote: NoteDocument?
+            get() = cache.cachedContinueNote
+            set(value) { cache.cachedContinueNote = value }
+
+        private var cachedTotalNotesCount: Int?
+            get() = cache.cachedTotalNotesCount
+            set(value) { cache.cachedTotalNotesCount = value }
+
+        private var cachedTotalFoldersCount: Int?
+            get() = cache.cachedTotalFoldersCount
+            set(value) { cache.cachedTotalFoldersCount = value }
+
+        private val directoryCache get() = cache.directoryCache
+        private val homeNotesCache get() = cache.homeNotesCache
+        private val recentNotesCache get() = cache.recentNotesCache
+        private val folderMetaCache get() = cache.folderMetaCache
     }
 
     fun getCachedDirectory(
         targetDir: File,
         query: String = "",
         showHidden: Boolean = false
-    ): Pair<List<FolderItem>, List<NoteDocument>>? {
-        val key = "${targetDir.absolutePath}_${query.trim()}_$showHidden"
-        return directoryCache[key]
-    }
+    ): Pair<List<FolderItem>, List<NoteDocument>>? = cache.getDirectory(targetDir, query, showHidden)
 
-    fun getCachedHomeNotes(limit: Int = 16): List<NoteDocument>? = homeNotesCache[limit]
+    fun getCachedHomeNotes(limit: Int = 16): List<NoteDocument>? = cache.homeNotesCache[limit]
 
-    fun getCachedRecentNotes(limit: Int = 10): List<NoteDocument>? = recentNotesCache[limit]
+    fun getCachedRecentNotes(limit: Int = 10): List<NoteDocument>? = cache.recentNotesCache[limit]
 
-    fun getCachedContinueNote(): NoteDocument? = cachedContinueNote
+    fun getCachedContinueNote(): NoteDocument? = cache.cachedContinueNote
 
-    fun getCachedTotalNotesCount(): Int? = cachedTotalNotesCount
+    fun getCachedTotalNotesCount(): Int? = cache.cachedTotalNotesCount
 
-    fun getCachedTotalFoldersCount(): Int? = cachedTotalFoldersCount
+    fun getCachedTotalFoldersCount(): Int? = cache.cachedTotalFoldersCount
 
     data class FolderMetaData(
         val colorHex: String? = null,
@@ -97,7 +130,7 @@ class DocumentRepository(private val context: Context) {
     )
 
     private val env = LinuxEnvironment(context)
-    private val prefs = context.getSharedPreferences("aournal_doc_hub_prefs", Context.MODE_PRIVATE)
+    private val prefs = AppPreferences.getDocumentHub(context)
 
     private val rootNotesDirCanonicalPath: String by lazy { canonicalOf(getRootNotesDirectory()) }
     private val rootNotesDirAbsolutePath: String by lazy { getRootNotesDirectory().absolutePath }
@@ -1868,7 +1901,7 @@ class DocumentRepository(private val context: Context) {
                     .apply()
 
                 try {
-                    context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+                    AppPreferences.getGeneral(context)
                         .edit()
                         .putString("pref_last_opened_note_path", path)
                         .apply()
@@ -1942,7 +1975,7 @@ class DocumentRepository(private val context: Context) {
         }
 
         val mainPrefsLastOpened = try {
-            context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+            AppPreferences.getGeneral(context)
                 .getString("pref_last_opened_note_path", null)
         } catch (e: Exception) {
             null

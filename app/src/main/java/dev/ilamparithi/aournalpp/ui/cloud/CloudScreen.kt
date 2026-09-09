@@ -29,7 +29,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Deselect
 import androidx.compose.ui.res.pluralStringResource
-import dev.ilamparithi.aournalpp.ui.util.AppIconButton
+import dev.ilamparithi.aournalpp.ui.common.AppIconButton
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -273,11 +273,7 @@ fun CloudScreen(
 
     // FAB Speed Dial States
     var isFabExpanded by remember { mutableStateOf(false) }
-    val fabRotation by animateFloatAsState(
-        targetValue = if (isFabExpanded) 135f else 0f,
-        animationSpec = if (reduceAnimations) snap() else spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-        label = "fabRotation"
-    )
+    val fabRotation by dev.ilamparithi.aournalpp.ui.animation.rememberFabRotation(isFabExpanded, reduceAnimations)
 
     fun refreshState() {
         services = vault.getAllServices()

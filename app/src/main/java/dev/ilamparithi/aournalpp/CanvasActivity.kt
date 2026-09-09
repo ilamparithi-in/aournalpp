@@ -413,11 +413,11 @@ class CanvasActivity : ComponentActivity() {
             || intent.getBooleanExtra("EXTRA_OPEN_PREFS", false)
 
         val targetPath = intent.getStringExtra(EXTRA_NOTE_PATH)
-        val prefs = getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        val prefs = dev.ilamparithi.aournalpp.data.AppPreferences.getGeneral(this)
         if (targetPath != null) {
             prefs.edit().putString("pref_last_opened_note_path", targetPath).apply()
             lifecycleScope.launch(Dispatchers.IO) {
-                DocumentRepository(this@CanvasActivity).recordNoteOpened(targetPath)
+                dev.ilamparithi.aournalpp.data.DocumentRepository.getInstance(this@CanvasActivity).recordNoteOpened(targetPath)
             }
         } else {
             prefs.edit().remove("pref_last_opened_note_path").apply()
@@ -520,11 +520,11 @@ class CanvasActivity : ComponentActivity() {
                             if (currentTarget != null) {
                                 val currentFile = File(currentTarget)
                                 if (currentFile.name.equals(title, ignoreCase = true) || currentFile.nameWithoutExtension.equals(title, ignoreCase = true)) {
-                                    DocumentRepository(this@CanvasActivity).recordNoteOpened(currentFile.absolutePath)
+                                    dev.ilamparithi.aournalpp.data.DocumentRepository.getInstance(this@CanvasActivity).recordNoteOpened(currentFile.absolutePath)
                                     return@withContext
                                 }
                             }
-                            val repo = DocumentRepository(this@CanvasActivity)
+                            val repo = dev.ilamparithi.aournalpp.data.DocumentRepository.getInstance(this@CanvasActivity)
                             val root = repo.getRootNotesDirectory()
                             val directFile = File(root, if (title.endsWith(".xopp", ignoreCase = true) || title.endsWith(".pdf", ignoreCase = true) || title.endsWith(".xoj", ignoreCase = true)) title else "$title.xopp")
                             if (directFile.exists() && directFile.isFile) {
@@ -1818,7 +1818,7 @@ class CanvasActivity : ComponentActivity() {
         backPressTimestamps.add(now)
         backPressTimestamps.removeAll { now - it > 2000 }
 
-        val prefs = getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        val prefs = dev.ilamparithi.aournalpp.data.AppPreferences.getGeneral(this)
         val tripleBackEnabled = prefs.getBoolean("pref_triple_back_force_close", true)
 
         if (tripleBackEnabled && backPressTimestamps.size >= 3) {
@@ -2169,10 +2169,10 @@ class CanvasActivity : ComponentActivity() {
 
         val targetPath = intent.getStringExtra(EXTRA_NOTE_PATH)
         if (!targetPath.isNullOrBlank()) {
-            val prefs = getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+            val prefs = dev.ilamparithi.aournalpp.data.AppPreferences.getGeneral(this)
             prefs.edit().putString("pref_last_opened_note_path", targetPath).apply()
             lifecycleScope.launch(Dispatchers.IO) {
-                DocumentRepository(this@CanvasActivity).recordNoteOpened(targetPath)
+                dev.ilamparithi.aournalpp.data.DocumentRepository.getInstance(this@CanvasActivity).recordNoteOpened(targetPath)
             }
             sessionManager.openNoteInNewWindow(targetPath)
         }

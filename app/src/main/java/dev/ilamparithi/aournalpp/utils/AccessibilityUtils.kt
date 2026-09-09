@@ -1,4 +1,4 @@
-package dev.ilamparithi.aournalpp.ui.util
+package dev.ilamparithi.aournalpp.utils
 
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.ui.Modifier
@@ -28,11 +28,7 @@ object AccessibilityUtils {
         isPinned: Boolean = false,
         isSelected: Boolean? = null
     ): String {
-        val typeLabel = when (fileType) {
-            NoteFileType.PDF -> "PDF document"
-            NoteFileType.XOJ -> "Legacy XOJ note"
-            NoteFileType.XOPP -> "Xournal++ note"
-        }
+        val typeLabel = fileType.a11yLabel
         val folderLabel = if (folderName.isBlank() || folderName == "Notes Home") "Notes Home" else folderName
         val parts = mutableListOf<String>()
 

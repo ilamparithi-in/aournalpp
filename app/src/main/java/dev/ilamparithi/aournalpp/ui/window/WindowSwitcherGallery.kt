@@ -319,7 +319,7 @@ fun WindowPreviewCard(
         if (fallbackThumbnail == null) {
             withContext(Dispatchers.IO) {
                 try {
-                    val repo = dev.ilamparithi.aournalpp.data.DocumentRepository(context)
+                    val repo = dev.ilamparithi.aournalpp.data.DocumentRepository.getInstance(context)
                     val doc = repo.findNoteDocumentByTitle(windowInfo.title)
                     if (doc != null) {
                         val thumb = dev.ilamparithi.aournalpp.utils.ThumbnailManager.getOrCreateThumbnailBitmap(context, doc.file, null, doc.lastModifiedMs)

@@ -1,4 +1,4 @@
-package dev.ilamparithi.aournalpp.ui.util
+package dev.ilamparithi.aournalpp.utils
 
 import dev.ilamparithi.aournalpp.model.NoteFileType
 import org.junit.Assert.assertEquals

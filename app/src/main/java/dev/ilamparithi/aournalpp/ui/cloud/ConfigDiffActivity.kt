@@ -46,7 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.ilamparithi.aournalpp.R
 import dev.ilamparithi.aournalpp.ui.theme.AournalTheme
-import dev.ilamparithi.aournalpp.ui.util.a11yHeading
+import dev.ilamparithi.aournalpp.utils.a11yHeading
 import java.io.File
 
 enum class DiffLineType {

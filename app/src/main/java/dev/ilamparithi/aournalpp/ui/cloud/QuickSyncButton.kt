@@ -39,8 +39,8 @@ import kotlinx.coroutines.launch
 
 import androidx.compose.ui.res.stringResource
 import dev.ilamparithi.aournalpp.R
-import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
-import dev.ilamparithi.aournalpp.ui.util.AppTooltipBox
+import dev.ilamparithi.aournalpp.utils.minTouchTarget
+import dev.ilamparithi.aournalpp.ui.common.AppTooltipBox
 
 @Composable
 fun QuickSyncButton(

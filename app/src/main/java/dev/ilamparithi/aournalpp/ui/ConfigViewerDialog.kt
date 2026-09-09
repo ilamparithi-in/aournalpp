@@ -60,7 +60,7 @@ fun ConfigViewerDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val configTypes = remember { ConfigFileType.values().toList() }
+    val configTypes = remember { ConfigFileType.entries }
     var selectedTabIndex by remember {
         mutableIntStateOf(configTypes.indexOf(initialFileType).coerceAtLeast(0))
     }

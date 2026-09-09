@@ -71,7 +71,7 @@ class XournalConfigManager(private val env: LinuxEnvironment) {
     }
 
     fun listAvailableConfigs(): List<ConfigFileType> {
-        return ConfigFileType.values().toList()
+        return ConfigFileType.entries
     }
 
     fun readConfigText(type: ConfigFileType = ConfigFileType.SETTINGS_XML): Result<String> = runCatching {

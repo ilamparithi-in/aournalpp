@@ -86,6 +86,8 @@ object ThumbnailManager {
 
     private val bgScope = CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
 
+    // Bitmap.CompressFormat.WEBP was deprecated in API 30 (Android R) in favor of WEBP_LOSSY / WEBP_LOSSLESS.
+    // This suppression and fallback can be removed once minSdk is raised to 30+.
     @Suppress("DEPRECATION")
     private val webpCompressFormat: Bitmap.CompressFormat =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {

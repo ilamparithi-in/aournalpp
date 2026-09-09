@@ -1,5 +1,6 @@
 package dev.ilamparithi.aournalpp.ui
 
+import dev.ilamparithi.aournalpp.ui.dialog.AutosaveResolutionDialog
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
@@ -43,9 +44,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.CustomAccessibilityAction
-import dev.ilamparithi.aournalpp.ui.util.a11yHeading
-import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
-import dev.ilamparithi.aournalpp.ui.util.AccessibilityUtils
+import dev.ilamparithi.aournalpp.utils.a11yHeading
+import dev.ilamparithi.aournalpp.utils.minTouchTarget
+import dev.ilamparithi.aournalpp.utils.AccessibilityUtils
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.utils.FileNameTemplateEngine
 import androidx.compose.foundation.layout.Arrangement
@@ -194,13 +195,13 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val repository = remember { DocumentRepository(context) }
+    val repository = remember { DocumentRepository.getInstance(context) }
     val env = remember { repository.getLinuxEnvironment() }
     val supervisor = remember { ProcessSupervisor(env) }
     val pdfExportManager = remember { PdfExportManager(env, supervisor) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val prefs = remember { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
+    val prefs = remember { dev.ilamparithi.aournalpp.data.AppPreferences.getGeneral(context) }
     var viewMode by remember { mutableStateOf(prefs.getString("pref_home_view_mode", "EXPRESSIVE") ?: "EXPRESSIVE") }
 
     val activeSession by ActiveSessionTracker.activeSessionFlow(context, env)
@@ -1183,46 +1184,21 @@ fun HomeScreen(
 
     // Save Emergency Recovery Name Dialog
     if (showEmergencySaveNameDialog && quarantinedEmergencySave != null) {
-        val file = quarantinedEmergencySave!!
-        val allAvailableFolders by produceState<List<FolderItem>>(emptyList(), showEmergencySaveNameDialog) {
-            value = repository.getAllFolders()
-        }
-
-        SaveAsNoteDialog(
-            title = "Save Recovered Note",
-            subtitle = "Choose a name and destination folder for the recovered note.",
-            icon = Icons.Default.Emergency,
+        dev.ilamparithi.aournalpp.ui.dialog.EmergencySaveNameDialog(
+            file = quarantinedEmergencySave!!,
             initialName = emergencySaveNameInput,
             initialFolder = emergencySaveTargetFolder,
-            availableFolders = allAvailableFolders,
-            rootFolder = repository.getRootNotesDirectory(),
+            repository = repository,
             onDismiss = { showEmergencySaveNameDialog = false },
-            onSave = { name, targetFolder ->
+            onSaveSuccess = { savedFile ->
                 showEmergencySaveNameDialog = false
-                val savedFile = repository.saveEmergencyRecoveryToNotes(
-                    file,
-                    name,
-                    targetFolder
-                )
                 quarantinedEmergencySave = null
                 loadHomeData()
                 scope.launch {
                     snackbarHostState.showSnackbar("Saved recovered note as \"${savedFile.name}\"")
                 }
             },
-            onCreateFolder = { name, colorHex, iconEmoji, iconType ->
-                val result = repository.createFolder(
-                    parentDir = repository.getRootNotesDirectory(),
-                    name = name,
-                    colorHex = colorHex,
-                    iconEmoji = iconEmoji,
-                    iconType = iconType
-                )
-                if (result.isSuccess) {
-                    loadHomeData()
-                }
-                result
-            }
+            onFolderCreated = { loadHomeData() }
         )
     }
 

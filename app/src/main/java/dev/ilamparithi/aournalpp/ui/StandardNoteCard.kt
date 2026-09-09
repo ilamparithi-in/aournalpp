@@ -83,9 +83,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import dev.ilamparithi.aournalpp.ui.util.AccessibilityUtils
-import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
-import dev.ilamparithi.aournalpp.ui.util.AppTooltipBox
+import dev.ilamparithi.aournalpp.utils.AccessibilityUtils
+import dev.ilamparithi.aournalpp.utils.minTouchTarget
+import dev.ilamparithi.aournalpp.ui.common.AppTooltipBox
 
 /**
  * Standardized Note Card Composable.

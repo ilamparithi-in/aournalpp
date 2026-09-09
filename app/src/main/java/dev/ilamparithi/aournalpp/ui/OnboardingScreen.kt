@@ -107,7 +107,7 @@ import dev.ilamparithi.aournalpp.ui.cloud.FolderBrowserDialog
 import dev.ilamparithi.aournalpp.ui.cloud.FolderBrowserMode
 import dev.ilamparithi.aournalpp.ui.cloud.MultiServiceConflictDialog
 import dev.ilamparithi.aournalpp.ui.cloud.ServiceConfigDialog
-import dev.ilamparithi.aournalpp.ui.util.a11yHeading
+import dev.ilamparithi.aournalpp.utils.a11yHeading
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton

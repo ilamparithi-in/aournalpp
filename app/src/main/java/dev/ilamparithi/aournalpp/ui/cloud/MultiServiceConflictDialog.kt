@@ -67,9 +67,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.ilamparithi.aournalpp.R
-import dev.ilamparithi.aournalpp.ui.util.AccessibilityUtils
-import dev.ilamparithi.aournalpp.ui.util.a11yHeading
-import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
+import dev.ilamparithi.aournalpp.utils.AccessibilityUtils
+import dev.ilamparithi.aournalpp.utils.a11yHeading
+import dev.ilamparithi.aournalpp.utils.minTouchTarget
 import dev.ilamparithi.aournalpp.backup.engine.BackupEngine
 import dev.ilamparithi.aournalpp.backup.model.ConflictResolutionAction
 import dev.ilamparithi.aournalpp.backup.model.ConflictResolutionReport

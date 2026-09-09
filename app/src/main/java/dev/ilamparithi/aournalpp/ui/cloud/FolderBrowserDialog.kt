@@ -58,8 +58,8 @@ import androidx.compose.ui.window.DialogProperties
 import dev.ilamparithi.aournalpp.ui.AppDialogDefaults
 import dev.ilamparithi.aournalpp.ui.promptWidth
 import dev.ilamparithi.aournalpp.R
-import dev.ilamparithi.aournalpp.ui.util.a11yHeading
-import dev.ilamparithi.aournalpp.ui.util.minTouchTarget
+import dev.ilamparithi.aournalpp.utils.a11yHeading
+import dev.ilamparithi.aournalpp.utils.minTouchTarget
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import dev.ilamparithi.aournalpp.backup.model.ServiceConfig

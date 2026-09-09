@@ -1,4 +1,4 @@
-package dev.ilamparithi.aournalpp.util
+package dev.ilamparithi.aournalpp.utils
 
 import android.app.Activity
 import android.content.Context

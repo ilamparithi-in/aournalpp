@@ -182,7 +182,7 @@ class MainActivity : ComponentActivity() {
                         val env = remember { LinuxEnvironment(this@MainActivity) }
                         val supervisor = remember { ProcessSupervisor(env) }
                         val pdfExportManager = remember { PdfExportManager(env, supervisor) }
-                        val repo = remember { DocumentRepository(this@MainActivity) }
+                        val repo = remember { DocumentRepository.getInstance(this@MainActivity) }
 
                         FloatingPreviewHost(
                             onTriggerAction = { note, action ->
@@ -361,7 +361,7 @@ class MainActivity : ComponentActivity() {
                     val file = result.getOrThrow()
                     val supervisor = ProcessSupervisor(env)
                     val pdfExportManager = PdfExportManager(env, supervisor)
-                    val repo = DocumentRepository(this@MainActivity)
+                    val repo = DocumentRepository.getInstance(this@MainActivity)
 
                     NoteOpenManager.handleFileOpen(
                         context = this@MainActivity,

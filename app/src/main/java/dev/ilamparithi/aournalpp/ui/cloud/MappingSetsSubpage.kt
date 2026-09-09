@@ -64,7 +64,7 @@ import dev.ilamparithi.aournalpp.backup.model.MappingSet
 import dev.ilamparithi.aournalpp.backup.model.MappingTemplateItem
 import dev.ilamparithi.aournalpp.backup.security.CustomMappingRepository
 import dev.ilamparithi.aournalpp.backup.model.ServiceConfig
-import dev.ilamparithi.aournalpp.ui.util.a11yHeading
+import dev.ilamparithi.aournalpp.utils.a11yHeading
 import java.io.File
 import java.util.UUID
 
