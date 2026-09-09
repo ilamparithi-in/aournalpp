@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.AlertDialog
@@ -104,14 +105,15 @@ fun colorToHex(color: Color): String {
 
 /**
  * An expressive folder color picker row with:
- * 1. Curated preset color circles
- * 2. Active custom color indicator
- * 3. Rainbow palette button opening a visual RGB/HSV palette picker
+ * 1. Default color reset circle (grey background with 🚫 icon, resetting to Material You accent)
+ * 2. Curated preset color circles
+ * 3. Active custom color indicator
+ * 4. Rainbow palette button opening a visual RGB/HSV palette picker
  */
 @Composable
 fun FolderColorPickerRow(
-    selectedColorHex: String,
-    onColorSelected: (String) -> Unit,
+    selectedColorHex: String?,
+    onColorSelected: (String?) -> Unit,
     presetColors: List<String> = DEFAULT_PRESET_FOLDER_COLORS,
     modifier: Modifier = Modifier
 ) {
@@ -121,12 +123,65 @@ fun FolderColorPickerRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier.fillMaxWidth()
     ) {
-        // 1. Preset Colors
+        // 1. Default (No custom color / Reset) Option: Grey circle with 🚫 icon
+        item {
+            val isDefaultSelected = selectedColorHex.isNullOrBlank()
+            val defaultColorTitle = stringResource(R.string.cd_default_folder_color)
+            val stateSelected = stringResource(R.string.state_selected)
+            val stateNotSelected = stringResource(R.string.state_not_selected)
+
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .minTouchTarget()
+                    .semantics {
+                        role = Role.RadioButton
+                        stateDescription = if (isDefaultSelected) stateSelected else stateNotSelected
+                        this.contentDescription = defaultColorTitle
+                    }
+                    .clickable { onColorSelected(null) }
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = if (isDefaultSelected) {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                    },
+                    modifier = Modifier
+                        .size(36.dp)
+                        .border(
+                            width = if (isDefaultSelected) 3.dp else 1.dp,
+                            color = if (isDefaultSelected) {
+                                MaterialTheme.colorScheme.onSurface
+                            } else {
+                                MaterialTheme.colorScheme.outlineVariant
+                            },
+                            shape = CircleShape
+                        )
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Block,
+                            contentDescription = null,
+                            tint = if (isDefaultSelected) {
+                                MaterialTheme.colorScheme.onSurface
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 2. Preset Colors
         items(presetColors) { colorHex ->
             val color = remember(colorHex) {
                 try { Color(AndroidColor.parseColor(colorHex)) } catch (e: Exception) { Color.Gray }
             }
-            val isSelected = colorHex.equals(selectedColorHex, ignoreCase = true)
+            val isSelected = !selectedColorHex.isNullOrBlank() && colorHex.equals(selectedColorHex, ignoreCase = true)
             val stateSelected = stringResource(R.string.state_selected)
             val stateNotSelected = stringResource(R.string.state_not_selected)
 
@@ -161,8 +216,8 @@ fun FolderColorPickerRow(
             }
         }
 
-        // 2. Custom selected color (if active and not in presets)
-        val isCustomSelected = presetColors.none { it.equals(selectedColorHex, ignoreCase = true) }
+        // 3. Custom selected color (if active and not in presets)
+        val isCustomSelected = !selectedColorHex.isNullOrBlank() && presetColors.none { it.equals(selectedColorHex, ignoreCase = true) }
         if (isCustomSelected) {
             item {
                 val customColor = remember(selectedColorHex) {
@@ -199,7 +254,7 @@ fun FolderColorPickerRow(
             }
         }
 
-        // 3. Rainbow Palette '+' Button for Custom Color Picker
+        // 4. Rainbow Palette '+' Button for Custom Color Picker
         item {
             val rainbowBrush = Brush.sweepGradient(
                 listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)
@@ -242,9 +297,10 @@ fun FolderColorPickerRow(
 
     if (showCustomColorDialog) {
         CustomColorPickerDialog(
-            initialColorHex = selectedColorHex,
+            initialColorHex = selectedColorHex ?: presetColors.first(),
             onDismiss = { showCustomColorDialog = false },
-            onColorSelected = onColorSelected
+            onColorSelected = onColorSelected,
+            onResetToDefault = { onColorSelected(null) }
         )
     }
 }
@@ -260,7 +316,8 @@ fun FolderColorPickerRow(
 fun CustomColorPickerDialog(
     initialColorHex: String,
     onDismiss: () -> Unit,
-    onColorSelected: (String) -> Unit
+    onColorSelected: (String) -> Unit,
+    onResetToDefault: (() -> Unit)? = null
 ) {
     val initialColor = remember(initialColorHex) {
         try { Color(AndroidColor.parseColor(initialColorHex)) } catch (e: Exception) { Color(0xFF4CAF50) }
@@ -597,8 +654,18 @@ fun CustomColorPickerDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (onResetToDefault != null) {
+                    TextButton(onClick = {
+                        onResetToDefault()
+                        onDismiss()
+                    }) {
+                        Text("Reset")
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel")
+                }
             }
         }
     )

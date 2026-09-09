@@ -389,11 +389,11 @@ fun DocumentHubScreen(
     var noteToDelete by remember { mutableStateOf<NoteDocument?>(null) }
     var showNewFolderDialog by remember { mutableStateOf(false) }
     var newFolderNameInput by remember { mutableStateOf("") }
-    var selectedFolderColor by remember { mutableStateOf(PRESET_FOLDER_COLORS.first()) }
+    var selectedFolderColor by remember { mutableStateOf<String?>(null) }
     var selectedFolderEmoji by remember { mutableStateOf<String?>(null) }
     var selectedFolderIconType by remember { mutableStateOf<String?>("folder") }
     var folderToEdit by remember { mutableStateOf<FolderItem?>(null) }
-    var editFolderSelectedColor by remember { mutableStateOf(PRESET_FOLDER_COLORS.first()) }
+    var editFolderSelectedColor by remember { mutableStateOf<String?>(null) }
     var editFolderSelectedEmoji by remember { mutableStateOf<String?>(null) }
     var editFolderSelectedIconType by remember { mutableStateOf<String?>("folder") }
     var folderToRename by remember { mutableStateOf<FolderItem?>(null) }
@@ -973,7 +973,7 @@ fun DocumentHubScreen(
                                         leadingIcon = { Icon(Icons.Default.ColorLens, contentDescription = null) },
                                         onClick = {
                                             showTopMenu = false
-                                            editFolderSelectedColor = currentFolderItem.colorHex ?: (if (currentFolderItem.isEmergencyFolder) DocumentRepository.EMERGENCY_SAVES_DEFAULT_COLOR else PRESET_FOLDER_COLORS.first())
+                                            editFolderSelectedColor = currentFolderItem.colorHex ?: (if (currentFolderItem.isEmergencyFolder) DocumentRepository.EMERGENCY_SAVES_DEFAULT_COLOR else null)
                                             editFolderSelectedEmoji = currentFolderItem.iconEmoji
                                             editFolderSelectedIconType = currentFolderItem.iconType ?: (if (currentFolderItem.isEmergencyFolder) "emergency" else (currentFolderItem.role ?: "folder"))
                                             folderToEdit = currentFolderItem
@@ -1591,7 +1591,7 @@ fun DocumentHubScreen(
             val allAvailableFolders by produceState<List<FolderItem>>(emptyList()) { value = repository.getAllFolders() }
             var isCreatingInlineFolder by remember { mutableStateOf(false) }
             var inlineFolderName by remember { mutableStateOf("") }
-            var inlineFolderColor by remember { mutableStateOf(PRESET_FOLDER_COLORS.first()) }
+            var inlineFolderColor by remember { mutableStateOf<String?>(null) }
 
             AlertDialog(
                 onDismissRequest = { showMoveToFolderDialog = false },
@@ -1611,26 +1611,10 @@ fun DocumentHubScreen(
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth()
                             )
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                items(PRESET_FOLDER_COLORS) { colorHex ->
-                                    val color = Color(android.graphics.Color.parseColor(colorHex))
-                                    val isSelected = colorHex == inlineFolderColor
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = color,
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .clickable { inlineFolderColor = colorHex }
-                                            .border(width = if (isSelected) 2.dp else 0.dp, color = MaterialTheme.colorScheme.onSurface, shape = CircleShape)
-                                    ) {
-                                        if (isSelected) {
-                                            Box(contentAlignment = Alignment.Center) {
-                                                Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                            FolderColorPickerRow(
+                                selectedColorHex = inlineFolderColor,
+                                onColorSelected = { inlineFolderColor = it }
+                            )
                             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                                 TextButton(onClick = { isCreatingInlineFolder = false }) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel)) }
                                 Spacer(modifier = Modifier.width(4.dp))
@@ -2500,7 +2484,7 @@ fun DocumentHubScreen(
                                                 true
                                             },
                                             CustomAccessibilityAction(customizeFolderActionLabel) {
-                                                editFolderSelectedColor = folder.colorHex ?: (if (folder.isEmergencyFolder) DocumentRepository.EMERGENCY_SAVES_DEFAULT_COLOR else PRESET_FOLDER_COLORS.first())
+                                                editFolderSelectedColor = folder.colorHex ?: (if (folder.isEmergencyFolder) DocumentRepository.EMERGENCY_SAVES_DEFAULT_COLOR else null)
                                                 editFolderSelectedEmoji = folder.iconEmoji
                                                 editFolderSelectedIconType = folder.iconType ?: (if (folder.isEmergencyFolder) "emergency" else (folder.role ?: "folder"))
                                                 folderToEdit = folder
@@ -2687,7 +2671,7 @@ fun DocumentHubScreen(
                                                  leadingIcon = { Icon(Icons.Default.ColorLens, contentDescription = null) },
                                                  onClick = {
                                                      showFolderMenu = false
-                                                     editFolderSelectedColor = folder.colorHex ?: (if (folder.isEmergencyFolder) DocumentRepository.EMERGENCY_SAVES_DEFAULT_COLOR else PRESET_FOLDER_COLORS.first())
+                                                     editFolderSelectedColor = folder.colorHex ?: (if (folder.isEmergencyFolder) DocumentRepository.EMERGENCY_SAVES_DEFAULT_COLOR else null)
                                                      editFolderSelectedEmoji = folder.iconEmoji
                                                      editFolderSelectedIconType = folder.iconType ?: (if (folder.isEmergencyFolder) "emergency" else (folder.role ?: "folder"))
                                                      folderToEdit = folder

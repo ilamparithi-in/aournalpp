@@ -1114,6 +1114,8 @@
     <string name="cd_clear_text">Clear text</string>
     <!-- Accessibility content description: Visual color picker rainbow palette -->
     <string name="cd_visual_color_picker">Visual Color Picker</string>
+    <!-- Accessibility content description: Default folder color (clear custom color) -->
+    <string name="cd_default_folder_color">Default Folder Color</string>
     <!-- Accessibility content description: Choose custom emoji -->
     <string name="cd_choose_custom_emoji">Choose Custom Emoji</string>
     <!-- Accessibility content description: Default folder icon -->

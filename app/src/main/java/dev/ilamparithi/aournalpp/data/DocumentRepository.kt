@@ -623,7 +623,7 @@ class DocumentRepository(private val context: Context) {
         return Result.success(newDir)
     }
 
-    fun setFolderColor(folderDir: File, colorHex: String): Result<Unit> {
+    fun setFolderColor(folderDir: File, colorHex: String?): Result<Unit> {
         val meta = readFolderMeta(folderDir)
         return writeFolderMeta(folderDir, colorHex, meta.iconEmoji, meta.iconType, meta.role, meta.excludeFromRecents)
     }
@@ -814,7 +814,7 @@ class DocumentRepository(private val context: Context) {
             JSONObject()
         }
 
-        if (colorHex != null) {
+        if (!colorHex.isNullOrBlank()) {
             json.put("color", colorHex)
         } else {
             json.remove("color")

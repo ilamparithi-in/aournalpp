@@ -47,12 +47,12 @@ fun CreateFolderDialog(
     parentFolder: File? = null,
     title: String = if (parentFolder != null) "New Folder in \"${parentFolder.name}\"" else "Create New Folder",
     confirmButtonLabel: String = "Create",
-    initialColorHex: String = "#4CAF50",
+    initialColorHex: String? = null,
     initialEmoji: String? = null,
     initialIconType: String? = "folder",
     isCreating: Boolean = false,
     onDismiss: () -> Unit,
-    onCreate: (name: String, colorHex: String, iconEmoji: String?, iconType: String?) -> Unit
+    onCreate: (name: String, colorHex: String?, iconEmoji: String?, iconType: String?) -> Unit
 ) {
     var newFolderName by remember { mutableStateOf("") }
     var selectedFolderColor by remember { mutableStateOf(initialColorHex) }

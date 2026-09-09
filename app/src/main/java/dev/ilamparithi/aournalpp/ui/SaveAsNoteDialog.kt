@@ -81,7 +81,7 @@ fun SaveAsNoteDialog(
     onSave: (name: String, targetFolder: File) -> Unit,
     confirmButtonLabel: String = "Save",
     onSkip: (() -> Unit)? = null,
-    onCreateFolder: (suspend (name: String, colorHex: String, iconEmoji: String?, iconType: String?) -> Result<File>)? = null
+    onCreateFolder: (suspend (name: String, colorHex: String?, iconEmoji: String?, iconType: String?) -> Result<File>)? = null
 ) {
     val cleanInitialName = remember(initialName) {
         if (initialName.endsWith(".xopp", ignoreCase = true)) {
