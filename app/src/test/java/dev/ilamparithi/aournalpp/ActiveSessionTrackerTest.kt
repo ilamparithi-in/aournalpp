@@ -11,6 +11,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.io.File
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 
 class ActiveSessionTrackerTest {
 
@@ -98,6 +103,41 @@ class ActiveSessionTrackerTest {
     }
 
     @Test
+    fun `test updateWindowCount with zero or negative count clears active session`() {
+        val currentPid = getCurrentProcessPid()
+        val info = ActiveSessionInfo(
+            isRunning = true,
+            pid = currentPid,
+            activeNotePath = null,
+            documentTitle = "New Note",
+            openWindowCount = 2
+        )
+        ActiveSessionTracker.setActiveSession(tempDir, info)
+        assertTrue(ActiveSessionTracker.isSessionActive(tempDir))
+
+        ActiveSessionTracker.updateWindowCount(tempDir, 0)
+        assertFalse(ActiveSessionTracker.isSessionActive(tempDir))
+        assertNull(ActiveSessionTracker.getActiveSession(tempDir))
+    }
+
+    @Test
+    fun `test getActiveSession with zero window count deletes session file and returns null`() {
+        val currentPid = getCurrentProcessPid()
+        val info = ActiveSessionInfo(
+            isRunning = true,
+            pid = currentPid,
+            activeNotePath = null,
+            documentTitle = "Note",
+            openWindowCount = 0
+        )
+        ActiveSessionTracker.setActiveSession(tempDir, info)
+
+        val result = ActiveSessionTracker.getActiveSession(tempDir)
+        assertNull(result)
+        assertFalse(File(tempDir, ".active_canvas_session.json").exists())
+    }
+
+    @Test
     fun `test dead PID cleans up stale session file`() {
         // PID 99999999 is dead / non-existent
         val deadPid = 99999999
@@ -137,4 +177,55 @@ class ActiveSessionTrackerTest {
         ActiveSessionTracker.clearActiveSession(tempDir)
         assertFalse(ActiveSessionTracker.isSessionActive(tempDir))
     }
+
+    @Test
+    fun `test activeSessionFlow emits null initially when no session exists`() {
+        runBlocking {
+            val firstEmission: ActiveSessionInfo? = withTimeout(2000) {
+                ActiveSessionTracker.activeSessionFlow(tempDir, pollIntervalMs = 100L).first()
+            }
+            assertNull(firstEmission)
+        }
+    }
+
+    @Test
+    fun `test activeSessionFlow transitions from active to null when session is cleared`() {
+        runBlocking {
+            val currentPid = getCurrentProcessPid()
+            val info = ActiveSessionInfo(
+                isRunning = true,
+                pid = currentPid,
+                activeNotePath = "/test/note.xopp",
+                documentTitle = "Active Note",
+                openWindowCount = 1
+            )
+            ActiveSessionTracker.setActiveSession(tempDir, info)
+
+            val emissions = mutableListOf<ActiveSessionInfo?>()
+            val job = launch {
+                ActiveSessionTracker.activeSessionFlow(tempDir, pollIntervalMs = 50L).collect {
+                    emissions.add(it)
+                }
+            }
+
+            // Wait for initial active emission
+            while (emissions.isEmpty()) {
+                delay(10)
+            }
+            assertNotNull(emissions.first())
+            assertEquals(currentPid, emissions.first()!!.pid)
+
+            // Clear active session (simulating background session ending)
+            ActiveSessionTracker.clearActiveSession(tempDir)
+
+            // Wait for null emission
+            while (emissions.size < 2) {
+                delay(10)
+            }
+            assertNull(emissions.last())
+
+            job.cancel()
+        }
+    }
 }
+

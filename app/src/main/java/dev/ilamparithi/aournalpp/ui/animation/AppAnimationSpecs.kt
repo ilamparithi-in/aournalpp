@@ -36,10 +36,10 @@ object AppAnimationSpecs {
 
     @Composable
     fun springColor(
-        stiffness: Float = Spring.StiffnessMedium
+        durationMillis: Int = 150
     ): FiniteAnimationSpec<Color> =
         if (LocalMotionPreferences.current.reduceAnimations) snap()
-        else spring(stiffness = stiffness)
+        else tween(durationMillis = durationMillis)
 
     @Composable
     fun fadeSpec(): FiniteAnimationSpec<Float> =

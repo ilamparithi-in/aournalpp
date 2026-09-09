@@ -359,12 +359,14 @@ class ProcessSupervisor(val env: LinuxEnvironment) {
                                         windowList.add(X11WindowInfo(id = wid, title = clean, isActive = (wid == activeId)))
                                     }
                                 }
+                                _openWindows.value = windowList
                                 if (windowList.isNotEmpty()) {
-                                    _openWindows.value = windowList
                                     val activeWin = windowList.find { it.isActive }
                                     if (activeWin != null && activeWin.title.isNotBlank() && activeWin.title != "Xournal++") {
                                         _documentTitle.value = activeWin.title
                                     }
+                                } else {
+                                    _documentTitle.value = null
                                 }
                             }
                             line = reader.readLine()

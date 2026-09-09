@@ -397,6 +397,9 @@ class CanvasActivity : ComponentActivity() {
                 if (!isFinishing) {
                     Log.i("CanvasActivity", "X11 / Xournal++ session terminated. isAppExitInProgress=$isAppExitInProgress")
                     sessionManager.stopSession()
+                    try {
+                        sendBroadcast(Intent("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED").setPackage(packageName))
+                    } catch (_: Exception) {}
                     if (!isAppExitInProgress) {
                         navigateBackToHome()
                     }
@@ -413,7 +416,9 @@ class CanvasActivity : ComponentActivity() {
         val prefs = getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
         if (targetPath != null) {
             prefs.edit().putString("pref_last_opened_note_path", targetPath).apply()
-            DocumentRepository(this).recordNoteOpened(targetPath)
+            lifecycleScope.launch(Dispatchers.IO) {
+                DocumentRepository(this@CanvasActivity).recordNoteOpened(targetPath)
+            }
         } else {
             prefs.edit().remove("pref_last_opened_note_path").apply()
         }
@@ -457,6 +462,19 @@ class CanvasActivity : ComponentActivity() {
                 var isSwitchTransitionActive by remember { mutableStateOf(false) }
                 var transitionSequence by remember { mutableIntStateOf(0) }
 
+                DisposableEffect(Unit) {
+                    onDispose {
+                        for (bmp in windowPreviewCache.values) {
+                            if (!bmp.isRecycled) {
+                                bmp.recycle()
+                            }
+                        }
+                        windowPreviewCache.clear()
+                        transitionOutgoingBitmap = null
+                        transitionIncomingBitmap = null
+                    }
+                }
+
                 val activeWindow by remember {
                     derivedStateOf { openWindows.find { it.isActive } }
                 }
@@ -473,6 +491,24 @@ class CanvasActivity : ComponentActivity() {
                     derivedStateOf {
                         val current = currentDisplayWindow
                         if (current != null) openWindows.indexOfFirst { it.id == current.id }.coerceAtLeast(0) else 0
+                    }
+                }
+
+                var hadWindowsOpen by remember { mutableStateOf(false) }
+                LaunchedEffect(openWindows) {
+                    if (openWindows.isNotEmpty()) {
+                        hadWindowsOpen = true
+                    } else if (hadWindowsOpen) {
+                        delay(250)
+                        if (openWindows.isEmpty() && !sessionManager.isModalOrDialogOpen() && !isFinishing) {
+                            Log.i("CanvasActivity", "All Xournal++ windows closed. Finishing session cleanly.")
+                            sessionManager.stopSession()
+                            try {
+                                sendBroadcast(Intent("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED").setPackage(packageName))
+                            } catch (_: Exception) {}
+                            navigateBackToHome()
+                            finish()
+                        }
                     }
                 }
 
@@ -1816,7 +1852,14 @@ class CanvasActivity : ComponentActivity() {
                 if (behavior == X11Preferences.CLOSE_BEHAVIOR_ALL_SEQUENTIAL) {
                     sessionManager.initiateFocusAwareSequentialClose(
                         onAllClosed = {
-                            navigateBackToHome()
+                            runOnUiThread {
+                                sessionManager.stopSession()
+                                try {
+                                    sendBroadcast(Intent("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED").setPackage(packageName))
+                                } catch (_: Exception) {}
+                                navigateBackToHome()
+                                finish()
+                            }
                         },
                         onAborted = {
                             Toast.makeText(this@CanvasActivity, "Exit cancelled", Toast.LENGTH_SHORT).show()
@@ -2128,7 +2171,9 @@ class CanvasActivity : ComponentActivity() {
         if (!targetPath.isNullOrBlank()) {
             val prefs = getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
             prefs.edit().putString("pref_last_opened_note_path", targetPath).apply()
-            DocumentRepository(this).recordNoteOpened(targetPath)
+            lifecycleScope.launch(Dispatchers.IO) {
+                DocumentRepository(this@CanvasActivity).recordNoteOpened(targetPath)
+            }
             sessionManager.openNoteInNewWindow(targetPath)
         }
     }

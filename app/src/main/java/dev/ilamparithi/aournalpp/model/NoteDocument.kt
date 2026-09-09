@@ -116,22 +116,19 @@ data class NoteDocument(
     val fuzzyLastModified: String = formatFuzzyTime(lastModifiedMs, lastModifiedFormatted)
     val fuzzyLastOpened: String? = lastOpenedMs?.let { formatFuzzyTime(it, null) }
 
-    val fullFormattedDateTime: String
-        get() = try {
-            FormatUtils.formatDateTimeMedium(lastModifiedMs)
-        } catch (e: Exception) {
-            lastModifiedFormatted
-        }
+    val fullFormattedDateTime: String = try {
+        FormatUtils.formatDateTimeMedium(lastModifiedMs)
+    } catch (_: Exception) {
+        lastModifiedFormatted
+    }
 
-    val fullFormattedOpenedDateTime: String?
-        get() {
-            val opened = lastOpenedMs ?: return null
-            return try {
-                FormatUtils.formatDateTimeMedium(opened)
-            } catch (e: Exception) {
-                null
-            }
+    val fullFormattedOpenedDateTime: String? = lastOpenedMs?.let { opened ->
+        try {
+            FormatUtils.formatDateTimeMedium(opened)
+        } catch (_: Exception) {
+            null
         }
+    }
 }
 
 private fun formatFuzzyTime(timestampMs: Long, fallback: String?): String {

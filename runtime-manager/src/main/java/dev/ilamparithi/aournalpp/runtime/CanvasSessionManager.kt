@@ -159,8 +159,23 @@ class CanvasSessionManager(
                     }
                 }
 
+                // Keep ActiveSessionTracker in sync with open window count from title watcher
+                scope.launch {
+                    supervisor.openWindows.collect { wins ->
+                        if (isSessionRunning) {
+                            if (wins.isNotEmpty()) {
+                                ActiveSessionTracker.updateWindowCount(context, env, wins.size)
+                            }
+                        }
+                    }
+                }
+
                 supervisor.setOnSingleProcessExitListener { remaining ->
-                    ActiveSessionTracker.updateWindowCount(context, env, remaining)
+                    if (remaining <= 0) {
+                        ActiveSessionTracker.clearActiveSession(context, env)
+                    } else {
+                        ActiveSessionTracker.updateWindowCount(context, env, remaining)
+                    }
                 }
 
                 // 6. Start X11 Title Watcher to monitor document renames & saves
@@ -581,6 +596,9 @@ class CanvasSessionManager(
         File(env.tmpDir, ".X0-lock").delete()
         File(env.tmpDir, ".X11-unix/X0").delete()
         ActiveSessionTracker.clearActiveSession(context, env)
+        try {
+            context.sendBroadcast(android.content.Intent("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED").setPackage(context.packageName))
+        } catch (_: Exception) {}
         if (isPreferencesSession) {
             env.clearQuarantinedEmergencySave()
             val emergencyFile = File(env.xournalConfigDir, "emergencysave.xopp")

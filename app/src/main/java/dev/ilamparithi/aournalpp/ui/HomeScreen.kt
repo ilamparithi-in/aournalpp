@@ -278,9 +278,10 @@ fun HomeScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                loadHomeData()
+                ActiveSessionTracker.notifySessionChanged()
                 scope.launch {
-                    kotlinx.coroutines.delay(1000)
+                    // Brief delay to allow tab/activity entrance transition to settle smoothly before disk scan
+                    kotlinx.coroutines.delay(200)
                     loadHomeDataNow()
                 }
             }
@@ -294,6 +295,7 @@ fun HomeScreen(
     DisposableEffect(Unit) {
         val receiver = object : android.content.BroadcastReceiver() {
             override fun onReceive(c: android.content.Context?, intent: android.content.Intent?) {
+                ActiveSessionTracker.notifySessionChanged()
                 scope.launch {
                     kotlinx.coroutines.delay(500)
                     loadHomeDataNow()
@@ -544,8 +546,8 @@ fun HomeScreen(
                     actions = {
                         AnimatedVisibility(
                             visible = activeSession?.isRunning == true,
-                            enter = fadeIn() + slideInHorizontally { it / 2 },
-                            exit = fadeOut() + slideOutHorizontally { it / 2 }
+                            enter = if (reduceAnimations) androidx.compose.animation.EnterTransition.None else (fadeIn() + slideInHorizontally { it / 2 }),
+                            exit = if (reduceAnimations) androidx.compose.animation.ExitTransition.None else (fadeOut() + slideOutHorizontally { it / 2 })
                         ) {
                             activeSession?.let { session ->
                                 ReturnToActiveSessionButton(
@@ -1836,16 +1838,22 @@ private fun ReturnToActiveSessionButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "pulseTransition")
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseAlpha"
-    )
+    val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
+    val pulseAlpha = if (reduceMotion) {
+        1.0f
+    } else {
+        val infiniteTransition = rememberInfiniteTransition(label = "pulseTransition")
+        val alpha by infiniteTransition.animateFloat(
+            initialValue = 0.4f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1000, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulseAlpha"
+        )
+        alpha
+    }
 
     Surface(
         onClick = onClick,

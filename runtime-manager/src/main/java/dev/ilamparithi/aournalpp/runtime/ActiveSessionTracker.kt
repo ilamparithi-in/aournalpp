@@ -6,6 +6,8 @@ import android.system.Os
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
@@ -107,6 +109,12 @@ object ActiveSessionTracker {
         return regex.find(json)?.groupValues?.get(1)?.toBooleanStrictOrNull() ?: default
     }
 
+    private val sessionEventTrigger = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    fun notifySessionChanged() {
+        sessionEventTrigger.tryEmit(Unit)
+    }
+
     @Synchronized
     fun setActiveSession(
         baseDir: File,
@@ -127,6 +135,7 @@ object ActiveSessionTracker {
             }
             file.writeText(serialized)
             logDebug("Active session recorded: pid=${info.pid}, title=${info.documentTitle}, windows=${info.openWindowCount}")
+            notifySessionChanged()
         } catch (e: Exception) {
             logError("Failed to write active session state", e)
         }
@@ -160,6 +169,10 @@ object ActiveSessionTracker {
         baseDir: File,
         count: Int
     ) {
+        if (count <= 0) {
+            clearActiveSession(baseDir)
+            return
+        }
         val current = getActiveSession(baseDir) ?: return
         setActiveSession(baseDir, current.copy(openWindowCount = count, lastTimestamp = System.currentTimeMillis()))
     }
@@ -179,6 +192,7 @@ object ActiveSessionTracker {
                 file.delete()
             }
             logDebug("Active session cleared.")
+            notifySessionChanged()
         } catch (e: Exception) {
             logWarn("Failed to clear active session file")
         }
@@ -203,7 +217,7 @@ object ActiveSessionTracker {
             val windowCount = extractInt(text, "openWindowCount", 1)
             val timestamp = extractLong(text, "lastTimestamp", System.currentTimeMillis())
 
-            if (isRunning && pid > 0) {
+            if (isRunning && pid > 0 && windowCount > 0) {
                 if (isPidAlive(pid)) {
                     ActiveSessionInfo(
                         isRunning = true,
@@ -219,6 +233,9 @@ object ActiveSessionTracker {
                     null
                 }
             } else {
+                if (windowCount <= 0 && file.exists()) {
+                    file.delete()
+                }
                 null
             }
         } catch (e: Exception) {
@@ -241,18 +258,28 @@ object ActiveSessionTracker {
     }
 
     fun activeSessionFlow(
+        baseDir: File,
+        pollIntervalMs: Long = 1000L
+    ): Flow<ActiveSessionInfo?> = kotlinx.coroutines.flow.channelFlow {
+        // Send initial state immediately to any new subscriber
+        send(getActiveSession(baseDir))
+
+        val triggerJob = launch {
+            sessionEventTrigger.collect {
+                send(getActiveSession(baseDir))
+            }
+        }
+
+        while (isActive) {
+            delay(pollIntervalMs)
+            send(getActiveSession(baseDir))
+        }
+        triggerJob.cancel()
+    }.distinctUntilChanged().flowOn(Dispatchers.IO)
+
+    fun activeSessionFlow(
         context: Context,
         env: LinuxEnvironment = LinuxEnvironment(context),
         pollIntervalMs: Long = 1000L
-    ): Flow<ActiveSessionInfo?> = flow {
-        var lastEmitted: ActiveSessionInfo? = null
-        while (true) {
-            val current = getActiveSession(context, env)
-            if (current != lastEmitted) {
-                lastEmitted = current
-                emit(current)
-            }
-            delay(pollIntervalMs)
-        }
-    }.distinctUntilChanged().flowOn(Dispatchers.IO)
+    ): Flow<ActiveSessionInfo?> = activeSessionFlow(env.tmpDir, pollIntervalMs)
 }
