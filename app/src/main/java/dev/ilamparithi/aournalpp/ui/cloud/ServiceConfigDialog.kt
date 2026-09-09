@@ -88,6 +88,7 @@ fun ServiceConfigDialog(
     var privateKeyPassphrase by remember { mutableStateOf(initialService?.privateKeyPassphrase ?: "") }
     var authToken by remember { mutableStateOf(initialService?.authToken ?: "") }
     var refreshToken by remember { mutableStateOf(initialService?.refreshToken ?: "") }
+    var tokenExpiryEpochMs by remember { mutableStateOf(initialService?.tokenExpiryEpochMs ?: 0L) }
     var accountIdentifier by remember { mutableStateOf(initialService?.accountIdentifier ?: "") }
     var shareName by remember { mutableStateOf(initialService?.shareName ?: "") }
     var domain by remember { mutableStateOf(initialService?.domain ?: "") }
@@ -118,6 +119,7 @@ fun ServiceConfigDialog(
                 if (!response.refreshToken.isNullOrBlank()) {
                     refreshToken = response.refreshToken
                 }
+                tokenExpiryEpochMs = System.currentTimeMillis() + (response.expiresInSeconds * 1000L)
                 if (!response.userEmail.isNullOrBlank()) {
                     accountIdentifier = response.userEmail
                     if (name.isBlank() || name == "Google Drive") {
@@ -130,19 +132,6 @@ fun ServiceConfigDialog(
         }
     }
 
-    LaunchedEffect(selectedType) {
-        if (selectedType == StorageProviderType.GOOGLE_DRIVE && authToken.isBlank() && refreshToken.isBlank() && initialService == null) {
-            val existingGdrive = existingServices.firstOrNull { it.providerType == StorageProviderType.GOOGLE_DRIVE }
-            if (existingGdrive != null && (existingGdrive.authToken.isNotBlank() || existingGdrive.refreshToken.isNotBlank())) {
-                authToken = existingGdrive.authToken
-                refreshToken = existingGdrive.refreshToken
-                accountIdentifier = existingGdrive.accountIdentifier
-                if (name.isBlank()) {
-                    name = existingGdrive.name
-                }
-            }
-        }
-    }
 
     fun buildCurrentConfig(): ServiceConfig {
         val id = initialService?.id ?: UUID.randomUUID().toString()
@@ -160,6 +149,7 @@ fun ServiceConfigDialog(
             privateKeyPassphrase = if (sftpAuthMode == 1) privateKeyPassphrase else "",
             authToken = authToken.trim(),
             refreshToken = refreshToken.trim(),
+            tokenExpiryEpochMs = tokenExpiryEpochMs,
             accountIdentifier = accountIdentifier.trim(),
             shareName = shareName.trim(),
             domain = domain.trim(),
@@ -168,6 +158,8 @@ fun ServiceConfigDialog(
             isFtpsExplicit = isFtpsExplicit,
             isCompleteBackupEnabled = isCompleteBackupEnabled,
             isEnabled = isEnabled,
+            lastSyncedAtEpochMs = initialService?.lastSyncedAtEpochMs ?: 0L,
+            lastSyncStatus = initialService?.lastSyncStatus,
             customMappings = initialService?.customMappings ?: emptyList()
         )
     }
@@ -360,13 +352,26 @@ fun ServiceConfigDialog(
 
                     StorageProviderType.GOOGLE_DRIVE -> {
                         val isGoogleLoggedIn = authToken.isNotBlank() || refreshToken.isNotBlank() || accountIdentifier.isNotBlank()
+                        val isAuthFailed = (initialService?.lastSyncStatus != null && (
+                            initialService.lastSyncStatus.contains("401") ||
+                            initialService.lastSyncStatus.contains("auth", ignoreCase = true) ||
+                            initialService.lastSyncStatus.contains("UNAUTHENTICATED", ignoreCase = true) ||
+                            initialService.lastSyncStatus.contains("invalid_grant", ignoreCase = true)
+                        )) || (testResultSuccess == false && testResultMessage != null && (
+                            testResultMessage?.contains("401") == true ||
+                            testResultMessage?.contains("auth", ignoreCase = true) == true ||
+                            testResultMessage?.contains("UNAUTHENTICATED", ignoreCase = true) == true
+                        ))
+                        val isTokenExpired = isGoogleLoggedIn && (
+                            (tokenExpiryEpochMs > 0L && System.currentTimeMillis() >= tokenExpiryEpochMs) || isAuthFailed
+                        )
 
                         Surface(
                             shape = MaterialTheme.shapes.medium,
-                            color = if (isGoogleLoggedIn) {
-                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
-                            } else {
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                            color = when {
+                                !isGoogleLoggedIn -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                isTokenExpired -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)
+                                else -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -381,14 +386,26 @@ fun ServiceConfigDialog(
                                         modifier = Modifier.weight(1f, fill = false)
                                     ) {
                                         Icon(
-                                            imageVector = if (isGoogleLoggedIn) Icons.Default.CheckCircle else Icons.Default.AccountCircle,
+                                            imageVector = when {
+                                                !isGoogleLoggedIn -> Icons.Default.AccountCircle
+                                                isTokenExpired -> Icons.Default.ErrorOutline
+                                                else -> Icons.Default.CheckCircle
+                                            },
                                             contentDescription = null,
-                                            tint = if (isGoogleLoggedIn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                                            tint = when {
+                                                !isGoogleLoggedIn -> MaterialTheme.colorScheme.secondary
+                                                isTokenExpired -> MaterialTheme.colorScheme.error
+                                                else -> MaterialTheme.colorScheme.primary
+                                            }
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Column {
                                             Text(
-                                                text = if (isGoogleLoggedIn) "Google Account Connected" else "Google OAuth2 Sign-In",
+                                                text = when {
+                                                    !isGoogleLoggedIn -> "Google OAuth2 Sign-In"
+                                                    isTokenExpired -> "Google Token Expired"
+                                                    else -> "Google Account Connected"
+                                                },
                                                 fontWeight = FontWeight.Bold,
                                                 style = MaterialTheme.typography.bodyMedium
                                             )
@@ -414,7 +431,7 @@ fun ServiceConfigDialog(
                                                 modifier = Modifier.size(16.dp)
                                             )
                                             Spacer(modifier = Modifier.width(4.dp))
-                                            Text("Switch Account")
+                                            Text(if (isTokenExpired) "Renew Sign-In" else "Switch Account")
                                         }
                                     } else {
                                         FilledTonalButton(
@@ -431,6 +448,13 @@ fun ServiceConfigDialog(
                                         text = "Tap above to authorize access to your Google Drive backup files.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.outline
+                                    )
+                                } else if (isTokenExpired) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = "Your authorization token has expired. Tap \"Renew Sign-In\" to restore connection.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error
                                     )
                                 }
                             }

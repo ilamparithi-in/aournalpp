@@ -270,21 +270,38 @@ fun CustomMappingDialog(
 
     // Local Folder Browser Dialog
     if (showLocalBrowser) {
+        val cleanRemote = remotePath.trim().trimEnd('/', '\\')
+        val remoteFolderName = if (cleanRemote.isNotBlank()) {
+            File(cleanRemote).name.ifBlank { cleanRemote }
+        } else null
         FolderBrowserDialog(
             mode = FolderBrowserMode.LOCAL,
             title = "Browse Local Notes Folder",
+            subtitle = remoteFolderName?.let { "Remote folder: $it" },
             initialPath = localPath,
             rootDirectory = notesDir,
-            onFolderSelected = { selected -> localPath = selected },
+            onFolderSelected = { selected ->
+                localPath = selected
+                if (name.isBlank() && selected.isNotBlank()) {
+                    name = File(selected).name
+                }
+            },
             onDismissRequest = { showLocalBrowser = false }
         )
     }
 
     // Remote Folder Browser Dialog
     if (showRemoteBrowser && currentSelectedService != null) {
+        val cleanLocal = localPath.trim().trimEnd('/', '\\')
+        val localFolderName = if (cleanLocal.isNotBlank()) {
+            File(cleanLocal).name.ifBlank { notesDir.name.ifBlank { "Notes" } }
+        } else {
+            notesDir.name.ifBlank { "Notes" }
+        }
         FolderBrowserDialog(
             mode = FolderBrowserMode.REMOTE,
             title = "Browse Remote Cloud Folders",
+            subtitle = "Local folder: $localFolderName",
             initialPath = remotePath,
             serviceConfig = currentSelectedService,
             onFolderSelected = { selected -> remotePath = selected },

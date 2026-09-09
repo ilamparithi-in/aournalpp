@@ -167,6 +167,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
+import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -548,6 +552,24 @@ fun DocumentHubScreen(
         scope.launch { loadContentNow() }
     }
 
+    fun showUndoSnackbar(message: String, onUndo: suspend () -> Unit) {
+        scope.launch {
+            val result = snackbarHostState.showSnackbar(
+                message = message,
+                actionLabel = "Undo",
+                duration = SnackbarDuration.Short
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                try {
+                    onUndo()
+                    loadContentNow()
+                } catch (e: Exception) {
+                    snackbarHostState.showSnackbar("Failed to undo: ${e.message}")
+                }
+            }
+        }
+    }
+
     var noteForActionDialog by remember { mutableStateOf<File?>(null) }
     val localView = LocalView.current
 
@@ -846,6 +868,20 @@ fun DocumentHubScreen(
                                     contentDescription = viewModeLabel
                                 )
                             }
+
+                            val trashLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_menu_trash)
+                            AppIconButton(
+                                onClick = {
+                                    isViewingTrash = true
+                                    loadContent()
+                                },
+                                tooltip = trashLabel
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = trashLabel
+                                )
+                            }
                         }
 
                         dev.ilamparithi.aournalpp.ui.cloud.QuickSyncButton(
@@ -870,6 +906,107 @@ fun DocumentHubScreen(
                             onDismissRequest = { showTopMenu = false }
                         ) {
                             if (!isViewingTrash) {
+                                val isSubfolder = currentDirectory.canonicalPath != repository.getRootNotesDirectory().canonicalPath
+                                if (isSubfolder) {
+                                    val currentFolderItem = repository.getFolderItem(currentDirectory)
+                                    val isPinned = currentFolderItem.isPinned
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(if (isPinned) "Unpin Folder" else "Pin Folder") },
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Default.PushPin,
+                                                contentDescription = null,
+                                                tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        },
+                                        onClick = {
+                                            showTopMenu = false
+                                            val nowPinned = repository.togglePinFolder(currentFolderItem)
+                                            loadContent()
+                                            showUndoSnackbar(
+                                                if (nowPinned) "Pinned \"${currentFolderItem.name}\"" else "Unpinned \"${currentFolderItem.name}\""
+                                            ) {
+                                                repository.togglePinFolder(currentFolderItem)
+                                            }
+                                        }
+                                    )
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(if (currentFolderItem.isExcludedFromRecents) "Include in Recents" else "Exclude from Recents") },
+                                        leadingIcon = {
+                                            Icon(
+                                                if (currentFolderItem.isExcludedFromRecents) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                                contentDescription = null,
+                                                tint = if (currentFolderItem.isExcludedFromRecents) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        },
+                                        onClick = {
+                                            showTopMenu = false
+                                            val newExcluded = !currentFolderItem.isExcludedFromRecents
+                                            repository.setFolderExcludeFromRecents(currentFolderItem.file, newExcluded)
+                                            loadContent()
+                                            showUndoSnackbar(
+                                                if (newExcluded) "Excluded \"${currentFolderItem.name}\" from Recents" else "Included \"${currentFolderItem.name}\" in Recents"
+                                            ) {
+                                                repository.setFolderExcludeFromRecents(currentFolderItem.file, !newExcluded)
+                                            }
+                                        }
+                                    )
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Rename Folder") },
+                                        leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null) },
+                                        onClick = {
+                                            showTopMenu = false
+                                            renameFolderNameInput = currentFolderItem.name
+                                            folderToRename = currentFolderItem
+                                        }
+                                    )
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Map to Cloud...") },
+                                        leadingIcon = { Icon(Icons.Default.CloudSync, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                        onClick = {
+                                            showTopMenu = false
+                                            folderToMapToCloud = currentFolderItem
+                                        }
+                                    )
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Customize Icon & Color") },
+                                        leadingIcon = { Icon(Icons.Default.ColorLens, contentDescription = null) },
+                                        onClick = {
+                                            showTopMenu = false
+                                            editFolderSelectedColor = currentFolderItem.colorHex ?: (if (currentFolderItem.isEmergencyFolder) DocumentRepository.EMERGENCY_SAVES_DEFAULT_COLOR else PRESET_FOLDER_COLORS.first())
+                                            editFolderSelectedEmoji = currentFolderItem.iconEmoji
+                                            editFolderSelectedIconType = currentFolderItem.iconType ?: (if (currentFolderItem.isEmergencyFolder) "emergency" else (currentFolderItem.role ?: "folder"))
+                                            folderToEdit = currentFolderItem
+                                        }
+                                    )
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Delete Folder", color = MaterialTheme.colorScheme.error) },
+                                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                        onClick = {
+                                            showTopMenu = false
+                                            val folderToDelete = currentFolderItem
+                                            val parentDir = currentDirectory.parentFile ?: repository.getRootNotesDirectory()
+                                            currentDirectory = parentDir
+                                            scope.launch {
+                                                val res = repository.moveFolderToTrash(folderToDelete.file)
+                                                loadContentNow()
+                                                if (res.isSuccess) {
+                                                    val trashName = res.getOrNull()
+                                                    showUndoSnackbar("Moved folder \"${folderToDelete.name}\" to Trash") {
+                                                        trashName?.let {
+                                                            val restored = repository.restoreFolderFromTrash(it).getOrNull()
+                                                            if (restored != null) {
+                                                                currentDirectory = restored
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    )
+                                    HorizontalDivider()
+                                }
+
                                 DropdownMenuItem(
                                     text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_menu_select_notes)) },
                                     leadingIcon = { Icon(Icons.Default.SelectAll, contentDescription = null) },
@@ -1390,11 +1527,25 @@ fun DocumentHubScreen(
                         val target = folderToRename
                         folderToRename = null
                         if (target != null && renameFolderNameInput.isNotBlank()) {
+                            val oldName = target.name
+                            val newName = renameFolderNameInput.trim()
+                            val wasCurrentDir = currentDirectory.canonicalPath == target.file.canonicalPath
                             scope.launch {
-                                val result = repository.renameFolder(target.file, renameFolderNameInput)
+                                val result = repository.renameFolder(target.file, newName)
                                 if (result.isSuccess) {
+                                    val renamedDir = result.getOrNull()
+                                    if (wasCurrentDir && renamedDir != null) {
+                                        currentDirectory = renamedDir
+                                    }
                                     loadContentNow()
-                                    snackbarHostState.showSnackbar("Renamed folder to \"${renameFolderNameInput.trim()}\"")
+                                    showUndoSnackbar("Renamed folder to \"$newName\"") {
+                                        renamedDir?.let {
+                                            val undoResult = repository.renameFolder(it, oldName)
+                                            if (wasCurrentDir && undoResult.isSuccess) {
+                                                undoResult.getOrNull()?.let { currentDirectory = it }
+                                            }
+                                        }
+                                    }
                                 } else {
                                     snackbarHostState.showSnackbar("Failed to rename: ${result.exceptionOrNull()?.message}")
                                 }
@@ -1488,20 +1639,30 @@ fun DocumentHubScreen(
                                         val created = repository.createFolder(repository.getRootNotesDirectory(), inlineFolderName, inlineFolderColor)
                                         if (created.isSuccess) {
                                             val dest = created.getOrThrow()
+                                            val origFolders = selectedDocs.map { it.file.name to it.file.parentFile }
                                             scope.launch {
                                                 val count = repository.moveNotesToFolder(selectedDocs, dest).getOrDefault(0)
                                                 showMoveToFolderDialog = false
                                                 isSelectionMode = false
                                                 selectedNotePaths = emptySet()
                                                 loadContentNow()
-                                                snackbarHostState.showSnackbar(
+                                                showUndoSnackbar(
                                                     context.resources.getQuantityString(
                                                         dev.ilamparithi.aournalpp.R.plurals.msg_moved_notes_to_folder,
                                                         count,
                                                         count,
                                                         dest.name
                                                     )
-                                                )
+                                                ) {
+                                                    for ((name, origDir) in origFolders) {
+                                                        if (origDir != null) {
+                                                            val currentFile = File(dest, name)
+                                                            if (currentFile.exists()) {
+                                                                currentFile.renameTo(File(origDir, name))
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -1522,19 +1683,30 @@ fun DocumentHubScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clickable {
+                                                val origFolders = selectedDocs.map { it.file.name to it.file.parentFile }
+                                                val rootDir = repository.getRootNotesDirectory()
                                                 scope.launch {
-                                                    val count = repository.moveNotesToFolder(selectedDocs, repository.getRootNotesDirectory()).getOrDefault(0)
+                                                    val count = repository.moveNotesToFolder(selectedDocs, rootDir).getOrDefault(0)
                                                     showMoveToFolderDialog = false
                                                     isSelectionMode = false
                                                     selectedNotePaths = emptySet()
                                                     loadContentNow()
-                                                    snackbarHostState.showSnackbar(
+                                                    showUndoSnackbar(
                                                         context.resources.getQuantityString(
                                                             dev.ilamparithi.aournalpp.R.plurals.msg_moved_notes_to_root,
                                                             count,
                                                             count
                                                         )
-                                                    )
+                                                    ) {
+                                                        for ((name, origDir) in origFolders) {
+                                                            if (origDir != null) {
+                                                                val currentFile = File(rootDir, name)
+                                                                if (currentFile.exists()) {
+                                                                    currentFile.renameTo(File(origDir, name))
+                                                                }
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
                                     ) {
@@ -1557,20 +1729,31 @@ fun DocumentHubScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clickable {
+                                                val origFolders = selectedDocs.map { it.file.name to it.file.parentFile }
+                                                val destDir = folder.file
                                                 scope.launch {
-                                                    val count = repository.moveNotesToFolder(selectedDocs, folder.file).getOrDefault(0)
+                                                    val count = repository.moveNotesToFolder(selectedDocs, destDir).getOrDefault(0)
                                                     showMoveToFolderDialog = false
                                                     isSelectionMode = false
                                                     selectedNotePaths = emptySet()
                                                     loadContentNow()
-                                                    snackbarHostState.showSnackbar(
+                                                    showUndoSnackbar(
                                                         context.resources.getQuantityString(
                                                             dev.ilamparithi.aournalpp.R.plurals.msg_moved_notes_to_folder,
                                                             count,
                                                             count,
                                                             folder.name
                                                         )
-                                                    )
+                                                    ) {
+                                                        for ((name, origDir) in origFolders) {
+                                                            if (origDir != null) {
+                                                                val currentFile = File(destDir, name)
+                                                                if (currentFile.exists()) {
+                                                                    currentFile.renameTo(File(origDir, name))
+                                                                }
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
                                     ) {
@@ -1640,10 +1823,17 @@ fun DocumentHubScreen(
                             noteToRename = null
                             target?.let { note ->
                                 scope.launch {
-                                    val result = repository.renameNote(note, renameInputText)
+                                    val oldTitle = note.title
+                                    val newTitle = renameInputText.trim()
+                                    val result = repository.renameNote(note, newTitle)
                                     if (result.isSuccess) {
+                                        val renamedFile = result.getOrNull()
                                         loadContentNow()
-                                        snackbarHostState.showSnackbar("Renamed note successfully")
+                                        showUndoSnackbar("Renamed note successfully") {
+                                            renamedFile?.let {
+                                                repository.renameNote(note.copy(file = it, title = it.nameWithoutExtension), oldTitle)
+                                            }
+                                        }
                                     } else {
                                         snackbarHostState.showSnackbar("Rename failed: ${result.exceptionOrNull()?.message}")
                                     }
@@ -1691,9 +1881,14 @@ fun DocumentHubScreen(
                                         loadContentNow()
                                         snackbarHostState.showSnackbar("Permanently deleted \"${note.title}\"")
                                     } else {
-                                        repository.deleteNote(note)
+                                        val result = repository.moveToTrash(listOf(note))
                                         loadContentNow()
-                                        snackbarHostState.showSnackbar("Moved \"${note.title}\" to Trash")
+                                        if (result.isSuccess) {
+                                            val receipt = result.getOrNull()
+                                            showUndoSnackbar("Moved \"${note.title}\" to Trash") {
+                                                receipt?.let { repository.restoreTrashItems(it.trashFileNames) }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -2208,8 +2403,11 @@ fun DocumentHubScreen(
                                     scope.launch {
                                         val result = repository.duplicateNote(note)
                                         if (result.isSuccess) {
+                                            val duplicated = result.getOrNull()
                                             loadContent()
-                                            snackbarHostState.showSnackbar("Duplicated note \"${note.title}\"")
+                                            showUndoSnackbar("Duplicated note \"${note.title}\"") {
+                                                duplicated?.delete()
+                                            }
                                         } else {
                                             snackbarHostState.showSnackbar("Failed to duplicate note: ${result.exceptionOrNull()?.message}")
                                         }
@@ -2289,10 +2487,10 @@ fun DocumentHubScreen(
                                             CustomAccessibilityAction(pinFolderActionLabel) {
                                                 val nowPinned = repository.togglePinFolder(folder)
                                                 loadContent()
-                                                scope.launch {
-                                                    snackbarHostState.showSnackbar(
-                                                        if (nowPinned) "Pinned \"${folder.name}\"" else "Unpinned \"${folder.name}\""
-                                                    )
+                                                showUndoSnackbar(
+                                                    if (nowPinned) "Pinned \"${folder.name}\"" else "Unpinned \"${folder.name}\""
+                                                ) {
+                                                    repository.togglePinFolder(folder)
                                                 }
                                                 true
                                             },
@@ -2310,9 +2508,14 @@ fun DocumentHubScreen(
                                             },
                                             CustomAccessibilityAction(deleteFolderActionLabel) {
                                                 scope.launch {
-                                                    repository.moveFolderToTrash(folder.file)
+                                                    val res = repository.moveFolderToTrash(folder.file)
                                                     loadContentNow()
-                                                    snackbarHostState.showSnackbar("Moved folder \"${folder.name}\" to Trash")
+                                                    if (res.isSuccess) {
+                                                        val trashName = res.getOrNull()
+                                                        showUndoSnackbar("Moved folder \"${folder.name}\" to Trash") {
+                                                            trashName?.let { repository.restoreFolderFromTrash(it) }
+                                                        }
+                                                    }
                                                 }
                                                 true
                                             }
@@ -2434,10 +2637,10 @@ fun DocumentHubScreen(
                                                     showFolderMenu = false
                                                     val nowPinned = repository.togglePinFolder(folder)
                                                     loadContent()
-                                                    scope.launch {
-                                                        snackbarHostState.showSnackbar(
-                                                            if (nowPinned) "Pinned \"${folder.name}\"" else "Unpinned \"${folder.name}\""
-                                                        )
+                                                    showUndoSnackbar(
+                                                        if (nowPinned) "Pinned \"${folder.name}\"" else "Unpinned \"${folder.name}\""
+                                                    ) {
+                                                        repository.togglePinFolder(folder)
                                                     }
                                                 }
                                             )
@@ -2455,10 +2658,10 @@ fun DocumentHubScreen(
                                                     val newExcluded = !folder.isExcludedFromRecents
                                                     repository.setFolderExcludeFromRecents(folder.file, newExcluded)
                                                     loadContent()
-                                                    scope.launch {
-                                                        snackbarHostState.showSnackbar(
-                                                            if (newExcluded) "Excluded \"${folder.name}\" from Recents" else "Included \"${folder.name}\" in Recents"
-                                                        )
+                                                    showUndoSnackbar(
+                                                        if (newExcluded) "Excluded \"${folder.name}\" from Recents" else "Included \"${folder.name}\" in Recents"
+                                                    ) {
+                                                        repository.setFolderExcludeFromRecents(folder.file, !newExcluded)
                                                     }
                                                 }
                                             )
@@ -2496,9 +2699,14 @@ fun DocumentHubScreen(
                                                 onClick = {
                                                     showFolderMenu = false
                                                     scope.launch {
-                                                        repository.moveFolderToTrash(folder.file)
+                                                        val res = repository.moveFolderToTrash(folder.file)
                                                         loadContentNow()
-                                                        snackbarHostState.showSnackbar("Moved folder \"${folder.name}\" to Trash")
+                                                        if (res.isSuccess) {
+                                                            val trashName = res.getOrNull()
+                                                            showUndoSnackbar("Moved folder \"${folder.name}\" to Trash") {
+                                                                trashName?.let { repository.restoreFolderFromTrash(it) }
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             )
@@ -2583,8 +2791,11 @@ fun DocumentHubScreen(
                                     scope.launch {
                                         val result = repository.duplicateNote(note)
                                         if (result.isSuccess) {
+                                            val duplicated = result.getOrNull()
                                             loadContentNow()
-                                            snackbarHostState.showSnackbar("Duplicated \"${note.title}\"")
+                                            showUndoSnackbar("Duplicated \"${note.title}\"") {
+                                                duplicated?.delete()
+                                            }
                                         }
                                     }
                                 },
@@ -2739,17 +2950,24 @@ fun DocumentHubScreen(
                             else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_pin)
                             AppIconButton(
                                 onClick = {
+                                    val originallyPinned = allSelectedPinned
                                     selectedDocs.forEach { doc ->
-                                        if (allSelectedPinned) {
+                                        if (originallyPinned) {
                                             repository.unpinNote(doc.file.absolutePath)
                                         } else {
                                             repository.pinNote(doc.file.absolutePath)
                                         }
                                     }
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar(if (allSelectedPinned) "Unpinned selected notes from Home" else "Pinned selected notes to Home")
-                                    }
                                     loadContent()
+                                    showUndoSnackbar(if (originallyPinned) "Unpinned selected notes from Home" else "Pinned selected notes to Home") {
+                                        selectedDocs.forEach { doc ->
+                                            if (originallyPinned) {
+                                                repository.pinNote(doc.file.absolutePath)
+                                            } else {
+                                                repository.unpinNote(doc.file.absolutePath)
+                                            }
+                                        }
+                                    }
                                 },
                                 tooltip = pinActionLabel
                             ) {
@@ -2758,6 +2976,11 @@ fun DocumentHubScreen(
                                         Icons.Default.PushPin,
                                         contentDescription = pinActionLabel,
                                         tint = if (allSelectedPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = if (allSelectedPinned) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_unpin) else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_pin),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1
                                     )
                                 }
                             }
@@ -2802,17 +3025,23 @@ fun DocumentHubScreen(
                             AppIconButton(
                                 onClick = {
                                     scope.launch {
-                                        val count = repository.moveToTrash(selectedDocs).getOrDefault(0)
+                                        val res = repository.moveToTrash(selectedDocs)
                                         isSelectionMode = false
                                         selectedNotePaths = emptySet()
                                         loadContentNow()
-                                        snackbarHostState.showSnackbar(
-                                            context.resources.getQuantityString(
-                                                dev.ilamparithi.aournalpp.R.plurals.msg_moved_notes_to_trash,
-                                                count,
-                                                count
-                                            )
-                                        )
+                                        if (res.isSuccess) {
+                                            val receipt = res.getOrNull()
+                                            val count = receipt?.movedCount ?: 0
+                                            showUndoSnackbar(
+                                                context.resources.getQuantityString(
+                                                    dev.ilamparithi.aournalpp.R.plurals.msg_moved_notes_to_trash,
+                                                    count,
+                                                    count
+                                                )
+                                            ) {
+                                                receipt?.let { repository.restoreTrashItems(it.trashFileNames) }
+                                            }
+                                        }
                                     }
                                 },
                                 tooltip = deleteLabel
@@ -3692,36 +3921,33 @@ fun DynamicRecentsCarousel(
             )
         }
 
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        HorizontalMultiBrowseCarousel(
+            state = rememberCarouselState { recentNotes.size },
+            preferredItemWidth = 230.dp,
+            itemSpacing = 10.dp,
             contentPadding = PaddingValues(horizontal = 4.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(180.dp)
-        ) {
-            items(recentNotes, key = { it.path }) { note ->
-                Box(
-                    modifier = Modifier
-                        .width(230.dp)
-                        .fillMaxHeight()
-                ) {
-                    StandardNoteCard(
-                        note = note,
-                        modifier = Modifier.fillMaxSize(),
-                        shape = MaterialTheme.shapes.extraLarge,
-                        pdfExportManager = pdfExportManager,
-                        onClick = { onOpenNote(note) },
-                        onTogglePin = { onTogglePin(note) },
-                        onShareExport = onShareExport?.let { { it(note) } },
-                        onExportPdf = onExportPdf?.let { { it(note) } },
-                        onSharePdf = onSharePdf?.let { { it(note) } },
-                        onShareXopp = onShareXopp?.let { { it(note) } },
-                        onRename = { onRenameNote(note) },
-                        onDuplicate = onDuplicate?.let { { it(note) } },
-                        onDelete = { onDeleteNote(note) }
-                    )
-                }
-            }
+                .height(185.dp)
+        ) { page ->
+            val note = recentNotes.getOrNull(page) ?: return@HorizontalMultiBrowseCarousel
+            StandardNoteCard(
+                note = note,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .maskClip(MaterialTheme.shapes.extraLarge),
+                shape = MaterialTheme.shapes.extraLarge,
+                pdfExportManager = pdfExportManager,
+                onClick = { onOpenNote(note) },
+                onTogglePin = { onTogglePin(note) },
+                onShareExport = onShareExport?.let { { it(note) } },
+                onExportPdf = onExportPdf?.let { { it(note) } },
+                onSharePdf = onSharePdf?.let { { it(note) } },
+                onShareXopp = onShareXopp?.let { { it(note) } },
+                onRename = { onRenameNote(note) },
+                onDuplicate = onDuplicate?.let { { it(note) } },
+                onDelete = { onDeleteNote(note) }
+            )
         }
     }
 }

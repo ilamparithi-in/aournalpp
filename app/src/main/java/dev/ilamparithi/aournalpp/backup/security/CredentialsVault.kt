@@ -280,6 +280,9 @@ class CredentialsVault(context: Context) {
         obj.put("privateKey", s.privateKey)
         obj.put("privateKeyPassphrase", s.privateKeyPassphrase)
         obj.put("authToken", s.authToken)
+        obj.put("refreshToken", s.refreshToken)
+        obj.put("tokenExpiryEpochMs", s.tokenExpiryEpochMs)
+        obj.put("accountIdentifier", s.accountIdentifier)
         obj.put("shareName", s.shareName)
         obj.put("domain", s.domain)
         obj.put("remoteBasePath", s.remoteBasePath)
@@ -335,6 +338,9 @@ class CredentialsVault(context: Context) {
             privateKey = obj.optString("privateKey", ""),
             privateKeyPassphrase = obj.optString("privateKeyPassphrase", ""),
             authToken = obj.optString("authToken", ""),
+            refreshToken = obj.optString("refreshToken", ""),
+            tokenExpiryEpochMs = obj.optLong("tokenExpiryEpochMs", 0L),
+            accountIdentifier = obj.optString("accountIdentifier", ""),
             shareName = obj.optString("shareName", ""),
             domain = obj.optString("domain", ""),
             remoteBasePath = obj.optString("remoteBasePath", ""),

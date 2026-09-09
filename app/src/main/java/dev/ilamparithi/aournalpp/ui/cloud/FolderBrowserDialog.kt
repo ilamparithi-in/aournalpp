@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
@@ -36,6 +37,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -92,6 +94,7 @@ private fun decodeUrlSafe(value: String): String {
 fun FolderBrowserDialog(
     mode: FolderBrowserMode,
     title: String = if (mode == FolderBrowserMode.LOCAL) "Select Local Folder" else "Select Remote Folder",
+    subtitle: String? = null,
     initialPath: String = "",
     rootDirectory: File? = null, // Used for LOCAL mode
     serviceConfig: ServiceConfig? = null, // Used for REMOTE mode
@@ -207,9 +210,12 @@ fun FolderBrowserDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
                         Icon(
-                            imageVector = Icons.Default.Folder,
+                            imageVector = if (mode == FolderBrowserMode.LOCAL) Icons.Default.Folder else Icons.Default.Cloud,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(24.dp)
@@ -228,6 +234,36 @@ fun FolderBrowserDialog(
                         modifier = Modifier.minTouchTarget()
                     ) {
                         Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_cancel))
+                    }
+                }
+
+                if (!subtitle.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (mode == FolderBrowserMode.REMOTE) Icons.Default.Folder else Icons.Default.Cloud,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
 

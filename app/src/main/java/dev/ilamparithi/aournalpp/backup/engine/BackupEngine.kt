@@ -130,7 +130,16 @@ class BackupEngine(
         }
 
         // 2. Custom folder mappings scanning
-        for (mapping in serviceConfig.customMappings) {
+        val activeMappings = if (serviceConfig.customMappings.isNotEmpty()) {
+            serviceConfig.customMappings
+        } else {
+            try {
+                dev.ilamparithi.aournalpp.backup.security.CustomMappingRepository(context).getMappingsForService(serviceConfig.id)
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+        for (mapping in activeMappings) {
             if (!mapping.isEnabled) continue
             val mappedFiles = scanner.scanCustomMapping(mapping, existingMetaMap)
             val remoteTargetBase = mapping.remoteFolderPath.trim().trim('/')
@@ -149,7 +158,7 @@ class BackupEngine(
         var totalBytesTransferred = 0L
         val errors = mutableListOf<String>()
 
-        val provider = StorageProviderFactory.createProvider(serviceConfig)
+        val provider = getStorageProvider(serviceConfig)
 
         try {
             // Test connection first
@@ -157,6 +166,11 @@ class BackupEngine(
             if (connResult.isFailure || connResult.getOrNull() == false) {
                 val err = connResult.exceptionOrNull()?.message ?: "Failed to connect to ${serviceConfig.name}"
                 errors.add(err)
+                vault.saveService(
+                    serviceConfig.copy(
+                        lastSyncStatus = "Connection failed: $err"
+                    )
+                )
                 return@withContext BackupResult(
                     serviceId = serviceConfig.id,
                     serviceName = serviceConfig.name,
@@ -315,7 +329,7 @@ class BackupEngine(
         }
         val startTime = System.currentTimeMillis()
         val dao = db.syncMetadataDao()
-        val provider = StorageProviderFactory.createProvider(serviceConfig)
+        val provider = getStorageProvider(serviceConfig)
         val errors = mutableListOf<String>()
 
         var restoredCount = 0
@@ -557,8 +571,30 @@ class BackupEngine(
             val services = vault.getActiveConfiguredServices().filter { it.isEnabled }
             val results = mutableListOf<BackupResult>()
             for (service in services) {
-                val result = performBackupInternal(service, concurrency, onProgress, clearCompletedQueue = false)
-                results.add(result)
+                try {
+                    val result = performBackupInternal(service, concurrency, onProgress, clearCompletedQueue = false)
+                    results.add(result)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Sync failed for service ${service.name} (${service.id})", e)
+                    vault.saveService(
+                        service.copy(
+                            lastSyncStatus = "Failed: ${e.message ?: "Unknown error"}"
+                        )
+                    )
+                    results.add(
+                        BackupResult(
+                            serviceId = service.id,
+                            serviceName = service.name,
+                            totalFilesScanned = 0,
+                            filesUploaded = 0,
+                            filesSkipped = 0,
+                            filesFailed = 1,
+                            totalBytesTransferred = 0L,
+                            durationMs = 0L,
+                            errors = listOf(e.message ?: "Unknown error")
+                        )
+                    )
+                }
             }
             return results
         } finally {
@@ -571,7 +607,7 @@ class BackupEngine(
      */
     suspend fun checkForRemoteChanges(serviceConfig: ServiceConfig): List<dev.ilamparithi.aournalpp.backup.model.RemoteFileMetadata> = withContext(Dispatchers.IO) {
         val changedRemoteFiles = mutableListOf<dev.ilamparithi.aournalpp.backup.model.RemoteFileMetadata>()
-        val provider = StorageProviderFactory.createProvider(serviceConfig)
+        val provider = getStorageProvider(serviceConfig)
         val dao = db.syncMetadataDao()
 
         try {
@@ -614,7 +650,16 @@ class BackupEngine(
                 }
             }
 
-            for (mapping in serviceConfig.customMappings) {
+            val activeMappings = if (serviceConfig.customMappings.isNotEmpty()) {
+                serviceConfig.customMappings
+            } else {
+                try {
+                    dev.ilamparithi.aournalpp.backup.security.CustomMappingRepository(context).getMappingsForService(serviceConfig.id)
+                } catch (_: Exception) {
+                    emptyList()
+                }
+            }
+            for (mapping in activeMappings) {
                 if (!mapping.isEnabled) continue
                 val localBase = File(mapping.localFolderPath)
                 val remoteBase = mapping.remoteFolderPath.trim().trim('/')
@@ -720,7 +765,7 @@ class BackupEngine(
 
         // 3. Gather remote files for all enabled services and their custom mappings
         for (srv in services) {
-            val provider = StorageProviderFactory.createProvider(srv)
+            val provider = getStorageProvider(srv)
             try {
                 val conn = provider.testConnection()
                 if (conn.isFailure || conn.getOrNull() == false) continue
@@ -957,7 +1002,7 @@ class BackupEngine(
                             is FileVersionSource.REMOTE -> {
                                 val srv = services[src.serviceId]
                                 if (srv != null && chosen.remotePath != null) {
-                                    val provider = StorageProviderFactory.createProvider(srv)
+                                    val provider = getStorageProvider(srv)
                                     try {
                                         val downloadResult = provider.downloadFile(
                                             remotePath = chosen.remotePath,
@@ -1005,7 +1050,7 @@ class BackupEngine(
                             is FileVersionSource.REMOTE -> {
                                 val srv = services[src.serviceId]
                                 if (srv != null && primary.remotePath != null) {
-                                    val provider = StorageProviderFactory.createProvider(srv)
+                                    val provider = getStorageProvider(srv)
                                     try {
                                         val downloadResult = provider.downloadFile(
                                             remotePath = primary.remotePath,
@@ -1050,7 +1095,7 @@ class BackupEngine(
                                     val desiredAlongsideName = "$nameWithoutExt (${src.sanitizedFileSuffix})$ext"
                                     val alongsideFile = generateNonCollidingFile(parentDir, desiredAlongsideName)
 
-                                    val provider = StorageProviderFactory.createProvider(srv)
+                                    val provider = getStorageProvider(srv)
                                     try {
                                         val dlResult = provider.downloadFile(
                                             remotePath = alongsideVer.remotePath,
@@ -1107,7 +1152,7 @@ class BackupEngine(
                                     val desiredAlongsideName = "$nameWithoutExt (${src.sanitizedFileSuffix})$ext"
                                     val alongsideFile = generateNonCollidingFile(parentDir, desiredAlongsideName)
 
-                                    val provider = StorageProviderFactory.createProvider(srv)
+                                    val provider = getStorageProvider(srv)
                                     try {
                                         val dlResult = provider.downloadFile(
                                             remotePath = remoteVer.remotePath,
@@ -1227,7 +1272,7 @@ class BackupEngine(
         serviceConfig: ServiceConfig,
         remotePath: String = getCompleteBackupRemoteRoot(serviceConfig)
     ): Result<Boolean> = withContext(Dispatchers.IO) {
-        val provider = StorageProviderFactory.createProvider(serviceConfig)
+        val provider = getStorageProvider(serviceConfig)
         try {
             val connResult = provider.testConnection()
             if (connResult.isFailure || connResult.getOrNull() == false) {
@@ -1287,7 +1332,7 @@ class BackupEngine(
             return@withContext ConfigSyncStatus.NO_LOCAL_CONFIG
         }
 
-        val provider = StorageProviderFactory.createProvider(serviceConfig)
+        val provider = getStorageProvider(serviceConfig)
         val tempFile = File(context.cacheDir, "remote_test_settings_${UUID.randomUUID()}.xml")
         try {
             val cleanRoot = remotePath.trim().trim('/')
@@ -1313,7 +1358,15 @@ class BackupEngine(
     }
 
     fun getStorageProvider(service: ServiceConfig): CloudStorageProvider {
-        return StorageProviderFactory.createProvider(service)
+        return StorageProviderFactory.createProvider(service) { newAccessToken, newRefreshToken, expiryEpochMs ->
+            Log.i(TAG, "Refreshed tokens for ${service.name} (${service.id}), persisting to CredentialsVault")
+            val updated = service.copy(
+                authToken = newAccessToken,
+                refreshToken = newRefreshToken ?: service.refreshToken,
+                tokenExpiryEpochMs = expiryEpochMs
+            )
+            vault.saveService(updated)
+        }
     }
 
     /**
@@ -1354,7 +1407,7 @@ class BackupEngine(
         )
 
         val conflicts = mutableListOf<FileConflictGroup>()
-        val provider = StorageProviderFactory.createProvider(serviceConfig)
+        val provider = getStorageProvider(serviceConfig)
         val cleanRoot = remotePath.trim().trim('/')
 
         try {
@@ -1512,7 +1565,7 @@ class BackupEngine(
         val service = vault.getAllServices().firstOrNull { it.id == item.serviceId }
             ?: return@withContext Result.failure(IllegalStateException("Cloud service ${item.serviceName} not found"))
 
-        val provider = StorageProviderFactory.createProvider(service)
+        val provider = getStorageProvider(service)
         try {
             val connResult = provider.testConnection()
             if (connResult.isFailure || connResult.getOrNull() == false) {

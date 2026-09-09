@@ -158,13 +158,13 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
-                        // Fast In-App Periodic Sync (e.g. 5 min intervals while app is actively running)
+                        // In-App Periodic Sync while app is actively running
                         LaunchedEffect(isOnboardingCompleted) {
                             if (!isOnboardingCompleted) return@LaunchedEffect
                             val backupPrefs = dev.ilamparithi.aournalpp.backup.worker.BackupPreferences(this@MainActivity)
-                            val intervalMins = backupPrefs.periodicSyncIntervalMinutes
-                            if (intervalMins in 1..14) {
-                                while (true) {
+                            while (true) {
+                                val intervalMins = backupPrefs.periodicSyncIntervalMinutes
+                                if (intervalMins > 0) {
                                     kotlinx.coroutines.delay(intervalMins * 60 * 1000L)
                                     withContext(Dispatchers.IO) {
                                         try {
@@ -174,6 +174,8 @@ class MainActivity : ComponentActivity() {
                                             Log.w("MainActivity", "In-app periodic sync failed", e)
                                         }
                                     }
+                                } else {
+                                    kotlinx.coroutines.delay(60_000L)
                                 }
                             }
                         }
@@ -324,7 +326,9 @@ class MainActivity : ComponentActivity() {
                             val updated = existingGdrive.copy(
                                 authToken = tokenResponse.accessToken,
                                 refreshToken = tokenResponse.refreshToken ?: existingGdrive.refreshToken,
-                                accountIdentifier = tokenResponse.userEmail ?: existingGdrive.accountIdentifier
+                                accountIdentifier = tokenResponse.userEmail ?: existingGdrive.accountIdentifier,
+                                tokenExpiryEpochMs = System.currentTimeMillis() + (tokenResponse.expiresInSeconds * 1000L),
+                                lastSyncStatus = "Connected"
                             )
                             vault.saveService(updated)
                         }

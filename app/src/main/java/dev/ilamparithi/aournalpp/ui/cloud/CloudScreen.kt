@@ -629,6 +629,10 @@ fun CloudScreen(
                     services = services,
                     pendingDeletedServiceIds = pendingDeletedServiceIds,
                     onSelectService = { service -> selectedDetailServiceId = service.id },
+                    onEditService = { service ->
+                        editingService = service
+                        showServiceDialog = true
+                    },
                     onToggleEnabled = { service, enabled ->
                         val updated = service.copy(isEnabled = enabled)
                         vault.saveService(updated)
@@ -1065,11 +1069,25 @@ fun EmptyServicesCard(onAddService: () -> Unit) {
     }
 }
 
+fun isReauthNeeded(service: ServiceConfig): Boolean {
+    val isGoogleDriveExpired = service.providerType == StorageProviderType.GOOGLE_DRIVE &&
+        service.tokenExpiryEpochMs > 0L && System.currentTimeMillis() >= service.tokenExpiryEpochMs
+    val hasAuthFailure = service.lastSyncStatus != null && (
+        service.lastSyncStatus.contains("401") ||
+        service.lastSyncStatus.contains("auth", ignoreCase = true) ||
+        service.lastSyncStatus.contains("UNAUTHENTICATED", ignoreCase = true) ||
+        service.lastSyncStatus.contains("OAuth", ignoreCase = true) ||
+        service.lastSyncStatus.contains("invalid_grant", ignoreCase = true)
+    )
+    return isGoogleDriveExpired || hasAuthFailure
+}
+
 @Composable
 fun ConfiguredServicesCarousel(
     services: List<ServiceConfig>,
     pendingDeletedServiceIds: Set<String> = emptySet(),
     onSelectService: (ServiceConfig) -> Unit,
+    onEditService: (ServiceConfig) -> Unit,
     onToggleEnabled: (ServiceConfig, Boolean) -> Unit,
     onRestoreService: (ServiceConfig) -> Unit,
     onAddService: () -> Unit
@@ -1134,12 +1152,17 @@ fun ConfiguredServicesCarousel(
             ) {
                 items(services, key = { it.id }) { service ->
                     val isPending = service.id in pendingDeletedServiceIds
+                    val reauthNeeded = isReauthNeeded(service)
                     CloudServiceCarouselCard(
                         service = service,
                         isPendingDeletion = isPending,
                         onClick = {
                             if (!isPending) {
-                                onSelectService(service)
+                                if (reauthNeeded) {
+                                    onEditService(service)
+                                } else {
+                                    onSelectService(service)
+                                }
                             }
                         },
                         onToggleEnabled = { enabled -> onToggleEnabled(service, enabled) },
@@ -1363,10 +1386,27 @@ fun CloudServiceCarouselCard(
                         )
                     }
 
+                    val reauthNeeded = isReauthNeeded(service)
+                    val hasError = !reauthNeeded && (service.lastSyncStatus?.startsWith("Failed") == true || service.lastSyncStatus?.startsWith("Connection failed") == true)
+
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        if (reauthNeeded) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.errorContainer
+                            ) {
+                                Text(
+                                    text = "Reauth needed",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = if (service.isCompleteBackupEnabled) {
@@ -1413,10 +1453,22 @@ fun CloudServiceCarouselCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
+                    val reauthNeeded = isReauthNeeded(service)
+                    val hasError = !reauthNeeded && (service.lastSyncStatus?.startsWith("Failed") == true || service.lastSyncStatus?.startsWith("Connection failed") == true)
+                    val footerText = when {
+                        reauthNeeded -> "Reauth needed · Tap to configure"
+                        hasError -> service.lastSyncStatus ?: "Sync error"
+                        else -> "Synced: $lastSyncFormatted"
+                    }
+                    val footerColor = when {
+                        reauthNeeded || hasError -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.outline
+                    }
+
                     Text(
-                        text = "Synced: $lastSyncFormatted",
+                        text = footerText,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline,
+                        color = footerColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
@@ -2640,8 +2692,18 @@ fun ExclusionFiltersCard(
 
             Spacer(modifier = Modifier.height(6.dp))
             val transientPrefix = if (filter.skipDefaultTransient) "Transient & lock files ignored • " else ""
-            val regexFormatted = pluralStringResource(R.plurals.cloud_exclusion_regex_patterns_count, filter.regexPatterns.size, filter.regexPatterns.size)
-            val extFormatted = pluralStringResource(R.plurals.cloud_exclusion_extensions_count, filter.excludedExtensions.size, filter.excludedExtensions.size)
+            val regexPluralRes = if (filter.isWhitelistMode) {
+                R.plurals.cloud_inclusion_regex_patterns_count
+            } else {
+                R.plurals.cloud_exclusion_regex_patterns_count
+            }
+            val extPluralRes = if (filter.isWhitelistMode) {
+                R.plurals.cloud_inclusion_extensions_count
+            } else {
+                R.plurals.cloud_exclusion_extensions_count
+            }
+            val regexFormatted = pluralStringResource(regexPluralRes, filter.regexPatterns.size, filter.regexPatterns.size)
+            val extFormatted = pluralStringResource(extPluralRes, filter.excludedExtensions.size, filter.excludedExtensions.size)
             Text(
                 text = stringResource(R.string.cloud_exclusion_card_summary, transientPrefix, regexFormatted, extFormatted),
                 style = MaterialTheme.typography.bodySmall,

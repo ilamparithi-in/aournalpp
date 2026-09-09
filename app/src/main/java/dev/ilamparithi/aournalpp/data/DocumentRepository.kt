@@ -850,6 +850,31 @@ class DocumentRepository(private val context: Context) {
         invalidateAllCaches()
     }
 
+    fun getFolderItem(dir: File): FolderItem {
+        val cache = ScanCache()
+        val meta = cache.folderMeta(dir)
+        val isEmergency = meta.role == "emergency" || isEmergencySavesFolder(dir)
+        val role = meta.role
+        val isUserPinned = cache.pinnedFolderPaths.contains(dir.absolutePath)
+        val isVirtuallyPinned = role != null && DEFAULT_VIRTUALLY_PINNED_ROLES.contains(role.lowercase()) && !cache.unpinnedSpecialRoles.contains(role.lowercase()) && !isUserPinned
+        val count = dir.listFiles { f -> f.isFile && isOpenableFile(f) && !f.name.startsWith(".") }?.size ?: 0
+        return FolderItem(
+            file = dir,
+            name = dir.name,
+            colorHex = meta.colorHex,
+            iconEmoji = meta.iconEmoji,
+            iconType = meta.iconType,
+            isEmergencyFolder = isEmergency,
+            isPinned = isUserPinned,
+            isVirtuallyPinned = isVirtuallyPinned,
+            role = role,
+            isExcludedFromRecents = meta.excludeFromRecents,
+            itemCount = count,
+            lastModifiedMs = dir.lastModified(),
+            isHidden = dir.name.startsWith(".")
+        )
+    }
+
     suspend fun getAllFolders(root: File = getRootNotesDirectory()): List<FolderItem> = withContext(Dispatchers.IO) {
         val cache = ScanCache()
         val list = mutableListOf<FolderItem>()
@@ -968,7 +993,12 @@ class DocumentRepository(private val context: Context) {
     }
 
     // Trashcan Operations
-    suspend fun moveToTrash(notes: List<NoteDocument>): Result<Int> = withContext(Dispatchers.IO) {
+    data class TrashReceipt(
+        val movedCount: Int,
+        val trashFileNames: List<String>
+    )
+
+    suspend fun moveToTrash(notes: List<NoteDocument>): Result<TrashReceipt> = withContext(Dispatchers.IO) {
         runCatching {
             val trashDir = getTrashDirectory()
             val manifestFile = File(trashDir, TRASH_MANIFEST_FILE)
@@ -980,6 +1010,7 @@ class DocumentRepository(private val context: Context) {
 
             var movedCount = 0
             val timestamp = System.currentTimeMillis()
+            val trashFileNames = mutableListOf<String>()
 
             for (note in notes) {
                 if (!note.file.exists()) continue
@@ -991,6 +1022,7 @@ class DocumentRepository(private val context: Context) {
                     manifest.put(trashFileName, note.file.absolutePath)
                     removeOpenedNoteHistory(note.file.absolutePath)
                     movedCount++
+                    trashFileNames.add(trashFileName)
 
                     // Move all associated autosave and backup files to Trash
                     for (assoc in srcAssociated) {
@@ -999,6 +1031,7 @@ class DocumentRepository(private val context: Context) {
                             val autoTrashFile = File(trashDir, autoTrashName)
                             if (assoc.renameTo(autoTrashFile)) {
                                 manifest.put(autoTrashName, assoc.absolutePath)
+                                trashFileNames.add(autoTrashName)
                             }
                         }
                     }
@@ -1006,11 +1039,11 @@ class DocumentRepository(private val context: Context) {
             }
 
             manifestFile.writeText(manifest.toString(2))
-            movedCount.also { invalidateAllCaches() }
+            TrashReceipt(movedCount, trashFileNames).also { invalidateAllCaches() }
         }
     }
 
-    suspend fun moveFolderToTrash(folder: File): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun moveFolderToTrash(folder: File): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val trashDir = getTrashDirectory()
             val manifestFile = File(trashDir, TRASH_MANIFEST_FILE)
@@ -1028,8 +1061,72 @@ class DocumentRepository(private val context: Context) {
                 manifest.put(trashFolderName, folder.absolutePath)
                 manifestFile.writeText(manifest.toString(2))
                 invalidateAllCaches()
+                trashFolderName
             } else {
                 error("Failed to move folder to trash")
+            }
+        }
+    }
+
+    suspend fun restoreTrashItems(trashFileNames: List<String>): Result<Int> = withContext(Dispatchers.IO) {
+        runCatching {
+            val trashDir = getTrashDirectory()
+            val manifestFile = File(trashDir, TRASH_MANIFEST_FILE)
+            val manifest = if (manifestFile.exists()) {
+                try { JSONObject(manifestFile.readText()) } catch (e: Exception) { JSONObject() }
+            } else {
+                JSONObject()
+            }
+
+            var count = 0
+            for (name in trashFileNames) {
+                val trashFile = File(trashDir, name)
+                if (!trashFile.exists()) continue
+                val originalPath = manifest.optString(name).takeIf { it.isNotBlank() }
+                val destFile = if (!originalPath.isNullOrBlank()) {
+                    File(originalPath)
+                } else {
+                    File(env.getNotesDirectory(), name.substringAfter("_"))
+                }
+                destFile.parentFile?.mkdirs()
+                if (trashFile.renameTo(destFile)) {
+                    manifest.remove(name)
+                    count++
+                }
+            }
+            manifestFile.writeText(manifest.toString(2))
+            count.also { invalidateAllCaches() }
+        }
+    }
+
+    suspend fun restoreFolderFromTrash(trashFolderName: String): Result<File> = withContext(Dispatchers.IO) {
+        runCatching {
+            val trashDir = getTrashDirectory()
+            val manifestFile = File(trashDir, TRASH_MANIFEST_FILE)
+            val manifest = if (manifestFile.exists()) {
+                try { JSONObject(manifestFile.readText()) } catch (e: Exception) { JSONObject() }
+            } else {
+                JSONObject()
+            }
+
+            val originalPath = manifest.optString(trashFolderName).takeIf { it.isNotBlank() }
+            val targetTrashFolder = File(trashDir, trashFolderName)
+            if (!targetTrashFolder.exists()) error("Trash folder does not exist")
+
+            val destDir = if (!originalPath.isNullOrBlank()) {
+                File(originalPath)
+            } else {
+                File(env.getNotesDirectory(), trashFolderName.substringAfter("_"))
+            }
+
+            destDir.parentFile?.mkdirs()
+            if (targetTrashFolder.renameTo(destDir)) {
+                manifest.remove(trashFolderName)
+                manifestFile.writeText(manifest.toString(2))
+                invalidateAllCaches()
+                destDir
+            } else {
+                error("Failed to restore folder from trash")
             }
         }
     }

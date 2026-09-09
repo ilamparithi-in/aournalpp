@@ -805,12 +805,20 @@
     <!-- Exclusion filters card summary. %1$s is transient status, %2$s is formatted regex count, %3$s is formatted extension count -->
     <string name="cloud_exclusion_card_summary">%1$s%2$s • %3$s</string>
     <plurals name="cloud_exclusion_regex_patterns_count">
-        <item quantity="one">%1$d regex pattern</item>
-        <item quantity="other">%1$d regex patterns</item>
+        <item quantity="one">%1$d excluded pattern</item>
+        <item quantity="other">%1$d excluded patterns</item>
+    </plurals>
+    <plurals name="cloud_inclusion_regex_patterns_count">
+        <item quantity="one">%1$d included pattern</item>
+        <item quantity="other">%1$d included patterns</item>
     </plurals>
     <plurals name="cloud_exclusion_extensions_count">
         <item quantity="one">%1$d excluded extension</item>
         <item quantity="other">%1$d excluded extensions</item>
+    </plurals>
+    <plurals name="cloud_inclusion_extensions_count">
+        <item quantity="one">%1$d included extension</item>
+        <item quantity="other">%1$d included extensions</item>
     </plurals>
     <!-- Automation card title -->
     <string name="cloud_automation_card_title">Automation &amp; Performance</string>

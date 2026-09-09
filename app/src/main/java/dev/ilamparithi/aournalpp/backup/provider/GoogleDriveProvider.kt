@@ -6,12 +6,15 @@ import dev.ilamparithi.aournalpp.backup.model.ServiceConfig
 import dev.ilamparithi.aournalpp.backup.model.StorageProviderType
 import dev.ilamparithi.aournalpp.backup.security.GoogleOAuthManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
+import okhttp3.Response
 import okio.BufferedSink
 import org.json.JSONObject
 import java.io.File
@@ -19,7 +22,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.TimeUnit
 
 /**
  * Storage provider for Google Drive using Google Drive REST API v3 over OkHttp.
@@ -27,7 +29,8 @@ import java.util.concurrent.TimeUnit
  */
 class GoogleDriveProvider(
     private val config: ServiceConfig,
-    private val httpClient: OkHttpClient = StorageProviderFactory.sharedHttpClient
+    private val httpClient: OkHttpClient = StorageProviderFactory.sharedHttpClient,
+    private val onTokenRefreshed: ((newAccessToken: String, newRefreshToken: String?, expiryEpochMs: Long) -> Unit)? = null
 ) : CloudStorageProvider {
 
     companion object {
@@ -42,22 +45,59 @@ class GoogleDriveProvider(
     // Cache of remotePath -> folderId
     private val folderIdCache = ConcurrentHashMap<String, String>()
 
+    private val refreshMutex = Mutex()
     private var currentAccessToken: String = config.authToken.ifBlank { config.passwordOrSecret }.trim()
+    private var currentRefreshToken: String = config.refreshToken.trim()
+    private var currentExpiryEpochMs: Long = config.tokenExpiryEpochMs
+
+    private suspend fun refreshAndPersistToken(): Boolean = refreshMutex.withLock {
+        if (currentRefreshToken.isBlank()) {
+            Log.w(TAG, "Cannot refresh Google Drive token: refresh token is blank.")
+            return false
+        }
+        Log.i(TAG, "Refreshing Google Drive OAuth2 access token for ${config.name}...")
+        val refreshResult = GoogleOAuthManager.refreshAccessToken(currentRefreshToken)
+        if (refreshResult.isSuccess) {
+            val resp = refreshResult.getOrNull()
+            if (resp != null) {
+                currentAccessToken = resp.accessToken
+                if (!resp.refreshToken.isNullOrBlank()) {
+                    currentRefreshToken = resp.refreshToken
+                }
+                val newExpiry = System.currentTimeMillis() + (resp.expiresInSeconds * 1000L)
+                currentExpiryEpochMs = newExpiry
+                Log.i(TAG, "Google Drive access token refreshed successfully, expires in ${resp.expiresInSeconds}s")
+                onTokenRefreshed?.invoke(resp.accessToken, currentRefreshToken, newExpiry)
+                return true
+            }
+        } else {
+            Log.e(TAG, "Failed to refresh Google Drive token: ${refreshResult.exceptionOrNull()?.message}")
+        }
+        return false
+    }
 
     private suspend fun ensureValidToken() {
-        if (currentAccessToken.isBlank() && config.refreshToken.isNotBlank()) {
-            val refreshResult = GoogleOAuthManager.refreshAccessToken(config.refreshToken)
-            if (refreshResult.isSuccess) {
-                currentAccessToken = refreshResult.getOrNull()?.accessToken ?: ""
-            }
+        val isExpired = currentExpiryEpochMs > 0L && System.currentTimeMillis() >= (currentExpiryEpochMs - 60_000L)
+        if ((currentAccessToken.isBlank() || isExpired) && currentRefreshToken.isNotBlank()) {
+            refreshAndPersistToken()
         }
     }
 
-    private fun addAuth(builder: Request.Builder): Request.Builder {
-        if (currentAccessToken.isNotEmpty()) {
-            builder.header("Authorization", "Bearer $currentAccessToken")
+    private suspend fun executeWithAuth(requestFactory: (token: String) -> Request): Response {
+        ensureValidToken()
+        val initialRequest = requestFactory(currentAccessToken)
+        var response = httpClient.newCall(initialRequest).execute()
+
+        if (response.code == 401 && currentRefreshToken.isNotBlank()) {
+            response.close()
+            Log.i(TAG, "Google Drive returned HTTP 401 Unauthorized. Attempting token refresh & retry...")
+            val refreshed = refreshAndPersistToken()
+            if (refreshed) {
+                val retryRequest = requestFactory(currentAccessToken)
+                response = httpClient.newCall(retryRequest).execute()
+            }
         }
-        return builder
+        return response
     }
 
     override suspend fun testConnection(): Result<Boolean> = withContext(Dispatchers.IO) {
@@ -66,28 +106,12 @@ class GoogleDriveProvider(
             if (currentAccessToken.isEmpty()) {
                 error("Google Drive OAuth2 Access Token is missing. Please authorize or configure token.")
             }
-            // Use files.list endpoint with pageSize=1, which is fully supported under drive.file scope
-            val request = addAuth(
+            val response = executeWithAuth { token ->
                 Request.Builder()
                     .url("$DRIVE_API_BASE/files?pageSize=1&fields=files(id)")
+                    .header("Authorization", "Bearer $token")
                     .get()
-            ).build()
-
-            var response = httpClient.newCall(request).execute()
-
-            // If token expired (401), attempt to refresh once and retry
-            if (response.code == 401 && config.refreshToken.isNotBlank()) {
-                response.close()
-                val refreshResult = GoogleOAuthManager.refreshAccessToken(config.refreshToken)
-                if (refreshResult.isSuccess) {
-                    currentAccessToken = refreshResult.getOrNull()?.accessToken ?: ""
-                    val retryRequest = addAuth(
-                        Request.Builder()
-                            .url("$DRIVE_API_BASE/files?pageSize=1&fields=files(id)")
-                            .get()
-                    ).build()
-                    response = httpClient.newCall(retryRequest).execute()
-                }
+                    .build()
             }
 
             response.use { resp ->
@@ -121,12 +145,18 @@ class GoogleDriveProvider(
             val query = "'$folderId' in parents and trashed = false"
             val url = "$DRIVE_API_BASE/files?q=${java.net.URLEncoder.encode(query, "UTF-8")}&fields=files(id,name,mimeType,size,modifiedTime,md5Checksum)&pageSize=1000"
 
-            val request = addAuth(Request.Builder().url(url).get()).build()
-            httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    error("Failed to list files: HTTP ${response.code} ${response.message}")
+            val response = executeWithAuth { token ->
+                Request.Builder()
+                    .url(url)
+                    .header("Authorization", "Bearer $token")
+                    .get()
+                    .build()
+            }
+            response.use { resp ->
+                if (!resp.isSuccessful) {
+                    error("Failed to list files: HTTP ${resp.code} ${resp.message}")
                 }
-                val body = response.body?.string() ?: "{}"
+                val body = resp.body?.string() ?: "{}"
                 val json = JSONObject(body)
                 val filesArray = json.optJSONArray("files") ?: return@runCatching emptyList()
 
@@ -201,7 +231,7 @@ class GoogleDriveProvider(
             val existingFileId = findFileIdInFolder(parentFolderId, fileName)
             val totalBytes = localFile.length()
 
-            val fileProgressBody = object : RequestBody() {
+            fun createProgressBody() = object : RequestBody() {
                 override fun contentType() = "application/octet-stream".toMediaTypeOrNull()
                 override fun contentLength() = totalBytes
 
@@ -222,10 +252,16 @@ class GoogleDriveProvider(
             if (existingFileId != null) {
                 // Update content
                 val uploadUrl = "$DRIVE_UPLOAD_BASE/files/$existingFileId?uploadType=media"
-                val request = addAuth(Request.Builder().url(uploadUrl).patch(fileProgressBody)).build()
-                httpClient.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        error("Google Drive update failed: HTTP ${response.code} ${response.message}")
+                val response = executeWithAuth { token ->
+                    Request.Builder()
+                        .url(uploadUrl)
+                        .header("Authorization", "Bearer $token")
+                        .patch(createProgressBody())
+                        .build()
+                }
+                response.use { resp ->
+                    if (!resp.isSuccessful) {
+                        error("Google Drive update failed: HTTP ${resp.code} ${resp.message}")
                     }
                 }
             } else {
@@ -235,17 +271,22 @@ class GoogleDriveProvider(
                     .put("parents", org.json.JSONArray().put(parentFolderId))
                     .toString()
 
-                val multipartBody = MultipartBody.Builder()
-                    .setType(MultipartBody.FORM)
-                    .addFormDataPart("metadata", null, RequestBody.create("application/json; charset=UTF-8".toMediaTypeOrNull(), metadataJson))
-                    .addFormDataPart("file", fileName, fileProgressBody)
-                    .build()
-
                 val uploadUrl = "$DRIVE_UPLOAD_BASE/files?uploadType=multipart"
-                val request = addAuth(Request.Builder().url(uploadUrl).post(multipartBody)).build()
-                httpClient.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful && response.code != 200 && response.code != 201) {
-                        error("Google Drive upload failed: HTTP ${response.code} ${response.message}")
+                val response = executeWithAuth { token ->
+                    val multipartBody = MultipartBody.Builder()
+                        .setType(MultipartBody.FORM)
+                        .addFormDataPart("metadata", null, RequestBody.create("application/json; charset=UTF-8".toMediaTypeOrNull(), metadataJson))
+                        .addFormDataPart("file", fileName, createProgressBody())
+                        .build()
+                    Request.Builder()
+                        .url(uploadUrl)
+                        .header("Authorization", "Bearer $token")
+                        .post(multipartBody)
+                        .build()
+                }
+                response.use { resp ->
+                    if (!resp.isSuccessful && resp.code != 200 && resp.code != 201) {
+                        error("Google Drive upload failed: HTTP ${resp.code} ${resp.message}")
                     }
                 }
             }
@@ -271,13 +312,19 @@ class GoogleDriveProvider(
 
             val fileId = findFileIdInFolder(parentFolderId, fileName) ?: error("File not found on Google Drive: $remotePath")
             val downloadUrl = "$DRIVE_API_BASE/files/$fileId?alt=media"
-            val request = addAuth(Request.Builder().url(downloadUrl).get()).build()
+            val response = executeWithAuth { token ->
+                Request.Builder()
+                    .url(downloadUrl)
+                    .header("Authorization", "Bearer $token")
+                    .get()
+                    .build()
+            }
 
-            httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    error("Google Drive download failed: HTTP ${response.code} ${response.message}")
+            response.use { resp ->
+                if (!resp.isSuccessful) {
+                    error("Google Drive download failed: HTTP ${resp.code} ${resp.message}")
                 }
-                val body = response.body ?: error("Empty response body")
+                val body = resp.body ?: error("Empty response body")
                 val totalBytes = body.contentLength()
                 val tempFile = File(destinationFile.parentFile, "${destinationFile.name}.download.tmp")
 
@@ -309,10 +356,16 @@ class GoogleDriveProvider(
             val parentFolderId = if (parentPath.isNotEmpty()) resolveFolderId(parentPath, false) ?: return@runCatching else "root"
             val fileId = findFileIdInFolder(parentFolderId, fileName) ?: return@runCatching
 
-            val request = addAuth(Request.Builder().url("$DRIVE_API_BASE/files/$fileId").delete()).build()
-            httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful && response.code != 404) {
-                    error("Failed to delete file on Google Drive: HTTP ${response.code}")
+            val response = executeWithAuth { token ->
+                Request.Builder()
+                    .url("$DRIVE_API_BASE/files/$fileId")
+                    .header("Authorization", "Bearer $token")
+                    .delete()
+                    .build()
+            }
+            response.use { resp ->
+                if (!resp.isSuccessful && resp.code != 404) {
+                    error("Failed to delete file on Google Drive: HTTP ${resp.code}")
                 }
             }
         }
@@ -322,7 +375,7 @@ class GoogleDriveProvider(
         folderIdCache.clear()
     }
 
-    private fun resolveFolderId(path: String, createIfMissing: Boolean): String? {
+    private suspend fun resolveFolderId(path: String, createIfMissing: Boolean): String? {
         val cleanPath = path.trim('/').replace('\\', '/')
         if (cleanPath.isEmpty() || cleanPath == "root") return "root"
 
@@ -356,15 +409,21 @@ class GoogleDriveProvider(
         return currentParentId
     }
 
-    private fun findFolderIdInParent(parentId: String, folderName: String): String? {
+    private suspend fun findFolderIdInParent(parentId: String, folderName: String): String? {
         val query = "'$parentId' in parents and name = '$folderName' and mimeType = '$FOLDER_MIME_TYPE' and trashed = false"
         val url = "$DRIVE_API_BASE/files?q=${java.net.URLEncoder.encode(query, "UTF-8")}&fields=files(id)&pageSize=1"
-        val request = addAuth(Request.Builder().url(url).get()).build()
 
         return try {
-            httpClient.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    val body = response.body?.string() ?: ""
+            val response = executeWithAuth { token ->
+                Request.Builder()
+                    .url(url)
+                    .header("Authorization", "Bearer $token")
+                    .get()
+                    .build()
+            }
+            response.use { resp ->
+                if (resp.isSuccessful) {
+                    val body = resp.body?.string() ?: ""
                     val json = JSONObject(body)
                     val files = json.optJSONArray("files")
                     if (files != null && files.length() > 0) {
@@ -377,26 +436,27 @@ class GoogleDriveProvider(
         }
     }
 
-    private fun createFolderInParent(parentId: String, folderName: String): String? {
+    private suspend fun createFolderInParent(parentId: String, folderName: String): String? {
         val meta = JSONObject()
             .put("name", folderName)
             .put("mimeType", FOLDER_MIME_TYPE)
             .put("parents", org.json.JSONArray().put(parentId))
             .toString()
 
-        val request = addAuth(
-            Request.Builder()
-                .url("$DRIVE_API_BASE/files")
-                .post(RequestBody.create("application/json; charset=UTF-8".toMediaTypeOrNull(), meta))
-        ).build()
-
         return try {
-            httpClient.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    val json = JSONObject(response.body?.string() ?: "")
+            val response = executeWithAuth { token ->
+                Request.Builder()
+                    .url("$DRIVE_API_BASE/files")
+                    .header("Authorization", "Bearer $token")
+                    .post(RequestBody.create("application/json; charset=UTF-8".toMediaTypeOrNull(), meta))
+                    .build()
+            }
+            response.use { resp ->
+                if (resp.isSuccessful) {
+                    val json = JSONObject(resp.body?.string() ?: "")
                     json.getString("id")
                 } else {
-                    Log.e(TAG, "Failed to create folder $folderName: HTTP ${response.code}")
+                    Log.e(TAG, "Failed to create folder $folderName: HTTP ${resp.code}")
                     null
                 }
             }
@@ -406,15 +466,21 @@ class GoogleDriveProvider(
         }
     }
 
-    private fun findFileIdInFolder(parentId: String, fileName: String): String? {
+    private suspend fun findFileIdInFolder(parentId: String, fileName: String): String? {
         val query = "'$parentId' in parents and name = '$fileName' and trashed = false"
         val url = "$DRIVE_API_BASE/files?q=${java.net.URLEncoder.encode(query, "UTF-8")}&fields=files(id)&pageSize=1"
-        val request = addAuth(Request.Builder().url(url).get()).build()
 
         return try {
-            httpClient.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    val json = JSONObject(response.body?.string() ?: "")
+            val response = executeWithAuth { token ->
+                Request.Builder()
+                    .url(url)
+                    .header("Authorization", "Bearer $token")
+                    .get()
+                    .build()
+            }
+            response.use { resp ->
+                if (resp.isSuccessful) {
+                    val json = JSONObject(resp.body?.string() ?: "")
                     val files = json.optJSONArray("files")
                     if (files != null && files.length() > 0) {
                         files.getJSONObject(0).getString("id")
