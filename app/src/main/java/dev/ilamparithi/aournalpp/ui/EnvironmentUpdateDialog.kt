@@ -90,17 +90,21 @@ fun EnvironmentUpdateDialog(
     val isWideScreen = configuration.screenWidthDp >= 520 || configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     var showDetails by remember { mutableStateOf(false) }
 
-    // Smooth continuous linear timeout draining animation for the circle
+    val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
     val continuousProgress = remember { Animatable(if (countdownSeconds > 0) countdownSeconds / 10f else 0f) }
-    LaunchedEffect(countdownSeconds > 0) {
+    LaunchedEffect(countdownSeconds > 0, reduceMotion) {
         if (countdownSeconds > 0) {
-            continuousProgress.animateTo(
-                targetValue = 0f,
-                animationSpec = tween(
-                    durationMillis = countdownSeconds * 1000,
-                    easing = LinearEasing
+            if (reduceMotion) {
+                continuousProgress.snapTo(countdownSeconds / 10f)
+            } else {
+                continuousProgress.animateTo(
+                    targetValue = 0f,
+                    animationSpec = tween(
+                        durationMillis = countdownSeconds * 1000,
+                        easing = LinearEasing
+                    )
                 )
-            )
+            }
         }
     }
 
@@ -288,8 +292,8 @@ fun EnvironmentUpdateDialog(
 
                         AnimatedVisibility(
                             visible = showDetails,
-                            enter = expandVertically(),
-                            exit = shrinkVertically()
+                            enter = if (reduceMotion) androidx.compose.animation.EnterTransition.None else expandVertically(),
+                            exit = if (reduceMotion) androidx.compose.animation.ExitTransition.None else shrinkVertically()
                         ) {
                             Surface(
                                 modifier = Modifier

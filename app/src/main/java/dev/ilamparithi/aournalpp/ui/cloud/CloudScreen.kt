@@ -269,10 +269,7 @@ fun CloudScreen(
     val queueItems by FileTransferQueueManager.items.collectAsStateWithLifecycle()
     val activeTransfers = queueItems.filter { it.status == TransferStatus.IN_PROGRESS || it.status == TransferStatus.QUEUED }
 
-    val reduceAnimations = remember {
-        context.getSharedPreferences("${context.packageName}_preferences", android.content.Context.MODE_PRIVATE)
-            .getBoolean(LinuxEnvironment.PREF_KEY_REDUCE_ANIMATIONS, false)
-    }
+    val reduceAnimations = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
 
     // FAB Speed Dial States
     var isFabExpanded by remember { mutableStateOf(false) }

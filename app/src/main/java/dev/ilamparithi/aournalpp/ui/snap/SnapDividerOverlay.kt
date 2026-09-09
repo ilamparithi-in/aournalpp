@@ -84,9 +84,10 @@ fun SnapDividerOverlay(
                 }
             }
 
+            val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
             val animatedAlpha by animateFloatAsState(
                 targetValue = if (isDragging || isResetAnimating) 1.0f else if (isHovered) 0.85f else 0.0f,
-                animationSpec = tween(durationMillis = 200),
+                animationSpec = if (reduceMotion) androidx.compose.animation.core.snap() else tween(durationMillis = 200),
                 label = "handleAlpha_${div.id}"
             )
 
@@ -118,16 +119,23 @@ fun SnapDividerOverlay(
                                     }
                                     coroutineScope.launch {
                                         animRatio.snapTo(currentLiveRatio)
-                                        animRatio.animateTo(
-                                            targetValue = currentDiv.defaultRatio,
-                                            animationSpec = tween(
-                                                durationMillis = 280,
-                                                easing = FastOutSlowInEasing
-                                            )
-                                        ) {
-                                            currentLiveRatio = value
-                                            rawDragRatio = value
-                                            currentOnUpdateRatio(currentDiv.id, value)
+                                        if (reduceMotion) {
+                                            animRatio.snapTo(currentDiv.defaultRatio)
+                                            currentLiveRatio = currentDiv.defaultRatio
+                                            rawDragRatio = currentDiv.defaultRatio
+                                            currentOnUpdateRatio(currentDiv.id, currentDiv.defaultRatio)
+                                        } else {
+                                            animRatio.animateTo(
+                                                targetValue = currentDiv.defaultRatio,
+                                                animationSpec = tween(
+                                                    durationMillis = 280,
+                                                    easing = FastOutSlowInEasing
+                                                )
+                                            ) {
+                                                currentLiveRatio = value
+                                                rawDragRatio = value
+                                                currentOnUpdateRatio(currentDiv.id, value)
+                                            }
                                         }
                                         isResetAnimating = false
                                         currentOnDragEnd()
@@ -228,16 +236,23 @@ fun SnapDividerOverlay(
                                     }
                                     coroutineScope.launch {
                                         animRatio.snapTo(currentLiveRatio)
-                                        animRatio.animateTo(
-                                            targetValue = currentDiv.defaultRatio,
-                                            animationSpec = tween(
-                                                durationMillis = 280,
-                                                easing = FastOutSlowInEasing
-                                            )
-                                        ) {
-                                            currentLiveRatio = value
-                                            rawDragRatio = value
-                                            currentOnUpdateRatio(currentDiv.id, value)
+                                        if (reduceMotion) {
+                                            animRatio.snapTo(currentDiv.defaultRatio)
+                                            currentLiveRatio = currentDiv.defaultRatio
+                                            rawDragRatio = currentDiv.defaultRatio
+                                            currentOnUpdateRatio(currentDiv.id, currentDiv.defaultRatio)
+                                        } else {
+                                            animRatio.animateTo(
+                                                targetValue = currentDiv.defaultRatio,
+                                                animationSpec = tween(
+                                                    durationMillis = 280,
+                                                    easing = FastOutSlowInEasing
+                                                )
+                                            ) {
+                                                currentLiveRatio = value
+                                                rawDragRatio = value
+                                                currentOnUpdateRatio(currentDiv.id, value)
+                                            }
                                         }
                                         isResetAnimating = false
                                         currentOnDragEnd()

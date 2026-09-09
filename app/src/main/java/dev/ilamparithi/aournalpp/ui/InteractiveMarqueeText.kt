@@ -73,6 +73,7 @@ fun InteractiveMarqueeText(
 
     var containerWidthPx by remember { mutableIntStateOf(0) }
     val animOffset = remember { Animatable(0f) }
+    val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
 
     val startMarqueeSequence = {
         val textWidth = if (actualTextWidthPx >= 0) {
@@ -90,7 +91,7 @@ fun InteractiveMarqueeText(
 
         val effectiveContainerWidth = if (containerWidthPx > 0) containerWidthPx else textWidth
         val maxScrollPx = (textWidth - effectiveContainerWidth).coerceAtLeast(0)
-        if (maxScrollPx > 0) {
+        if (maxScrollPx > 0 && !reduceMotion) {
             isInteracted = true
             animJob?.cancel()
             animJob = coroutineScope.launch {

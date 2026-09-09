@@ -36,9 +36,12 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
@@ -454,18 +457,23 @@ class CanvasActivity : ComponentActivity() {
                 var isSwitchTransitionActive by remember { mutableStateOf(false) }
                 var transitionSequence by remember { mutableIntStateOf(0) }
 
-                val activeWindow = remember(openWindows) {
-                    openWindows.find { it.isActive }
+                val activeWindow by remember {
+                    derivedStateOf { openWindows.find { it.isActive } }
                 }
-                val currentDisplayWindow = remember(openWindows, activeWindow, isSwitchTransitionActive, transitionTargetWindow) {
-                    if (isSwitchTransitionActive && transitionTargetWindow != null) {
-                        transitionTargetWindow
-                    } else {
-                        activeWindow
+                val currentDisplayWindow by remember {
+                    derivedStateOf {
+                        if (isSwitchTransitionActive && transitionTargetWindow != null) {
+                            transitionTargetWindow
+                        } else {
+                            activeWindow
+                        }
                     }
                 }
-                val activeWindowIndex = remember(openWindows, currentDisplayWindow) {
-                    if (currentDisplayWindow != null) openWindows.indexOfFirst { it.id == currentDisplayWindow.id }.coerceAtLeast(0) else 0
+                val activeWindowIndex by remember {
+                    derivedStateOf {
+                        val current = currentDisplayWindow
+                        if (current != null) openWindows.indexOfFirst { it.id == current.id }.coerceAtLeast(0) else 0
+                    }
                 }
 
                 androidx.compose.runtime.LaunchedEffect(liveTitle) {
@@ -494,8 +502,9 @@ class CanvasActivity : ComponentActivity() {
                     targetPath?.let { File(it).nameWithoutExtension } ?: (initialTitle ?: "New Note")
                 }
                 val displayTitle = remember(openWindows, currentDisplayWindow, liveTitle, activePromptTitle, alwaysShowFileName, openPreferences, baseDocumentName, initialTitle) {
+                    val currentWin = currentDisplayWindow
                     val raw = when {
-                        currentDisplayWindow != null && currentDisplayWindow.title.isNotBlank() && currentDisplayWindow.title != "Xournal++" -> currentDisplayWindow.title
+                        currentWin != null && currentWin.title.isNotBlank() && currentWin.title != "Xournal++" -> currentWin.title
                         !liveTitle.isNullOrBlank() && liveTitle != "Xournal++" -> liveTitle!!
                         openPreferences && (liveTitle == null || liveTitle?.removePrefix("*")?.trim() == "New Note" || liveTitle?.removePrefix("*")?.trim() == "Unsaved Document") -> "Preferences"
                         else -> initialTitle ?: "New Note"
@@ -917,6 +926,28 @@ class CanvasActivity : ComponentActivity() {
                         }
                     }
 
+                    // Evict and recycle previews for closed windows
+                    for (closedId in closedIds) {
+                        val bmp = windowPreviewCache.remove(closedId)
+                        if (bmp != null && !bmp.isRecycled) {
+                            bmp.recycle()
+                        }
+                    }
+
+                    // Cap preview cache to 8 entries
+                    while (windowPreviewCache.size > 8) {
+                        val oldest = windowMruList.lastOrNull { it in windowPreviewCache.keys }
+                            ?: windowPreviewCache.keys.firstOrNull()
+                        if (oldest != null) {
+                            val bmp = windowPreviewCache.remove(oldest)
+                            if (bmp != null && !bmp.isRecycled) {
+                                bmp.recycle()
+                            }
+                        } else {
+                            break
+                        }
+                    }
+
                     val needsDegradation = openWindows.isNotEmpty() &&
                         activeSnapMode != SnapLayoutMode.SINGLE &&
                         activeSnapMode != SnapLayoutMode.UNLOCKED &&
@@ -1008,9 +1039,10 @@ class CanvasActivity : ComponentActivity() {
                         // Debounced window resize & preview synchronization
                         // Ensures active and background window previews match new window size without thrashing during active divider drag
                         LaunchedEffect(canvasWidthPx, canvasHeightPx, activeWindow?.id, isSwitchTransitionActive) {
-                            if (activeWindow != null && !isSwitchTransitionActive && !showSnapAssistHost && !showWindowSwitcherGallery && canvasWidthPx > 0 && canvasHeightPx > 0) {
+                            val curActive = activeWindow
+                            if (curActive != null && !isSwitchTransitionActive && !showSnapAssistHost && !showWindowSwitcherGallery && canvasWidthPx > 0 && canvasHeightPx > 0) {
                                 delay(300)
-                                val currentId = activeWindow.id
+                                val currentId = curActive.id
                                 val view = activeLorieView
                                 if (view != null && view.width > 0 && view.height > 0) {
                                     captureCurrentWindowPreview { freshBmp ->
@@ -1143,6 +1175,8 @@ class CanvasActivity : ComponentActivity() {
                                         onTransitionFinished = {
                                             isSwitchTransitionActive = false
                                             transitionTargetWindow = null
+                                            transitionOutgoingBitmap = null
+                                            transitionIncomingBitmap = null
                                             lifecycleScope.launch {
                                                 kotlinx.coroutines.delay(150)
                                                 captureCurrentWindowPreview { bmp ->
@@ -1906,7 +1940,7 @@ class CanvasActivity : ComponentActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 if (sessionManager.isModalOrDialogOpen()) {
-                    withContext(Dispatchers.Main) {
+                    withContext(Dispatchers.Main.immediate) {
                         Toast.makeText(this@CanvasActivity, "Close open dialogs before inserting image", Toast.LENGTH_SHORT).show()
                     }
                     return@launch
@@ -1973,20 +2007,20 @@ class CanvasActivity : ComponentActivity() {
                 }
 
                 if (pngBytes.isNotEmpty()) {
-                    withContext(Dispatchers.Main) {
+                    withContext(Dispatchers.Main.immediate) {
                         // Isolated in-memory X11 clipboard push: does NOT touch host Android clipboard!
                         activeLorieView?.stageClipboardImage(pngBytes)
                         injectKeyboardShortcut(KeyEvent.KEYCODE_V, "ctrl+v")
                         Toast.makeText(this@CanvasActivity, "Image inserted", Toast.LENGTH_SHORT).show()
                     }
                 } else {
-                    withContext(Dispatchers.Main) {
+                    withContext(Dispatchers.Main.immediate) {
                         Toast.makeText(this@CanvasActivity, "Failed to read image data", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
                 Log.e("CanvasActivity", "Failed to process image URI", e)
-                withContext(Dispatchers.Main) {
+                withContext(Dispatchers.Main.immediate) {
                     Toast.makeText(this@CanvasActivity, "Failed to insert image: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -1997,7 +2031,7 @@ class CanvasActivity : ComponentActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 if (sessionManager.isModalOrDialogOpen()) {
-                    withContext(Dispatchers.Main) {
+                    withContext(Dispatchers.Main.immediate) {
                         Toast.makeText(this@CanvasActivity, "Close open dialogs before inserting image", Toast.LENGTH_SHORT).show()
                     }
                     return@launch
@@ -2042,7 +2076,7 @@ class CanvasActivity : ComponentActivity() {
                     val pngBytes = baos.toByteArray()
                     finalBitmap.recycle()
 
-                    withContext(Dispatchers.Main) {
+                    withContext(Dispatchers.Main.immediate) {
                         // Isolated in-memory X11 clipboard push: does NOT touch host Android clipboard!
                         activeLorieView?.stageClipboardImage(pngBytes)
                         injectKeyboardShortcut(KeyEvent.KEYCODE_V, "ctrl+v")
@@ -2051,7 +2085,7 @@ class CanvasActivity : ComponentActivity() {
                 }
             } catch (e: Exception) {
                 Log.e("CanvasActivity", "Failed to process captured camera photo", e)
-                withContext(Dispatchers.Main) {
+                withContext(Dispatchers.Main.immediate) {
                     Toast.makeText(this@CanvasActivity, "Failed to insert photo: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -2379,7 +2413,7 @@ private fun FloatingToolbarOverlay(
 
     val animatedTitleWidthDp by animateDpAsState(
         targetValue = targetTitleWidthDp,
-        animationSpec = spring(
+        animationSpec = dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springDp(
             dampingRatio = SpringSlideTransition.SLIDE_DAMPING,
             stiffness = SpringSlideTransition.SLIDE_STIFFNESS
         ),
@@ -2474,15 +2508,22 @@ private fun FloatingToolbarOverlay(
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
             tonalElevation = 6.dp
         ) {
+            val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
             AnimatedContent(
                 targetState = isHeaderExpanded,
                 transitionSpec = {
-                    fadeIn(animationSpec = tween(durationMillis = 180, easing = M3MorphEasing)) togetherWith
-                    fadeOut(animationSpec = tween(durationMillis = 120, easing = M3MorphEasing)) using
-                    SizeTransform(
-                        clip = true,
-                        sizeAnimationSpec = { _, _ -> tween(durationMillis = 300, easing = M3MorphEasing) }
-                    )
+                    if (reduceMotion) {
+                        fadeIn(animationSpec = snap()) togetherWith
+                            fadeOut(animationSpec = snap()) using
+                            SizeTransform(clip = true, sizeAnimationSpec = { _, _ -> snap() })
+                    } else {
+                        fadeIn(animationSpec = tween(durationMillis = 180, easing = M3MorphEasing)) togetherWith
+                            fadeOut(animationSpec = tween(durationMillis = 120, easing = M3MorphEasing)) using
+                            SizeTransform(
+                                clip = true,
+                                sizeAnimationSpec = { _, _ -> tween(durationMillis = 300, easing = M3MorphEasing) }
+                            )
+                    }
                 },
                 contentAlignment = Alignment.Center,
                 label = "HeaderMorphTransition"
@@ -2621,6 +2662,7 @@ private fun FloatingToolbarOverlay(
                             if (showTitle) {
                                 val cleanDisplayTitle = remember(displayTitle) { displayTitle.removePrefix("*").trim() }
                                 val isDirty = displayTitle.startsWith("*")
+                                val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
                                 Box(
                                     modifier = Modifier.width(animatedTitleWidthDp),
                                     contentAlignment = Alignment.Center
@@ -2629,7 +2671,7 @@ private fun FloatingToolbarOverlay(
                                         targetState = Triple(cleanDisplayTitle, windowIcon, windowIndex),
                                         transitionSpec = {
                                             val isForward = targetState.third >= initialState.third
-                                            SpringSlideTransition.createSpec<Triple<String, ImageVector, Int>>(isForward = isForward)(this)
+                                            SpringSlideTransition.createSpec<Triple<String, ImageVector, Int>>(isForward = isForward, reduceAnimations = reduceMotion)(this)
                                         },
                                         label = "windowTitleSwitchTransition"
                                     ) { (currentCleanTitle, currentIcon, _) ->
@@ -2681,9 +2723,10 @@ private fun FloatingToolbarOverlay(
                                 val spacing = 2.dp
                                 val padding = 2.dp
 
+                                val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
                                 val indicatorOffset by animateDpAsState(
                                     targetValue = (itemWidth + spacing) * selectedIndex,
-                                    animationSpec = tween(durationMillis = 240, easing = M3MorphEasing),
+                                    animationSpec = if (reduceMotion) snap() else tween(durationMillis = 240, easing = M3MorphEasing),
                                     label = "StylusIndicatorOffset"
                                 )
 
@@ -2714,7 +2757,7 @@ private fun FloatingToolbarOverlay(
                                                 val isSelected = stylusClickMode == modeValue
                                                 val textColor by animateColorAsState(
                                                     targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    animationSpec = tween(durationMillis = 240, easing = M3MorphEasing),
+                                                    animationSpec = dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springColor(),
                                                     label = "StylusTextColor"
                                                 )
 
@@ -2748,12 +2791,12 @@ private fun FloatingToolbarOverlay(
                             if (showTouchStylus) {
                                 val activeBgColor by animateColorAsState(
                                     targetValue = if (isFingerAsStylus) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                    animationSpec = tween(durationMillis = 240, easing = M3MorphEasing),
+                                    animationSpec = dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springColor(),
                                     label = "TouchStylusBgColor"
                                 )
                                 val activeIconColor by animateColorAsState(
                                     targetValue = if (isFingerAsStylus) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    animationSpec = tween(durationMillis = 240, easing = M3MorphEasing),
+                                    animationSpec = dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springColor(),
                                     label = "TouchStylusIconColor"
                                 )
 
@@ -2876,12 +2919,12 @@ private fun FloatingToolbarOverlay(
                             if (showKeyboard) {
                                 val activeBgColor by animateColorAsState(
                                     targetValue = if (isKeyboardOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                    animationSpec = tween(durationMillis = 240, easing = M3MorphEasing),
+                                    animationSpec = dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springColor(),
                                     label = "KeyboardBgColor"
                                 )
                                 val activeIconColor by animateColorAsState(
                                     targetValue = if (isKeyboardOpen) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    animationSpec = tween(durationMillis = 240, easing = M3MorphEasing),
+                                    animationSpec = dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springColor(),
                                     label = "KeyboardIconColor"
                                 )
 
@@ -2916,8 +2959,8 @@ private fun FloatingToolbarOverlay(
                             // Animated Reset Position Button
                             AnimatedVisibility(
                                 visible = isMovedFromDefault,
-                                enter = fadeIn() + scaleIn(initialScale = 0.6f),
-                                exit = fadeOut() + scaleOut(targetScale = 0.6f)
+                                enter = if (reduceMotion) EnterTransition.None else (fadeIn() + scaleIn(initialScale = 0.6f)),
+                                exit = if (reduceMotion) ExitTransition.None else (fadeOut() + scaleOut(targetScale = 0.6f))
                             ) {
                                 IconButton(
                                     onClick = {
@@ -2965,13 +3008,17 @@ private fun FloatingToolbarOverlay(
 
                                         coroutineScope.launch {
                                             animPixelOffset.snapTo(Offset(startDeltaX, startDeltaY))
-                                            animPixelOffset.animateTo(
-                                                targetValue = Offset.Zero,
-                                                animationSpec = spring(
-                                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                    stiffness = Spring.StiffnessMediumLow
+                                            if (reduceMotion) {
+                                                animPixelOffset.snapTo(Offset.Zero)
+                                            } else {
+                                                animPixelOffset.animateTo(
+                                                    targetValue = Offset.Zero,
+                                                    animationSpec = spring(
+                                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                        stiffness = Spring.StiffnessMediumLow
+                                                    )
                                                 )
-                                            )
+                                            }
                                         }
                                     },
                                     modifier = Modifier.size(36.dp)
@@ -3132,6 +3179,7 @@ private fun FloatingToolbarOverlay(
                         if (showTitle) {
                             val cleanDisplayTitle = remember(displayTitle) { displayTitle.removePrefix("*").trim() }
                             val isDirty = displayTitle.startsWith("*")
+                            val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
                             Box(
                                 contentAlignment = Alignment.Center
                             ) {
@@ -3139,7 +3187,7 @@ private fun FloatingToolbarOverlay(
                                     targetState = Triple(cleanDisplayTitle, windowIcon, windowIndex),
                                     transitionSpec = {
                                         val isForward = targetState.third >= initialState.third
-                                        SpringSlideTransition.createSpec<Triple<String, ImageVector, Int>>(isForward = isForward)(this)
+                                        SpringSlideTransition.createSpec<Triple<String, ImageVector, Int>>(isForward = isForward, reduceAnimations = reduceMotion)(this)
                                     },
                                     label = "collapsedWindowTitleSwitchTransition"
                                 ) { (currentCleanTitle, currentIcon, _) ->

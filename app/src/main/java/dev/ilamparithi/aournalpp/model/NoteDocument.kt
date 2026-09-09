@@ -113,44 +113,8 @@ data class NoteDocument(
             else -> NoteFileType.XOPP
         }
 
-    val fuzzyLastModified: String
-        get() = try {
-            val now = System.currentTimeMillis()
-            val diff = now - lastModifiedMs
-            if (diff in 0L..59_999L) {
-                "Just now"
-            } else {
-                android.text.format.DateUtils.getRelativeTimeSpanString(
-                    lastModifiedMs,
-                    now,
-                    android.text.format.DateUtils.MINUTE_IN_MILLIS,
-                    android.text.format.DateUtils.FORMAT_ABBREV_RELATIVE
-                ).toString()
-            }
-        } catch (e: Exception) {
-            lastModifiedFormatted
-        }
-
-    val fuzzyLastOpened: String?
-        get() {
-            val opened = lastOpenedMs ?: return null
-            return try {
-                val now = System.currentTimeMillis()
-                val diff = now - opened
-                if (diff in 0L..59_999L) {
-                    "Just now"
-                } else {
-                    android.text.format.DateUtils.getRelativeTimeSpanString(
-                        opened,
-                        now,
-                        android.text.format.DateUtils.MINUTE_IN_MILLIS,
-                        android.text.format.DateUtils.FORMAT_ABBREV_RELATIVE
-                    ).toString()
-                }
-            } catch (e: Exception) {
-                null
-            }
-        }
+    val fuzzyLastModified: String = formatFuzzyTime(lastModifiedMs, lastModifiedFormatted)
+    val fuzzyLastOpened: String? = lastOpenedMs?.let { formatFuzzyTime(it, null) }
 
     val fullFormattedDateTime: String
         get() = try {
@@ -169,3 +133,23 @@ data class NoteDocument(
             }
         }
 }
+
+private fun formatFuzzyTime(timestampMs: Long, fallback: String?): String {
+    return try {
+        val now = System.currentTimeMillis()
+        val diff = now - timestampMs
+        if (diff in 0L..59_999L) {
+            "Just now"
+        } else {
+            android.text.format.DateUtils.getRelativeTimeSpanString(
+                timestampMs,
+                now,
+                android.text.format.DateUtils.MINUTE_IN_MILLIS,
+                android.text.format.DateUtils.FORMAT_ABBREV_RELATIVE
+            ).toString()
+        }
+    } catch (_: Exception) {
+        fallback ?: ""
+    }
+}
+

@@ -109,8 +109,7 @@ fun BootstrapScreen(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
-    val aournalPrefs = remember { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
-    val reduceAnimations = remember { aournalPrefs.getBoolean(LinuxEnvironment.PREF_KEY_REDUCE_ANIMATIONS, false) }
+    val reduceAnimations = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
 
     // Intercept back button during checking, extraction or bootstrap error
     BackHandler(enabled = true) {

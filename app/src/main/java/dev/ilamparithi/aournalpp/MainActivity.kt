@@ -403,8 +403,7 @@ enum class AppTab(
 @Composable
 fun MainResponsiveAppShell() {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val aournalPrefs = remember { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
-    val reduceAnimations = remember { aournalPrefs.getBoolean(LinuxEnvironment.PREF_KEY_REDUCE_ANIMATIONS, false) }
+    val reduceAnimations = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
 
     var selectedTab by rememberSaveable { mutableIntStateOf(AppTab.HOME.id) }
     val saveableStateHolder = rememberSaveableStateHolder()
@@ -629,8 +628,8 @@ fun MainResponsiveAppShell() {
 
     androidx.compose.animation.AnimatedVisibility(
         visible = isClosingSession,
-        enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(300)),
-        exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(300))
+        enter = if (reduceAnimations) androidx.compose.animation.EnterTransition.None else androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(300)),
+        exit = if (reduceAnimations) androidx.compose.animation.ExitTransition.None else androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(300))
     ) {
         dev.ilamparithi.aournalpp.ui.SessionClosingScreen(
             documentTitle = isCanvasSessionActive?.documentTitle

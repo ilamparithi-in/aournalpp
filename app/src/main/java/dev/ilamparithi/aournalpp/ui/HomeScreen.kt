@@ -479,7 +479,7 @@ fun HomeScreen(
         }
     }
 
-    val reduceAnimations = remember { prefs.getBoolean(LinuxEnvironment.PREF_KEY_REDUCE_ANIMATIONS, false) }
+    val reduceAnimations = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
 
     // FAB Rotation Animation
     val fabRotation by animateFloatAsState(

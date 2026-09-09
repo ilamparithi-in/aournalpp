@@ -16,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -73,6 +74,18 @@ object ThumbnailManager {
     /** Fast in-memory cache for path hashes to avoid repeated SHA calculations. */
     private val pathHashCache = ConcurrentHashMap<String, String>()
 
+    private val sanitizeRegex = Regex("[^a-zA-Z0-9._-]")
+
+    private val sha256Digest = ThreadLocal.withInitial {
+        try {
+            java.security.MessageDigest.getInstance("SHA-256")
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private val bgScope = CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+
     @Suppress("DEPRECATION")
     private val webpCompressFormat: Bitmap.CompressFormat =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -84,15 +97,26 @@ object ThumbnailManager {
     internal fun cacheKeyFor(noteFile: File, lastModifiedMs: Long = 0L): String {
         val path = noteFile.path
         val pathHash = pathHashCache.getOrPut(path) {
-            try {
-                val md = java.security.MessageDigest.getInstance("SHA-256")
-                val digest = md.digest(path.toByteArray(Charsets.UTF_8))
-                digest.take(8).joinToString("") { "%02x".format(it) }
-            } catch (_: Exception) {
+            val md = sha256Digest.get()
+            if (md != null) {
+                try {
+                    md.reset()
+                    val digest = md.digest(path.toByteArray(Charsets.UTF_8))
+                    val sb = StringBuilder(16)
+                    for (i in 0 until 8) {
+                        val b = digest[i].toInt() and 0xFF
+                        if (b < 16) sb.append('0')
+                        sb.append(Integer.toHexString(b))
+                    }
+                    sb.toString()
+                } catch (_: Exception) {
+                    path.hashCode().toUInt().toString(16)
+                }
+            } else {
                 path.hashCode().toUInt().toString(16)
             }
         }
-        val cleanName = noteFile.name.replace(Regex("[^a-zA-Z0-9._-]"), "_").take(32)
+        val cleanName = noteFile.name.replace(sanitizeRegex, "_").take(32)
         val modTime = if (lastModifiedMs > 0L) lastModifiedMs else try { noteFile.lastModified() } catch (_: Exception) { 0L }
         return "thumb_${cleanName}_${pathHash}_${modTime}.webp"
     }
@@ -119,59 +143,57 @@ object ThumbnailManager {
 
         if (!noteFile.exists() || noteFile.length() == 0L) return@withContext null
 
-        // Deduplicate in-flight render requests
-        val inFlight = inFlightJobs[cacheKey]
-        if (inFlight != null) {
-            return@withContext inFlight.await()
-        }
+        val deferred = synchronized(inFlightJobs) {
+            inFlightJobs.getOrPut(cacheKey) {
+                async(renderDispatcher) {
+                    try {
+                        // 1. Check if thumbnail is already cached on disk
+                        val thumbDir = File(context.cacheDir, "thumbnails").apply { if (!exists()) mkdirs() }
+                        val cachedFile = File(thumbDir, cacheKey)
 
-        val deferred = async(renderDispatcher) {
-            try {
-                // 1. Check if thumbnail is already cached on disk
-                val thumbDir = File(context.cacheDir, "thumbnails").apply { if (!exists()) mkdirs() }
-                val cachedFile = File(thumbDir, cacheKey)
-
-                if (cachedFile.exists() && cachedFile.length() > 0) {
-                    resolved[cacheKey] = cachedFile
-                    val bitmap = decodeBitmapFromFile(cachedFile)
-                    if (bitmap != null) {
-                        val image = bitmap.asImageBitmap()
-                        decoded.put(cacheKey, image)
-                        return@async image
-                    }
-                }
-
-                // 2. Render thumbnail
-                val renderedBitmap = renderThumbnailBitmap(context, noteFile, pdfExportManager)
-                if (renderedBitmap != null) {
-                    // Save to disk cache asynchronously without blocking reader threads
-                    val lock = fileLocks.getOrPut(cacheKey) { Mutex() }
-                    lock.withLock {
-                        if (!cachedFile.exists() || cachedFile.length() == 0L) {
-                            try {
-                                FileOutputStream(cachedFile).use { out ->
-                                    renderedBitmap.compress(webpCompressFormat, 85, out)
-                                }
-                                resolved[cacheKey] = cachedFile
-                                scheduleAsyncTrim(thumbDir)
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Failed to save thumbnail to disk for ${noteFile.name}", e)
+                        if (cachedFile.exists() && cachedFile.length() > 0) {
+                            resolved[cacheKey] = cachedFile
+                            val bitmap = decodeBitmapFromFile(cachedFile)
+                            if (bitmap != null) {
+                                val image = bitmap.asImageBitmap()
+                                decoded.put(cacheKey, image)
+                                return@async image
                             }
                         }
+
+                        // 2. Render thumbnail
+                        val renderedBitmap = renderThumbnailBitmap(context, noteFile, pdfExportManager)
+                        if (renderedBitmap != null) {
+                            val lock = fileLocks.getOrPut(cacheKey) { Mutex() }
+                            lock.withLock {
+                                if (!cachedFile.exists() || cachedFile.length() == 0L) {
+                                    try {
+                                        FileOutputStream(cachedFile).use { out ->
+                                            renderedBitmap.compress(webpCompressFormat, 85, out)
+                                        }
+                                        resolved[cacheKey] = cachedFile
+                                        scheduleAsyncTrim(thumbDir)
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "Failed to save thumbnail to disk for ${noteFile.name}", e)
+                                    }
+                                }
+                            }
+
+                            val image = renderedBitmap.asImageBitmap()
+                            decoded.put(cacheKey, image)
+                            return@async image
+                        }
+
+                        null
+                    } finally {
+                        synchronized(inFlightJobs) {
+                            inFlightJobs.remove(cacheKey)
+                        }
                     }
-
-                    val image = renderedBitmap.asImageBitmap()
-                    decoded.put(cacheKey, image)
-                    return@async image
                 }
-
-                null
-            } finally {
-                inFlightJobs.remove(cacheKey)
             }
         }
 
-        inFlightJobs[cacheKey] = deferred
         deferred.await()
     }
 
@@ -302,21 +324,24 @@ object ThumbnailManager {
     ) {
         if (notes.isEmpty()) return
         scope.launch(renderDispatcher) {
-            for (note in notes) {
+            val uncached = notes.filter { note ->
                 val cacheKey = cacheKeyFor(note.file, note.lastModifiedMs)
-                if (decoded[cacheKey] == null) {
+                decoded[cacheKey] == null
+            }
+            uncached.map { note ->
+                async {
                     try {
                         getOrCreateThumbnailBitmap(context, note.file, pdfExportManager, note.lastModifiedMs)
                     } catch (_: Exception) {}
                 }
-            }
+            }.awaitAll()
         }
     }
 
     private fun scheduleAsyncTrim(thumbDir: File) {
         if (writesSinceLastTrim.incrementAndGet() >= 25) {
             writesSinceLastTrim.set(0)
-            CoroutineScope(Dispatchers.IO).launch {
+            bgScope.launch {
                 trimCache(thumbDir)
             }
         }

@@ -100,8 +100,12 @@ fun WindowSwitchTransitionOverlay(
             modifier = Modifier.fillMaxSize()
         )
 
+        val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
         transition.AnimatedContent(
-            transitionSpec = SpringSlideTransition.createSpec(isForward = isForward),
+            transitionSpec = SpringSlideTransition.createSpec(
+                isForward = isForward,
+                reduceAnimations = reduceMotion
+            ),
             contentKey = { it },
             modifier = Modifier.fillMaxSize()
         ) { targetStep ->

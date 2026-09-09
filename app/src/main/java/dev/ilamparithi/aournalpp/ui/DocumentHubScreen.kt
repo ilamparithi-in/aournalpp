@@ -428,8 +428,7 @@ fun DocumentHubScreen(
     var pendingBatchExportFormat by remember { mutableStateOf<dev.ilamparithi.aournalpp.data.DocumentRepository.ShareExportFormat?>(null) }
     var pendingBatchExportDocs by remember { mutableStateOf<List<NoteDocument>>(emptyList()) }
 
-    val aournalPrefs = remember { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
-    val reduceAnimations = remember { aournalPrefs.getBoolean(LinuxEnvironment.PREF_KEY_REDUCE_ANIMATIONS, false) }
+    val reduceAnimations = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
 
     // Speed Dial FAB State
     var isFabExpanded by remember { mutableStateOf(false) }
@@ -527,14 +526,17 @@ fun DocumentHubScreen(
             folders = fList
             notes = nList
 
-            if (currentDirectory.canonicalPath == repository.getRootNotesDirectory().canonicalPath) {
+            if (repository.isRootNotesDirectory(currentDirectory)) {
                 recentNotes = repository.getAllRecentNotes(10)
             }
 
             ThumbnailManager.prefetchThumbnails(context, nList, pdfExportManager, scope)
 
-            val emergencyFile = withContext(Dispatchers.IO) { env.checkAndQuarantineEmergencySave() }
-            if (emergencyFile != null && emergencyFile.exists() && emergencyFile.length() > 0) {
+            val emergencyFile = withContext(Dispatchers.IO) {
+                val f = env.checkAndQuarantineEmergencySave()
+                if (f != null && f.exists() && f.length() > 0) f else null
+            }
+            if (emergencyFile != null) {
                 if (quarantinedEmergencySave == null && !showEmergencySaveNameDialog) {
                     quarantinedEmergencySave = emergencyFile
                     showEmergencyDialog = true

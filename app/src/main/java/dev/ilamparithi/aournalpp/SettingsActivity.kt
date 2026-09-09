@@ -257,10 +257,14 @@ fun SettingsNavigationHost(onFinish: () -> Unit) {
         }
     }
 
+    val reduceAnimations = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
     AnimatedContent(
         targetState = currentSubpage,
         transitionSpec = {
-            if (targetState.ordinal > initialState.ordinal) {
+            if (reduceAnimations) {
+                androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(120)) togetherWith
+                    androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(100))
+            } else if (targetState.ordinal > initialState.ordinal) {
                 slideInHorizontally { width -> width } togetherWith slideOutHorizontally { width -> -width }
             } else {
                 slideInHorizontally { width -> -width } togetherWith slideOutHorizontally { width -> width }

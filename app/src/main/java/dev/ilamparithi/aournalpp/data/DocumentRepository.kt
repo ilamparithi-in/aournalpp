@@ -14,6 +14,7 @@ import dev.ilamparithi.aournalpp.runtime.PdfExportManager
 import dev.ilamparithi.aournalpp.R
 import dev.ilamparithi.aournalpp.utils.FormatUtils
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
@@ -43,7 +44,9 @@ class DocumentRepository(private val context: Context) {
         @Volatile private var cachedContinueNote: NoteDocument? = null
         @Volatile private var cachedTotalNotesCount: Int? = null
         @Volatile private var cachedTotalFoldersCount: Int? = null
+        private val repoScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
         @Volatile private var cachedPinnedNotes: List<String>? = null
+        @Volatile private var cachedPinnedNotesSet: Set<String>? = null
         @Volatile private var cachedPinnedFolders: List<String>? = null
         @Volatile private var cachedUnpinnedSpecialRoles: Set<String>? = null
         @Volatile private var cachedOpenedNotesHistory: List<String>? = null
@@ -58,6 +61,7 @@ class DocumentRepository(private val context: Context) {
             cachedTotalNotesCount = null
             cachedTotalFoldersCount = null
             cachedPinnedNotes = null
+            cachedPinnedNotesSet = null
             cachedPinnedFolders = null
             cachedUnpinnedSpecialRoles = null
             cachedOpenedNotesHistory = null
@@ -105,6 +109,11 @@ class DocumentRepository(private val context: Context) {
 
     fun getRootNotesDirectory(): File = env.getNotesDirectory()
 
+    fun isRootNotesDirectory(dir: File): Boolean {
+        val path = dir.absolutePath
+        return path == rootNotesDirAbsolutePath
+    }
+
     fun getTrashDirectory(): File = File(env.getNotesDirectory(), TRASH_DIR_NAME).apply {
         if (!exists()) mkdirs()
     }
@@ -150,6 +159,7 @@ class DocumentRepository(private val context: Context) {
                 emptyList()
             }
             cachedPinnedNotes = list
+            cachedPinnedNotesSet = list.toSet()
         }
 
         return if (strictlyWithinRoot) {
@@ -160,8 +170,13 @@ class DocumentRepository(private val context: Context) {
     }
 
     fun isNotePinned(path: String): Boolean {
-        val pinned = getPinnedNotePaths()
-        return pinned.contains(path)
+        var set = cachedPinnedNotesSet
+        if (set == null) {
+            val list = getPinnedNotePaths()
+            set = list.toSet()
+            cachedPinnedNotesSet = set
+        }
+        return set.contains(path)
     }
 
     fun pinNote(path: String) {
@@ -347,6 +362,7 @@ class DocumentRepository(private val context: Context) {
         val pinnedPaths: Set<String> by lazy { getPinnedNotePaths().toSet() }
         val pinnedFolderOrder: List<String> by lazy { getPinnedFolderPaths() }
         val pinnedFolderPaths: Set<String> by lazy { pinnedFolderOrder.toSet() }
+        val pinnedFolderOrderMap: Map<String, Int> by lazy { pinnedFolderOrder.withIndex().associate { it.value to it.index } }
         val unpinnedSpecialRoles: Set<String> by lazy { getUnpinnedSpecialRoles() }
         val openedTimestamps: Map<String, Long> by lazy { getOpenedNotesTimestamps() }
 
@@ -373,9 +389,31 @@ class DocumentRepository(private val context: Context) {
         val cache = ScanCache()
         val trimmedQuery = query.trim()
 
+        // Single-pass partitioning of target directory entries
+        val directories = mutableListOf<File>()
+        val mainFiles = mutableListOf<File>()
+        val hiddenOrBackupFiles = if (showHidden) mutableListOf<File>() else null
+        val fileMapByName = HashMap<String, File>(allFiles.size)
+
+        for (f in allFiles) {
+            if (f.isDirectory) {
+                if (f.name != TRASH_DIR_NAME) {
+                    directories.add(f)
+                }
+            } else if (f.isFile) {
+                fileMapByName[f.name] = f
+                val name = f.name
+                val isHiddenOrBackup = name.startsWith(".") || name.endsWith("~") || name.contains(".autosave.", ignoreCase = true)
+                if (!isHiddenOrBackup && isOpenableFile(f)) {
+                    mainFiles.add(f)
+                } else if (showHidden && isHiddenOrBackup && isOpenableCandidate(f)) {
+                    hiddenOrBackupFiles?.add(f)
+                }
+            }
+        }
+
         // 1. Scan Subfolders
         val folderItems = mutableListOf<FolderItem>()
-        val directories = allFiles.filter { it.isDirectory && it.name != TRASH_DIR_NAME }
 
         for (dir in directories) {
             val isHidden = dir.name.startsWith(".")
@@ -390,9 +428,9 @@ class DocumentRepository(private val context: Context) {
             val role = meta.role
             val isUserPinned = cache.pinnedFolderPaths.contains(dir.absolutePath)
             val isVirtuallyPinned = role != null && DEFAULT_VIRTUALLY_PINNED_ROLES.contains(role.lowercase()) && !cache.unpinnedSpecialRoles.contains(role.lowercase()) && !isUserPinned
-            val itemCount = dir.listFiles()?.count { file ->
-                file.isFile && isOpenableFile(file) && !file.name.startsWith(".")
-            } ?: 0
+            val itemCount = dir.list { _, name ->
+                !name.startsWith(".") && (name.endsWith(".xopp", ignoreCase = true) || name.endsWith(".xoj", ignoreCase = true) || name.endsWith(".pdf", ignoreCase = true))
+            }?.size ?: 0
 
             folderItems.add(
                 FolderItem(
@@ -417,23 +455,6 @@ class DocumentRepository(private val context: Context) {
         val seenMainPaths = mutableSetOf<String>()
         val resultNotes = mutableListOf<NoteDocument>()
         val matchedAutosavePaths = mutableSetOf<String>()
-
-        // Index non-directory files for fast O(1) in-memory autosave matching without disk syscalls
-        val fileMapByName = HashMap<String, File>(allFiles.size)
-        for (f in allFiles) {
-            if (f.isFile) {
-                fileMapByName[f.name] = f
-            }
-        }
-
-        // 2a. Gather normal, non-hidden openable files (.xopp, .xoj, .pdf)
-        val mainFiles = allFiles.filter { file ->
-            file.isFile &&
-            isOpenableFile(file) &&
-            !file.name.startsWith(".") &&
-            !file.name.endsWith("~") &&
-            !file.name.contains(".autosave.", ignoreCase = true)
-        }
 
         val isRoot = cache.isRoot(targetDir)
         val targetFolderMeta = if (!isRoot) cache.folderMeta(targetDir) else FolderMetaData()
@@ -480,13 +501,7 @@ class DocumentRepository(private val context: Context) {
         }
 
         // 2b. If showHidden is true, include hidden/backup files that are strictly openable by Xournal++
-        if (showHidden) {
-            val hiddenOrBackupFiles = allFiles.filter { file ->
-                file.isFile &&
-                (file.name.startsWith(".") || file.name.endsWith("~") || file.name.contains(".autosave.", ignoreCase = true)) &&
-                isOpenableCandidate(file)
-            }
-
+        if (showHidden && hiddenOrBackupFiles != null) {
             for (file in hiddenOrBackupFiles) {
                 val path = file.absolutePath
                 if (matchedAutosavePaths.contains(path) || seenMainPaths.contains(path)) continue
@@ -521,12 +536,12 @@ class DocumentRepository(private val context: Context) {
         // 2. Virtually pinned special folders in alphabetical order
         // 3. Regular unpinned folders in alphabetical order
         val sortedFolders = folderItems.sortedWith { a, b ->
-            val aUserPinned = cache.pinnedFolderPaths.contains(a.file.absolutePath)
-            val bUserPinned = cache.pinnedFolderPaths.contains(b.file.absolutePath)
+            val aUserPinned = a.isPinned
+            val bUserPinned = b.isPinned
             when {
                 aUserPinned && bUserPinned -> {
-                    val aIndex = cache.pinnedFolderOrder.indexOf(a.file.absolutePath)
-                    val bIndex = cache.pinnedFolderOrder.indexOf(b.file.absolutePath)
+                    val aIndex = cache.pinnedFolderOrderMap[a.file.absolutePath] ?: Int.MAX_VALUE
+                    val bIndex = cache.pinnedFolderOrderMap[b.file.absolutePath] ?: Int.MAX_VALUE
                     aIndex.compareTo(bIndex)
                 }
                 aUserPinned -> -1
@@ -1838,25 +1853,31 @@ class DocumentRepository(private val context: Context) {
         timestampsMap[path] = now
         cachedOpenedNotesTimestamps = timestampsMap
 
-        val jsonArray = org.json.JSONArray()
-        trimmed.forEach { jsonArray.put(it) }
+        repoScope.launch {
+            try {
+                val jsonArray = org.json.JSONArray()
+                trimmed.forEach { jsonArray.put(it) }
 
-        val timestampsObj = org.json.JSONObject()
-        timestampsMap.forEach { (k, v) -> timestampsObj.put(k, v) }
+                val timestampsObj = org.json.JSONObject()
+                timestampsMap.forEach { (k, v) -> timestampsObj.put(k, v) }
 
-        prefs.edit()
-            .putString("pref_opened_notes_history_json", jsonArray.toString())
-            .putString("pref_opened_notes_timestamps_json", timestampsObj.toString())
-            .putString("pref_last_opened_note_path", path)
-            .apply()
+                prefs.edit()
+                    .putString("pref_opened_notes_history_json", jsonArray.toString())
+                    .putString("pref_opened_notes_timestamps_json", timestampsObj.toString())
+                    .putString("pref_last_opened_note_path", path)
+                    .apply()
 
-        try {
-            context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
-                .edit()
-                .putString("pref_last_opened_note_path", path)
-                .apply()
-        } catch (e: Exception) {
-            // ignore
+                try {
+                    context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+                        .edit()
+                        .putString("pref_last_opened_note_path", path)
+                        .apply()
+                } catch (_: Exception) {
+                    // ignore
+                }
+            } catch (_: Exception) {
+                // ignore
+            }
         }
     }
 

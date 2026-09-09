@@ -53,32 +53,36 @@ fun ExpressiveHeroSpinner(
     iconTint: Color = MaterialTheme.colorScheme.onPrimary
 ) {
     val context = LocalContext.current
-    val aournalPrefs = remember { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
-    val reduceAnimations = remember { aournalPrefs.getBoolean(LinuxEnvironment.PREF_KEY_REDUCE_ANIMATIONS, false) }
+    val reduceAnimations = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
 
-    val infiniteTransition = rememberInfiniteTransition(label = "expressiveHeroSpinnerTransition")
-
-    val animatedRotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 24000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "expressiveSpinnerRotation"
-    )
-    val rotation = if (reduceAnimations) 0f else animatedRotation
-
-    val animatedPulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.92f,
-        targetValue = 1.08f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "expressiveSpinnerPulse"
-    )
-    val pulseScale = if (reduceAnimations) 1f else animatedPulseScale
+    val rotation: Float
+    val pulseScale: Float
+    if (reduceAnimations) {
+        rotation = 0f
+        pulseScale = 1f
+    } else {
+        val infiniteTransition = rememberInfiniteTransition(label = "expressiveHeroSpinnerTransition")
+        val animatedRotation by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 24000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "expressiveSpinnerRotation"
+        )
+        val animatedPulseScale by infiniteTransition.animateFloat(
+            initialValue = 0.92f,
+            targetValue = 1.08f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 2200, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "expressiveSpinnerPulse"
+        )
+        rotation = animatedRotation
+        pulseScale = animatedPulseScale
+    }
 
     Box(
         modifier = modifier.size(size),

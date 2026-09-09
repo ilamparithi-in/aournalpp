@@ -60,37 +60,48 @@ fun SessionClosingScreen(
     // Intercept back button during closing to ensure graceful shutdown
     BackHandler(enabled = true) { /* no-op */ }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "ClosingHeroAnimations")
+    val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
+    val rotation: Float
+    val counterRotation: Float
+    val pulseScale: Float
 
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(12000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "HeroRotation"
-    )
-
-    val counterRotation by infiniteTransition.animateFloat(
-        initialValue = 360f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(8000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "HeroCounterRotation"
-    )
-
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.92f,
-        targetValue = 1.08f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "HeroPulse"
-    )
+    if (reduceMotion) {
+        rotation = 0f
+        counterRotation = 0f
+        pulseScale = 1f
+    } else {
+        val infiniteTransition = rememberInfiniteTransition(label = "ClosingHeroAnimations")
+        val r by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(12000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "HeroRotation"
+        )
+        val cr by infiniteTransition.animateFloat(
+            initialValue = 360f,
+            targetValue = 0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(8000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "HeroCounterRotation"
+        )
+        val ps by infiniteTransition.animateFloat(
+            initialValue = 0.92f,
+            targetValue = 1.08f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1400, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "HeroPulse"
+        )
+        rotation = r
+        counterRotation = cr
+        pulseScale = ps
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),

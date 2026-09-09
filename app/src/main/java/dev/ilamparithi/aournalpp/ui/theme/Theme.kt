@@ -132,7 +132,10 @@ fun AournalTheme(
     }
 
     MaterialTheme(
-        colorScheme = colorScheme,
-        content = content
-    )
+        colorScheme = colorScheme
+    ) {
+        dev.ilamparithi.aournalpp.ui.animation.ProvideMotionPreferences {
+            content()
+        }
+    }
 }

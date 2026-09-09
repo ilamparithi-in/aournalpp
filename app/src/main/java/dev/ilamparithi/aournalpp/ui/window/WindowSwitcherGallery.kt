@@ -102,11 +102,16 @@ fun WindowSwitcherGallery(
     val config = LocalConfiguration.current
     val isLandscape = config.screenWidthDp > config.screenHeightDp
 
+    val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
     LaunchedEffect(Unit) {
-        morphProgress.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(durationMillis = 320, easing = M3MorphEasing)
-        )
+        if (reduceMotion) {
+            morphProgress.snapTo(1f)
+        } else {
+            morphProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 320, easing = M3MorphEasing)
+            )
+        }
     }
 
     Box(
@@ -386,10 +391,12 @@ fun WindowPreviewCard(
                     val isCloseHovered by closeInteractionSource.collectIsHoveredAsState()
                     val closeBgColor by animateColorAsState(
                         targetValue = if (isCloseHovered) Color(0xFFD32F2F) else Color.Transparent,
+                        animationSpec = dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springColor(),
                         label = "closeHoverBg"
                     )
                     val closeIconTint by animateColorAsState(
                         targetValue = if (isCloseHovered) Color.White else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        animationSpec = dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springColor(),
                         label = "closeHoverTint"
                     )
 

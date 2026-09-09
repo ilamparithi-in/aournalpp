@@ -28,6 +28,7 @@ class CredentialsVault(context: Context) {
         private const val KEY_ACTIVE_SERVICE_ID = "active_service_id"
         private const val KEY_EXCLUSION_FILTER = "exclusion_filter_json"
         private const val KEY_PENDING_DELETIONS = "pending_deleted_service_ids"
+        private val vaultScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
     }
 
     private val masterKey = MasterKey.Builder(context)
@@ -141,7 +142,7 @@ class CredentialsVault(context: Context) {
         // 2. Delete Room database metadata
         try {
             val syncDb = dev.ilamparithi.aournalpp.backup.db.SyncDatabase.getInstance(context)
-            CoroutineScope(Dispatchers.IO).launch {
+            vaultScope.launch {
                 syncDb.syncMetadataDao().deleteAllForService(serviceId)
             }
         } catch (e: Exception) {
