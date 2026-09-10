@@ -19,8 +19,12 @@ object AppPreferences {
     fun getGeneral(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS_GENERAL, Context.MODE_PRIVATE)
 
+    fun getGeneralPrefs(context: Context): SharedPreferences = getGeneral(context)
+
     fun getDocumentHub(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS_DOCUMENT_HUB, Context.MODE_PRIVATE)
+
+    fun getDocumentHubPrefs(context: Context): SharedPreferences = getDocumentHub(context)
 
     fun getX11(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS_X11, Context.MODE_PRIVATE)
