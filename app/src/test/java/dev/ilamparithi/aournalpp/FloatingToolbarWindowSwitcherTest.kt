@@ -214,6 +214,28 @@ class FloatingToolbarWindowSwitcherTest {
     }
 
     @Test
+    fun testSpringSlideTransitionDirectionalOffsets() {
+        val width = 900
+        val offsetFraction = 3
+
+        // Forward transition (e.g. Home -> Files):
+        // Incoming page enters from right (+width/3 -> 0)
+        // Outgoing page exits to left (0 -> -width/3)
+        val forwardInitial = dev.ilamparithi.aournalpp.ui.animation.SpringSlideTransition.calculateInitialOffsetX(width, isForward = true, offsetFraction)
+        val forwardTarget = dev.ilamparithi.aournalpp.ui.animation.SpringSlideTransition.calculateTargetOffsetX(width, isForward = true, offsetFraction)
+        assertEquals(300, forwardInitial)
+        assertEquals(-300, forwardTarget)
+
+        // Backward transition (e.g. Files -> Home):
+        // Incoming page enters from left (-width/3 -> 0)
+        // Outgoing page exits to right (0 -> +width/3)
+        val backwardInitial = dev.ilamparithi.aournalpp.ui.animation.SpringSlideTransition.calculateInitialOffsetX(width, isForward = false, offsetFraction)
+        val backwardTarget = dev.ilamparithi.aournalpp.ui.animation.SpringSlideTransition.calculateTargetOffsetX(width, isForward = false, offsetFraction)
+        assertEquals(-300, backwardInitial)
+        assertEquals(300, backwardTarget)
+    }
+
+    @Test
     fun testRapidWindowSwitchingTargetIndexTracking() {
         // When user rapidly spams Alt+Tab while transition is active,
         // target calculation must advance from the transitioning target window, not the stale active window

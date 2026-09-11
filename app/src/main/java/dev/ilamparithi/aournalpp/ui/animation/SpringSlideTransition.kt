@@ -26,6 +26,16 @@ object SpringSlideTransition {
     const val FADE_DAMPING = 0.9f
     const val FADE_STIFFNESS = 400f
 
+    fun calculateInitialOffsetX(width: Int, isForward: Boolean, offsetFraction: Int = DEFAULT_OFFSET_FRACTION): Int {
+        val enterOffset = if (isForward) 1 else -1
+        return (width / offsetFraction) * enterOffset
+    }
+
+    fun calculateTargetOffsetX(width: Int, isForward: Boolean, offsetFraction: Int = DEFAULT_OFFSET_FRACTION): Int {
+        val exitOffset = if (isForward) -1 else 1
+        return (width / offsetFraction) * exitOffset
+    }
+
     fun <T> createSpec(
         isForward: Boolean,
         reduceAnimations: Boolean = false,
@@ -35,15 +45,12 @@ object SpringSlideTransition {
             fadeIn(animationSpec = tween(120))
                 .togetherWith(fadeOut(animationSpec = tween(100)))
         } else {
-            val enterOffset = if (isForward) 1 else -1
-            val exitOffset = if (isForward) -1 else 1
-
             (slideInHorizontally(
                 animationSpec = spring(
                     dampingRatio = SLIDE_DAMPING,
                     stiffness = SLIDE_STIFFNESS
                 ),
-                initialOffsetX = { (it / offsetFraction) * enterOffset }
+                initialOffsetX = { calculateInitialOffsetX(it, isForward, offsetFraction) }
             ) + fadeIn(
                 animationSpec = spring(
                     dampingRatio = FADE_DAMPING,
@@ -56,7 +63,7 @@ object SpringSlideTransition {
                             dampingRatio = SLIDE_DAMPING,
                             stiffness = SLIDE_STIFFNESS
                         ),
-                        targetOffsetX = { -(it / offsetFraction) * exitOffset }
+                        targetOffsetX = { calculateTargetOffsetX(it, isForward, offsetFraction) }
                     ) + fadeOut(
                         animationSpec = spring(
                             dampingRatio = FADE_DAMPING,
