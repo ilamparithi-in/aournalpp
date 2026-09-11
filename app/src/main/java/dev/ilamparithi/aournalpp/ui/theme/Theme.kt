@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import dev.ilamparithi.aournalpp.data.AppPreferences
 
 private val LightColors = lightColorScheme(
     primary = md_theme_light_primary,
@@ -83,7 +84,7 @@ private val DarkColors = darkColorScheme(
 @Composable
 fun rememberAppDarkTheme(context: Context = LocalContext.current): Boolean {
     val systemInDark = isSystemInDarkTheme()
-    val prefs = remember(context) { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
+    val prefs = remember(context) { AppPreferences.getGeneral(context) }
     var currentSetting by remember {
         mutableStateOf(prefs.getString("pref_app_theme", "system") ?: "system")
     }

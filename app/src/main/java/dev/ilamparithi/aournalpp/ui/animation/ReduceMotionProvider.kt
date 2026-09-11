@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import dev.ilamparithi.aournalpp.data.AppPreferences
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 
 @Stable
@@ -24,7 +25,7 @@ val LocalMotionPreferences = compositionLocalOf { MotionPreferences(reduceAnimat
 @Composable
 fun ProvideMotionPreferences(content: @Composable () -> Unit) {
     val context = LocalContext.current
-    val prefs = remember(context) { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
+    val prefs = remember(context) { AppPreferences.getGeneral(context) }
     var reduce by remember {
         mutableStateOf(prefs.getBoolean(LinuxEnvironment.PREF_KEY_REDUCE_ANIMATIONS, false))
     }

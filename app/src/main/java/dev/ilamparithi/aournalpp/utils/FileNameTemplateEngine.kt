@@ -244,7 +244,7 @@ object FileNameTemplateEngine {
      * Helper to get configured template from SharedPreferences.
      */
     fun getTemplate(context: Context, key: String, default: String): String {
-        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        val prefs = dev.ilamparithi.aournalpp.data.AppPreferences.getGeneral(context)
         return prefs.getString(key, default) ?: default
     }
 
@@ -252,7 +252,7 @@ object FileNameTemplateEngine {
      * Helper to save configured template into SharedPreferences.
      */
     fun setTemplate(context: Context, key: String, template: String) {
-        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        val prefs = dev.ilamparithi.aournalpp.data.AppPreferences.getGeneral(context)
         prefs.edit().putString(key, template).apply()
     }
 }
