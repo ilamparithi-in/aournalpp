@@ -543,6 +543,7 @@ def main():
     os.makedirs(os.path.join(staging_usr, "etc", "fonts"), exist_ok=True)
     os.makedirs(os.path.join(staging_usr, "tmp"), exist_ok=True)
     os.makedirs(os.path.join(staging_usr, "var", "cache", "fontconfig"), exist_ok=True)
+    os.makedirs(os.path.join(staging_usr, "var", "data"), exist_ok=True)
 
     fonts_conf_path = os.path.join(staging_usr, "etc", "fonts", "fonts.conf")
     with open(fonts_conf_path, "w") as f:

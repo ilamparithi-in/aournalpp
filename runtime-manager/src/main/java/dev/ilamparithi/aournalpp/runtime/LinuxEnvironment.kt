@@ -52,6 +52,8 @@ class LinuxEnvironment(private val context: Context) {
     val configDir: File = File(homeDir, ".config")
     val xournalConfigDir: File = File(configDir, "xournalpp")
     val openboxConfigDir: File = File(configDir, "openbox")
+    val cacheDir: File = File(usrDir, "var/cache")
+    val dataHomeDir: File = File(usrDir, "var/data")
     val nativeLibDir: File
         get() = File(context.applicationInfo.nativeLibraryDir)
 
@@ -460,7 +462,8 @@ class LinuxEnvironment(private val context: Context) {
 
     fun ensureDirectoryTree() {
         val dirs = listOf(
-            rootDir, usrDir, binDir, libDir, shareDir, tmpDir, homeDir, configDir, xournalConfigDir, openboxConfigDir
+            rootDir, usrDir, binDir, libDir, shareDir, tmpDir, homeDir, configDir, xournalConfigDir, openboxConfigDir,
+            cacheDir, dataHomeDir
         )
         dirs.forEach {
             if (!it.exists()) {
@@ -521,6 +524,7 @@ class LinuxEnvironment(private val context: Context) {
         if (!compiledSchema.exists() && compileSchemasBin.exists() && schemasDir.exists()) {
             try {
                 val pb = ProcessBuilder(compileSchemasBin.absolutePath, schemasDir.absolutePath)
+                    .directory(homeDir)
                     .redirectErrorStream(true)
                 pb.environment().putAll(getEnvMap())
                 val p = pb.start()
@@ -543,6 +547,7 @@ class LinuxEnvironment(private val context: Context) {
                     val cmd = mutableListOf(queryLoadersBin.absolutePath)
                     loaderFiles.forEach { cmd.add(it.absolutePath) }
                     val pb = ProcessBuilder(cmd)
+                        .directory(homeDir)
                         .redirectOutput(loadersCache)
                     pb.environment().putAll(getEnvMap())
                     val p = pb.start()
@@ -1229,6 +1234,9 @@ class LinuxEnvironment(private val context: Context) {
             "GDK_PIXBUF_MODULEDIR" to "${libDir.absolutePath}/gdk-pixbuf-2.0/2.10.0/loaders",
             "FONTCONFIG_PATH" to "${usrDir.absolutePath}/etc/fonts",
             "FONTCONFIG_FILE" to "${usrDir.absolutePath}/etc/fonts/fonts.conf",
+            "FONTCONFIG_CACHE" to "${cacheDir.absolutePath}/fontconfig",
+            "XDG_CACHE_HOME" to cacheDir.absolutePath,
+            "XDG_DATA_HOME" to dataHomeDir.absolutePath,
             "TMPDIR" to tmpDir.absolutePath,
             "XDG_RUNTIME_DIR" to tmpDir.absolutePath,
             "MESA_SHADER_CACHE_DIR" to tmpDir.absolutePath,
