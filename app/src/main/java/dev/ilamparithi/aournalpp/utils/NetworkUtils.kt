@@ -62,4 +62,55 @@ object NetworkUtils {
         }
         return NetworkCheckResult.ONLINE
     }
+
+    /**
+     * Checks whether an exception is caused by a transient network/DNS issue (device offline, DNS resolving, timeout)
+     * rather than an actual service or authentication error.
+     */
+    fun isTransientNetworkException(throwable: Throwable?): Boolean {
+        if (throwable == null) return false
+        var current: Throwable? = throwable
+        while (current != null) {
+            if (current is java.net.UnknownHostException ||
+                current is java.net.SocketTimeoutException ||
+                current is java.net.ConnectException ||
+                current is java.net.NoRouteToHostException ||
+                current is java.net.PortUnreachableException ||
+                current is javax.net.ssl.SSLHandshakeException
+            ) {
+                return true
+            }
+            val msg = current.message?.lowercase() ?: ""
+            if (msg.contains("unable to resolve host") ||
+                msg.contains("no address associated with hostname") ||
+                msg.contains("network is unreachable") ||
+                msg.contains("connection timed out") ||
+                msg.contains("failed to connect to") ||
+                msg.contains("software caused connection abort") ||
+                msg.contains("connection reset")
+            ) {
+                return true
+            }
+            current = current.cause
+        }
+        return false
+    }
+
+    /**
+     * Checks whether a status message indicates a transient network/DNS disconnection.
+     */
+    fun isTransientNetworkErrorMessage(message: String?): Boolean {
+        if (message.isNullOrBlank()) return false
+        val lower = message.lowercase()
+        return lower.contains("unable to resolve host") ||
+                lower.contains("no address associated with hostname") ||
+                lower.contains("network is unreachable") ||
+                lower.contains("connection timed out") ||
+                lower.contains("failed to connect to") ||
+                lower.contains("connection refused") ||
+                lower.contains("unknownhostexception") ||
+                lower.contains("sockettimeoutexception") ||
+                lower.contains("connectexception")
+    }
 }
+

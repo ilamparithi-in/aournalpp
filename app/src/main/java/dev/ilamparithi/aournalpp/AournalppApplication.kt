@@ -11,7 +11,7 @@ import kotlinx.coroutines.launch
 
 class AournalppApplication : Application() {
 
-    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
@@ -32,5 +32,8 @@ class AournalppApplication : Application() {
     companion object {
         lateinit var instance: AournalppApplication
             private set
+
+        val applicationScope: CoroutineScope
+            get() = instance.applicationScope
     }
 }

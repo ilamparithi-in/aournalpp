@@ -68,8 +68,10 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun OnboardingStoragePermissionPage(
-    isGranted: Boolean,
-    onRequestPermission: () -> Unit,
+    isStorageGranted: Boolean,
+    isNotificationGranted: Boolean = true,
+    onRequestStoragePermission: () -> Unit,
+    onRequestNotificationPermission: () -> Unit = {},
     onContinue: () -> Unit
 ) {
     val context = LocalContext.current
@@ -145,28 +147,26 @@ fun OnboardingStoragePermissionPage(
             modifier = Modifier
                 .size(76.dp)
                 .clip(CircleShape)
-                .background(
-                    if (isGranted) MaterialTheme.colorScheme.primaryContainer
-                    else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-                ),
+                .background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = if (isGranted) Icons.Default.CheckCircle else Icons.Default.Security,
+                imageVector = Icons.Default.FolderShared,
                 contentDescription = null,
-                tint = if (isGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(38.dp)
             )
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(18.dp))
 
         Text(
             text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_storage_title),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            modifier = Modifier.a11yHeading()
         )
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -206,12 +206,12 @@ fun OnboardingStoragePermissionPage(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Status Card
+        // Storage Status Card
         ElevatedCard(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.elevatedCardColors(
-                containerColor = if (isGranted)
+                containerColor = if (isStorageGranted)
                     MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
                 else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
             )
@@ -221,26 +221,68 @@ fun OnboardingStoragePermissionPage(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = if (isGranted) Icons.Default.CheckCircle else Icons.Default.Warning,
+                    imageVector = if (isStorageGranted) Icons.Default.CheckCircle else Icons.Default.Warning,
                     contentDescription = null,
-                    tint = if (isGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = if (isStorageGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(26.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = if (isGranted) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_storage_granted_title)
+                        text = if (isStorageGranted) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_storage_granted_title)
                         else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_storage_required_title),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = if (isGranted) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_storage_granted_desc)
+                        text = if (isStorageGranted) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_storage_granted_desc)
                         else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_storage_required_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            }
+        }
+
+        // Notification Status Card (Android 13+)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            Spacer(modifier = Modifier.height(12.dp))
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.elevatedCardColors(
+                    containerColor = if (isNotificationGranted)
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (isNotificationGranted) Icons.Default.CheckCircle else Icons.Default.NotificationsActive,
+                        contentDescription = null,
+                        tint = if (isNotificationGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(26.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = if (isNotificationGranted) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_notification_granted_title)
+                            else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_notification_title),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = if (isNotificationGranted) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_notification_granted_desc)
+                            else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_notification_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
@@ -252,9 +294,9 @@ fun OnboardingStoragePermissionPage(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            if (!isGranted) {
+            if (!isStorageGranted) {
                 Button(
-                    onClick = onRequestPermission,
+                    onClick = onRequestStoragePermission,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(50.dp),
@@ -275,6 +317,29 @@ fun OnboardingStoragePermissionPage(
                         fontWeight = FontWeight.Bold
                     )
                 }
+            } else if (!isNotificationGranted && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                Button(
+                    onClick = onRequestNotificationPermission,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_grant_notification_permission),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
             FilledTonalButton(
@@ -284,8 +349,9 @@ fun OnboardingStoragePermissionPage(
                     .height(50.dp),
                 shape = RoundedCornerShape(18.dp)
             ) {
+                val allGranted = isStorageGranted && (isNotificationGranted || android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU)
                 Text(
-                    text = if (isGranted) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_continue)
+                    text = if (allGranted) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_continue)
                     else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_continue_anyway),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold

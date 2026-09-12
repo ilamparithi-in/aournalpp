@@ -456,7 +456,9 @@ class CredentialsVault private constructor(context: Context) {
             isCompleteBackupEnabled = obj.optBoolean("isCompleteBackupEnabled", true),
             isEnabled = obj.optBoolean("isEnabled", true),
             lastSyncedAtEpochMs = obj.optLong("lastSyncedAtEpochMs", 0L),
-            lastSyncStatus = obj.optString("lastSyncStatus", "").ifEmpty { null },
+            lastSyncStatus = obj.optString("lastSyncStatus", "").ifEmpty { null }?.let { status ->
+                if (dev.ilamparithi.aournalpp.utils.NetworkUtils.isTransientNetworkErrorMessage(status)) null else status
+            },
             customMappings = mappings
         )
     }

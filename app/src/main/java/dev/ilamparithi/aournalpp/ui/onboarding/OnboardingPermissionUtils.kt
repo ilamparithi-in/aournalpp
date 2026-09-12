@@ -39,13 +39,40 @@ fun launchStoragePermissionSettings(context: Context) {
             context.startActivity(fallback)
         }
     } else {
+        launchAppSettings(context)
+    }
+}
+
+fun launchAppSettings(context: Context) {
+    try {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.parse("package:${context.packageName}")
+        }
+        context.startActivity(intent)
+    } catch (_: Exception) {}
+}
+
+fun checkNotificationPermissionGranted(context: Context): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        ContextCompat.checkSelfPermission(
+            context, Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+    } else {
+        true
+    }
+}
+
+fun launchNotificationSettings(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         try {
-            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.parse("package:${context.packageName}")
+            val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
             }
             context.startActivity(intent)
-        } catch (e: Exception) {
-            // fallback
+        } catch (_: Exception) {
+            launchAppSettings(context)
         }
+    } else {
+        launchAppSettings(context)
     }
 }

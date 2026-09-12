@@ -80,6 +80,7 @@ import dev.ilamparithi.aournalpp.utils.FormatUtils
 import androidx.compose.ui.platform.LocalContext
 import dev.ilamparithi.aournalpp.backup.model.StorageProviderType
 import dev.ilamparithi.aournalpp.backup.security.CredentialsVault
+import dev.ilamparithi.aournalpp.AournalppApplication
 import kotlinx.coroutines.launch
 
 enum class QueueFilter {
@@ -184,7 +185,7 @@ fun TransferQueueSubpage(
                     if (failedCount > 0 && engine != null) {
                         TextButton(
                             onClick = {
-                                coroutineScope.launch {
+                                AournalppApplication.applicationScope.launch {
                                     isRetryingAll = true
                                     try {
                                         if (selectedServiceId != null) {
@@ -231,7 +232,7 @@ fun TransferQueueSubpage(
                     } else if (pausedCount > 0) {
                         IconButton(
                             onClick = {
-                                coroutineScope.launch {
+                                AournalppApplication.applicationScope.launch {
                                     if (selectedServiceId != null) {
                                         val pausedInView = cloudFilteredItems.filter { it.status == TransferStatus.PAUSED }
                                         if (engine != null) {
@@ -458,7 +459,7 @@ fun TransferQueueSubpage(
                             isRetrying = isItemRetrying,
                             onPause = { FileTransferQueueManager.requestPause(item.id) },
                             onResume = {
-                                coroutineScope.launch {
+                                AournalppApplication.applicationScope.launch {
                                     retryingItemIds[item.id] = true
                                     try {
                                         if (engine != null) {
@@ -473,7 +474,7 @@ fun TransferQueueSubpage(
                             },
                             onCancel = { FileTransferQueueManager.requestCancel(item.id) },
                             onRetry = {
-                                coroutineScope.launch {
+                                AournalppApplication.applicationScope.launch {
                                     retryingItemIds[item.id] = true
                                     try {
                                         engine?.retryTransfer(item)

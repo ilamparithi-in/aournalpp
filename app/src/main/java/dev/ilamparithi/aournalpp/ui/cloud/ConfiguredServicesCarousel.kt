@@ -421,7 +421,8 @@ fun CloudServiceCarouselCard(
                     }
 
                     val reauthNeeded = isReauthNeeded(service)
-                    val hasError = !reauthNeeded && (service.lastSyncStatus?.startsWith("Failed") == true || service.lastSyncStatus?.startsWith("Connection failed") == true)
+                    val isTransient = dev.ilamparithi.aournalpp.utils.NetworkUtils.isTransientNetworkErrorMessage(service.lastSyncStatus)
+                    val hasError = !reauthNeeded && !isTransient && (service.lastSyncStatus?.startsWith("Failed") == true || service.lastSyncStatus?.startsWith("Connection failed") == true)
 
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -488,7 +489,8 @@ fun CloudServiceCarouselCard(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     val reauthNeeded = isReauthNeeded(service)
-                    val hasError = !isServiceSyncing && !reauthNeeded && (service.lastSyncStatus?.startsWith("Failed") == true || service.lastSyncStatus?.startsWith("Connection failed") == true)
+                    val isTransient = dev.ilamparithi.aournalpp.utils.NetworkUtils.isTransientNetworkErrorMessage(service.lastSyncStatus)
+                    val hasError = !isServiceSyncing && !reauthNeeded && !isTransient && (service.lastSyncStatus?.startsWith("Failed") == true || service.lastSyncStatus?.startsWith("Connection failed") == true)
                     val footerText = when {
                         isServiceSyncing && activeCount > 0 -> "Syncing ($activeCount remaining)..."
                         isServiceSyncing -> "Syncing..."

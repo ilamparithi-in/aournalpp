@@ -55,9 +55,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Cloud
@@ -224,8 +225,44 @@ fun CloudScreen(
     val mappingRepo = remember { CustomMappingRepository(context) }
 
     var currentSubpage by remember { mutableStateOf(initialSubpage) }
+    LaunchedEffect(initialSubpage) {
+        if (initialSubpage != CloudSubpage.OVERVIEW) {
+            currentSubpage = initialSubpage
+        }
+    }
     var selectedDetailServiceId by remember { mutableStateOf<String?>(null) }
     var showMappingSetsDialog by remember { mutableStateOf(false) }
+
+    var hasNotificationPermission by remember {
+        mutableStateOf(
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                dev.ilamparithi.aournalpp.ui.onboarding.checkNotificationPermissionGranted(context)
+            } else {
+                true
+            }
+        )
+    }
+
+    val notificationLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasNotificationPermission = granted
+    }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    hasNotificationPermission = dev.ilamparithi.aournalpp.ui.onboarding.checkNotificationPermissionGranted(context)
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     val services by vault.servicesFlow.collectAsStateWithLifecycle()
     val pendingDeletedServiceIds by vault.pendingDeletionsFlow.collectAsStateWithLifecycle()
@@ -628,6 +665,59 @@ fun CloudScreen(
                 }
             }
 
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
+                item {
+                    ElevatedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.elevatedCardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.NotificationsActive,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.onboarding_notification_title),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = stringResource(R.string.permission_notification_missing_desc),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(
+                                onClick = {
+                                    notificationLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    stringResource(R.string.action_grant_notification_permission),
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             item {
                 ConfiguredServicesCarousel(
                     services = services,
@@ -923,8 +1013,10 @@ fun CloudScreen(
                     onClick = {
                         showRestoreConfirmDialog = false
                         restoreTargetService = null
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Restoring from ${srv.name}...")
+                        dev.ilamparithi.aournalpp.AournalppApplication.applicationScope.launch(Dispatchers.IO) {
+                            withContext(Dispatchers.Main) {
+                                snackbarHostState.showSnackbar("Restoring from ${srv.name}...")
+                            }
                             try {
                                 val result = engine.performRestore(
                                     serviceConfig = srv,
@@ -932,19 +1024,25 @@ fun CloudScreen(
                                     concurrency = concurrencyWorkers
                                 )
                                 refreshState()
-                                if (result.isSuccess) {
-                                    snackbarHostState.showSnackbar(
-                                        context.resources.getQuantityString(
-                                            R.plurals.msg_restore_files_complete,
-                                            result.filesRestored,
-                                            result.filesRestored
+                                withContext(Dispatchers.Main) {
+                                    if (result.isSuccess) {
+                                        snackbarHostState.showSnackbar(
+                                            context.resources.getQuantityString(
+                                                R.plurals.msg_restore_files_complete,
+                                                result.filesRestored,
+                                                result.filesRestored
+                                            )
                                         )
-                                    )
-                                } else {
-                                    snackbarHostState.showSnackbar("Restore errors: ${result.errors.firstOrNull() ?: "failed"}")
+                                    } else {
+                                        snackbarHostState.showSnackbar("Restore errors: ${result.errors.firstOrNull() ?: "failed"}")
+                                    }
                                 }
                             } catch (e: Exception) {
-                                snackbarHostState.showSnackbar("Restore failed: ${e.message}")
+                                if (e !is kotlin.coroutines.cancellation.CancellationException) {
+                                    withContext(Dispatchers.Main) {
+                                        snackbarHostState.showSnackbar("Restore failed: ${e.message}")
+                                    }
+                                }
                             }
                         }
                     }

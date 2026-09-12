@@ -489,4 +489,70 @@ class FileTransferQueueManagerTest {
         FileTransferQueueManager.setConcurrencyWorkers(2)
         assertEquals(2, FileTransferQueueManager.concurrencyWorkers.value)
     }
+
+    @Test
+    fun testMarkFailedIgnoresCompositionCancellation() {
+        val item = TransferItem(
+            id = "test_composition_cancel",
+            serviceId = "srv_1",
+            serviceName = "Google Drive",
+            localFilePath = "/test/note.xopp",
+            remotePath = "note.xopp",
+            fileName = "note.xopp",
+            direction = TransferDirection.UPLOAD,
+            totalBytes = 500L,
+            status = TransferStatus.IN_PROGRESS
+        )
+        FileTransferQueueManager.enqueue(item)
+
+        // Calling markFailed with composition cancellation error string should pause instead of fail
+        FileTransferQueueManager.markFailed("test_composition_cancel", "The coroutine scope left the composition")
+
+        val currentItem = FileTransferQueueManager.items.value[0]
+        assertEquals(TransferStatus.PAUSED, currentItem.status)
+        assertFalse(currentItem.errorMessage?.contains("left the composition") == true)
+    }
+
+    @Test
+    fun testMarkFailedIgnoresJobCancellation() {
+        val item = TransferItem(
+            id = "test_job_cancel",
+            serviceId = "srv_1",
+            serviceName = "Nextcloud",
+            localFilePath = "/test/note2.xopp",
+            remotePath = "note2.xopp",
+            fileName = "note2.xopp",
+            direction = TransferDirection.UPLOAD,
+            totalBytes = 500L,
+            status = TransferStatus.IN_PROGRESS
+        )
+        FileTransferQueueManager.enqueue(item)
+
+        FileTransferQueueManager.markFailed("test_job_cancel", "CancellationException: StandaloneCoroutine was cancelled")
+
+        val currentItem = FileTransferQueueManager.items.value[0]
+        assertEquals(TransferStatus.PAUSED, currentItem.status)
+    }
+
+    @Test
+    fun testMarkFailedRecordsActualErrors() {
+        val item = TransferItem(
+            id = "test_real_error",
+            serviceId = "srv_1",
+            serviceName = "Nextcloud",
+            localFilePath = "/test/note3.xopp",
+            remotePath = "note3.xopp",
+            fileName = "note3.xopp",
+            direction = TransferDirection.UPLOAD,
+            totalBytes = 500L,
+            status = TransferStatus.IN_PROGRESS
+        )
+        FileTransferQueueManager.enqueue(item)
+
+        FileTransferQueueManager.markFailed("test_real_error", "HTTP 500 Internal Server Error")
+
+        val currentItem = FileTransferQueueManager.items.value[0]
+        assertEquals(TransferStatus.FAILED, currentItem.status)
+        assertEquals("HTTP 500 Internal Server Error", currentItem.errorMessage)
+    }
 }

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderCopy
 import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Home
@@ -28,6 +29,14 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.FolderCopy
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.ui.res.stringResource
+import dev.ilamparithi.aournalpp.ui.promptWidth
+import dev.ilamparithi.aournalpp.ui.cloud.CloudSubpage
+import dev.ilamparithi.aournalpp.ui.onboarding.checkStoragePermissionGranted
+import dev.ilamparithi.aournalpp.ui.onboarding.launchStoragePermissionSettings
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.material.icons.outlined.Gavel
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Info
@@ -117,6 +126,8 @@ class MainActivity : ComponentActivity() {
 
     private var pendingIntentToProcess: Intent? = null
     private val externalFileToOpen = androidx.compose.runtime.mutableStateOf<File?>(null)
+    private val pendingTabNavigation = androidx.compose.runtime.mutableStateOf<Int?>(null)
+    private val pendingCloudSubpageNavigation = androidx.compose.runtime.mutableStateOf<CloudSubpage?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -131,6 +142,25 @@ class MainActivity : ComponentActivity() {
                 val viewModel: BootstrapViewModel = viewModel()
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 val isOnboardingCompleted by viewModel.isOnboardingCompleted.collectAsStateWithLifecycle()
+                val targetTab by pendingTabNavigation
+                val targetCloudSubpage by pendingCloudSubpageNavigation
+
+                var isStorageRevokedPostOnboarding by remember { mutableStateOf(false) }
+                val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+
+                DisposableEffect(lifecycleOwner, isOnboardingCompleted) {
+                    if (!isOnboardingCompleted) return@DisposableEffect onDispose {}
+                    val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                        if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                            isStorageRevokedPostOnboarding = !checkStoragePermissionGranted(this@MainActivity)
+                        }
+                    }
+                    lifecycleOwner.lifecycle.addObserver(observer)
+                    isStorageRevokedPostOnboarding = !checkStoragePermissionGranted(this@MainActivity)
+                    onDispose {
+                        lifecycleOwner.lifecycle.removeObserver(observer)
+                    }
+                }
 
                 // Intercept back presses while bootstrap/update/extraction is active
                 BackHandler(enabled = state !is BootstrapState.Ready) {
@@ -154,7 +184,8 @@ class MainActivity : ComponentActivity() {
                                 delay(850.milliseconds)
                                 LinuxEnvironment(this@MainActivity).ensureDirectoryTree()
                                 val backupPrefs = BackupPreferences(this@MainActivity)
-                                if (backupPrefs.isCheckRemoteChangesOnLaunchEnabled) {
+                                if (backupPrefs.isCheckRemoteChangesOnLaunchEnabled &&
+                                    dev.ilamparithi.aournalpp.utils.NetworkUtils.isOnline(this@MainActivity)) {
                                     val engine = BackupEngine(this@MainActivity)
                                     val remoteChanges = engine.checkAllServicesForRemoteChanges()
                                     if (remoteChanges.isNotEmpty()) {
@@ -173,12 +204,14 @@ class MainActivity : ComponentActivity() {
                                 val intervalMins = backupPrefs.periodicSyncIntervalMinutes
                                 if (intervalMins > 0) {
                                     delay(intervalMins.minutes)
-                                    withContext(Dispatchers.IO) {
-                                        try {
-                                            val engine = BackupEngine(this@MainActivity)
-                                            engine.performMultiServiceBackup()
-                                        } catch (e: Exception) {
-                                            Log.w("MainActivity", "In-app periodic sync failed", e)
+                                    if (dev.ilamparithi.aournalpp.utils.NetworkUtils.isOnline(this@MainActivity)) {
+                                        withContext(Dispatchers.IO) {
+                                            try {
+                                                val engine = BackupEngine(this@MainActivity)
+                                                engine.performMultiServiceBackup()
+                                            } catch (e: Exception) {
+                                                Log.w("MainActivity", "In-app periodic sync failed", e)
+                                            }
                                         }
                                     }
                                 } else {
@@ -214,7 +247,47 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         ) {
-                            MainResponsiveAppShell()
+                            MainResponsiveAppShell(
+                                targetTab = targetTab,
+                                targetCloudSubpage = targetCloudSubpage,
+                                onNavigationHandled = {
+                                    pendingTabNavigation.value = null
+                                    pendingCloudSubpageNavigation.value = null
+                                }
+                            )
+                        }
+
+                        if (isOnboardingCompleted && isStorageRevokedPostOnboarding) {
+                            AlertDialog(
+                                onDismissRequest = { /* Non-dismissible */ },
+                                properties = androidx.compose.ui.window.DialogProperties(
+                                    dismissOnBackPress = false,
+                                    dismissOnClickOutside = false
+                                ),
+                                modifier = Modifier.promptWidth(),
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Folder,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                },
+                                title = {
+                                    Text(stringResource(R.string.permission_storage_revoked_title))
+                                },
+                                text = {
+                                    Text(stringResource(R.string.permission_storage_revoked_desc))
+                                },
+                                confirmButton = {
+                                    Button(
+                                        onClick = {
+                                            launchStoragePermissionSettings(this@MainActivity)
+                                        }
+                                    ) {
+                                        Text(stringResource(R.string.action_open_settings))
+                                    }
+                                }
+                            )
                         }
 
                         val promptFile = externalFileToOpen.value
@@ -314,8 +387,27 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleExternalIntent(intent: Intent?) {
-        val uri = intent?.data ?: return
+        if (intent == null) return
         val action = intent.action
+
+        // 1. Notification / Tab Navigation (e.g. Action Open Transfer Queue)
+        if (action == "dev.ilamparithi.aournalpp.ACTION_OPEN_TRANSFER_QUEUE" ||
+            intent.hasExtra("EXTRA_OPEN_TAB") ||
+            intent.hasExtra("EXTRA_CLOUD_SUBPAGE")
+        ) {
+            val tabId = intent.getIntExtra("EXTRA_OPEN_TAB", AppTab.CLOUD.id)
+            val subpageStr = intent.getStringExtra("EXTRA_CLOUD_SUBPAGE")
+            val subpage = if (subpageStr == "TRANSFER_QUEUE" || action == "dev.ilamparithi.aournalpp.ACTION_OPEN_TRANSFER_QUEUE") {
+                CloudSubpage.TRANSFER_QUEUE
+            } else {
+                null
+            }
+            pendingTabNavigation.value = tabId
+            pendingCloudSubpageNavigation.value = subpage
+            return
+        }
+
+        val uri = intent.data ?: return
 
         // 1. Google OAuth2 Redirect Handler
         val isOAuthRedirect = (uri.scheme == "dev.ilamparithi.aournalpp" ||
@@ -408,11 +500,22 @@ enum class AppTab(
 }
 
 @Composable
-fun MainResponsiveAppShell() {
+fun MainResponsiveAppShell(
+    targetTab: Int? = null,
+    targetCloudSubpage: CloudSubpage? = null,
+    onNavigationHandled: () -> Unit = {}
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val reduceAnimations = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
 
     var selectedTab by rememberSaveable { mutableIntStateOf(AppTab.HOME.id) }
+
+    LaunchedEffect(targetTab) {
+        if (targetTab != null) {
+            selectedTab = targetTab
+            onNavigationHandled()
+        }
+    }
     val saveableStateHolder = rememberSaveableStateHolder()
     var tabGenerations by rememberSaveable { mutableStateOf(mapOf<Int, Int>()) }
 
@@ -560,6 +663,7 @@ fun MainResponsiveAppShell() {
                             tabId = tabId,
                             tabGenerations = tabGenerations,
                             saveableStateHolder = saveableStateHolder,
+                            targetCloudSubpage = targetCloudSubpage,
                             onTabSelect = onTabSelect
                         )
                     }
@@ -608,6 +712,7 @@ fun MainResponsiveAppShell() {
                             tabId = tabId,
                             tabGenerations = tabGenerations,
                             saveableStateHolder = saveableStateHolder,
+                            targetCloudSubpage = targetCloudSubpage,
                             onTabSelect = onTabSelect
                         )
                     }
@@ -632,13 +737,18 @@ private fun TabHost(
     tabId: Int,
     tabGenerations: Map<Int, Int>,
     saveableStateHolder: SaveableStateHolder,
+    targetCloudSubpage: CloudSubpage? = null,
     onTabSelect: (Int) -> Unit
 ) {
     val gen = tabGenerations[tabId] ?: 0
     val pageKey = "tab_${tabId}_$gen"
     saveableStateHolder.SaveableStateProvider(key = pageKey) {
         key(pageKey) {
-            RenderTabContent(tab = tabId, onTabSelect = onTabSelect)
+            RenderTabContent(
+                tab = tabId,
+                targetCloudSubpage = targetCloudSubpage,
+                onTabSelect = onTabSelect
+            )
         }
     }
 }
@@ -646,6 +756,7 @@ private fun TabHost(
 @Composable
 private fun RenderTabContent(
     tab: Int,
+    targetCloudSubpage: CloudSubpage? = null,
     onTabSelect: (Int) -> Unit
 ) {
     when (tab) {
@@ -659,6 +770,7 @@ private fun RenderTabContent(
             onNavigateToLicenses = { onTabSelect(AppTab.ABOUT.id) }
         )
         AppTab.CLOUD.id -> CloudScreen(
+            initialSubpage = targetCloudSubpage ?: CloudSubpage.OVERVIEW,
             onNavigateToSettings = { onTabSelect(AppTab.SETTINGS.id) }
         )
         AppTab.SETTINGS.id -> SettingsScreen(onBack = { onTabSelect(AppTab.HOME.id) })

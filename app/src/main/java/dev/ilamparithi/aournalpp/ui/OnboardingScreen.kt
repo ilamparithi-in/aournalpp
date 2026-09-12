@@ -180,12 +180,20 @@ fun OnboardingScreen(
     var restoringStatusText by remember { mutableStateOf("") }
     var isRestorationComplete by remember { mutableStateOf(false) }
 
-    // Live storage permission state with lifecycle resume observer
+    // Live storage and notification permission states with lifecycle resume observer
     var isPermissionGranted by remember { mutableStateOf(checkStoragePermissionGranted(context)) }
+    var isNotificationPermissionGranted by remember { mutableStateOf(checkNotificationPermissionGranted(context)) }
+
     val legacyPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) {
         isPermissionGranted = checkStoragePermissionGranted(context)
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) {
+        isNotificationPermissionGranted = checkNotificationPermissionGranted(context)
     }
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -193,6 +201,7 @@ fun OnboardingScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 isPermissionGranted = checkStoragePermissionGranted(context)
+                isNotificationPermissionGranted = checkNotificationPermissionGranted(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -426,8 +435,9 @@ fun OnboardingScreen(
                                 }
                             )
                             1 -> OnboardingStoragePermissionPage(
-                                isGranted = isPermissionGranted,
-                                onRequestPermission = {
+                                isStorageGranted = isPermissionGranted,
+                                isNotificationGranted = isNotificationPermissionGranted,
+                                onRequestStoragePermission = {
                                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                                         launchStoragePermissionSettings(context)
                                     } else {
@@ -437,6 +447,11 @@ fun OnboardingScreen(
                                                 Manifest.permission.WRITE_EXTERNAL_STORAGE
                                             )
                                         )
+                                    }
+                                },
+                                onRequestNotificationPermission = {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                                     }
                                 },
                                 onContinue = {

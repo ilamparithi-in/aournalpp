@@ -139,6 +139,17 @@ object FileTransferQueueManager {
     fun markFailed(id: String, error: String) {
         speedTrackers.remove(id)
         lastProgressEmitMs.remove(id)
+        // Defensive guard: never mark an item as failed with Compose lifecycle or coroutine cancellation strings
+        if (error.contains("left the composition", ignoreCase = true) ||
+            error.contains("was cancelled", ignoreCase = true) ||
+            error.contains("CancellationException", ignoreCase = true)
+        ) {
+            val newStatus = if (isCancelled(id)) TransferStatus.CANCELLED else TransferStatus.PAUSED
+            _items.update { list ->
+                list.map { if (it.id == id) it.copy(status = newStatus, speedBytesPerSec = 0L) else it }
+            }
+            return
+        }
         _items.update { list ->
             list.map {
                 if (it.id == id) {

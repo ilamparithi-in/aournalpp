@@ -50,6 +50,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import dev.ilamparithi.aournalpp.backup.model.ConfigSyncStatus
 import dev.ilamparithi.aournalpp.backup.model.BackupScope
+import dev.ilamparithi.aournalpp.utils.NetworkUtils
+import dev.ilamparithi.aournalpp.backup.worker.BackupPreferences
 
 /**
  * Core differential synchronization engine supporting multi-service complete backups,
@@ -154,6 +156,22 @@ class BackupEngine(
         onProgress: ((current: Int, total: Int, currentFile: String) -> Unit)? = null,
         clearCompletedQueue: Boolean = true
     ): BackupResult = withContext(Dispatchers.IO) {
+        val prefs = BackupPreferences(context)
+        val netCheck = NetworkUtils.checkSyncNetworkPreconditions(context, wifiOnly = prefs.isWifiOnlyEnabled)
+        if (!netCheck.canSync) {
+            Log.w(TAG, "Network preconditions not met for ${serviceConfig.name}: ${netCheck.errorMessage}")
+            return@withContext BackupResult(
+                serviceId = serviceConfig.id,
+                serviceName = serviceConfig.name,
+                totalFilesScanned = 0,
+                filesUploaded = 0,
+                filesSkipped = 0,
+                filesFailed = 0,
+                totalBytesTransferred = 0L,
+                durationMs = 0L,
+                errors = listOf(netCheck.errorMessage ?: "Device offline")
+            )
+        }
         if (concurrency != null) {
             FileTransferQueueManager.setConcurrencyWorkers(concurrency)
         }
@@ -226,11 +244,17 @@ class BackupEngine(
             if (connResult.isFailure || connResult.getOrNull() == false) {
                 val err = connResult.exceptionOrNull()?.message ?: "Failed to connect to ${serviceConfig.name}"
                 errors.add(err)
-                vault.saveService(
-                    serviceConfig.copy(
-                        lastSyncStatus = "Connection failed: $err"
+                val isTransient = NetworkUtils.isTransientNetworkException(connResult.exceptionOrNull()) ||
+                        NetworkUtils.isTransientNetworkErrorMessage(err)
+                if (!isTransient) {
+                    vault.saveService(
+                        serviceConfig.copy(
+                            lastSyncStatus = "Connection failed: $err"
+                        )
                     )
-                )
+                } else {
+                    Log.w(TAG, "Transient network error connecting to ${serviceConfig.name}: $err. Preserving lastSyncStatus.")
+                }
                 return@withContext BackupResult(
                     serviceId = serviceConfig.id,
                     serviceName = serviceConfig.name,
@@ -345,6 +369,8 @@ class BackupEngine(
                             FileTransferQueueManager.updateProgress(item.id, transferred, total)
                         }
                     )
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Result.failure(e)
                 }
@@ -375,7 +401,11 @@ class BackupEngine(
                         )
                     )
                 } else {
-                    val errMsg = uploadResult.exceptionOrNull()?.message ?: "Upload failed"
+                    val ex = uploadResult.exceptionOrNull()
+                    if (ex is CancellationException) {
+                        throw ex
+                    }
+                    val errMsg = ex?.message ?: "Upload failed"
                     FileTransferQueueManager.markFailed(item.id, errMsg)
                     synchronized(this@BackupEngine) {
                         failedCount++
@@ -675,6 +705,8 @@ class BackupEngine(
                             FileTransferQueueManager.updateProgress(item.id, transferred, total)
                         }
                     )
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Result.failure(e)
                 }
@@ -725,7 +757,11 @@ class BackupEngine(
                         }
                     }
                 } else {
-                    val errMsg = downloadResult.exceptionOrNull()?.message ?: "Download failed"
+                    val ex = downloadResult.exceptionOrNull()
+                    if (ex is CancellationException) {
+                        throw ex
+                    }
+                    val errMsg = ex?.message ?: "Download failed"
                     FileTransferQueueManager.markFailed(item.id, errMsg)
                     synchronized(this@BackupEngine) {
                         failedCount++
@@ -770,6 +806,12 @@ class BackupEngine(
         if (concurrency != null) {
             FileTransferQueueManager.setConcurrencyWorkers(concurrency)
         }
+        val prefs = BackupPreferences(context)
+        val netCheck = NetworkUtils.checkSyncNetworkPreconditions(context, wifiOnly = prefs.isWifiOnlyEnabled)
+        if (!netCheck.canSync) {
+            Log.i(TAG, "Network preconditions not met for multi-service backup: ${netCheck.errorMessage}. Skipping sync.")
+            return emptyList()
+        }
         val lock = CrossProcessLock.tryAcquire(syncLockFile)
         if (lock == null) {
             Log.w(TAG, "Cloud sync is already active in another window or process. Skipping concurrent multi-service sync.")
@@ -784,12 +826,19 @@ class BackupEngine(
                     val result = performBackupInternal(service, concurrency, onProgress, clearCompletedQueue = false)
                     results.add(result)
                 } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                     Log.e(TAG, "Sync failed for service ${service.name} (${service.id})", e)
-                    vault.saveService(
-                        service.copy(
-                            lastSyncStatus = "Failed: ${e.message ?: "Unknown error"}"
+                    val isTransient = NetworkUtils.isTransientNetworkException(e) ||
+                            NetworkUtils.isTransientNetworkErrorMessage(e.message)
+                    if (!isTransient) {
+                        vault.saveService(
+                            service.copy(
+                                lastSyncStatus = "Failed: ${e.message ?: "Unknown error"}"
+                            )
                         )
-                    )
+                    } else {
+                        Log.w(TAG, "Transient network failure during sync for ${service.name}: ${e.message}. Preserving lastSyncStatus.")
+                    }
                     results.add(
                         BackupResult(
                             serviceId = service.id,
@@ -918,6 +967,10 @@ class BackupEngine(
      * Checks all enabled services for remote changes on app launch.
      */
     suspend fun checkAllServicesForRemoteChanges(): Map<String, List<dev.ilamparithi.aournalpp.backup.model.RemoteFileMetadata>> = withContext(Dispatchers.IO) {
+        if (!NetworkUtils.isOnline(context)) {
+            Log.d(TAG, "Device is offline; skipping checkAllServicesForRemoteChanges")
+            return@withContext emptyMap()
+        }
         val services = vault.getActiveConfiguredServices().filter { it.isEnabled }
         val results = mutableMapOf<String, List<dev.ilamparithi.aournalpp.backup.model.RemoteFileMetadata>>()
         for (service in services) {
@@ -1859,6 +1912,8 @@ class BackupEngine(
                             FileTransferQueueManager.updateProgress(item.id, transferred, total)
                         }
                     )
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Result.failure(e)
                 }
@@ -1890,9 +1945,13 @@ class BackupEngine(
                     )
                     Result.success(Unit)
                 } else {
-                    val errMsg = uploadResult.exceptionOrNull()?.message ?: "Upload failed"
+                    val ex = uploadResult.exceptionOrNull()
+                    if (ex is CancellationException) {
+                        throw ex
+                    }
+                    val errMsg = ex?.message ?: "Upload failed"
                     FileTransferQueueManager.markFailed(item.id, errMsg)
-                    Result.failure(uploadResult.exceptionOrNull() ?: Exception(errMsg))
+                    Result.failure(ex ?: Exception(errMsg))
                 }
             } else {
                 val localFile = File(item.localFilePath)
@@ -1912,6 +1971,8 @@ class BackupEngine(
                             FileTransferQueueManager.updateProgress(item.id, downloaded, total)
                         }
                     )
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Result.failure(e)
                 }
@@ -1927,9 +1988,13 @@ class BackupEngine(
                     FileTransferQueueManager.markCompleted(item.id)
                     Result.success(Unit)
                 } else {
-                    val errMsg = downloadResult.exceptionOrNull()?.message ?: "Download failed"
+                    val ex = downloadResult.exceptionOrNull()
+                    if (ex is CancellationException) {
+                        throw ex
+                    }
+                    val errMsg = ex?.message ?: "Download failed"
                     FileTransferQueueManager.markFailed(item.id, errMsg)
-                    Result.failure(downloadResult.exceptionOrNull() ?: Exception(errMsg))
+                    Result.failure(ex ?: Exception(errMsg))
                 }
             }
         } finally {

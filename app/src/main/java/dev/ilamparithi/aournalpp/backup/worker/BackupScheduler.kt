@@ -102,13 +102,24 @@ object BackupScheduler {
         WorkManager.getInstance(context).cancelUniqueWork(PERIODIC_DAILY_WORK_NAME)
     }
 
-    fun triggerImmediateSync(context: Context, wifiOnly: Boolean = false) {
+    fun triggerImmediateSync(
+        context: Context,
+        wifiOnly: Boolean = false,
+        targetServiceId: String? = null
+    ) {
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
             .build()
 
+        val inputData = if (targetServiceId != null) {
+            androidx.work.workDataOf(BackupWorker.KEY_TARGET_SERVICE_ID to targetServiceId)
+        } else {
+            androidx.work.Data.EMPTY
+        }
+
         val request = OneTimeWorkRequestBuilder<BackupWorker>()
             .setConstraints(constraints)
+            .setInputData(inputData)
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .addTag(BackupWorker.TAG)
             .build()

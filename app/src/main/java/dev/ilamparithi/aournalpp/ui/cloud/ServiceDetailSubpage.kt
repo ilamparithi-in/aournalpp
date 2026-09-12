@@ -51,6 +51,12 @@ import dev.ilamparithi.aournalpp.backup.model.MappingTemplateItem
 import dev.ilamparithi.aournalpp.backup.model.ServiceConfig
 import dev.ilamparithi.aournalpp.backup.model.StorageProviderType
 import dev.ilamparithi.aournalpp.backup.security.CustomMappingRepository
+import dev.ilamparithi.aournalpp.backup.model.TransferStatus
+import dev.ilamparithi.aournalpp.backup.queue.FileTransferQueueManager
+import dev.ilamparithi.aournalpp.backup.worker.BackupPreferences
+import dev.ilamparithi.aournalpp.backup.worker.BackupScheduler
+import dev.ilamparithi.aournalpp.utils.NetworkUtils
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.ilamparithi.aournalpp.ui.InteractiveMarqueeText
 import dev.ilamparithi.aournalpp.ui.common.AppIconButton
 import dev.ilamparithi.aournalpp.ui.promptWidth
@@ -88,11 +94,17 @@ fun ServiceDetailSubpage(
     var isBatchMode by remember { mutableStateOf(false) }
     val selectedMappingIds = remember { mutableStateListOf<String>() }
 
+    val prefs = remember { BackupPreferences(context) }
+    val queueItems by FileTransferQueueManager.items.collectAsStateWithLifecycle()
+    val isSyncRunningByManager by FileTransferQueueManager.isSyncRunning.collectAsStateWithLifecycle()
+    val isServiceSyncing = queueItems.any {
+        it.serviceId == service.id && (it.status == TransferStatus.IN_PROGRESS || it.status == TransferStatus.QUEUED)
+    } || isSyncRunningByManager
+
     var isCheckingFolders by remember { mutableStateOf(false) }
     var folderValidationResults by remember { mutableStateOf<Map<String, FolderValidationResult>>(emptyMap()) }
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
     var showBatchSaveSetDialog by remember { mutableStateOf(false) }
-    var isSyncing by remember { mutableStateOf(false) }
 
     androidx.compose.runtime.LaunchedEffect(service.id, service.customMappings) {
         val stored = mappingRepo.getMappingsForService(service.id)
@@ -251,26 +263,25 @@ fun ServiceDetailSubpage(
                     actions = {
                         IconButton(
                             onClick = {
-                                isSyncing = true
-                                coroutineScope.launch {
-                                    onShowSnackbar("Starting sync for \"${service.name}\"...")
-                                    try {
-                                        val result = engine.performBackup(service)
-                                        if (result.isSuccess) {
-                                            onShowSnackbar("Synced \"${service.name}\": ${result.filesUploaded} uploaded")
-                                        } else {
-                                            onShowSnackbar("Sync error: ${result.errors.firstOrNull() ?: "failed"}")
-                                        }
-                                    } catch (e: Exception) {
-                                        onShowSnackbar("Sync failed: ${e.message}")
-                                    } finally {
-                                        isSyncing = false
-                                    }
+                                val netCheck = NetworkUtils.checkSyncNetworkPreconditions(
+                                    context,
+                                    wifiOnly = prefs.isWifiOnlyEnabled
+                                )
+                                if (!netCheck.canSync) {
+                                    onShowSnackbar(netCheck.errorMessage ?: "Network not available")
+                                    return@IconButton
                                 }
+
+                                BackupScheduler.triggerImmediateSync(
+                                    context,
+                                    wifiOnly = prefs.isWifiOnlyEnabled,
+                                    targetServiceId = service.id
+                                )
+                                onShowSnackbar("Starting background sync for \"${service.name}\"…")
                             },
-                            enabled = service.isEnabled && !isSyncing
+                            enabled = service.isEnabled && !isServiceSyncing
                         ) {
-                            if (isSyncing) {
+                            if (isServiceSyncing) {
                                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                             } else {
                                 Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.cloud_sync_now))

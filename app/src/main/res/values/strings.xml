@@ -164,8 +164,22 @@
     <string name="onboarding_storage_required_title">Permission Required</string>
     <!-- Status card description when storage permission is required -->
     <string name="onboarding_storage_required_desc">Grant access in Android Settings to continue.</string>
-    <!-- Action button to grant storage permission -->
     <string name="action_grant_storage_permission">Grant Storage Permission</string>
+    <!-- Notification permission onboarding strings -->
+    <string name="onboarding_notification_title">Sync Notifications</string>
+    <string name="onboarding_notification_desc">Receive real-time progress bars during cloud syncs and alerts if file transfers encounter errors.</string>
+    <string name="onboarding_notification_granted_title">Notifications Enabled</string>
+    <string name="onboarding_notification_granted_desc">Background sync progress and transfer alerts will be shown in the notification tray.</string>
+    <string name="action_grant_notification_permission">Grant Notification Permission</string>
+    <!-- Post-onboarding permission revoked strings -->
+    <string name="permission_storage_revoked_title">Storage Access Revoked</string>
+    <string name="permission_storage_revoked_desc">Storage permission was revoked in Android Settings. Aournal++ cannot read, write, or synchronize your notes and configurations without storage access.</string>
+    <string name="action_open_settings">Open Settings</string>
+    <string name="permission_notification_missing_title">Notification Access Required</string>
+    <string name="permission_notification_missing_desc">Notification permission is required to display live background transfer progress and sync error alerts.</string>
+    <!-- Sync notification action labels -->
+    <string name="notification_action_cancel_sync">Cancel Sync</string>
+    <string name="notification_action_view_queue">View Transfers</string>
     <!-- Step 3 Choose folder title -->
     <string name="onboarding_folder_title">Notes Storage Folder</string>
     <!-- Step 3 Choose folder description -->
