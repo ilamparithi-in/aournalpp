@@ -235,6 +235,7 @@ dependencies {
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.appcompat)
+    implementation(libs.material)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
@@ -320,6 +321,12 @@ bootstrapTasksMap.forEach { (flavorName, archName) ->
         outputs.file(flavorOutputFile)
         outputs.file(flavorManifestFile)
         outputs.dir(flavorJniDir)
+        outputs.upToDateWhen {
+            flavorOutputFile.exists() && flavorManifestFile.exists() && flavorJniDir.exists()
+        }
+        onlyIf {
+            !flavorOutputFile.exists() || !flavorManifestFile.exists() || !flavorJniDir.exists()
+        }
         doFirst {
             flavorOutDir.mkdirs()
             flavorJniDir.mkdirs()
