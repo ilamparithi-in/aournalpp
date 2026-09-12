@@ -64,7 +64,11 @@ object NoteOpenManager {
                 val importedDir = env.getImportedDirectory()
                 if (!importedDir.exists()) importedDir.mkdirs()
                 val dest = File(importedDir, file.name)
+                val originalMtime = file.lastModified()
                 file.copyTo(dest, overwrite = true)
+                if (originalMtime > 0L) {
+                    dest.setLastModified(originalMtime)
+                }
                 dest
             } catch (e: Exception) {
                 file

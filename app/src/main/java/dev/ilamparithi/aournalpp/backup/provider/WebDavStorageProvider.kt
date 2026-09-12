@@ -197,9 +197,11 @@ class WebDavStorageProvider(
                 }
             }
 
+            val mtimeSeconds = (localFile.lastModified() / 1000L).coerceAtLeast(0L)
             val request = addAuth(
                 Request.Builder()
                     .url(targetUrl)
+                    .header("X-OC-Mtime", mtimeSeconds.toString())
                     .put(requestBody)
             ).build()
 
@@ -250,6 +252,20 @@ class WebDavStorageProvider(
                     destinationFile.delete()
                 }
                 tempFile.renameTo(destinationFile)
+
+                // Preserve remote timestamp if Last-Modified header is present
+                val lastModHeader = response.header("Last-Modified")
+                if (!lastModHeader.isNullOrBlank()) {
+                    try {
+                        val dateFormat = HTTP_DATE_FORMAT.get() ?: SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US).apply {
+                            timeZone = TimeZone.getTimeZone("GMT")
+                        }
+                        val parsedTime = dateFormat.parse(lastModHeader.trim())?.time ?: 0L
+                        if (parsedTime > 0L) {
+                            destinationFile.setLastModified(parsedTime)
+                        }
+                    } catch (_: Exception) {}
+                }
                 Unit
             }
         }

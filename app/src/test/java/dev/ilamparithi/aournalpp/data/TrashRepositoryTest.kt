@@ -88,4 +88,55 @@ class TrashRepositoryTest {
         assertTrue(emptyResult.isSuccess)
         assertEquals(0, repository.scanTrash().size)
     }
+
+    @Test
+    fun testMoveToTrashAndRestorePreservesTimestamp() = runBlocking {
+        val noteFile = File(notesDir, "timestamp_test.xopp").apply {
+            writeText("mtime test content")
+        }
+        val targetMtime = 1680000000000L // arbitrary fixed past timestamp
+        noteFile.setLastModified(targetMtime)
+        assertEquals(targetMtime, noteFile.lastModified())
+
+        val noteDoc = NoteDocument(
+            file = noteFile,
+            title = "timestamp_test.xopp",
+            path = noteFile.absolutePath,
+            lastModifiedMs = noteFile.lastModified(),
+            sizeBytes = noteFile.length()
+        )
+
+        // Move to trash
+        val result = repository.moveToTrash(listOf(noteDoc))
+        assertTrue(result.isSuccess)
+        val receipt = result.getOrThrow()
+
+        // Restore from trash
+        val restoreResult = repository.restoreTrashItems(receipt.trashFileNames)
+        assertTrue(restoreResult.isSuccess)
+        assertEquals(1, restoreResult.getOrThrow())
+        assertTrue(noteFile.exists())
+        assertEquals("File lastModified must be preserved across trash & restore", targetMtime, noteFile.lastModified())
+    }
+
+    @Test
+    fun testLegacyManifestCompatibility() = runBlocking {
+        val trashDir = File(notesDir, ".Trash").apply { mkdirs() }
+        val trashedFile = File(trashDir, "legacy_note.xopp").apply {
+            writeText("legacy content")
+        }
+        val targetMtime = 1670000000000L
+        trashedFile.setLastModified(targetMtime)
+
+        val restoredDest = File(notesDir, "legacy_note.xopp")
+        // Write legacy manifest with raw string path
+        val legacyJson = """{"legacy_note.xopp": "${restoredDest.absolutePath}"}"""
+        File(trashDir, ".trash_manifest.json").writeText(legacyJson)
+
+        val restoreResult = repository.restoreTrashItems(listOf("legacy_note.xopp"))
+        assertTrue(restoreResult.isSuccess)
+        assertEquals(1, restoreResult.getOrThrow())
+        assertTrue(restoredDest.exists())
+        assertEquals(targetMtime, restoredDest.lastModified())
+    }
 }

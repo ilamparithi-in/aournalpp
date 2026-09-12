@@ -48,6 +48,18 @@ class TrashRepository(
         }
     }
 
+    private fun extractManifestEntry(manifest: JSONObject, key: String): Pair<String?, Long?> {
+        if (!manifest.has(key)) return Pair(null, null)
+        val obj = manifest.optJSONObject(key)
+        if (obj != null) {
+            val path = obj.optString("path").takeIf { it.isNotBlank() }
+            val mtime = obj.optLong("lastModified", 0L).takeIf { it > 0L }
+            return Pair(path, mtime)
+        }
+        val plainStr = manifest.optString(key).takeIf { it.isNotBlank() }
+        return Pair(plainStr, null)
+    }
+
     suspend fun moveToTrash(notes: List<NoteDocument>): Result<TrashReceipt> = withContext(Dispatchers.IO) {
         runCatching {
             val trashDir = getTrashDirectory()
@@ -60,12 +72,17 @@ class TrashRepository(
 
             for ((file) in notes) {
                 if (!file.exists()) continue
+                val originalMtime = file.lastModified()
                 val trashFileName = "${timestamp}_${file.name}"
                 val targetTrashFile = File(trashDir, trashFileName)
                 val srcAssociated = findAssociatedFiles(file)
 
                 if (file.renameTo(targetTrashFile)) {
-                    manifest.put(trashFileName, file.absolutePath)
+                    val metaObj = JSONObject().apply {
+                        put("path", file.absolutePath)
+                        put("lastModified", originalMtime)
+                    }
+                    manifest.put(trashFileName, metaObj)
                     onRemoveOpenedNoteHistory(file.absolutePath)
                     movedCount++
                     trashFileNames.add(trashFileName)
@@ -73,10 +90,15 @@ class TrashRepository(
                     // Move all associated autosave and backup files to Trash
                     for (assoc in srcAssociated) {
                         if (assoc.exists()) {
+                            val assocMtime = assoc.lastModified()
                             val autoTrashName = "${timestamp}_${assoc.name}"
                             val autoTrashFile = File(trashDir, autoTrashName)
                             if (assoc.renameTo(autoTrashFile)) {
-                                manifest.put(autoTrashName, assoc.absolutePath)
+                                val assocObj = JSONObject().apply {
+                                    put("path", assoc.absolutePath)
+                                    put("lastModified", assocMtime)
+                                }
+                                manifest.put(autoTrashName, assocObj)
                                 trashFileNames.add(autoTrashName)
                             }
                         }
@@ -96,11 +118,16 @@ class TrashRepository(
             val manifest = readManifest(manifestFile)
 
             val timestamp = System.currentTimeMillis()
+            val folderMtime = folder.lastModified()
             val trashFolderName = "${timestamp}_${folder.name}"
             val targetTrashFolder = File(trashDir, trashFolderName)
 
             if (folder.renameTo(targetTrashFolder)) {
-                manifest.put(trashFolderName, folder.absolutePath)
+                val folderObj = JSONObject().apply {
+                    put("path", folder.absolutePath)
+                    put("lastModified", folderMtime)
+                }
+                manifest.put(trashFolderName, folderObj)
                 manifestFile.writeText(manifest.toString(2))
                 onInvalidateCaches()
                 trashFolderName
@@ -120,14 +147,18 @@ class TrashRepository(
             for (name in trashFileNames) {
                 val trashFile = File(trashDir, name)
                 if (!trashFile.exists()) continue
-                val originalPath = manifest.optString(name).takeIf { it.isNotBlank() }
+                val (originalPath, savedMtime) = extractManifestEntry(manifest, name)
                 val destFile = if (!originalPath.isNullOrBlank()) {
                     File(originalPath)
                 } else {
                     File(notesDirectoryProvider(), name.substringAfter("_"))
                 }
+                val mtimeToRestore = savedMtime ?: trashFile.lastModified()
                 destFile.parentFile?.mkdirs()
                 if (trashFile.renameTo(destFile)) {
+                    if (mtimeToRestore > 0L) {
+                        try { destFile.setLastModified(mtimeToRestore) } catch (_: Exception) {}
+                    }
                     manifest.remove(name)
                     count++
                 }
@@ -143,7 +174,7 @@ class TrashRepository(
             val manifestFile = File(trashDir, TRASH_MANIFEST_FILE)
             val manifest = readManifest(manifestFile)
 
-            val originalPath = manifest.optString(trashFolderName).takeIf { it.isNotBlank() }
+            val (originalPath, savedMtime) = extractManifestEntry(manifest, trashFolderName)
             val targetTrashFolder = File(trashDir, trashFolderName)
             if (!targetTrashFolder.exists()) error("Trash folder does not exist")
 
@@ -152,9 +183,13 @@ class TrashRepository(
             } else {
                 File(notesDirectoryProvider(), trashFolderName.substringAfter("_"))
             }
+            val mtimeToRestore = savedMtime ?: targetTrashFolder.lastModified()
 
             destDir.parentFile?.mkdirs()
             if (targetTrashFolder.renameTo(destDir)) {
+                if (mtimeToRestore > 0L) {
+                    try { destDir.setLastModified(mtimeToRestore) } catch (_: Exception) {}
+                }
                 manifest.remove(trashFolderName)
                 manifestFile.writeText(manifest.toString(2))
                 onInvalidateCaches()
@@ -189,15 +224,19 @@ class TrashRepository(
             val manifestFile = File(trashDir, TRASH_MANIFEST_FILE)
             val manifest = readManifest(manifestFile)
 
-            val originalPath = manifest.optString(note.file.name).takeIf { it.isNotBlank() }
+            val (originalPath, savedMtime) = extractManifestEntry(manifest, note.file.name)
             val destFile = if (!originalPath.isNullOrBlank()) {
                 File(originalPath)
             } else {
                 File(notesDirectoryProvider(), note.title)
             }
+            val mtimeToRestore = savedMtime ?: note.file.lastModified()
 
             destFile.parentFile?.mkdirs()
             if (note.file.renameTo(destFile)) {
+                if (mtimeToRestore > 0L) {
+                    try { destFile.setLastModified(mtimeToRestore) } catch (_: Exception) {}
+                }
                 manifest.remove(note.file.name)
                 manifestFile.writeText(manifest.toString(2))
                 onInvalidateCaches()
@@ -216,15 +255,19 @@ class TrashRepository(
 
             var count = 0
             for ((file, title) in notes) {
-                val originalPath = manifest.optString(file.name).takeIf { it.isNotBlank() }
+                val (originalPath, savedMtime) = extractManifestEntry(manifest, file.name)
                 val destFile = if (!originalPath.isNullOrBlank()) {
                     File(originalPath)
                 } else {
                     File(notesDirectoryProvider(), title)
                 }
+                val mtimeToRestore = savedMtime ?: file.lastModified()
 
                 destFile.parentFile?.mkdirs()
                 if (file.renameTo(destFile)) {
+                    if (mtimeToRestore > 0L) {
+                        try { destFile.setLastModified(mtimeToRestore) } catch (_: Exception) {}
+                    }
                     manifest.remove(file.name)
                     count++
                 }

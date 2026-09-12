@@ -42,6 +42,11 @@ object ExternalFileHandler {
                 }
             } ?: error("Failed to open input stream for URI: $uri")
 
+            val originalMtime = getLastModified(context, uri)
+            if (originalMtime != null && originalMtime > 0L) {
+                destFile.setLastModified(originalMtime)
+            }
+
             if (!destFile.exists() || destFile.length() == 0L) {
                 error("Staged temporary file is empty or was not created: ${destFile.absolutePath}")
             }
@@ -65,7 +70,11 @@ object ExternalFileHandler {
 
             val destFile = File(importedDir, sourceFile.name)
             if (sourceFile.canonicalPath != destFile.canonicalPath) {
+                val originalMtime = sourceFile.lastModified()
                 sourceFile.copyTo(destFile, overwrite = true)
+                if (originalMtime > 0L) {
+                    destFile.setLastModified(originalMtime)
+                }
             }
             Log.i(TAG, "Imported file to ${destFile.absolutePath} (${destFile.length()} bytes)")
             destFile
@@ -90,6 +99,10 @@ object ExternalFileHandler {
                     input.copyTo(output)
                 }
             } ?: error("Failed to open input stream for URI: $uri")
+            val originalMtime = getLastModified(context, uri)
+            if (originalMtime != null && originalMtime > 0L) {
+                destFile.setLastModified(originalMtime)
+            }
             Log.i(TAG, "Imported external file to target dir: ${destFile.absolutePath} (${destFile.length()} bytes)")
             destFile
         }
@@ -123,5 +136,39 @@ object ExternalFileHandler {
         }
 
         return uri.lastPathSegment?.substringAfterLast('/')
+    }
+
+    private fun getLastModified(context: Context, uri: Uri): Long? {
+        if (uri.scheme == "file") {
+            val path = uri.path
+            if (path != null) {
+                val f = File(path)
+                if (f.exists() && f.lastModified() > 0L) return f.lastModified()
+            }
+        }
+
+        if (uri.scheme == "content") {
+            try {
+                context.contentResolver.query(
+                    uri,
+                    arrayOf(android.provider.DocumentsContract.Document.COLUMN_LAST_MODIFIED),
+                    null,
+                    null,
+                    null
+                )?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val idx = cursor.getColumnIndex(android.provider.DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+                        if (idx != -1 && !cursor.isNull(idx)) {
+                            val lm = cursor.getLong(idx)
+                            if (lm > 0L) return lm
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to resolve last modified from ContentResolver", e)
+            }
+        }
+
+        return null
     }
 }

@@ -39,7 +39,36 @@ class GoogleDriveProvider(
         private const val DRIVE_API_BASE = "https://www.googleapis.com/drive/v3"
         private const val DRIVE_UPLOAD_BASE = "https://www.googleapis.com/upload/drive/v3"
         private const val FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
+
+        private val ISO_DATE_FORMAT = object : ThreadLocal<SimpleDateFormat>() {
+            override fun initialValue(): SimpleDateFormat {
+                return SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                }
+            }
+        }
+
+        private val ISO_FALLBACK_FORMAT = object : ThreadLocal<SimpleDateFormat>() {
+            override fun initialValue(): SimpleDateFormat {
+                return SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                }
+            }
+        }
+
+        private fun parseIsoTime(modifiedStr: String): Long {
+            if (modifiedStr.isBlank()) return 0L
+            return try {
+                ISO_DATE_FORMAT.get()?.parse(modifiedStr)?.time
+                    ?: ISO_FALLBACK_FORMAT.get()?.parse(modifiedStr)?.time
+                    ?: 0L
+            } catch (e: Exception) {
+                0L
+            }
+        }
     }
+
+    data class DriveFileInfo(val id: String, val lastModifiedMs: Long)
 
     override val providerType: StorageProviderType = StorageProviderType.GOOGLE_DRIVE
 
@@ -162,13 +191,6 @@ class GoogleDriveProvider(
                 val filesArray = json.optJSONArray("files") ?: return@runCatching emptyList()
 
                 val list = mutableListOf<RemoteFileMetadata>()
-                val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
-                    timeZone = TimeZone.getTimeZone("UTC")
-                }
-                val isoFallback = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-                    timeZone = TimeZone.getTimeZone("UTC")
-                }
-
                 val cleanDir = remoteDirectory.trim('/').replace('\\', '/')
 
                 for (i in 0 until filesArray.length()) {
@@ -181,9 +203,7 @@ class GoogleDriveProvider(
                     val modifiedStr = fileObj.optString("modifiedTime", "")
                     val md5 = fileObj.optString("md5Checksum", "").ifEmpty { null }
 
-                    val modEpoch = try {
-                        isoFormat.parse(modifiedStr)?.time ?: isoFallback.parse(modifiedStr)?.time ?: 0L
-                    } catch (e: Exception) { 0L }
+                    val modEpoch = parseIsoTime(modifiedStr)
 
                     val itemPath = if (cleanDir.isEmpty()) name else "$cleanDir/$name"
                     if (isDir) {
@@ -250,14 +270,24 @@ class GoogleDriveProvider(
                 }
             }
 
+            val mtimeIso = ISO_DATE_FORMAT.get()?.format(java.util.Date(localFile.lastModified()))
             if (existingFileId != null) {
-                // Update content
-                val uploadUrl = "$DRIVE_UPLOAD_BASE/files/$existingFileId?uploadType=media"
+                // Update content & preserve modification time via multipart update
+                val metadataJson = JSONObject().apply {
+                    if (mtimeIso != null) put("modifiedTime", mtimeIso)
+                }.toString()
+
+                val uploadUrl = "$DRIVE_UPLOAD_BASE/files/$existingFileId?uploadType=multipart"
                 val response = executeWithAuth { token ->
+                    val multipartBody = MultipartBody.Builder()
+                        .setType(MultipartBody.FORM)
+                        .addFormDataPart("metadata", null, metadataJson.toRequestBody("application/json; charset=UTF-8".toMediaTypeOrNull()))
+                        .addFormDataPart("file", fileName, createProgressBody())
+                        .build()
                     Request.Builder()
                         .url(uploadUrl)
                         .header("Authorization", "Bearer $token")
-                        .patch(createProgressBody())
+                        .patch(multipartBody)
                         .build()
                 }
                 response.use { resp ->
@@ -266,11 +296,12 @@ class GoogleDriveProvider(
                     }
                 }
             } else {
-                // Multipart Create
-                val metadataJson = JSONObject()
-                    .put("name", fileName)
-                    .put("parents", org.json.JSONArray().put(parentFolderId))
-                    .toString()
+                // Multipart Create with modifiedTime
+                val metadataJson = JSONObject().apply {
+                    put("name", fileName)
+                    put("parents", org.json.JSONArray().put(parentFolderId))
+                    if (mtimeIso != null) put("modifiedTime", mtimeIso)
+                }.toString()
 
                 val uploadUrl = "$DRIVE_UPLOAD_BASE/files?uploadType=multipart"
                 val response = executeWithAuth { token ->
@@ -311,8 +342,8 @@ class GoogleDriveProvider(
                 "root"
             }
 
-            val fileId = findFileIdInFolder(parentFolderId, fileName) ?: error("File not found on Google Drive: $remotePath")
-            val downloadUrl = "$DRIVE_API_BASE/files/$fileId?alt=media"
+            val fileInfo = findFileInfoInFolder(parentFolderId, fileName) ?: error("File not found on Google Drive: $remotePath")
+            val downloadUrl = "$DRIVE_API_BASE/files/${fileInfo.id}?alt=media"
             val response = executeWithAuth { token ->
                 Request.Builder()
                     .url(downloadUrl)
@@ -344,6 +375,9 @@ class GoogleDriveProvider(
 
                 if (destinationFile.exists()) destinationFile.delete()
                 tempFile.renameTo(destinationFile)
+                if (fileInfo.lastModifiedMs > 0L) {
+                    destinationFile.setLastModified(fileInfo.lastModifiedMs)
+                }
                 Unit
             }
         }
@@ -467,9 +501,9 @@ class GoogleDriveProvider(
         }
     }
 
-    private suspend fun findFileIdInFolder(parentId: String, fileName: String): String? {
+    private suspend fun findFileInfoInFolder(parentId: String, fileName: String): DriveFileInfo? {
         val query = "'$parentId' in parents and name = '$fileName' and trashed = false"
-        val url = "$DRIVE_API_BASE/files?q=${java.net.URLEncoder.encode(query, "UTF-8")}&fields=files(id)&pageSize=1"
+        val url = "$DRIVE_API_BASE/files?q=${java.net.URLEncoder.encode(query, "UTF-8")}&fields=files(id,modifiedTime)&pageSize=1"
 
         return try {
             val response = executeWithAuth { token ->
@@ -484,12 +518,20 @@ class GoogleDriveProvider(
                     val json = JSONObject(resp.body?.string() ?: "")
                     val files = json.optJSONArray("files")
                     if (files != null && files.length() > 0) {
-                        files.getJSONObject(0).getString("id")
+                        val fileObj = files.getJSONObject(0)
+                        val id = fileObj.getString("id")
+                        val modifiedStr = fileObj.optString("modifiedTime", "")
+                        val mtime = parseIsoTime(modifiedStr)
+                        DriveFileInfo(id, mtime)
                     } else null
                 } else null
             }
         } catch (e: Exception) {
             null
         }
+    }
+
+    private suspend fun findFileIdInFolder(parentId: String, fileName: String): String? {
+        return findFileInfoInFolder(parentId, fileName)?.id
     }
 }

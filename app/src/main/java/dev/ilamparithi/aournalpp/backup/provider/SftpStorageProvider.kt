@@ -179,6 +179,16 @@ class SftpStorageProvider(
 
             sftp.fileTransfer.transferListener = listener
             sftp.put(FileSystemFile(localFile), targetPath)
+            try {
+                val mtimeSec = (localFile.lastModified() / 1000L).coerceAtLeast(0L)
+                val attrs = net.schmizz.sshj.sftp.FileAttributes.Builder()
+                    .withAtimeMtime(mtimeSec, mtimeSec)
+                    .build()
+                sftp.setattr(targetPath, attrs)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to preserve mtime on SFTP upload for $targetPath", e)
+            }
+            Unit
         }
     }
 
@@ -210,6 +220,10 @@ class SftpStorageProvider(
 
             if (destinationFile.exists()) destinationFile.delete()
             tempFile.renameTo(destinationFile)
+            val mtimeEpoch = stat.mtime * 1000L
+            if (mtimeEpoch > 0L) {
+                destinationFile.setLastModified(mtimeEpoch)
+            }
             Unit
         }
     }

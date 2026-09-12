@@ -434,7 +434,16 @@ class BackupEngine(
         var failedCount = 0
         var totalBytesDownloaded = 0L
         var hasRestoredConfigs = false
-        val remoteFilesToDownload = mutableListOf<Triple<RemoteFileMetadata, String, File>>() // (rf, remotePath, localDestinationFile)
+
+        data class RestoreDownloadItem(
+            val remoteFile: RemoteFileMetadata,
+            val remotePath: String,
+            val localFile: File,
+            val scope: String,
+            val relativePath: String
+        )
+
+        val remoteFilesToDownload = mutableListOf<RestoreDownloadItem>()
         val seenDownloadRemotePaths = mutableSetOf<String>()
 
         try {
@@ -474,7 +483,15 @@ class BackupEngine(
                         continue
                     }
                     if (seenDownloadRemotePaths.add(rf.remotePath)) {
-                        remoteFilesToDownload.add(Triple(rf, rf.remotePath, destFile))
+                        remoteFilesToDownload.add(
+                            RestoreDownloadItem(
+                                remoteFile = rf,
+                                remotePath = rf.remotePath,
+                                localFile = destFile,
+                                scope = BackupScope.NOTES.id,
+                                relativePath = "Notes/$subPath"
+                            )
+                        )
                     }
                 }
 
@@ -493,7 +510,15 @@ class BackupEngine(
                         continue
                     }
                     if (seenDownloadRemotePaths.add(rf.remotePath)) {
-                        remoteFilesToDownload.add(Triple(rf, rf.remotePath, destFile))
+                        remoteFilesToDownload.add(
+                            RestoreDownloadItem(
+                                remoteFile = rf,
+                                remotePath = rf.remotePath,
+                                localFile = destFile,
+                                scope = BackupScope.CONFIG.id,
+                                relativePath = ".config/$subPath"
+                            )
+                        )
                         addedRemotePaths.add(rf.remotePath)
                     }
                 }
@@ -512,16 +537,24 @@ class BackupEngine(
                         continue
                     }
                     if (seenDownloadRemotePaths.add(rf.remotePath)) {
-                        remoteFilesToDownload.add(Triple(rf, rf.remotePath, destFile))
+                        remoteFilesToDownload.add(
+                            RestoreDownloadItem(
+                                remoteFile = rf,
+                                remotePath = rf.remotePath,
+                                localFile = destFile,
+                                scope = BackupScope.CONFIG.id,
+                                relativePath = ".config/xournalpp/$subPath"
+                            )
+                        )
                     }
                 }
             }
 
             // Custom Folder Mappings
-            for (mapping in serviceConfig.customMappings) {
-                if (!mapping.isEnabled) continue
-                val localBase = File(mapping.localFolderPath)
-                val remoteBase = mapping.remoteFolderPath.trim().trim('/')
+            for ((id, _, _, localFolderPath, remoteFolderPath, isEnabled) in serviceConfig.customMappings) {
+                if (!isEnabled) continue
+                val localBase = File(localFolderPath)
+                val remoteBase = remoteFolderPath.trim().trim('/')
                 val remoteMapped = listRemoteRecursively(provider, remoteBase)
                 for (rf in remoteMapped) {
                     if (rf.isDirectory) continue
@@ -535,7 +568,15 @@ class BackupEngine(
                         continue
                     }
                     if (seenDownloadRemotePaths.add(rf.remotePath)) {
-                        remoteFilesToDownload.add(Triple(rf, rf.remotePath, destFile))
+                        remoteFilesToDownload.add(
+                            RestoreDownloadItem(
+                                remoteFile = rf,
+                                remotePath = rf.remotePath,
+                                localFile = destFile,
+                                scope = "custom_$id",
+                                relativePath = subPath
+                            )
+                        )
                     }
                 }
             }
@@ -543,14 +584,16 @@ class BackupEngine(
             val totalDiscovered = remoteFilesToDownload.size
 
             // Apply Conflict Policy
-            val downloadQueue = mutableListOf<Pair<String, File>>()
-            for ((rf, remotePath, localFile) in remoteFilesToDownload) {
+            val downloadQueue = mutableListOf<RestoreDownloadItem>()
+            for (restoreItem in remoteFilesToDownload) {
+                val localFile = restoreItem.localFile
+                val rf = restoreItem.remoteFile
                 if (!localFile.exists()) {
-                    downloadQueue.add(remotePath to localFile)
+                    downloadQueue.add(restoreItem)
                 } else {
                     when (conflictPolicy) {
                         ConflictResolutionPolicy.OVERWRITE_LOCAL -> {
-                            downloadQueue.add(remotePath to localFile)
+                            downloadQueue.add(restoreItem)
                         }
                         ConflictResolutionPolicy.SKIP_CONFLICTS -> {
                             skippedCount++
@@ -560,7 +603,7 @@ class BackupEngine(
                                 val cacheDir = File(context.cacheDir, "config_diff_cache").apply { if (!exists()) mkdirs() }
                                 val tempRemote = File(cacheDir, "remote_restore_${serviceConfig.id}_${localFile.name}")
                                 val dl = try {
-                                    provider.downloadFile(remotePath, tempRemote) { _, _ -> }
+                                    provider.downloadFile(restoreItem.remotePath, tempRemote) { _, _ -> }
                                 } catch (_: Exception) {
                                     Result.failure(Exception("Download failed"))
                                 }
@@ -572,7 +615,7 @@ class BackupEngine(
                                 tempRemote.delete()
                             }
                             if (rf.lastModifiedEpochMs > localFile.lastModified()) {
-                                downloadQueue.add(remotePath to localFile)
+                                downloadQueue.add(restoreItem)
                             } else {
                                 skippedCount++
                             }
@@ -581,21 +624,21 @@ class BackupEngine(
                 }
             }
 
-            val transferItems = downloadQueue.map { (remotePath, localFile) ->
-                val id = "${serviceConfig.id}_${TransferDirection.DOWNLOAD.name}_$remotePath"
+            val transferItems = downloadQueue.map { restoreItem ->
+                val id = "${serviceConfig.id}_${TransferDirection.DOWNLOAD.name}_${restoreItem.remotePath}"
                 TransferItem(
                     id = id,
                     serviceId = serviceConfig.id,
                     serviceName = serviceConfig.name,
-                    localFilePath = localFile.absolutePath,
-                    remotePath = remotePath,
-                    fileName = localFile.name,
+                    localFilePath = restoreItem.localFile.absolutePath,
+                    remotePath = restoreItem.remotePath,
+                    fileName = restoreItem.localFile.name,
                     direction = TransferDirection.DOWNLOAD,
-                    totalBytes = if (localFile.exists()) localFile.length() else 0L,
+                    totalBytes = if (restoreItem.localFile.exists()) restoreItem.localFile.length() else 0L,
                     status = TransferStatus.QUEUED,
-                    scope = "restore",
-                    relativePath = remotePath
-                ) to (remotePath to localFile)
+                    scope = restoreItem.scope,
+                    relativePath = restoreItem.relativePath
+                ) to restoreItem
             }
 
             FileTransferQueueManager.enqueueAll(transferItems.map { it.first })
@@ -605,8 +648,10 @@ class BackupEngine(
             processWithDynamicConcurrency(
                 items = transferItems,
                 concurrencyFlow = FileTransferQueueManager.concurrencyWorkers
-            ) { (item, payload) ->
-                val (remotePath, localFile) = payload
+            ) { (item, restoreItem) ->
+                val remotePath = restoreItem.remotePath
+                val localFile = restoreItem.localFile
+                val rf = restoreItem.remoteFile
                 if (FileTransferQueueManager.isCancelled(item.id) || FileTransferQueueManager.isPaused(item.id)) {
                     return@processWithDynamicConcurrency
                 }
@@ -643,6 +688,35 @@ class BackupEngine(
 
                 if (downloadResult.isSuccess) {
                     FileTransferQueueManager.markCompleted(item.id)
+                    // Preserve original remote modification timestamp on disk
+                    if (rf.lastModifiedEpochMs > 0L) {
+                        try {
+                            localFile.setLastModified(rf.lastModifiedEpochMs)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to restore lastModified on ${localFile.name}", e)
+                        }
+                    }
+
+                    // Register restored file in SyncMetadataDao to prevent redundant cloud uploads
+                    val finalLocalModified = if (rf.lastModifiedEpochMs > 0L) {
+                        rf.lastModifiedEpochMs
+                    } else {
+                        localFile.lastModified()
+                    }
+                    val sha256 = BackupScanner.calculateSha256(localFile)
+                    dao.insertOrUpdate(
+                        SyncMetadataEntity(
+                            serviceId = serviceConfig.id,
+                            relativePath = restoreItem.relativePath,
+                            scope = restoreItem.scope,
+                            localSha256 = sha256,
+                            remoteHash = rf.contentHash ?: sha256,
+                            localLastModified = finalLocalModified,
+                            sizeBytes = localFile.length(),
+                            lastSyncedAt = System.currentTimeMillis()
+                        )
+                    )
+
                     synchronized(this@BackupEngine) {
                         restoredCount++
                         totalBytesDownloaded += localFile.length()
@@ -1204,6 +1278,13 @@ class BackupEngine(
                                         )
                                         if (downloadResult.isSuccess) {
                                             filesUpdated++
+                                            if (chosen.lastModifiedEpochMs > 0L) {
+                                                try {
+                                                    localFile.setLastModified(chosen.lastModifiedEpochMs)
+                                                } catch (e: Exception) {
+                                                    Log.w(TAG, "Failed to restore lastModified on ${localFile.name}", e)
+                                                }
+                                            }
                                             dao.insertOrUpdate(
                                                 SyncMetadataEntity(
                                                     serviceId = srv.id,
@@ -1252,6 +1333,13 @@ class BackupEngine(
                                         )
                                         if (downloadResult.isSuccess) {
                                             filesUpdated++
+                                            if (primary.lastModifiedEpochMs > 0L) {
+                                                try {
+                                                    localFile.setLastModified(primary.lastModifiedEpochMs)
+                                                } catch (e: Exception) {
+                                                    Log.w(TAG, "Failed to restore lastModified on ${localFile.name}", e)
+                                                }
+                                            }
                                             dao.insertOrUpdate(
                                                 SyncMetadataEntity(
                                                     serviceId = srv.id,
@@ -1297,6 +1385,13 @@ class BackupEngine(
                                         )
                                         if (dlResult.isSuccess) {
                                             filesSavedAlongside++
+                                            if (alongsideVer.lastModifiedEpochMs > 0L) {
+                                                try {
+                                                    alongsideFile.setLastModified(alongsideVer.lastModifiedEpochMs)
+                                                } catch (e: Exception) {
+                                                    Log.w(TAG, "Failed to restore lastModified on ${alongsideFile.name}", e)
+                                                }
+                                            }
                                             val alongsideRel = if (relativePath.contains('/')) {
                                                 "${relativePath.substringBeforeLast('/')}/${alongsideFile.name}"
                                             } else {
@@ -1354,6 +1449,13 @@ class BackupEngine(
                                         )
                                         if (dlResult.isSuccess) {
                                             filesSavedAlongside++
+                                            if (remoteVer.lastModifiedEpochMs > 0L) {
+                                                try {
+                                                    alongsideFile.setLastModified(remoteVer.lastModifiedEpochMs)
+                                                } catch (e: Exception) {
+                                                    Log.w(TAG, "Failed to restore lastModified on ${alongsideFile.name}", e)
+                                                }
+                                            }
                                             val alongsideRel = if (relativePath.contains('/')) {
                                                 "${relativePath.substringBeforeLast('/')}/${alongsideFile.name}"
                                             } else {

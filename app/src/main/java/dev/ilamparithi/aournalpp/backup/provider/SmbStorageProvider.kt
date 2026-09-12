@@ -198,6 +198,7 @@ class SmbStorageProvider(
             destinationFile.parentFile?.mkdirs()
             val tempFile = File(destinationFile.parentFile, "${destinationFile.name}.download.tmp")
 
+            var remoteLastModified = 0L
             diskShare.openFile(
                 smbPath,
                 EnumSet.of(AccessMask.GENERIC_READ),
@@ -207,6 +208,9 @@ class SmbStorageProvider(
                 null
             ).use { smbFile ->
                 val totalBytes = smbFile.fileInformation.standardInformation.endOfFile
+                try {
+                    remoteLastModified = smbFile.fileInformation.basicInformation.lastWriteTime.toEpochMillis()
+                } catch (_: Exception) {}
                 smbFile.inputStream.use { input ->
                     tempFile.outputStream().use { out ->
                         val buffer = ByteArray(16384)
@@ -223,6 +227,9 @@ class SmbStorageProvider(
 
             if (destinationFile.exists()) destinationFile.delete()
             tempFile.renameTo(destinationFile)
+            if (remoteLastModified > 0L) {
+                destinationFile.setLastModified(remoteLastModified)
+            }
             Unit
         }
     }

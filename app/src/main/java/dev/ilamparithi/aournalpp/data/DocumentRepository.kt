@@ -908,7 +908,11 @@ class DocumentRepository internal constructor(private val context: Context) {
                 candidate = File(parentDir, "$baseName (Copy $counter).$ext")
             }
 
+            val originalMtime = doc.file.lastModified()
             doc.file.copyTo(candidate, overwrite = false)
+            if (originalMtime > 0L) {
+                candidate.setLastModified(originalMtime)
+            }
             invalidateAllCaches()
             candidate
         }
@@ -1253,6 +1257,9 @@ class DocumentRepository internal constructor(private val context: Context) {
         val autoInfo = note.autosaveInfo ?: return note.file
         try {
             autoInfo.autosaveFile.copyTo(note.file, overwrite = true)
+            if (autoInfo.autosaveLastModifiedMs > 0L) {
+                note.file.setLastModified(autoInfo.autosaveLastModifiedMs)
+            }
             autoInfo.autosaveFile.delete()
         } catch (e: Exception) {
             e.printStackTrace()
@@ -1267,6 +1274,9 @@ class DocumentRepository internal constructor(private val context: Context) {
             val timestamp = sdf.format(Date(autoInfo.autosaveLastModifiedMs))
             val backupFile = File(note.file.parentFile, "${note.file.nameWithoutExtension}_autosave_$timestamp.${note.file.extension}")
             autoInfo.autosaveFile.copyTo(backupFile, overwrite = true)
+            if (autoInfo.autosaveLastModifiedMs > 0L) {
+                backupFile.setLastModified(autoInfo.autosaveLastModifiedMs)
+            }
             autoInfo.autosaveFile.delete()
         } catch (e: Exception) {
             e.printStackTrace()
@@ -1296,6 +1306,9 @@ class DocumentRepository internal constructor(private val context: Context) {
 
         val target = File(targetFolder, effectiveName)
         autoInfo.autosaveFile.copyTo(target, overwrite = true)
+        if (autoInfo.autosaveLastModifiedMs > 0L) {
+            target.setLastModified(autoInfo.autosaveLastModifiedMs)
+        }
         autoInfo.autosaveFile.delete()
         return target
     }
@@ -1342,7 +1355,11 @@ class DocumentRepository internal constructor(private val context: Context) {
         }
 
         val target = File(targetFolder, effectiveName)
+        val originalMtime = recoveryFile.lastModified()
         recoveryFile.copyTo(target, overwrite = true)
+        if (originalMtime > 0L) {
+            target.setLastModified(originalMtime)
+        }
         recoveryFile.delete()
         env.clearQuarantinedEmergencySave()
         return target

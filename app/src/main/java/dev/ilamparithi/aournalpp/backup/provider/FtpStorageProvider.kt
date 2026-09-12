@@ -207,6 +207,10 @@ class FtpStorageProvider(
 
             if (destinationFile.exists()) destinationFile.delete()
             tempFile.renameTo(destinationFile)
+            val mtime = ftpFile?.timestamp?.timeInMillis
+            if (mtime != null && mtime > 0L) {
+                destinationFile.setLastModified(mtime)
+            }
             Unit
         }
     }
