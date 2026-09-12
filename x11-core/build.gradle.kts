@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "com.termux.x11"
     compileSdk = libs.versions.compileSdk.get().toInt()
-    ndkVersion = "27.0.12077973"
+    ndkVersion = libs.versions.ndkVersion.get()
 
     defaultConfig {
         minSdk = libs.versions.minSdk.get().toInt()
