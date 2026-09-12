@@ -1,0 +1,2074 @@
+{
+  "lock_version": 1,
+  "updated_at": "2026-09-12T03:45:20.581348+00:00",
+  "packages": {
+    "aarch64": {
+      "adwaita-icon-theme": {
+        "version": "50.0",
+        "sha256": "02f1a08deb7a209ecd4ba12fb644d8840eb60a2de8389147db42de25ec56d33d",
+        "filename": "pool/main/a/adwaita-icon-theme/adwaita-icon-theme_50.0_all.deb",
+        "repo": "x11"
+      },
+      "adwaita-icon-theme-legacy": {
+        "version": "46.2-1",
+        "sha256": "b2fd45b5e2b19d43e23b2fc49bd6a9a21e716e7f5c120c36c02f9e07cece869f",
+        "filename": "pool/main/a/adwaita-icon-theme-legacy/adwaita-icon-theme-legacy_46.2-1_all.deb",
+        "repo": "x11"
+      },
+      "at-spi2-core": {
+        "version": "2.60.6",
+        "sha256": "4555d8a9584615c984a4d7869af571cc8aedf8e60eef33e07f235598bf0ac51d",
+        "filename": "pool/main/a/at-spi2-core/at-spi2-core_2.60.6_aarch64.deb",
+        "repo": "main"
+      },
+      "atk": {
+        "version": "2.48.0",
+        "sha256": "a0fd8ef948d4b4836f1f7d9507b8a15d4abf065d46984dd08a76c202c22cd6ac",
+        "filename": "pool/main/a/atk/atk_2.48.0_all.deb",
+        "repo": "x11"
+      },
+      "attr": {
+        "version": "2.6.0",
+        "sha256": "50a4d1238564a49985d398061ef61a0020348ddc84bd296e6450c5f0bdca2435",
+        "filename": "pool/main/a/attr/attr_2.6.0_aarch64.deb",
+        "repo": "main"
+      },
+      "bash": {
+        "version": "5.3.15",
+        "sha256": "15f8fef866dad70f675c520d5f56d718a1b1c0cffe9f14e20fff8f8249377d46",
+        "filename": "pool/main/b/bash/bash_5.3.15_aarch64.deb",
+        "repo": "main"
+      },
+      "brotli": {
+        "version": "1.2.0",
+        "sha256": "db1502601d40fb44e6085ad8bfd9311a8b472e98db831ceec9d404c5708bb52c",
+        "filename": "pool/main/b/brotli/brotli_1.2.0_aarch64.deb",
+        "repo": "main"
+      },
+      "bzip2": {
+        "version": "1.0.8-8",
+        "sha256": "7b904d820c34b6c043067ca3c8cb67465413ea5eae3f529a0e05a9ae0df2b89a",
+        "filename": "pool/main/b/bzip2/bzip2_1.0.8-8_aarch64.deb",
+        "repo": "main"
+      },
+      "ca-certificates": {
+        "version": "1:2026.08.13",
+        "sha256": "8e894fb885da738b4ca9a7932703e414d730fa32e78aba33046a747822547d5a",
+        "filename": "pool/main/c/ca-certificates/ca-certificates_1:2026.08.13_all.deb",
+        "repo": "main"
+      },
+      "coreutils": {
+        "version": "9.11-1",
+        "sha256": "5fe326e19256ac2f0a2b278e780e26a848746a43ff37105cbdeddd4c527ccf57",
+        "filename": "pool/main/c/coreutils/coreutils_9.11-1_aarch64.deb",
+        "repo": "main"
+      },
+      "curl": {
+        "version": "8.22.0",
+        "sha256": "19d2aedca5456cecfd3202d48dee7bd2f44584ffc036aa9fde4174c31d0b4af6",
+        "filename": "pool/main/c/curl/curl_8.22.0_aarch64.deb",
+        "repo": "main"
+      },
+      "dash": {
+        "version": "0.5.12-2",
+        "sha256": "47d1ffce6c74fd7b3201162f26e7449f69c96bbd0aee4bf60e80ea2ba6708839",
+        "filename": "pool/main/d/dash/dash_0.5.12-2_aarch64.deb",
+        "repo": "main"
+      },
+      "dbus": {
+        "version": "1.16.2-3",
+        "sha256": "1b6d5e349708414acbbb1404210e32d4e3f390890d02e162639dec1016a8657b",
+        "filename": "pool/main/d/dbus/dbus_1.16.2-3_aarch64.deb",
+        "repo": "main"
+      },
+      "desktop-file-utils": {
+        "version": "0.28-3",
+        "sha256": "15061cc8490a4c5f3c8987f3a21eb4b37fb483c70105cb4cbc57ef9e955c47f5",
+        "filename": "pool/main/d/desktop-file-utils/desktop-file-utils_0.28-3_aarch64.deb",
+        "repo": "x11"
+      },
+      "dialog": {
+        "version": "1.3-20260721-0",
+        "sha256": "f7c96ea214b33652b8e2b3e2f2797dbc0371be5cac5dfe341c57c0a4927bdd78",
+        "filename": "pool/main/d/dialog/dialog_1.3-20260721-0_aarch64.deb",
+        "repo": "main"
+      },
+      "diffutils": {
+        "version": "3.12-2",
+        "sha256": "ab039ac163550ebb73a601f104da2dfb8bbd26f028086821c48edaa2384e68d2",
+        "filename": "pool/main/d/diffutils/diffutils_3.12-2_aarch64.deb",
+        "repo": "main"
+      },
+      "findutils": {
+        "version": "4.10.0-1",
+        "sha256": "a7e9c3db936370077b5a8b012f4d47e994dd64192cc6e4a12ad9f99e82d3fcb5",
+        "filename": "pool/main/f/findutils/findutils_4.10.0-1_aarch64.deb",
+        "repo": "main"
+      },
+      "fontconfig": {
+        "version": "2.18.3",
+        "sha256": "7f8b70dd7ca85b1e7cbb14a11e9e6bd4ce3189ab985aa7af51145484d85f2c61",
+        "filename": "pool/main/f/fontconfig/fontconfig_2.18.3_aarch64.deb",
+        "repo": "main"
+      },
+      "freetype": {
+        "version": "2.14.3",
+        "sha256": "670d27d8f53ef2d887b67f8b82fa480f7132b65ac2264a39b3c5b4db637ee285",
+        "filename": "pool/main/f/freetype/freetype_2.14.3_aarch64.deb",
+        "repo": "main"
+      },
+      "fribidi": {
+        "version": "1.0.16-1",
+        "sha256": "a15369457781dbe0af15344d9d184f22ad5da4a7546f94c44c3614646d1f6904",
+        "filename": "pool/main/f/fribidi/fribidi_1.0.16-1_aarch64.deb",
+        "repo": "main"
+      },
+      "gawk": {
+        "version": "5.3.2",
+        "sha256": "4e5c3163cf0e845434f25560db21920bf7970a7d7fb4462bd73360258c879717",
+        "filename": "pool/main/g/gawk/gawk_5.3.2_aarch64.deb",
+        "repo": "main"
+      },
+      "gdbm": {
+        "version": "1.26-1",
+        "sha256": "c378de833aae3cf41f3028491ea11836479d9833ab653edc27d0c0e0e691d5c5",
+        "filename": "pool/main/g/gdbm/gdbm_1.26-1_aarch64.deb",
+        "repo": "main"
+      },
+      "gdk-pixbuf": {
+        "version": "2.44.8",
+        "sha256": "213da5186fc4ccca336ee7debf150c01c8de72ecb9575950d58f55e535267795",
+        "filename": "pool/main/g/gdk-pixbuf/gdk-pixbuf_2.44.8_aarch64.deb",
+        "repo": "main"
+      },
+      "giflib": {
+        "version": "5.2.2-2",
+        "sha256": "4d30733db0778db1aa2a24fcc39bb97597795e96e85f0ba1ed166965ad1354dc",
+        "filename": "pool/main/g/giflib/giflib_5.2.2-2_aarch64.deb",
+        "repo": "main"
+      },
+      "glib": {
+        "version": "2.90.0",
+        "sha256": "fee438e69505cda78f29e6662afb04613947f56db3e8d1557f25a0a5c3ea7c9c",
+        "filename": "pool/main/g/glib/glib_2.90.0_aarch64.deb",
+        "repo": "main"
+      },
+      "gnupg": {
+        "version": "2.5.17",
+        "sha256": "a32d7fae0e72566f0fb1fe59d62ed411a1546267971c65f0c03358bce23cdc2f",
+        "filename": "pool/main/g/gnupg/gnupg_2.5.17_aarch64.deb",
+        "repo": "main"
+      },
+      "gpgme": {
+        "version": "2.2.0",
+        "sha256": "b8e4ed83e7bed94fd8e7791718d233a0e23df61e8354aae7e7d55a2714cf0264",
+        "filename": "pool/main/g/gpgme/gpgme_2.2.0_aarch64.deb",
+        "repo": "main"
+      },
+      "gpgmepp": {
+        "version": "2.2.0",
+        "sha256": "3457131c9af6e750554b99a3e9d7ce19de5ed8723486d98155d403e7e060f6cf",
+        "filename": "pool/main/g/gpgmepp/gpgmepp_2.2.0_aarch64.deb",
+        "repo": "main"
+      },
+      "grep": {
+        "version": "3.12-3",
+        "sha256": "a2819b49c621b61567e39c5c647d5ed6fe9d51eab71ed73eebf18be76719457d",
+        "filename": "pool/main/g/grep/grep_3.12-3_aarch64.deb",
+        "repo": "main"
+      },
+      "gtk-update-icon-cache": {
+        "version": "3.24.52",
+        "sha256": "0f0c46e5ccfb49a88ef1c6a0df673a926ecc97c4b59926f4ad81c2f44944c5ec",
+        "filename": "pool/main/g/gtk-update-icon-cache/gtk-update-icon-cache_3.24.52_aarch64.deb",
+        "repo": "x11"
+      },
+      "gtk3": {
+        "version": "3.24.52",
+        "sha256": "65e72860a80e97d730012e9d2b686e91f67800ec33d89ae3258778eb298df971",
+        "filename": "pool/main/g/gtk3/gtk3_3.24.52_aarch64.deb",
+        "repo": "x11"
+      },
+      "gtksourceview4": {
+        "version": "4.8.4-4",
+        "sha256": "933a7d7ae08e7266ea2b7308cf1ea773759eaac9b14a0f034a5e222c0e82d90d",
+        "filename": "pool/main/g/gtksourceview4/gtksourceview4_4.8.4-4_aarch64.deb",
+        "repo": "x11"
+      },
+      "gzip": {
+        "version": "1.14-1",
+        "sha256": "5af23d04f40ef62401ed4f99dbb2087740e44aa8ae8c9f3c0ac2d56aa6551348",
+        "filename": "pool/main/g/gzip/gzip_1.14-1_aarch64.deb",
+        "repo": "main"
+      },
+      "harfbuzz": {
+        "version": "14.4.0",
+        "sha256": "7f39fffee18a0956f65d2d3b8e86a36204829cf44f09d36c27d5e5177f36d360",
+        "filename": "pool/main/h/harfbuzz/harfbuzz_14.4.0_aarch64.deb",
+        "repo": "main"
+      },
+      "hicolor-icon-theme": {
+        "version": "0.18",
+        "sha256": "ae90743bc7797f581dd9e156b22eb64c23527a531708952083e53ccbab0b1456",
+        "filename": "pool/main/h/hicolor-icon-theme/hicolor-icon-theme_0.18_all.deb",
+        "repo": "x11"
+      },
+      "highway": {
+        "version": "1.4.0-1",
+        "sha256": "71b8e0c231ab6b66827374543d55997a5cb02d8882f5d53e059ba78cd2511da1",
+        "filename": "pool/main/h/highway/highway_1.4.0-1_aarch64.deb",
+        "repo": "main"
+      },
+      "imlib2": {
+        "version": "1.12.7",
+        "sha256": "badf2dd1911ac9c759f673b1a3a53b6ceefe848ebd62a5280108f2415938ad3c",
+        "filename": "pool/main/i/imlib2/imlib2_1.12.7_aarch64.deb",
+        "repo": "main"
+      },
+      "less": {
+        "version": "704",
+        "sha256": "350d5ec24969106b5fb43695944aed21e388571a7506d1716b1fa3d9d2110f3a",
+        "filename": "pool/main/l/less/less_704_aarch64.deb",
+        "repo": "main"
+      },
+      "libacl": {
+        "version": "2.4.0",
+        "sha256": "cb620e33405e74b566cb05740dca488705cf0c475ec7f795fa333412211b6d92",
+        "filename": "pool/main/liba/libacl/libacl_2.4.0_aarch64.deb",
+        "repo": "main"
+      },
+      "libandroid-execinfo": {
+        "version": "0.1-3",
+        "sha256": "725dd2c6da7fc96e860fcc928e18aa9fb0e85e0bdcaf4f8ce0f0654ca6860fc2",
+        "filename": "pool/main/liba/libandroid-execinfo/libandroid-execinfo_0.1-3_aarch64.deb",
+        "repo": "main"
+      },
+      "libandroid-glob": {
+        "version": "0.6-3",
+        "sha256": "2276ae8adedf0db76c2f4ffc94cc4cceb2f4f5d78e021b54e2e046d1233e7826",
+        "filename": "pool/main/liba/libandroid-glob/libandroid-glob_0.6-3_aarch64.deb",
+        "repo": "main"
+      },
+      "libandroid-posix-semaphore": {
+        "version": "0.1-4",
+        "sha256": "0efa8677a0166315ba4e685863712eba0ca0a1732827492f38226e2723730c7a",
+        "filename": "pool/main/liba/libandroid-posix-semaphore/libandroid-posix-semaphore_0.1-4_aarch64.deb",
+        "repo": "main"
+      },
+      "libandroid-selinux": {
+        "version": "14.0.0.11-1",
+        "sha256": "00afd8c34087c2864737b51fd9d104dc5e955f6ec3c0f50c0c7ef5b4a56866b9",
+        "filename": "pool/main/liba/libandroid-selinux/libandroid-selinux_14.0.0.11-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libandroid-shmem": {
+        "version": "0.7",
+        "sha256": "0da3a24d558b93c92bcf8d611e0826a99ff96e396b148e6cdf33b47c47c57ff6",
+        "filename": "pool/main/liba/libandroid-shmem/libandroid-shmem_0.7_aarch64.deb",
+        "repo": "main"
+      },
+      "libandroid-support": {
+        "version": "29-1",
+        "sha256": "f2f145d6135ad4843ac9670153be3e3944dc1e6f1736d46d2306c28f2b86f517",
+        "filename": "pool/main/liba/libandroid-support/libandroid-support_29-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libaom": {
+        "version": "3.15.0",
+        "sha256": "f284096506dbdeb160ac09d803948b8fb3ad26535361776535ec43d87f185841",
+        "filename": "pool/main/liba/libaom/libaom_3.15.0_aarch64.deb",
+        "repo": "main"
+      },
+      "libassuan": {
+        "version": "3.0.2-1",
+        "sha256": "4886a69d2a30a26429ab4c2f7262a5c8fb30449dcda80358e9213c6715398fc3",
+        "filename": "pool/main/liba/libassuan/libassuan_3.0.2-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libbz2": {
+        "version": "1.0.8-8",
+        "sha256": "4335d7f060650b0aabef545d1334c2f9f280223d5962e13c24a00ec934b794ba",
+        "filename": "pool/main/libb/libbz2/libbz2_1.0.8-8_aarch64.deb",
+        "repo": "main"
+      },
+      "libc++": {
+        "version": "29",
+        "sha256": "bb9f12113c137aa0e8513bb51cc49fe77a5ce3ca39ab9e92c57d228ecdf00222",
+        "filename": "pool/main/libc/libc++/libc++_29_aarch64.deb",
+        "repo": "main"
+      },
+      "libcairo": {
+        "version": "1.18.4-2",
+        "sha256": "ea7a4341c6c3186fec785e1395bda26b4d99cddb0f73cffcbe8c38a8bc2fa68f",
+        "filename": "pool/main/libc/libcairo/libcairo_1.18.4-2_aarch64.deb",
+        "repo": "main"
+      },
+      "libcap-ng": {
+        "version": "2:0.9.6",
+        "sha256": "68e8e2a95e5ac061e40717654fe2014042d88bfa2b85455713ed992eb694f89d",
+        "filename": "pool/main/libc/libcap-ng/libcap-ng_2:0.9.6_aarch64.deb",
+        "repo": "main"
+      },
+      "libcrypt": {
+        "version": "0.2-6",
+        "sha256": "6c283eed576b98cc3568f99638156f8588f77d979579d03bef8683d6eb8601e1",
+        "filename": "pool/main/libc/libcrypt/libcrypt_0.2-6_aarch64.deb",
+        "repo": "main"
+      },
+      "libcurl": {
+        "version": "8.22.0",
+        "sha256": "e780d925d977c32a3cfe6a2c7d340f0726618786deee98b0cb8b601efb93a8c9",
+        "filename": "pool/main/libc/libcurl/libcurl_8.22.0_aarch64.deb",
+        "repo": "main"
+      },
+      "libdav1d": {
+        "version": "1.5.4",
+        "sha256": "4c2ffdcbbb805727caaa2e91b56917830dbacf4245dd439cf2e1c0d61a541613",
+        "filename": "pool/main/libd/libdav1d/libdav1d_1.5.4_aarch64.deb",
+        "repo": "main"
+      },
+      "libde265": {
+        "version": "1.1.2",
+        "sha256": "19f377c5349ce4e12480a707391f42c10e71807382e41a6f687d8bde40814387",
+        "filename": "pool/main/libd/libde265/libde265_1.1.2_aarch64.deb",
+        "repo": "main"
+      },
+      "libdrm": {
+        "version": "2.4.134",
+        "sha256": "0cbe82140cf325c15473fbf53a3711fc7a2fb88e36a3eea58a3267c461ab4a17",
+        "filename": "pool/main/libd/libdrm/libdrm_2.4.134_aarch64.deb",
+        "repo": "main"
+      },
+      "libepoxy": {
+        "version": "1.5.10-3",
+        "sha256": "89cec877ca34febc20dd62eaa07e95871c3c005e006fcc9fc155e09b4f61449b",
+        "filename": "pool/main/libe/libepoxy/libepoxy_1.5.10-3_aarch64.deb",
+        "repo": "main"
+      },
+      "libevent": {
+        "version": "2.1.13",
+        "sha256": "cf99e8e6cd1218c0e4956d2ee69efbb26520211b3e03407463eac9016fe55f25",
+        "filename": "pool/main/libe/libevent/libevent_2.1.13_aarch64.deb",
+        "repo": "main"
+      },
+      "libexpat": {
+        "version": "2.8.4",
+        "sha256": "71934cf00b404627702034bd1308cb58353dd851d9a2d3ecd9205b4ae6a67a27",
+        "filename": "pool/main/libe/libexpat/libexpat_2.8.4_aarch64.deb",
+        "repo": "main"
+      },
+      "libffi": {
+        "version": "3.8.0",
+        "sha256": "4f255badf74cd31f6a2801c17fa1444199c84c834b517b7c843e2fe9ebe91d77",
+        "filename": "pool/main/libf/libffi/libffi_3.8.0_aarch64.deb",
+        "repo": "main"
+      },
+      "libflac": {
+        "version": "1.5.0-1",
+        "sha256": "d1d6fcac6fd6d15c36f34464cb01d5e2140e321d8448dfc396cd7eb1536b1f6c",
+        "filename": "pool/main/libf/libflac/libflac_1.5.0-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libgcrypt": {
+        "version": "1.12.3",
+        "sha256": "6a4fc21f6b4a76ccc0535af3a3076175a7d8804ea40b1d2868a265c31fe4a28c",
+        "filename": "pool/main/libg/libgcrypt/libgcrypt_1.12.3_aarch64.deb",
+        "repo": "main"
+      },
+      "libglvnd": {
+        "version": "1.7.0-1",
+        "sha256": "67f3fd247e4279a7fceddbd2929f8b53e87c255edfc9c07d0dee7df5fe243d2c",
+        "filename": "pool/main/libg/libglvnd/libglvnd_1.7.0-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libgmp": {
+        "version": "6.3.0-2",
+        "sha256": "5a3c1325638946ca212ddcb89bffb2c4459b4c90757d6e69f820e176534037fa",
+        "filename": "pool/main/libg/libgmp/libgmp_6.3.0-2_aarch64.deb",
+        "repo": "main"
+      },
+      "libgnutls": {
+        "version": "3.8.13-1",
+        "sha256": "eb12f2cf82923caf288edd99bc4c19a9dd0cf1de4a03855ff4457a1bbdae146d",
+        "filename": "pool/main/libg/libgnutls/libgnutls_3.8.13-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libgpg-error": {
+        "version": "1.61",
+        "sha256": "452afa22fe36e4d79679e91eae6e22855dd1f855e2a7e1840736279b26611d8f",
+        "filename": "pool/main/libg/libgpg-error/libgpg-error_1.61_aarch64.deb",
+        "repo": "main"
+      },
+      "libgraphite": {
+        "version": "1.3.15",
+        "sha256": "15ac85737a35150cecb9e46ecb32567ae2a4fc28071cdf58fb95e1b77d7889d9",
+        "filename": "pool/main/libg/libgraphite/libgraphite_1.3.15_aarch64.deb",
+        "repo": "main"
+      },
+      "libheif": {
+        "version": "1.23.4",
+        "sha256": "78c53ef6df843f01abc65d79ea6e4253965b64b918ca6d6b0ba10ce069b56c50",
+        "filename": "pool/main/libh/libheif/libheif_1.23.4_aarch64.deb",
+        "repo": "main"
+      },
+      "libice": {
+        "version": "1.1.2-1",
+        "sha256": "7dadc832b7476778f1bf5d1164218762b5abcd1ffe0beebfcb78bc43c281fe12",
+        "filename": "pool/main/libi/libice/libice_1.1.2-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libiconv": {
+        "version": "1.18-1",
+        "sha256": "b19e6f348034bb48d2a5590b5cb242769f682c476717374d134d004cc663dc84",
+        "filename": "pool/main/libi/libiconv/libiconv_1.18-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libicu": {
+        "version": "78.3",
+        "sha256": "f536403f65a08fe0df6e7304184e902d54def77d5c3bd5edfd9109d57601d276",
+        "filename": "pool/main/libi/libicu/libicu_78.3_aarch64.deb",
+        "repo": "main"
+      },
+      "libid3tag": {
+        "version": "0.16.4-1",
+        "sha256": "3e472561e6791800f674a6fb6781cc600f57144eba83ea5bc08985ce5fb6cb3a",
+        "filename": "pool/main/libi/libid3tag/libid3tag_0.16.4-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libidn2": {
+        "version": "2.3.8-1",
+        "sha256": "a450a1ba25759ebf78738484a3efee316c51a1fe7bafb0b01a68e2c058a91020",
+        "filename": "pool/main/libi/libidn2/libidn2_2.3.8-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libjpeg-turbo": {
+        "version": "3.2.0",
+        "sha256": "e6339075bcde28b4902d5a51f4063164834abfd2fa115e881ae637a34585e54f",
+        "filename": "pool/main/libj/libjpeg-turbo/libjpeg-turbo_3.2.0_aarch64.deb",
+        "repo": "main"
+      },
+      "libjxl": {
+        "version": "0.12.0-1",
+        "sha256": "5deef55b1940aef2bc2666fdb4bfcba66cfbf73c17a419f299ddabe312b2ce11",
+        "filename": "pool/main/libj/libjxl/libjxl_0.12.0-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libksba": {
+        "version": "1.8.1",
+        "sha256": "bdfc427c74b3a95737b7b7f3676b0945c7f5bfc3c7f6dda9699d06405a25eacb",
+        "filename": "pool/main/libk/libksba/libksba_1.8.1_aarch64.deb",
+        "repo": "main"
+      },
+      "libllvm": {
+        "version": "21.1.8-3",
+        "sha256": "5056a73f2645fc9c0759e6f94a1bd6edcf36305acaef58dc685211ced9cc2a02",
+        "filename": "pool/main/libl/libllvm/libllvm_21.1.8-3_aarch64.deb",
+        "repo": "main"
+      },
+      "liblzma": {
+        "version": "5.8.4",
+        "sha256": "44e95e6e60dddb3705e60a344a4f009a1085a210797342b721eaff41b44033c0",
+        "filename": "pool/main/libl/liblzma/liblzma_5.8.4_aarch64.deb",
+        "repo": "main"
+      },
+      "liblzo": {
+        "version": "2.10-5",
+        "sha256": "b8a6d232d592dcd6529589c817927cca3254f3ab40a85fce873d997ace7d1ca2",
+        "filename": "pool/main/libl/liblzo/liblzo_2.10-5_aarch64.deb",
+        "repo": "main"
+      },
+      "libmp3lame": {
+        "version": "3.100-7",
+        "sha256": "8c28c74209eb5c31675b4e9c1ee5193c1bf22c49ff5965612dcf9aede5d870d9",
+        "filename": "pool/main/libm/libmp3lame/libmp3lame_3.100-7_aarch64.deb",
+        "repo": "main"
+      },
+      "libmpfr": {
+        "version": "4.2.1-1",
+        "sha256": "5edf5a36e6f4773dc827d37ea515db27c242d3631f3030188a3324be2e00e4c6",
+        "filename": "pool/main/libm/libmpfr/libmpfr_4.2.1-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libmpg123": {
+        "version": "1.33.7",
+        "sha256": "883b104faae53820b2e758363300ccf99e28f627a263d766af61ae07b73b07b3",
+        "filename": "pool/main/libm/libmpg123/libmpg123_1.33.7_aarch64.deb",
+        "repo": "main"
+      },
+      "libnettle": {
+        "version": "4.0+really3.10.2",
+        "sha256": "f2d2a84083e66beab642e88496eb16976ccdb12d1278466e687f01431db8a5fb",
+        "filename": "pool/main/libn/libnettle/libnettle_4.0+really3.10.2_aarch64.deb",
+        "repo": "main"
+      },
+      "libnghttp2": {
+        "version": "1.70.0",
+        "sha256": "ab2e0a3408fe4934ffdf774bd5049a265db2e6db62dcb651baecbecfb81e3f0b",
+        "filename": "pool/main/libn/libnghttp2/libnghttp2_1.70.0_aarch64.deb",
+        "repo": "main"
+      },
+      "libnghttp3": {
+        "version": "1.18.0",
+        "sha256": "0be2ee96def3608afaf24eb0b4b55f3484a37c95ea21bb1d6d85c7d543467603",
+        "filename": "pool/main/libn/libnghttp3/libnghttp3_1.18.0_aarch64.deb",
+        "repo": "main"
+      },
+      "libngtcp2": {
+        "version": "1.25.0",
+        "sha256": "f471bad7f4329b6b0b4aedf124e0a23a35f6ac99bfbae73304136f8bfd570fc3",
+        "filename": "pool/main/libn/libngtcp2/libngtcp2_1.25.0_aarch64.deb",
+        "repo": "main"
+      },
+      "libnpth": {
+        "version": "1.6-3",
+        "sha256": "e134b04b5baaf3edd81bc39483bdb9b93c8e687cb05de5bfce42c4fb70907519",
+        "filename": "pool/main/libn/libnpth/libnpth_1.6-3_aarch64.deb",
+        "repo": "main"
+      },
+      "libnspr": {
+        "version": "4.40",
+        "sha256": "a68dc8460397981b7eaedb7e5f8542fe1ce41d5c86a5e51f5f3dfcc2ced9a988",
+        "filename": "pool/main/libn/libnspr/libnspr_4.40_aarch64.deb",
+        "repo": "main"
+      },
+      "libnss": {
+        "version": "3.129",
+        "sha256": "f280a886624b7d7b0d66f27a7a98a21564d6bf49ef52a5e65442acbab429d008",
+        "filename": "pool/main/libn/libnss/libnss_3.129_aarch64.deb",
+        "repo": "main"
+      },
+      "libogg": {
+        "version": "1.3.6-1",
+        "sha256": "4f1700a532f251ad3600f44f88cd764f1f6b0542d3343391117944b47a92802d",
+        "filename": "pool/main/libo/libogg/libogg_1.3.6-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libopus": {
+        "version": "1.6.1",
+        "sha256": "005a9335ce0ec0f510bbe6e0229c901d6f920cc375fcda56461e96cef70f8ff0",
+        "filename": "pool/main/libo/libopus/libopus_1.6.1_aarch64.deb",
+        "repo": "main"
+      },
+      "libpixman": {
+        "version": "0.46.4-1",
+        "sha256": "364b8c82ff68f8513930e5d413459fb7c52eccc7ba75a97a8c5a38760eee8d33",
+        "filename": "pool/main/libp/libpixman/libpixman_0.46.4-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libpng": {
+        "version": "1.6.58",
+        "sha256": "e47937405c72734867513cf0c63d27f36400d462666b65dfada984667d7228c4",
+        "filename": "pool/main/libp/libpng/libpng_1.6.58_aarch64.deb",
+        "repo": "main"
+      },
+      "librav1e": {
+        "version": "0.8.1",
+        "sha256": "ac7842a5896bdff1b4d4974d9c02e60f7d4a587b8618df691118a8591f8dbccf",
+        "filename": "pool/main/libr/librav1e/librav1e_0.8.1_aarch64.deb",
+        "repo": "main"
+      },
+      "librsvg": {
+        "version": "2.63.0",
+        "sha256": "fbdccfc642f1459d2da124b9e0554e67794d4cb066bbd99d62b3b9b6db101edf",
+        "filename": "pool/main/libr/librsvg/librsvg_2.63.0_aarch64.deb",
+        "repo": "main"
+      },
+      "libsm": {
+        "version": "1.2.6-1",
+        "sha256": "b3d0577db54b9a3663ca10d894fe34ca53339d90974f9cb6c9493f133113cebd",
+        "filename": "pool/main/libs/libsm/libsm_1.2.6-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libsmartcols": {
+        "version": "2.42.1-4",
+        "sha256": "94172cad650f192ef00b7d9ab2fb077b079a6204b1c3b96db6f1806e281fbfa3",
+        "filename": "pool/main/libs/libsmartcols/libsmartcols_2.42.1-4_aarch64.deb",
+        "repo": "main"
+      },
+      "libsndfile": {
+        "version": "1.2.2-3",
+        "sha256": "1e1fb77b14ec26f3ff6ded069e9ec816ab7535ae5d074122c6727b0f59d8aff3",
+        "filename": "pool/main/libs/libsndfile/libsndfile_1.2.2-3_aarch64.deb",
+        "repo": "main"
+      },
+      "libsqlite": {
+        "version": "3.53.4",
+        "sha256": "0e909ce0d50fe123305446cd22e0c5edf535d40344b9b065fbdcdee52f53198d",
+        "filename": "pool/main/libs/libsqlite/libsqlite_3.53.4_aarch64.deb",
+        "repo": "main"
+      },
+      "libssh2": {
+        "version": "1.11.1-2",
+        "sha256": "1add4e0a926b848814e7e2f1817ea28b123c54cabd5bbc4e5cfd65291cbad84e",
+        "filename": "pool/main/libs/libssh2/libssh2_1.11.1-2_aarch64.deb",
+        "repo": "main"
+      },
+      "libtasn1": {
+        "version": "4.21.0",
+        "sha256": "1d02de3a7e5ef4ff7d893597091176b8ddf135f1ddfacff951f76c18711a7342",
+        "filename": "pool/main/libt/libtasn1/libtasn1_4.21.0_aarch64.deb",
+        "repo": "main"
+      },
+      "libtiff": {
+        "version": "4.7.2",
+        "sha256": "998c583d65d7d42dcb177548a218545661f02385a51bb9f5c24f0da4fd046574",
+        "filename": "pool/main/libt/libtiff/libtiff_4.7.2_aarch64.deb",
+        "repo": "main"
+      },
+      "libunbound": {
+        "version": "1.26.0",
+        "sha256": "b7dc8206c8aa22463938b2691f15358b5a656f04100e24ad799b50df0a7a0a1a",
+        "filename": "pool/main/libu/libunbound/libunbound_1.26.0_aarch64.deb",
+        "repo": "main"
+      },
+      "libunistring": {
+        "version": "1.4.2",
+        "sha256": "5ff75cdf3ddd4ddf5dc9705050f270c3422820295a4b26f93496d3e8e9060122",
+        "filename": "pool/main/libu/libunistring/libunistring_1.4.2_aarch64.deb",
+        "repo": "main"
+      },
+      "libuuid": {
+        "version": "2.42.1-4",
+        "sha256": "3458abaa8794d15a9d7763928f00c78e512af06cb3965dd5d8f550ff82c0e27d",
+        "filename": "pool/main/libu/libuuid/libuuid_2.42.1-4_aarch64.deb",
+        "repo": "main"
+      },
+      "libvorbis": {
+        "version": "1.3.7-4",
+        "sha256": "6bfd70c4b570b85594bd06116b75a6f8109ec58cbc123e938b630a6eefdedf4e",
+        "filename": "pool/main/libv/libvorbis/libvorbis_1.3.7-4_aarch64.deb",
+        "repo": "main"
+      },
+      "libwayland": {
+        "version": "1.25.0-1",
+        "sha256": "1f98af1db541027082b57998a6cd62da0c73701d656210c41283f77cccfb3ed6",
+        "filename": "pool/main/libw/libwayland/libwayland_1.25.0-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libwebp": {
+        "version": "1.6.0-rc1-0",
+        "sha256": "80fa46bec4faad0ccfd969df5acfd501d813ca9d112b5c49f3f91390e987f3a9",
+        "filename": "pool/main/libw/libwebp/libwebp_1.6.0-rc1-0_aarch64.deb",
+        "repo": "main"
+      },
+      "libx11": {
+        "version": "1.8.13-1",
+        "sha256": "a18c5cf3cfe2670bf1cb4243e3140a0b7639350a4175b5229c969402fdb12e9f",
+        "filename": "pool/main/libx/libx11/libx11_1.8.13-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libx264": {
+        "version": "1:0.164.3191-1",
+        "sha256": "fe98852cb06ce1c963a54284179d8cda42af2fa82afcac09f7d81e6de4d9bbc1",
+        "filename": "pool/main/libx/libx264/libx264_1:0.164.3191-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libx265": {
+        "version": "4.3",
+        "sha256": "8dbfd50ad2ceea5ffa2384f0f4cc16a87cbf56ac83b4861fa4f640d1beb352cd",
+        "filename": "pool/main/libx/libx265/libx265_4.3_aarch64.deb",
+        "repo": "main"
+      },
+      "libxau": {
+        "version": "1.0.12-2",
+        "sha256": "2d86bed61ce89dd8fdb55e565aede10155f2ce3adaccb61d5f1375aec3314083",
+        "filename": "pool/main/libx/libxau/libxau_1.0.12-2_aarch64.deb",
+        "repo": "main"
+      },
+      "libxcb": {
+        "version": "1.17.0-1",
+        "sha256": "191c3642b6a8c754bc75b69b94a81858ecb5f18766dc085aff55559b8087ad34",
+        "filename": "pool/main/libx/libxcb/libxcb_1.17.0-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libxcomposite": {
+        "version": "0.4.7",
+        "sha256": "858836accb06ac3111eb540b396492733b277e94f5375b0d82cc0255886269b6",
+        "filename": "pool/main/libx/libxcomposite/libxcomposite_0.4.7_aarch64.deb",
+        "repo": "x11"
+      },
+      "libxcursor": {
+        "version": "1.2.3-1",
+        "sha256": "9c5437a9be00f727d1c2ee55ec475ead27e235e6243f0011e2421575d6bc1fad",
+        "filename": "pool/main/libx/libxcursor/libxcursor_1.2.3-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libxdamage": {
+        "version": "1.1.7",
+        "sha256": "2ded05bd7a409cff0dce05942d69028b962921a20d1c3559b302a75711e10c98",
+        "filename": "pool/main/libx/libxdamage/libxdamage_1.1.7_aarch64.deb",
+        "repo": "x11"
+      },
+      "libxdmcp": {
+        "version": "1.1.5-2",
+        "sha256": "caea0cf5c0028af0840774094b8900ef7afffd8f9bbd7b1abfbe66851f0d6077",
+        "filename": "pool/main/libx/libxdmcp/libxdmcp_1.1.5-2_aarch64.deb",
+        "repo": "main"
+      },
+      "libxext": {
+        "version": "1.3.7",
+        "sha256": "6e98a24e0d1996d25f7db8d70ecae02cfe5fc146343428a065149003454c7fc9",
+        "filename": "pool/main/libx/libxext/libxext_1.3.7_aarch64.deb",
+        "repo": "main"
+      },
+      "libxfixes": {
+        "version": "6.0.2",
+        "sha256": "d6791716490c45faae8d7fcfa782f93edceef692c79b61c40ef8191c4e546ef1",
+        "filename": "pool/main/libx/libxfixes/libxfixes_6.0.2_aarch64.deb",
+        "repo": "main"
+      },
+      "libxft": {
+        "version": "2.3.9-1",
+        "sha256": "50e13e49e55dc0246a8b2ead0f84679bc674cd09ffc0e3e60e885f6886cbe2fd",
+        "filename": "pool/main/libx/libxft/libxft_2.3.9-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libxi": {
+        "version": "1.8.3",
+        "sha256": "96a5b93c7f46f1d3f52fa5c3c10bd782027a51a5a5222e5ecf4d7ff46b9e19cf",
+        "filename": "pool/main/libx/libxi/libxi_1.8.3_aarch64.deb",
+        "repo": "main"
+      },
+      "libxinerama": {
+        "version": "1.1.6",
+        "sha256": "2b30adb0517549e00e9206ad5051b135ae9666d5cf2b5f3795d824d6fdb748b2",
+        "filename": "pool/main/libx/libxinerama/libxinerama_1.1.6_aarch64.deb",
+        "repo": "x11"
+      },
+      "libxkbcommon": {
+        "version": "1.13.2",
+        "sha256": "227f3895af38a49e41a06262b83760bb2764711821848cb7b583bcd42d8655d3",
+        "filename": "pool/main/libx/libxkbcommon/libxkbcommon_1.13.2_aarch64.deb",
+        "repo": "x11"
+      },
+      "libxml2": {
+        "version": "2.15.4",
+        "sha256": "cc518f2045db589a0dfc10b0d2c4a18234b80911c8e89ec60bf0eff7bb4db600",
+        "filename": "pool/main/libx/libxml2/libxml2_2.15.4_aarch64.deb",
+        "repo": "main"
+      },
+      "libxrandr": {
+        "version": "1.5.5",
+        "sha256": "07d0ff1c6baa4d343d56706b71781af8ad4c494c345fee5dc542c53732ef08d2",
+        "filename": "pool/main/libx/libxrandr/libxrandr_1.5.5_aarch64.deb",
+        "repo": "main"
+      },
+      "libxrender": {
+        "version": "0.9.12-1",
+        "sha256": "90b21a4bc266468d540cab654ea7c010dcdd949b60d7136e87dad6966cef5cc0",
+        "filename": "pool/main/libx/libxrender/libxrender_0.9.12-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libxshmfence": {
+        "version": "1.3.3-1",
+        "sha256": "7644c2969c2ce4d763785bd2a85eb32ccf8e5ad40228cd92b193f7edb6398d92",
+        "filename": "pool/main/libx/libxshmfence/libxshmfence_1.3.3-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libxtst": {
+        "version": "1.2.5-1",
+        "sha256": "2f0759c5f6dcefd102e530f2c10795e4c9d614ba5354f4074f93a207438b7351",
+        "filename": "pool/main/libx/libxtst/libxtst_1.2.5-1_aarch64.deb",
+        "repo": "main"
+      },
+      "libxxf86vm": {
+        "version": "1.1.7",
+        "sha256": "95903bec784e1d92954e96a4dd978d66075c0935e41467b7063a30acaf0c77c4",
+        "filename": "pool/main/libx/libxxf86vm/libxxf86vm_1.1.7_aarch64.deb",
+        "repo": "main"
+      },
+      "libzip": {
+        "version": "1.11.4-1",
+        "sha256": "735dcb2f7f3be5d4bda7f7a8c0aaa093e3181d4d68e0bfd60393901c5c7200e8",
+        "filename": "pool/main/libz/libzip/libzip_1.11.4-1_aarch64.deb",
+        "repo": "main"
+      },
+      "littlecms": {
+        "version": "2.19.1",
+        "sha256": "274f732a186563beca204f5d016d30cac8e5c24f7c4395b60881f9613eddf1a1",
+        "filename": "pool/main/l/littlecms/littlecms_2.19.1_aarch64.deb",
+        "repo": "main"
+      },
+      "mesa": {
+        "version": "26.0.6-3",
+        "sha256": "db2fe551b24ab6f1eba5df0f8557091fb15ea36cd72abfa7f2e0dc9979e40e16",
+        "filename": "pool/main/m/mesa/mesa_26.0.6-3_aarch64.deb",
+        "repo": "main"
+      },
+      "ncurses": {
+        "version": "6.6.20260307+really6.5.20250830",
+        "sha256": "f44bbfdc3d42ec0217bffa978309390e59cea5a48a9a83226d4a496c42ad0b99",
+        "filename": "pool/main/n/ncurses/ncurses_6.6.20260307+really6.5.20250830_aarch64.deb",
+        "repo": "main"
+      },
+      "ncurses-ui-libs": {
+        "version": "6.6.20260307+really6.5.20250830",
+        "sha256": "7393f369009be189b3d4ec1f9b16ebd57621d6a1b22949ae07685573950d1f37",
+        "filename": "pool/main/n/ncurses-ui-libs/ncurses-ui-libs_6.6.20260307+really6.5.20250830_aarch64.deb",
+        "repo": "main"
+      },
+      "openbox": {
+        "version": "3.6.1-62",
+        "sha256": "b284237ca66c57e4dac231239f1228bda88c6fe3299485cdd2b0df72331edb36",
+        "filename": "pool/main/o/openbox/openbox_3.6.1-62_aarch64.deb",
+        "repo": "x11"
+      },
+      "opengl": {
+        "version": "4.5",
+        "sha256": "dc6db4e3ecc84e31a2ddbd6ed71fe3ca7592a95823a08f099e479ceb77c90d99",
+        "filename": "pool/main/o/opengl/opengl_4.5_all.deb",
+        "repo": "main"
+      },
+      "openjpeg": {
+        "version": "2.5.4",
+        "sha256": "93ad32c8caa0eb8943e2dd86b5c2eaf48a767709a3fa069a5b670d948656c7d8",
+        "filename": "pool/main/o/openjpeg/openjpeg_2.5.4_aarch64.deb",
+        "repo": "main"
+      },
+      "openssl": {
+        "version": "1:3.6.3",
+        "sha256": "86760e9ce736f463236f2c15b1eb3a3fdcfc5778d0fd7077a917448dcc90f3aa",
+        "filename": "pool/main/o/openssl/openssl_1:3.6.3_aarch64.deb",
+        "repo": "main"
+      },
+      "p11-kit": {
+        "version": "0.26.5",
+        "sha256": "7911d7427e3c7182cf364e56a45a92307e5e7fddc105dc468f25ae39aa3e0ad7",
+        "filename": "pool/main/p/p11-kit/p11-kit_0.26.5_aarch64.deb",
+        "repo": "main"
+      },
+      "pango": {
+        "version": "1.58.2",
+        "sha256": "3089e2de505f3aed90b60235af7723bdc6e90bd0dd954bcd8083848a5d9c19e9",
+        "filename": "pool/main/p/pango/pango_1.58.2_aarch64.deb",
+        "repo": "main"
+      },
+      "pcre2": {
+        "version": "10.47",
+        "sha256": "51f915d22de639bfca6ec029ae613987bbe3bc73626eede13319fd2e95f50b63",
+        "filename": "pool/main/p/pcre2/pcre2_10.47_aarch64.deb",
+        "repo": "main"
+      },
+      "pinentry": {
+        "version": "1.3.3",
+        "sha256": "10d4b1e8436ba35457fb1d32c54aba858dd26aa7483e250de384f71316226e8d",
+        "filename": "pool/main/p/pinentry/pinentry_1.3.3_aarch64.deb",
+        "repo": "main"
+      },
+      "poppler": {
+        "version": "26.02.0-1",
+        "sha256": "054bd4342720c0a9d0ec423f3e2cd4bdccb0c0c5f6da36c48c38dfec4541dd81",
+        "filename": "pool/main/p/poppler/poppler_26.02.0-1_aarch64.deb",
+        "repo": "main"
+      },
+      "portaudio": {
+        "version": "19.07.00-3",
+        "sha256": "4ce2ff4e859b1eb5dc40947815204d117703b50d28dceafcd51592f7a6a129cc",
+        "filename": "pool/main/p/portaudio/portaudio_19.07.00-3_aarch64.deb",
+        "repo": "main"
+      },
+      "procps": {
+        "version": "4.0.7",
+        "sha256": "572c030f43eddb116bb80456446cdc21628105500efb4894590cf7e1ec2d2097",
+        "filename": "pool/main/p/procps/procps_4.0.7_aarch64.deb",
+        "repo": "main"
+      },
+      "psmisc": {
+        "version": "23.7-1",
+        "sha256": "99d0db5ba934e7fa38e33bebbda82c78be59b90e4ba85a74a6dabc3d5b5939b0",
+        "filename": "pool/main/p/psmisc/psmisc_23.7-1_aarch64.deb",
+        "repo": "main"
+      },
+      "python": {
+        "version": "3.14.6-1",
+        "sha256": "3166e56c2b6c03fff41191fbb9d736302978e7c484702814d9f6dc99dd6006bd",
+        "filename": "pool/main/p/python/python_3.14.6-1_aarch64.deb",
+        "repo": "main"
+      },
+      "qpdf": {
+        "version": "12.4.1",
+        "sha256": "32d00014a870a6d21b0bdb86cf554d1f6009339ceca888022dfe5c5536c955ed",
+        "filename": "pool/main/q/qpdf/qpdf_12.4.1_aarch64.deb",
+        "repo": "main"
+      },
+      "readline": {
+        "version": "8.3.3",
+        "sha256": "e50fb67f40753247dbb83efb17c7fbee0ac868ffcb5b5555d44d76ec8d90b4b1",
+        "filename": "pool/main/r/readline/readline_8.3.3_aarch64.deb",
+        "repo": "main"
+      },
+      "resolv-conf": {
+        "version": "1.3",
+        "sha256": "ab541abac8e0c81709cd7ca4a02bcfa0d60ba1f4bfe7fd6dce4a694a4a9dfffa",
+        "filename": "pool/main/r/resolv-conf/resolv-conf_1.3_aarch64.deb",
+        "repo": "main"
+      },
+      "sed": {
+        "version": "4.10",
+        "sha256": "9c514efdb527b5daef2d754fdbddd783f4c1e89382f1b56781120d1da99cee80",
+        "filename": "pool/main/s/sed/sed_4.10_aarch64.deb",
+        "repo": "main"
+      },
+      "shared-mime-info": {
+        "version": "2.5.1",
+        "sha256": "b4d9cc869196d30131ff0251ae4c04fcd7a34b1e226e2aa4a7b846d30f355f6b",
+        "filename": "pool/main/s/shared-mime-info/shared-mime-info_2.5.1_aarch64.deb",
+        "repo": "x11"
+      },
+      "startup-notification": {
+        "version": "0.12-29",
+        "sha256": "254c5cfe26f59fd76ec36f10cb8fb4b1b85cef8586ea7f4dbe912ac176cd389d",
+        "filename": "pool/main/s/startup-notification/startup-notification_0.12-29_aarch64.deb",
+        "repo": "x11"
+      },
+      "tar": {
+        "version": "1.35-3",
+        "sha256": "a3847bc259b8654f621d36fa6345b1d6e93932e60e315e526eac2e3ecc5549ec",
+        "filename": "pool/main/t/tar/tar_1.35-3_aarch64.deb",
+        "repo": "main"
+      },
+      "termux-am": {
+        "version": "0.8.0-2",
+        "sha256": "c67200a3c1750819e0aef91be6f166395b61be7f7b2e1437a7294643956f5d32",
+        "filename": "pool/main/t/termux-am/termux-am_0.8.0-2_all.deb",
+        "repo": "main"
+      },
+      "termux-am-socket": {
+        "version": "1.5.0-1",
+        "sha256": "dcf53ccb7e1ac46d50e1de9d5e182b748157ba53fbaf47e7a2d50d78447c550b",
+        "filename": "pool/main/t/termux-am-socket/termux-am-socket_1.5.0-1_aarch64.deb",
+        "repo": "main"
+      },
+      "termux-core": {
+        "version": "0.4.0-1",
+        "sha256": "4f809d70eff0afa8c1beccbf4b5f65e0f59207867462a3a2f66b3e2fcd64b057",
+        "filename": "pool/main/t/termux-core/termux-core_0.4.0-1_aarch64.deb",
+        "repo": "main"
+      },
+      "termux-exec": {
+        "version": "1:2.5.0-1",
+        "sha256": "fd6a06a6a74c6fba2d1cec56dc8b5726e6488918322b06fd19fe5cff34b28a5d",
+        "filename": "pool/main/t/termux-exec/termux-exec_1:2.5.0-1_aarch64.deb",
+        "repo": "main"
+      },
+      "termux-tools": {
+        "version": "1.46.0+really1.45.0-1",
+        "sha256": "970fb05a835169f218ea73479eda0f2574f5f70c2af54119f42f77e97cee98e1",
+        "filename": "pool/main/t/termux-tools/termux-tools_1.46.0+really1.45.0-1_aarch64.deb",
+        "repo": "main"
+      },
+      "ttf-dejavu": {
+        "version": "2.37-8",
+        "sha256": "3fa9352d528cb19aebcdd2de5d1fb0cb67b201be3ae264207fc1a277d2cfd6da",
+        "filename": "pool/main/t/ttf-dejavu/ttf-dejavu_2.37-8_all.deb",
+        "repo": "main"
+      },
+      "util-linux": {
+        "version": "2.42.1-4",
+        "sha256": "d860076365b60b657467b3b393960d070d99d05c5e1c11ce7062612c34571425",
+        "filename": "pool/main/u/util-linux/util-linux_2.42.1-4_aarch64.deb",
+        "repo": "main"
+      },
+      "vulkan-loader": {
+        "version": "0.0.3",
+        "sha256": "d290a35afb15217b4da0858bb149d6900f92ee25970b5febd6ea4f2c6d29e2be",
+        "filename": "pool/main/v/vulkan-loader/vulkan-loader_0.0.3_all.deb",
+        "repo": "main"
+      },
+      "vulkan-loader-generic": {
+        "version": "1.4.362",
+        "sha256": "f830c374fae2b3d421de401185e4171ff52b706701a1d9e19ab17281a84893ac",
+        "filename": "pool/main/v/vulkan-loader-generic/vulkan-loader-generic_1.4.362_aarch64.deb",
+        "repo": "main"
+      },
+      "xcb-util": {
+        "version": "0.4.1-1",
+        "sha256": "95f985a71136c6036a61db655315b291b7ef83e281bedc4493838c91d9da4f2e",
+        "filename": "pool/main/x/xcb-util/xcb-util_0.4.1-1_aarch64.deb",
+        "repo": "x11"
+      },
+      "xdotool": {
+        "version": "3.20211022.1-1",
+        "sha256": "c1998203d862b86ab5e99ec24a18423aac1083de7c679c32c032d2b7fcec6a15",
+        "filename": "pool/main/x/xdotool/xdotool_3.20211022.1-1_aarch64.deb",
+        "repo": "x11"
+      },
+      "xkeyboard-config": {
+        "version": "2.48-1",
+        "sha256": "5e7317d47130aee16d8e18014423f1b1ab23601ca57cea81cd160ec4c1424167",
+        "filename": "pool/main/x/xkeyboard-config/xkeyboard-config_2.48-1_all.deb",
+        "repo": "x11"
+      },
+      "xorg-util-macros": {
+        "version": "1.20.2",
+        "sha256": "11765ad1a6f181e36f807464f7b4360593d847dce245202a393eb2ca156520d0",
+        "filename": "pool/main/x/xorg-util-macros/xorg-util-macros_1.20.2_all.deb",
+        "repo": "main"
+      },
+      "xorgproto": {
+        "version": "2025.1",
+        "sha256": "cd2a6405a79540f6cc0dbc991fffdbe68058f3223ed456ac66c07207048ef62f",
+        "filename": "pool/main/x/xorgproto/xorgproto_2025.1_all.deb",
+        "repo": "main"
+      },
+      "xournalpp": {
+        "version": "1.3.7",
+        "sha256": "96af7b42854b47ac811ba4f6beef523bf4d7e36ff9b965be0235539a8f46fec2",
+        "filename": "pool/main/x/xournalpp/xournalpp_1.3.7_aarch64.deb",
+        "repo": "x11"
+      },
+      "xz-utils": {
+        "version": "5.8.4",
+        "sha256": "c26e35d5393d4ad59d7bfbac93570d418996e69bc160458bee0e165844ae56e8",
+        "filename": "pool/main/x/xz-utils/xz-utils_5.8.4_aarch64.deb",
+        "repo": "main"
+      },
+      "zlib": {
+        "version": "1.3.2",
+        "sha256": "75e7d0af17fcc3b40004309fdc00a1ddb9ae08346dce5e269902c34ac3966ac9",
+        "filename": "pool/main/z/zlib/zlib_1.3.2_aarch64.deb",
+        "repo": "main"
+      },
+      "zstd": {
+        "version": "1.5.7-1",
+        "sha256": "e1b4a5113648da8de189620ba1fce74c48b2d0833d9043391b9a1c91fb606fd3",
+        "filename": "pool/main/z/zstd/zstd_1.5.7-1_aarch64.deb",
+        "repo": "main"
+      }
+    },
+    "x86_64": {
+      "adwaita-icon-theme": {
+        "version": "50.0",
+        "sha256": "02f1a08deb7a209ecd4ba12fb644d8840eb60a2de8389147db42de25ec56d33d",
+        "filename": "pool/main/a/adwaita-icon-theme/adwaita-icon-theme_50.0_all.deb",
+        "repo": "x11"
+      },
+      "adwaita-icon-theme-legacy": {
+        "version": "46.2-1",
+        "sha256": "b2fd45b5e2b19d43e23b2fc49bd6a9a21e716e7f5c120c36c02f9e07cece869f",
+        "filename": "pool/main/a/adwaita-icon-theme-legacy/adwaita-icon-theme-legacy_46.2-1_all.deb",
+        "repo": "x11"
+      },
+      "at-spi2-core": {
+        "version": "2.60.6",
+        "sha256": "b3adb07aaba0dcd1315ba19e9076e8915a01ef60fc034f446138b699c42747eb",
+        "filename": "pool/main/a/at-spi2-core/at-spi2-core_2.60.6_x86_64.deb",
+        "repo": "main"
+      },
+      "atk": {
+        "version": "2.48.0",
+        "sha256": "a0fd8ef948d4b4836f1f7d9507b8a15d4abf065d46984dd08a76c202c22cd6ac",
+        "filename": "pool/main/a/atk/atk_2.48.0_all.deb",
+        "repo": "x11"
+      },
+      "attr": {
+        "version": "2.6.0",
+        "sha256": "47e4ef0557e9b2c3981bd9b834210a597ead144caf9860d343bf1bd004017a1a",
+        "filename": "pool/main/a/attr/attr_2.6.0_x86_64.deb",
+        "repo": "main"
+      },
+      "bash": {
+        "version": "5.3.15",
+        "sha256": "cf913f774f9c485a79e935f05f07130249869f71f9464638af250a4499487920",
+        "filename": "pool/main/b/bash/bash_5.3.15_x86_64.deb",
+        "repo": "main"
+      },
+      "brotli": {
+        "version": "1.2.0",
+        "sha256": "f802caf8093b2e5dcfd22a67f2a7deee17c094eca24a0e87b9722283d954fe7a",
+        "filename": "pool/main/b/brotli/brotli_1.2.0_x86_64.deb",
+        "repo": "main"
+      },
+      "bzip2": {
+        "version": "1.0.8-8",
+        "sha256": "1a44821b7573ab8e1df88a517e7201954b77eb99f9368af0ba05d2cdf9a23b3e",
+        "filename": "pool/main/b/bzip2/bzip2_1.0.8-8_x86_64.deb",
+        "repo": "main"
+      },
+      "ca-certificates": {
+        "version": "1:2026.08.13",
+        "sha256": "8e894fb885da738b4ca9a7932703e414d730fa32e78aba33046a747822547d5a",
+        "filename": "pool/main/c/ca-certificates/ca-certificates_1:2026.08.13_all.deb",
+        "repo": "main"
+      },
+      "coreutils": {
+        "version": "9.11-1",
+        "sha256": "12ce87084ad1b1fecadfe39971d47869511f975e268b737a509da3f96e894c9e",
+        "filename": "pool/main/c/coreutils/coreutils_9.11-1_x86_64.deb",
+        "repo": "main"
+      },
+      "curl": {
+        "version": "8.22.0",
+        "sha256": "5a469424bf2181773671e63cf37c18bbb45ec2431e5002d8f9f0db8ffd9d3ff2",
+        "filename": "pool/main/c/curl/curl_8.22.0_x86_64.deb",
+        "repo": "main"
+      },
+      "dash": {
+        "version": "0.5.12-2",
+        "sha256": "21526c2cfd7d55f4a84413d10c3bf4cfa0f17ab9e392d38f372cb45a6cdb6732",
+        "filename": "pool/main/d/dash/dash_0.5.12-2_x86_64.deb",
+        "repo": "main"
+      },
+      "dbus": {
+        "version": "1.16.2-3",
+        "sha256": "7860940419ff89270227063267f7aab3e3b7a91789359d9296190e50a361aff7",
+        "filename": "pool/main/d/dbus/dbus_1.16.2-3_x86_64.deb",
+        "repo": "main"
+      },
+      "desktop-file-utils": {
+        "version": "0.28-3",
+        "sha256": "a0ab32a4b2690b324f80f5b4c02e9bc7829051c125942d16097d1c46b15af572",
+        "filename": "pool/main/d/desktop-file-utils/desktop-file-utils_0.28-3_x86_64.deb",
+        "repo": "x11"
+      },
+      "dialog": {
+        "version": "1.3-20260721-0",
+        "sha256": "322ef140175c592dab77e40c7d0c1166968257b5c5f8e699d058ae04432a07ce",
+        "filename": "pool/main/d/dialog/dialog_1.3-20260721-0_x86_64.deb",
+        "repo": "main"
+      },
+      "diffutils": {
+        "version": "3.12-2",
+        "sha256": "027f349acf5c23c2482d2060c8c78daa91abd7d8f3a9ada61e824e0701c66d44",
+        "filename": "pool/main/d/diffutils/diffutils_3.12-2_x86_64.deb",
+        "repo": "main"
+      },
+      "findutils": {
+        "version": "4.10.0-1",
+        "sha256": "7d708a76d6ef19cf2cc4c915bc194595e999d008508482ec3af7159ed2c72997",
+        "filename": "pool/main/f/findutils/findutils_4.10.0-1_x86_64.deb",
+        "repo": "main"
+      },
+      "fontconfig": {
+        "version": "2.18.3",
+        "sha256": "5c40bc38f24e22eb7d6654748aaf8d6a33a5a69ff53cf02a249e8aa3ecefc2e5",
+        "filename": "pool/main/f/fontconfig/fontconfig_2.18.3_x86_64.deb",
+        "repo": "main"
+      },
+      "freetype": {
+        "version": "2.14.3",
+        "sha256": "9a9bb469c3c8d3c09b0ddd22eb3ff756c61ec880873dd63b99ffce0a862b17ca",
+        "filename": "pool/main/f/freetype/freetype_2.14.3_x86_64.deb",
+        "repo": "main"
+      },
+      "fribidi": {
+        "version": "1.0.16-1",
+        "sha256": "960fbbe5ad647d6d29f58ac160cb051d101404c563b5356f3468a20061b367b1",
+        "filename": "pool/main/f/fribidi/fribidi_1.0.16-1_x86_64.deb",
+        "repo": "main"
+      },
+      "gawk": {
+        "version": "5.3.2",
+        "sha256": "8f15b9220b0bae5bda926e7971ce76e2eb181350d16a0f458f76ff1242edb972",
+        "filename": "pool/main/g/gawk/gawk_5.3.2_x86_64.deb",
+        "repo": "main"
+      },
+      "gdbm": {
+        "version": "1.26-1",
+        "sha256": "af6c89b403d42a98898c665fc2c48da59a7d20e6e26f651a654790661844001f",
+        "filename": "pool/main/g/gdbm/gdbm_1.26-1_x86_64.deb",
+        "repo": "main"
+      },
+      "gdk-pixbuf": {
+        "version": "2.44.8",
+        "sha256": "b84a632b8694419f95c124529c916f7d072449e51e3dc7c057654025d878013c",
+        "filename": "pool/main/g/gdk-pixbuf/gdk-pixbuf_2.44.8_x86_64.deb",
+        "repo": "main"
+      },
+      "giflib": {
+        "version": "5.2.2-2",
+        "sha256": "4431fe5541c176e7551e0b375acc47cd890c2660bbc631ab6eff2180f1af9b14",
+        "filename": "pool/main/g/giflib/giflib_5.2.2-2_x86_64.deb",
+        "repo": "main"
+      },
+      "glib": {
+        "version": "2.90.0",
+        "sha256": "268c60ee90695dd553715cfd1414a269e12f52711e428c4ae8a8152a0531577f",
+        "filename": "pool/main/g/glib/glib_2.90.0_x86_64.deb",
+        "repo": "main"
+      },
+      "gnupg": {
+        "version": "2.5.17",
+        "sha256": "8c4dd8bb92f4d204b41f4b0047ec46139d3b60bff34a510ba1b9a50282ed2bc6",
+        "filename": "pool/main/g/gnupg/gnupg_2.5.17_x86_64.deb",
+        "repo": "main"
+      },
+      "gpgme": {
+        "version": "2.2.0",
+        "sha256": "68be49ee0586657ad2c7b36746b054076f20c6c079b32ed33eb919dfdfe179fb",
+        "filename": "pool/main/g/gpgme/gpgme_2.2.0_x86_64.deb",
+        "repo": "main"
+      },
+      "gpgmepp": {
+        "version": "2.2.0",
+        "sha256": "b70b478a51f296e6c8f47471908dc8b09782907c21a64ad3aa5a84344f7d3987",
+        "filename": "pool/main/g/gpgmepp/gpgmepp_2.2.0_x86_64.deb",
+        "repo": "main"
+      },
+      "grep": {
+        "version": "3.12-3",
+        "sha256": "2469d26137060b6dc1d9a480fc2ac5159bcd5dbb91e1e1b0947c985460cd1212",
+        "filename": "pool/main/g/grep/grep_3.12-3_x86_64.deb",
+        "repo": "main"
+      },
+      "gtk-update-icon-cache": {
+        "version": "3.24.52",
+        "sha256": "ccb3e3c5e996d191b6be5f2b05708bed565d9cc802308ec2672671e7edd5c421",
+        "filename": "pool/main/g/gtk-update-icon-cache/gtk-update-icon-cache_3.24.52_x86_64.deb",
+        "repo": "x11"
+      },
+      "gtk3": {
+        "version": "3.24.52",
+        "sha256": "d44a21f14818cc6763fd4769cfd779c7b706e2f27eb3efd38a903ca39ec90782",
+        "filename": "pool/main/g/gtk3/gtk3_3.24.52_x86_64.deb",
+        "repo": "x11"
+      },
+      "gtksourceview4": {
+        "version": "4.8.4-4",
+        "sha256": "a6205f2d9ce20c67cbf28df87cca568c7cae6b745eb1772c7718aaabc95fbe83",
+        "filename": "pool/main/g/gtksourceview4/gtksourceview4_4.8.4-4_x86_64.deb",
+        "repo": "x11"
+      },
+      "gzip": {
+        "version": "1.14-1",
+        "sha256": "5f9f3f55038f2edcc58afb8b197b77fcdbcbaec46f98150d88d0a45817240b92",
+        "filename": "pool/main/g/gzip/gzip_1.14-1_x86_64.deb",
+        "repo": "main"
+      },
+      "harfbuzz": {
+        "version": "14.4.0",
+        "sha256": "96b981e0770b49d6d08eecce08e1097ffebf8bece070b0ce2807c4617cec1ef5",
+        "filename": "pool/main/h/harfbuzz/harfbuzz_14.4.0_x86_64.deb",
+        "repo": "main"
+      },
+      "hicolor-icon-theme": {
+        "version": "0.18",
+        "sha256": "ae90743bc7797f581dd9e156b22eb64c23527a531708952083e53ccbab0b1456",
+        "filename": "pool/main/h/hicolor-icon-theme/hicolor-icon-theme_0.18_all.deb",
+        "repo": "x11"
+      },
+      "highway": {
+        "version": "1.4.0-1",
+        "sha256": "00c3ed53c3d9697e4ec3bca3758fa2ea39b38ee753cf284e08cc839d51fd04e9",
+        "filename": "pool/main/h/highway/highway_1.4.0-1_x86_64.deb",
+        "repo": "main"
+      },
+      "imlib2": {
+        "version": "1.12.7",
+        "sha256": "15cce0fa8347802d611a4f9920d475608a7316555f67a2ff04fa883bc2dc1711",
+        "filename": "pool/main/i/imlib2/imlib2_1.12.7_x86_64.deb",
+        "repo": "main"
+      },
+      "less": {
+        "version": "704",
+        "sha256": "e940ebaa1d28bcbfa6a6f1538a414e8716b0d01c71f7845f3ecc7fd1d8dcfbc2",
+        "filename": "pool/main/l/less/less_704_x86_64.deb",
+        "repo": "main"
+      },
+      "libacl": {
+        "version": "2.4.0",
+        "sha256": "cfb92789ab1b1aad89d0918cd406e755918f2331276854a2c8a57748fb6c4049",
+        "filename": "pool/main/liba/libacl/libacl_2.4.0_x86_64.deb",
+        "repo": "main"
+      },
+      "libandroid-execinfo": {
+        "version": "0.1-3",
+        "sha256": "348582b47b4b6dec8c13147437d8bd93d029239bc95f30635074cad08efb6220",
+        "filename": "pool/main/liba/libandroid-execinfo/libandroid-execinfo_0.1-3_x86_64.deb",
+        "repo": "main"
+      },
+      "libandroid-glob": {
+        "version": "0.6-3",
+        "sha256": "33b5d2ce934e89d50363e7ea267cea697da937d14de9fcea78cc7271956ef86e",
+        "filename": "pool/main/liba/libandroid-glob/libandroid-glob_0.6-3_x86_64.deb",
+        "repo": "main"
+      },
+      "libandroid-posix-semaphore": {
+        "version": "0.1-4",
+        "sha256": "4bde3f8bc00fa59761544593f0606a05e4b449801f1c79038c42ce66988d0eb0",
+        "filename": "pool/main/liba/libandroid-posix-semaphore/libandroid-posix-semaphore_0.1-4_x86_64.deb",
+        "repo": "main"
+      },
+      "libandroid-selinux": {
+        "version": "14.0.0.11-1",
+        "sha256": "99cf96556683ddb53f7d645ca1720e10523c4796ce5b41c583da9f89a47679ce",
+        "filename": "pool/main/liba/libandroid-selinux/libandroid-selinux_14.0.0.11-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libandroid-shmem": {
+        "version": "0.7",
+        "sha256": "ffa9e4c87467b158b148d0ff92dda796aa038276c2075af3269cdcdb06f25797",
+        "filename": "pool/main/liba/libandroid-shmem/libandroid-shmem_0.7_x86_64.deb",
+        "repo": "main"
+      },
+      "libandroid-support": {
+        "version": "29-1",
+        "sha256": "665900760c05959ec076082a0941f05bd452f301e5a70bdfa7383fd3404d44d5",
+        "filename": "pool/main/liba/libandroid-support/libandroid-support_29-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libaom": {
+        "version": "3.15.0",
+        "sha256": "f1c11e5061770fe375fcdf3259de0d3dcde3d46b6b10263239895934912f0e04",
+        "filename": "pool/main/liba/libaom/libaom_3.15.0_x86_64.deb",
+        "repo": "main"
+      },
+      "libassuan": {
+        "version": "3.0.2-1",
+        "sha256": "80efeac96544024e2f09afe8e80558928b597d1ebebf3379e9b51b499d036eb2",
+        "filename": "pool/main/liba/libassuan/libassuan_3.0.2-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libbz2": {
+        "version": "1.0.8-8",
+        "sha256": "f6f81d38a40c1626202da1e87727e5a3e6de296b1c0eb252af8948646b164ca0",
+        "filename": "pool/main/libb/libbz2/libbz2_1.0.8-8_x86_64.deb",
+        "repo": "main"
+      },
+      "libc++": {
+        "version": "29",
+        "sha256": "a4325afa2ecde73742499766e2a46202003e5cb3dcd2b7773ae25f386f3fecfa",
+        "filename": "pool/main/libc/libc++/libc++_29_x86_64.deb",
+        "repo": "main"
+      },
+      "libcairo": {
+        "version": "1.18.4-2",
+        "sha256": "8406ae5e0121e8eccacb25ecb907383448feb26ed6b85f9c5d0b4f96e88f6665",
+        "filename": "pool/main/libc/libcairo/libcairo_1.18.4-2_x86_64.deb",
+        "repo": "main"
+      },
+      "libcap-ng": {
+        "version": "2:0.9.6",
+        "sha256": "5f5c07e5e96bb415a935b1b25f729ba03db7952a5e55c65582de5fdbe481c83d",
+        "filename": "pool/main/libc/libcap-ng/libcap-ng_2:0.9.6_x86_64.deb",
+        "repo": "main"
+      },
+      "libcrypt": {
+        "version": "0.2-6",
+        "sha256": "c424f96ce977cf2e8aa44925a852fd4c6c63564490a100cc44f63b71afd943e2",
+        "filename": "pool/main/libc/libcrypt/libcrypt_0.2-6_x86_64.deb",
+        "repo": "main"
+      },
+      "libcurl": {
+        "version": "8.22.0",
+        "sha256": "b442ccf9eea4a4695bdc71b1bc577990e3d56024d245886f9b4bf2efa3e009aa",
+        "filename": "pool/main/libc/libcurl/libcurl_8.22.0_x86_64.deb",
+        "repo": "main"
+      },
+      "libdav1d": {
+        "version": "1.5.4",
+        "sha256": "93f0c7fd4c7706cf89783243c3a1e9676b25a9a78976caa6524f1cad73f4a38c",
+        "filename": "pool/main/libd/libdav1d/libdav1d_1.5.4_x86_64.deb",
+        "repo": "main"
+      },
+      "libde265": {
+        "version": "1.1.2",
+        "sha256": "282a990632ed0ca05338a554891efeba00ebffe2cc95916a4e36d8760a2f18e4",
+        "filename": "pool/main/libd/libde265/libde265_1.1.2_x86_64.deb",
+        "repo": "main"
+      },
+      "libdrm": {
+        "version": "2.4.134",
+        "sha256": "7d374e5286a4764b7329bff3b2690e9e2498c8fba86e2624cc35b276d710bb08",
+        "filename": "pool/main/libd/libdrm/libdrm_2.4.134_x86_64.deb",
+        "repo": "main"
+      },
+      "libepoxy": {
+        "version": "1.5.10-3",
+        "sha256": "7888596517c2792353396cfb0c81a95fb092d60a96824d2a591dc0be9195bc64",
+        "filename": "pool/main/libe/libepoxy/libepoxy_1.5.10-3_x86_64.deb",
+        "repo": "main"
+      },
+      "libevent": {
+        "version": "2.1.13",
+        "sha256": "5d0a0913d0280d5c1a499b119c4867499e893056d1dec4bac29a7723545217ec",
+        "filename": "pool/main/libe/libevent/libevent_2.1.13_x86_64.deb",
+        "repo": "main"
+      },
+      "libexpat": {
+        "version": "2.8.4",
+        "sha256": "0b1de1b009a09cb02d8ddc2311799b4c527fd6863765c0cc782f83143c1369ba",
+        "filename": "pool/main/libe/libexpat/libexpat_2.8.4_x86_64.deb",
+        "repo": "main"
+      },
+      "libffi": {
+        "version": "3.8.0",
+        "sha256": "59121ca4bc5f5735d7bb603bd99548983064e8fde97d236e97122cb87d3452a3",
+        "filename": "pool/main/libf/libffi/libffi_3.8.0_x86_64.deb",
+        "repo": "main"
+      },
+      "libflac": {
+        "version": "1.5.0-1",
+        "sha256": "2f07360bfa8c876eeb73cd566c4c0bde19345645dcae4fbc6db14cc12301c6e3",
+        "filename": "pool/main/libf/libflac/libflac_1.5.0-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libgcrypt": {
+        "version": "1.12.3",
+        "sha256": "f3c560b8f17c7a91879f831c7a405c1e51f5280448c4e6143de9477ee29e6d1f",
+        "filename": "pool/main/libg/libgcrypt/libgcrypt_1.12.3_x86_64.deb",
+        "repo": "main"
+      },
+      "libglvnd": {
+        "version": "1.7.0-1",
+        "sha256": "582c1a31b84c7da44161c72a757516cda89aaa9d520a155a066ed0910db2a93d",
+        "filename": "pool/main/libg/libglvnd/libglvnd_1.7.0-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libgmp": {
+        "version": "6.3.0-2",
+        "sha256": "743e742d1d2900bffecf17e85487c830df871653bcdaede223425d2c62ac1b49",
+        "filename": "pool/main/libg/libgmp/libgmp_6.3.0-2_x86_64.deb",
+        "repo": "main"
+      },
+      "libgnutls": {
+        "version": "3.8.13-1",
+        "sha256": "c64e2016faba3c601deed91c94812f44636c545809c1938ebbf92c52024c273f",
+        "filename": "pool/main/libg/libgnutls/libgnutls_3.8.13-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libgpg-error": {
+        "version": "1.61",
+        "sha256": "b645274b1ae452b4a9fe85bf0c14c0e4ab7a8370bb4f5141112314a61be660ff",
+        "filename": "pool/main/libg/libgpg-error/libgpg-error_1.61_x86_64.deb",
+        "repo": "main"
+      },
+      "libgraphite": {
+        "version": "1.3.15",
+        "sha256": "c82bd46d191d4cbf08547f3537200c5c459ec1dcbb82fcd05b3704f05f47bc21",
+        "filename": "pool/main/libg/libgraphite/libgraphite_1.3.15_x86_64.deb",
+        "repo": "main"
+      },
+      "libheif": {
+        "version": "1.23.4",
+        "sha256": "128495bd9b5193c3be4bbfa4b3cb43deadbab4ea1f24c118a416f893b37f67a8",
+        "filename": "pool/main/libh/libheif/libheif_1.23.4_x86_64.deb",
+        "repo": "main"
+      },
+      "libice": {
+        "version": "1.1.2-1",
+        "sha256": "062e08f666caee77434851629bd82451f81051af7ff89e1c5f73c635013eeb94",
+        "filename": "pool/main/libi/libice/libice_1.1.2-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libiconv": {
+        "version": "1.18-1",
+        "sha256": "c171356580d85f58d3eedc9c5f49b563d80afb18c92cbbb0382295d539bc0719",
+        "filename": "pool/main/libi/libiconv/libiconv_1.18-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libicu": {
+        "version": "78.3",
+        "sha256": "19fa8c4d828719f465d523983b1e0d833e4130bb22790104638965d97e27fe60",
+        "filename": "pool/main/libi/libicu/libicu_78.3_x86_64.deb",
+        "repo": "main"
+      },
+      "libid3tag": {
+        "version": "0.16.4-1",
+        "sha256": "6932ac26bd58941e7e1dd9a1fc7301c4ba97cb296bf536633c99104e95e49f09",
+        "filename": "pool/main/libi/libid3tag/libid3tag_0.16.4-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libidn2": {
+        "version": "2.3.8-1",
+        "sha256": "4f4f91f5bc8b7b215f153fb96808f75b55a86c6e8ec66ff3286b859cb6048500",
+        "filename": "pool/main/libi/libidn2/libidn2_2.3.8-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libjpeg-turbo": {
+        "version": "3.2.0",
+        "sha256": "1726e1550b25dc0c14499702ff1c2cd0ff084516cfc24d7629e272907c727b77",
+        "filename": "pool/main/libj/libjpeg-turbo/libjpeg-turbo_3.2.0_x86_64.deb",
+        "repo": "main"
+      },
+      "libjxl": {
+        "version": "0.12.0-1",
+        "sha256": "86f6f437e7d62ba7389c1b5e07bff3bfb2c4b0d42dafe9e4352db32890c786aa",
+        "filename": "pool/main/libj/libjxl/libjxl_0.12.0-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libksba": {
+        "version": "1.8.1",
+        "sha256": "3f1df9141b2265695dd2acd898177347e433d70f3a642c3e45b8aad5a71d0747",
+        "filename": "pool/main/libk/libksba/libksba_1.8.1_x86_64.deb",
+        "repo": "main"
+      },
+      "libllvm": {
+        "version": "21.1.8-3",
+        "sha256": "4b3bc509e727fc41c45682795129f29922b6f931e7391b6b287bd4c14bccdd7a",
+        "filename": "pool/main/libl/libllvm/libllvm_21.1.8-3_x86_64.deb",
+        "repo": "main"
+      },
+      "liblzma": {
+        "version": "5.8.4",
+        "sha256": "100ea7503a0b9ecffa45e1f168d035651f2eb7aedbebe71dd21fc0da4a84ef16",
+        "filename": "pool/main/libl/liblzma/liblzma_5.8.4_x86_64.deb",
+        "repo": "main"
+      },
+      "liblzo": {
+        "version": "2.10-5",
+        "sha256": "90fe00b4b8746317c3698d50294fced19df5741e5e5f81e33cc90c86693398c7",
+        "filename": "pool/main/libl/liblzo/liblzo_2.10-5_x86_64.deb",
+        "repo": "main"
+      },
+      "libmp3lame": {
+        "version": "3.100-7",
+        "sha256": "098490855464eefed965c91b8484d275ba840042d882b66dc6346a96d0f5f70e",
+        "filename": "pool/main/libm/libmp3lame/libmp3lame_3.100-7_x86_64.deb",
+        "repo": "main"
+      },
+      "libmpfr": {
+        "version": "4.2.1-1",
+        "sha256": "e960d1f016257264c9d66213a8ba1ad8c3d8b888d0b387537425c6f688a5fb8a",
+        "filename": "pool/main/libm/libmpfr/libmpfr_4.2.1-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libmpg123": {
+        "version": "1.33.7",
+        "sha256": "d39a982b5080b1a01f3d21707d4de72ea6ce13ab795548fa307bafdb4c4c0323",
+        "filename": "pool/main/libm/libmpg123/libmpg123_1.33.7_x86_64.deb",
+        "repo": "main"
+      },
+      "libnettle": {
+        "version": "4.0+really3.10.2",
+        "sha256": "e754086e59615e260bdb24b8000732a3eaedefa40c8c11e30a30a9c22877e815",
+        "filename": "pool/main/libn/libnettle/libnettle_4.0+really3.10.2_x86_64.deb",
+        "repo": "main"
+      },
+      "libnghttp2": {
+        "version": "1.70.0",
+        "sha256": "7378c2e54518d0bd8cd349f6f89148a7feaef7e42196efcc0db237767319cdca",
+        "filename": "pool/main/libn/libnghttp2/libnghttp2_1.70.0_x86_64.deb",
+        "repo": "main"
+      },
+      "libnghttp3": {
+        "version": "1.18.0",
+        "sha256": "bd9dc28e1e7593837dae5bb6747ca95de1cfb8da78d86009cbeb18fc6464fc0e",
+        "filename": "pool/main/libn/libnghttp3/libnghttp3_1.18.0_x86_64.deb",
+        "repo": "main"
+      },
+      "libngtcp2": {
+        "version": "1.25.0",
+        "sha256": "d8232b10e8ab9129f4a0c1a5c8fc4591f11c74d99e5fd4d24121abbea65af5b7",
+        "filename": "pool/main/libn/libngtcp2/libngtcp2_1.25.0_x86_64.deb",
+        "repo": "main"
+      },
+      "libnpth": {
+        "version": "1.6-3",
+        "sha256": "3e5da3b3a27fa5d682a134a96074035eda7b98a771750911db9b2846b48b662f",
+        "filename": "pool/main/libn/libnpth/libnpth_1.6-3_x86_64.deb",
+        "repo": "main"
+      },
+      "libnspr": {
+        "version": "4.40",
+        "sha256": "066ae76c2545a8a5ae022ac37c4e89e01ffbd095722cda7560890e242d9b6871",
+        "filename": "pool/main/libn/libnspr/libnspr_4.40_x86_64.deb",
+        "repo": "main"
+      },
+      "libnss": {
+        "version": "3.129",
+        "sha256": "3a5e439064650349aada9b6f85a04ff1c9cc5603f15223ec8f3d57136f7b1406",
+        "filename": "pool/main/libn/libnss/libnss_3.129_x86_64.deb",
+        "repo": "main"
+      },
+      "libogg": {
+        "version": "1.3.6-1",
+        "sha256": "55dd0908feb56bec69fdf1c0aaeedb73f6c74cc28495c0d640172845863c9eed",
+        "filename": "pool/main/libo/libogg/libogg_1.3.6-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libopus": {
+        "version": "1.6.1",
+        "sha256": "724f0215e78a21a02f8dd01dd6c78d6cea71457c8080be99f984f5d8c8f5e4d9",
+        "filename": "pool/main/libo/libopus/libopus_1.6.1_x86_64.deb",
+        "repo": "main"
+      },
+      "libpixman": {
+        "version": "0.46.4-1",
+        "sha256": "169e3ce2e2adf1cbb51c39fc7e7e2532f519b3e5362fef24e895d6c98e82a8f5",
+        "filename": "pool/main/libp/libpixman/libpixman_0.46.4-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libpng": {
+        "version": "1.6.58",
+        "sha256": "27279c83237ee11da31049cb809e55ed56ebb73d3f3bb8e6a5421880203afc15",
+        "filename": "pool/main/libp/libpng/libpng_1.6.58_x86_64.deb",
+        "repo": "main"
+      },
+      "librav1e": {
+        "version": "0.8.1",
+        "sha256": "6a40a0e0633d49f3eb222ad345dcb579aacdccf211645017ad95c83a15a6f0dc",
+        "filename": "pool/main/libr/librav1e/librav1e_0.8.1_x86_64.deb",
+        "repo": "main"
+      },
+      "librsvg": {
+        "version": "2.63.0",
+        "sha256": "32f7477cd8621ad6c2fb11f0fc9c2e1bb0275f86fccb18b6057f47474a360f81",
+        "filename": "pool/main/libr/librsvg/librsvg_2.63.0_x86_64.deb",
+        "repo": "main"
+      },
+      "libsm": {
+        "version": "1.2.6-1",
+        "sha256": "3f9bb728d06f7ead22411f440e89580038f4f9ab064acf9139a20d1d778d0d72",
+        "filename": "pool/main/libs/libsm/libsm_1.2.6-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libsmartcols": {
+        "version": "2.42.1-4",
+        "sha256": "50b1e496f75b239c6a08a70ea9ba83c8b51acb35819ef32301e2c712b09dfca9",
+        "filename": "pool/main/libs/libsmartcols/libsmartcols_2.42.1-4_x86_64.deb",
+        "repo": "main"
+      },
+      "libsndfile": {
+        "version": "1.2.2-3",
+        "sha256": "5c2a37ce7703dc05fc1eb014ced672e4783eae7929983c3d4298a3b1eb500361",
+        "filename": "pool/main/libs/libsndfile/libsndfile_1.2.2-3_x86_64.deb",
+        "repo": "main"
+      },
+      "libsqlite": {
+        "version": "3.53.4",
+        "sha256": "c2801581e7c656aec11153e5ef42179b9f8db8b9739fb6706899b93fa2655e6e",
+        "filename": "pool/main/libs/libsqlite/libsqlite_3.53.4_x86_64.deb",
+        "repo": "main"
+      },
+      "libssh2": {
+        "version": "1.11.1-2",
+        "sha256": "00db1c1497e8703281efded7f1f2a63824b145c980d9ec309ae0ab7ccb9ce1c5",
+        "filename": "pool/main/libs/libssh2/libssh2_1.11.1-2_x86_64.deb",
+        "repo": "main"
+      },
+      "libtasn1": {
+        "version": "4.21.0",
+        "sha256": "1680378db0b5350d563783eb29ffe7c2397e204c8ab031047cfc3316e61b879b",
+        "filename": "pool/main/libt/libtasn1/libtasn1_4.21.0_x86_64.deb",
+        "repo": "main"
+      },
+      "libtiff": {
+        "version": "4.7.2",
+        "sha256": "8548fb44835a463fa1a0c1d770c0bae9e327b0af567682113f01cac2673d3f6a",
+        "filename": "pool/main/libt/libtiff/libtiff_4.7.2_x86_64.deb",
+        "repo": "main"
+      },
+      "libunbound": {
+        "version": "1.26.0",
+        "sha256": "fc21228d3de173361977e4af3fb608e615abd6c67e16c3ae6db33e671407e3a3",
+        "filename": "pool/main/libu/libunbound/libunbound_1.26.0_x86_64.deb",
+        "repo": "main"
+      },
+      "libunistring": {
+        "version": "1.4.2",
+        "sha256": "be23f951cef2a7588b3b98b27d6dfc3c82a4d4066471b024b189f9a9217e0525",
+        "filename": "pool/main/libu/libunistring/libunistring_1.4.2_x86_64.deb",
+        "repo": "main"
+      },
+      "libuuid": {
+        "version": "2.42.1-4",
+        "sha256": "00c7a275e46b29f855e02b625ce4009033a645481526f35714d0e5a16c55fcf5",
+        "filename": "pool/main/libu/libuuid/libuuid_2.42.1-4_x86_64.deb",
+        "repo": "main"
+      },
+      "libvorbis": {
+        "version": "1.3.7-4",
+        "sha256": "9515c03de58faa17e2e19deb78da09289c90b939c17fcbaf4b171aebfefb65bf",
+        "filename": "pool/main/libv/libvorbis/libvorbis_1.3.7-4_x86_64.deb",
+        "repo": "main"
+      },
+      "libwayland": {
+        "version": "1.25.0-1",
+        "sha256": "23a9d208b52c7f7272fe34c701ba2f58f3815a7df00259f3ca81bf1b108dceaa",
+        "filename": "pool/main/libw/libwayland/libwayland_1.25.0-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libwebp": {
+        "version": "1.6.0-rc1-0",
+        "sha256": "43340a5d290b602aba2d2284cae4cd04a1b375b2eae7df59294f45651359e3d9",
+        "filename": "pool/main/libw/libwebp/libwebp_1.6.0-rc1-0_x86_64.deb",
+        "repo": "main"
+      },
+      "libx11": {
+        "version": "1.8.13-1",
+        "sha256": "95d7acb460930fce61c26baeafb002e9b978df569b89d4093ad4de1e7dfd78d7",
+        "filename": "pool/main/libx/libx11/libx11_1.8.13-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libx264": {
+        "version": "1:0.164.3191-1",
+        "sha256": "b71ce302a81561c0e30ae65980b541b508dbe804fadc3eb402ba90085d0c1024",
+        "filename": "pool/main/libx/libx264/libx264_1:0.164.3191-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libx265": {
+        "version": "4.3",
+        "sha256": "2289658fba654b3e56c22f30f8baef0b8fa1b39ef92887c5744b3063ba997288",
+        "filename": "pool/main/libx/libx265/libx265_4.3_x86_64.deb",
+        "repo": "main"
+      },
+      "libxau": {
+        "version": "1.0.12-2",
+        "sha256": "b964143f84f11270ba14baf9a747b9732f5a9b84d2ca0e70ca26ba0364e0ce0b",
+        "filename": "pool/main/libx/libxau/libxau_1.0.12-2_x86_64.deb",
+        "repo": "main"
+      },
+      "libxcb": {
+        "version": "1.17.0-1",
+        "sha256": "38da04c89e95026282c1277ca475fe02aca78735e0af48e3aada6b5aed78b894",
+        "filename": "pool/main/libx/libxcb/libxcb_1.17.0-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libxcomposite": {
+        "version": "0.4.7",
+        "sha256": "7c35182deb272c14e1b3ec54b3c771949eb7ee4d550c5e2cf56b4f00be025056",
+        "filename": "pool/main/libx/libxcomposite/libxcomposite_0.4.7_x86_64.deb",
+        "repo": "x11"
+      },
+      "libxcursor": {
+        "version": "1.2.3-1",
+        "sha256": "dae8a1b5fca932de6e1cdfe858914bab26a207fdfca47199bfd47475c96887d9",
+        "filename": "pool/main/libx/libxcursor/libxcursor_1.2.3-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libxdamage": {
+        "version": "1.1.7",
+        "sha256": "a4146a3af161a7ebcd40a969e8bfedd5ad5c038332606a48020defa3a2e80bdd",
+        "filename": "pool/main/libx/libxdamage/libxdamage_1.1.7_x86_64.deb",
+        "repo": "x11"
+      },
+      "libxdmcp": {
+        "version": "1.1.5-2",
+        "sha256": "814a80d52fdfd193286f3a2e50215a10f03f6e64579cbdef3886cf499adf896d",
+        "filename": "pool/main/libx/libxdmcp/libxdmcp_1.1.5-2_x86_64.deb",
+        "repo": "main"
+      },
+      "libxext": {
+        "version": "1.3.7",
+        "sha256": "91e33ce5d5ebc26118bc3e2f3266f508fd94ea512b6df4ed633118f4d754eb2c",
+        "filename": "pool/main/libx/libxext/libxext_1.3.7_x86_64.deb",
+        "repo": "main"
+      },
+      "libxfixes": {
+        "version": "6.0.2",
+        "sha256": "5f3cc1d05ba6bb50960ef8da41928c6bf045a20e52d46df3c74dfde782cb9f8b",
+        "filename": "pool/main/libx/libxfixes/libxfixes_6.0.2_x86_64.deb",
+        "repo": "main"
+      },
+      "libxft": {
+        "version": "2.3.9-1",
+        "sha256": "e329250eda83a37cb83d1f3381d801da0c57e883418f3af4d9604dde16ce776f",
+        "filename": "pool/main/libx/libxft/libxft_2.3.9-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libxi": {
+        "version": "1.8.3",
+        "sha256": "0aac03fc1b1102c9c7ade3fa8fd8b392f5be1b18fcf24bc68449b1d1c6a3366d",
+        "filename": "pool/main/libx/libxi/libxi_1.8.3_x86_64.deb",
+        "repo": "main"
+      },
+      "libxinerama": {
+        "version": "1.1.6",
+        "sha256": "3fb73a5f6244f69302d3b2202e8607af10dd9e77cd2f9580909dfce0e24e1057",
+        "filename": "pool/main/libx/libxinerama/libxinerama_1.1.6_x86_64.deb",
+        "repo": "x11"
+      },
+      "libxkbcommon": {
+        "version": "1.13.2",
+        "sha256": "accbfe1a05165d16f1d66c602ed8d1f18acce48157a52510ffdc73e21131fc2b",
+        "filename": "pool/main/libx/libxkbcommon/libxkbcommon_1.13.2_x86_64.deb",
+        "repo": "x11"
+      },
+      "libxml2": {
+        "version": "2.15.4",
+        "sha256": "694be31ee936772409b16b3bbcf5b27afb0623975eadd025b3f1ec2053d9fa95",
+        "filename": "pool/main/libx/libxml2/libxml2_2.15.4_x86_64.deb",
+        "repo": "main"
+      },
+      "libxrandr": {
+        "version": "1.5.5",
+        "sha256": "df1a1f6873600c40dcdc36ec81b3cce37ab493b837483d96dbd7d4b4b45d70ee",
+        "filename": "pool/main/libx/libxrandr/libxrandr_1.5.5_x86_64.deb",
+        "repo": "main"
+      },
+      "libxrender": {
+        "version": "0.9.12-1",
+        "sha256": "4a32680f188ba6a262392e0d8d671cd144f3513ea97ab51ed92e58d67b8f08a6",
+        "filename": "pool/main/libx/libxrender/libxrender_0.9.12-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libxshmfence": {
+        "version": "1.3.3-1",
+        "sha256": "5278f6371b1847b657bfd320d7e234c6858921737e2b14f6b2174cd46fa25732",
+        "filename": "pool/main/libx/libxshmfence/libxshmfence_1.3.3-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libxtst": {
+        "version": "1.2.5-1",
+        "sha256": "f7ae1590210babc02fe25b1bfdf2784c525d94a61ede5532c6aedd61954902d7",
+        "filename": "pool/main/libx/libxtst/libxtst_1.2.5-1_x86_64.deb",
+        "repo": "main"
+      },
+      "libxxf86vm": {
+        "version": "1.1.7",
+        "sha256": "f48663bd4e37e29de7185a6e96bd24459f743d3a2948a8b1186a0689ed0fdb42",
+        "filename": "pool/main/libx/libxxf86vm/libxxf86vm_1.1.7_x86_64.deb",
+        "repo": "main"
+      },
+      "libzip": {
+        "version": "1.11.4-1",
+        "sha256": "c83a016b219b50f79dda3727652c49ea2f54e39971afc3990a9b15dbcbb8885f",
+        "filename": "pool/main/libz/libzip/libzip_1.11.4-1_x86_64.deb",
+        "repo": "main"
+      },
+      "littlecms": {
+        "version": "2.19.1",
+        "sha256": "4008b2d5feb283d5cafceecbcf43de1849b2b4e437a3773c3c07262434222227",
+        "filename": "pool/main/l/littlecms/littlecms_2.19.1_x86_64.deb",
+        "repo": "main"
+      },
+      "mesa": {
+        "version": "26.0.6-3",
+        "sha256": "b9f8c3955ff3b197cd79430d81c4233131e647197a5b7da2b72101257b77542a",
+        "filename": "pool/main/m/mesa/mesa_26.0.6-3_x86_64.deb",
+        "repo": "main"
+      },
+      "ncurses": {
+        "version": "6.6.20260307+really6.5.20250830",
+        "sha256": "3f30f53c6a41c8450d146d4d42611a44be6ba0a8de1e8bb4dc903109a5fc3ff1",
+        "filename": "pool/main/n/ncurses/ncurses_6.6.20260307+really6.5.20250830_x86_64.deb",
+        "repo": "main"
+      },
+      "ncurses-ui-libs": {
+        "version": "6.6.20260307+really6.5.20250830",
+        "sha256": "1193618e18f579eb86064e00648d80648eaec5da70c0a5b944ac1315d209d16e",
+        "filename": "pool/main/n/ncurses-ui-libs/ncurses-ui-libs_6.6.20260307+really6.5.20250830_x86_64.deb",
+        "repo": "main"
+      },
+      "openbox": {
+        "version": "3.6.1-62",
+        "sha256": "6806822019622153794831fd3d01b3bad89dcdcf38e7662730313c96ae5f525d",
+        "filename": "pool/main/o/openbox/openbox_3.6.1-62_x86_64.deb",
+        "repo": "x11"
+      },
+      "opengl": {
+        "version": "4.5",
+        "sha256": "dc6db4e3ecc84e31a2ddbd6ed71fe3ca7592a95823a08f099e479ceb77c90d99",
+        "filename": "pool/main/o/opengl/opengl_4.5_all.deb",
+        "repo": "main"
+      },
+      "openjpeg": {
+        "version": "2.5.4",
+        "sha256": "e66866f64446380a6d8bec217d54dac08d163c6d3ce81cf341b50a218174a29a",
+        "filename": "pool/main/o/openjpeg/openjpeg_2.5.4_x86_64.deb",
+        "repo": "main"
+      },
+      "openssl": {
+        "version": "1:3.6.3",
+        "sha256": "b58fedf8d3accda418b69b636bb1f8b789a5a75a375bda4a1c4fccb2c6e30380",
+        "filename": "pool/main/o/openssl/openssl_1:3.6.3_x86_64.deb",
+        "repo": "main"
+      },
+      "p11-kit": {
+        "version": "0.26.5",
+        "sha256": "15395569169bbb32d54a34f6849ca4e4b10752ecccc9383f3806a02a3af07a61",
+        "filename": "pool/main/p/p11-kit/p11-kit_0.26.5_x86_64.deb",
+        "repo": "main"
+      },
+      "pango": {
+        "version": "1.58.2",
+        "sha256": "ca265b3938a02f0309e2dcbe9cad0a8015a273f2952d86d8d8f696a779b90387",
+        "filename": "pool/main/p/pango/pango_1.58.2_x86_64.deb",
+        "repo": "main"
+      },
+      "pcre2": {
+        "version": "10.47",
+        "sha256": "8e4fb14ba014f9b2d5e07b6ed9c519b31d00a6e7ddeb5804c3b076a6c841c2fb",
+        "filename": "pool/main/p/pcre2/pcre2_10.47_x86_64.deb",
+        "repo": "main"
+      },
+      "pinentry": {
+        "version": "1.3.3",
+        "sha256": "cff772b0d38aae427df75a7320dd4cf0f04d9d21539e97fc5c4caffa74374efd",
+        "filename": "pool/main/p/pinentry/pinentry_1.3.3_x86_64.deb",
+        "repo": "main"
+      },
+      "poppler": {
+        "version": "26.02.0-1",
+        "sha256": "f8f84c7c7cb5c8c414bbe61aa9e0fbeff35c162c738da6230979513acb20b401",
+        "filename": "pool/main/p/poppler/poppler_26.02.0-1_x86_64.deb",
+        "repo": "main"
+      },
+      "portaudio": {
+        "version": "19.07.00-3",
+        "sha256": "be6023225021f3dc2d7d32711447bed0029cb3b259467f2fe5ceed2f28e2b237",
+        "filename": "pool/main/p/portaudio/portaudio_19.07.00-3_x86_64.deb",
+        "repo": "main"
+      },
+      "procps": {
+        "version": "4.0.7",
+        "sha256": "70cb43e9ee215ac9078b3edf84b892fd484c81a8c07a5898af20e5683f354919",
+        "filename": "pool/main/p/procps/procps_4.0.7_x86_64.deb",
+        "repo": "main"
+      },
+      "psmisc": {
+        "version": "23.7-1",
+        "sha256": "68a0b98f8b344f6b2a9491e68a02e6498a1a799515fef9172fde6fb5cfe59f72",
+        "filename": "pool/main/p/psmisc/psmisc_23.7-1_x86_64.deb",
+        "repo": "main"
+      },
+      "python": {
+        "version": "3.14.6-1",
+        "sha256": "7fa420e055367c5c14a4cc18158046451aae16f5d82ba4d4a95ef90592f7e15f",
+        "filename": "pool/main/p/python/python_3.14.6-1_x86_64.deb",
+        "repo": "main"
+      },
+      "qpdf": {
+        "version": "12.4.1",
+        "sha256": "ae98413949aa695a0290fe2e7952d6e8daf81c7a4b99e048d3688d299171e75a",
+        "filename": "pool/main/q/qpdf/qpdf_12.4.1_x86_64.deb",
+        "repo": "main"
+      },
+      "readline": {
+        "version": "8.3.3",
+        "sha256": "e69d768ba81246700c244aea31a1fd728f6cc9698ca3031b6f7b7250ea77f8dd",
+        "filename": "pool/main/r/readline/readline_8.3.3_x86_64.deb",
+        "repo": "main"
+      },
+      "resolv-conf": {
+        "version": "1.3",
+        "sha256": "0fcf8c5447bc5fbb0d411a47dc5c67d2aced861227e09052fc423220291a22c7",
+        "filename": "pool/main/r/resolv-conf/resolv-conf_1.3_x86_64.deb",
+        "repo": "main"
+      },
+      "sed": {
+        "version": "4.10",
+        "sha256": "0d916f97833f9e3245c68fcb12ddbd0aa0f33d6e699da7f42ad51b34f653b936",
+        "filename": "pool/main/s/sed/sed_4.10_x86_64.deb",
+        "repo": "main"
+      },
+      "shared-mime-info": {
+        "version": "2.5.1",
+        "sha256": "87be6f2ad6ca5953ef1239c79bc1b5111cb47b17e456d466525e4019afd29cf9",
+        "filename": "pool/main/s/shared-mime-info/shared-mime-info_2.5.1_x86_64.deb",
+        "repo": "x11"
+      },
+      "startup-notification": {
+        "version": "0.12-29",
+        "sha256": "2c2541c1f8ced9391fc3cab6b09e409005ad2e7ea4b5a5ca4a92f768b1133ef6",
+        "filename": "pool/main/s/startup-notification/startup-notification_0.12-29_x86_64.deb",
+        "repo": "x11"
+      },
+      "tar": {
+        "version": "1.35-3",
+        "sha256": "7e8c311c04dd4ce66d053a5f55faaf4914cfc34c4c53589c55c162f504788a7f",
+        "filename": "pool/main/t/tar/tar_1.35-3_x86_64.deb",
+        "repo": "main"
+      },
+      "termux-am": {
+        "version": "0.8.0-2",
+        "sha256": "c67200a3c1750819e0aef91be6f166395b61be7f7b2e1437a7294643956f5d32",
+        "filename": "pool/main/t/termux-am/termux-am_0.8.0-2_all.deb",
+        "repo": "main"
+      },
+      "termux-am-socket": {
+        "version": "1.5.0-1",
+        "sha256": "bfcb894d4c3e4bbd31a1ecf0d6d4d9779331f099c1daa719f5db0feea37c7c04",
+        "filename": "pool/main/t/termux-am-socket/termux-am-socket_1.5.0-1_x86_64.deb",
+        "repo": "main"
+      },
+      "termux-core": {
+        "version": "0.4.0-1",
+        "sha256": "8479a35c2d5caa58e4815d6380d2994b46a2b36d37f6d2014f9c9f0836fe3672",
+        "filename": "pool/main/t/termux-core/termux-core_0.4.0-1_x86_64.deb",
+        "repo": "main"
+      },
+      "termux-exec": {
+        "version": "1:2.5.0-1",
+        "sha256": "78a95e9f17fd83de5b33b64d5ea8978266b2b025c89794e82066b0fb904ed93c",
+        "filename": "pool/main/t/termux-exec/termux-exec_1:2.5.0-1_x86_64.deb",
+        "repo": "main"
+      },
+      "termux-tools": {
+        "version": "1.46.0+really1.45.0-1",
+        "sha256": "2cf9cd1b7767d6a792438357a3c44fa6536b40465e02e9fb0f53c216e841b707",
+        "filename": "pool/main/t/termux-tools/termux-tools_1.46.0+really1.45.0-1_x86_64.deb",
+        "repo": "main"
+      },
+      "ttf-dejavu": {
+        "version": "2.37-8",
+        "sha256": "3fa9352d528cb19aebcdd2de5d1fb0cb67b201be3ae264207fc1a277d2cfd6da",
+        "filename": "pool/main/t/ttf-dejavu/ttf-dejavu_2.37-8_all.deb",
+        "repo": "main"
+      },
+      "util-linux": {
+        "version": "2.42.1-4",
+        "sha256": "5537ad9ade367e29644c37d788f328aed11e3e391be3e8ac845d03732e315069",
+        "filename": "pool/main/u/util-linux/util-linux_2.42.1-4_x86_64.deb",
+        "repo": "main"
+      },
+      "vulkan-loader": {
+        "version": "0.0.3",
+        "sha256": "d290a35afb15217b4da0858bb149d6900f92ee25970b5febd6ea4f2c6d29e2be",
+        "filename": "pool/main/v/vulkan-loader/vulkan-loader_0.0.3_all.deb",
+        "repo": "main"
+      },
+      "vulkan-loader-generic": {
+        "version": "1.4.362",
+        "sha256": "c6f86b9147089dd3d22244d14aa49bf6c65eb14df91674d63bf72247e78b6f94",
+        "filename": "pool/main/v/vulkan-loader-generic/vulkan-loader-generic_1.4.362_x86_64.deb",
+        "repo": "main"
+      },
+      "xcb-util": {
+        "version": "0.4.1-1",
+        "sha256": "ad2f3098378db6acd008f69dbbd9deef15ef6074f21a179cb535275aa93977b5",
+        "filename": "pool/main/x/xcb-util/xcb-util_0.4.1-1_x86_64.deb",
+        "repo": "x11"
+      },
+      "xdotool": {
+        "version": "3.20211022.1-1",
+        "sha256": "c05126cdd9e945300cd41f716c40c2075c6cf4821271296044c84906b92ba9af",
+        "filename": "pool/main/x/xdotool/xdotool_3.20211022.1-1_x86_64.deb",
+        "repo": "x11"
+      },
+      "xkeyboard-config": {
+        "version": "2.48-1",
+        "sha256": "5e7317d47130aee16d8e18014423f1b1ab23601ca57cea81cd160ec4c1424167",
+        "filename": "pool/main/x/xkeyboard-config/xkeyboard-config_2.48-1_all.deb",
+        "repo": "x11"
+      },
+      "xorg-util-macros": {
+        "version": "1.20.2",
+        "sha256": "11765ad1a6f181e36f807464f7b4360593d847dce245202a393eb2ca156520d0",
+        "filename": "pool/main/x/xorg-util-macros/xorg-util-macros_1.20.2_all.deb",
+        "repo": "main"
+      },
+      "xorgproto": {
+        "version": "2025.1",
+        "sha256": "cd2a6405a79540f6cc0dbc991fffdbe68058f3223ed456ac66c07207048ef62f",
+        "filename": "pool/main/x/xorgproto/xorgproto_2025.1_all.deb",
+        "repo": "main"
+      },
+      "xournalpp": {
+        "version": "1.3.7",
+        "sha256": "88d8f679551f2fed9fcdfd7d9c8350d0b7dc4688ea9cc60ef252ec79e571209f",
+        "filename": "pool/main/x/xournalpp/xournalpp_1.3.7_x86_64.deb",
+        "repo": "x11"
+      },
+      "xz-utils": {
+        "version": "5.8.4",
+        "sha256": "66c8f91dfbced4357a519381313a6a766d0938b70fc0cf965a82e2f05d8386ef",
+        "filename": "pool/main/x/xz-utils/xz-utils_5.8.4_x86_64.deb",
+        "repo": "main"
+      },
+      "zlib": {
+        "version": "1.3.2",
+        "sha256": "c61b089dd30981452f5953b2bad4c4e7857062b2abd971f87fb0aec441bc02f4",
+        "filename": "pool/main/z/zlib/zlib_1.3.2_x86_64.deb",
+        "repo": "main"
+      },
+      "zstd": {
+        "version": "1.5.7-1",
+        "sha256": "a76ba6c3d8742819bf4fff7780eb2e022269412700fc8f4471f530cc0d81833f",
+        "filename": "pool/main/z/zstd/zstd_1.5.7-1_x86_64.deb",
+        "repo": "main"
+      }
+    }
+  }
+}

@@ -2,11 +2,15 @@ name: Build & Cache Termux-X11 Core AAR
 
 on:
   push:
+    branches:
+      - '**'
     paths:
       - 'submodules/termux-x11/**'
       - 'x11-core/**'
       - '.github/workflows/build-x11-core.yml'
   pull_request:
+    branches:
+      - main
     paths:
       - 'submodules/termux-x11/**'
       - 'x11-core/**'
@@ -28,6 +32,13 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
+
+      - name: Compute Deterministic Cache Key
+        id: cache-key
+        run: |
+          SUBMODULE_SHA=$(git rev-parse HEAD:submodules/termux-x11)
+          CORE_SHA=$(git rev-parse HEAD:x11-core)
+          echo "key=x11-core-aar-${SUBMODULE_SHA}-${CORE_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -57,7 +68,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: libs/x11-core-release.aar
-          key: x11-core-aar-${{ hashFiles('submodules/termux-x11/**', 'x11-core/**') }}
+          key: ${{ steps.cache-key.outputs.key }}
 
       - name: Upload x11-core AAR Artifact
         uses: actions/upload-artifact@v7

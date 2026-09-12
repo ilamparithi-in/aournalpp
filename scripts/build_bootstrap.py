@@ -14,6 +14,7 @@ import gzip
 import shutil
 import tarfile
 import urllib.request
+import urllib.error
 import argparse
 import json
 import hashlib
@@ -51,12 +52,15 @@ ARCH_MAPPINGS = {
 class DebExtractor:
     """Minimal in-memory Debian (.deb) archive payload extractor."""
     @staticmethod
-    def extract_data_tar(deb_bytes: bytes, dest_dir: str):
+    def extract_data_tar(deb_bytes: bytes, dest_dir: str) -> int:
         stream = io.BytesIO(deb_bytes)
         magic = stream.read(8)
         if magic != b"!<arch>\n":
             raise ValueError("Invalid .deb ar archive header")
-        
+
+        installed_size = 0
+        extracted = False
+
         while True:
             header = stream.read(60)
             if len(header) < 60:
@@ -67,24 +71,44 @@ class DebExtractor:
             if size % 2 != 0:
                 stream.read(1)  # ar 2-byte alignment padding
 
-            if filename.startswith("data.tar"):
+            if filename.startswith("control.tar"):
+                try:
+                    if filename.endswith(".xz"):
+                        c_tar = tarfile.open(fileobj=io.BytesIO(lzma.decompress(file_data)))
+                    elif filename.endswith(".gz"):
+                        c_tar = tarfile.open(fileobj=io.BytesIO(file_data), mode="r:gz")
+                    else:
+                        c_tar = tarfile.open(fileobj=io.BytesIO(file_data))
+                    ctrl = c_tar.extractfile("./control") or c_tar.extractfile("control")
+                    if ctrl:
+                        for line in ctrl.read().decode("utf-8", errors="ignore").splitlines():
+                            if line.startswith("Installed-Size:"):
+                                installed_size = int(line.split(":", 1)[1].strip()) * 1024
+                                break
+                except Exception:
+                    pass
+
+            elif filename.startswith("data.tar"):
                 filename = filename.rstrip("/")
                 if filename.endswith(".xz"):
                     decompressed = lzma.decompress(file_data)
                     with tarfile.open(fileobj=io.BytesIO(decompressed), mode="r:") as tar:
                         tar.extractall(path=dest_dir, filter='fully_trusted')
-                    return
+                    extracted = True
                 elif filename.endswith(".gz"):
                     with tarfile.open(fileobj=io.BytesIO(file_data), mode="r:gz") as tar:
                         tar.extractall(path=dest_dir, filter='fully_trusted')
-                    return
+                    extracted = True
                 elif filename.endswith(".tar"):
                     with tarfile.open(fileobj=io.BytesIO(file_data), mode="r:") as tar:
                         tar.extractall(path=dest_dir, filter='fully_trusted')
-                    return
+                    extracted = True
                 else:
                     raise RuntimeError(f"Unsupported payload format: {filename}")
-        raise RuntimeError("No data.tar payload found inside .deb package")
+
+        if not extracted:
+            raise RuntimeError("No data.tar payload found inside .deb package")
+        return installed_size
 
 
 def provision_xournalpp_translations(staging_usr: str, cache_dir: str):
@@ -267,6 +291,7 @@ class RepositoryIndex:
                 if "Package" in current_pkg:
                     pkg_name = current_pkg["Package"]
                     current_pkg["_repo_base"] = self.repo_bases[repo_key]
+                    current_pkg["_repo"] = repo_key
                     self.packages[pkg_name] = current_pkg
                 current_pkg = {}
                 continue
@@ -367,13 +392,118 @@ def ensure_keyring(keyring_path: str) -> str:
     return keyring_path
 
 
+
+def download_deb_secure(url_primary: str, url_archive: str, expected_sha: str, cached_path: str, pkg_name: str, version: str = "") -> bytes:
+    if os.path.exists(cached_path):
+        with open(cached_path, "rb") as f:
+            deb_bytes = f.read()
+        if expected_sha:
+            actual_sha = hashlib.sha256(deb_bytes).hexdigest()
+            if actual_sha == expected_sha:
+                print(f" -> [Cache Hit Verified] {pkg_name} ({version})")
+                return deb_bytes
+            else:
+                print(f"[!] Cached deb checksum mismatch for {pkg_name}, redownloading...")
+        else:
+            print(f" -> [Cache Hit] {pkg_name} ({version})")
+            return deb_bytes
+
+    deb_bytes = None
+    print(f" -> [Download] {pkg_name} ({version}) from {url_primary}")
+    try:
+        req = urllib.request.Request(url_primary, headers={"User-Agent": "xopp-builder"})
+        with urllib.request.urlopen(req, timeout=45) as resp:
+            deb_bytes = resp.read()
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            print(f"[!] Primary mirror returned 404 for {pkg_name}. Falling back to Termux archive: {url_archive}")
+            req = urllib.request.Request(url_archive, headers={"User-Agent": "xopp-builder"})
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                deb_bytes = resp.read()
+        else:
+            raise
+    except Exception as e:
+        print(f"[!] Primary mirror download failed ({e}). Falling back to Termux archive: {url_archive}")
+        req = urllib.request.Request(url_archive, headers={"User-Agent": "xopp-builder"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            deb_bytes = resp.read()
+
+    if expected_sha:
+        actual_sha = hashlib.sha256(deb_bytes).hexdigest()
+        if actual_sha != expected_sha:
+            raise RuntimeError(
+                f"SECURITY ALERT: Cryptographic checksum mismatch for package '{pkg_name}'!\n"
+                f"  Expected SHA-256: {expected_sha}\n"
+                f"  Actual SHA-256:   {actual_sha}\n"
+                f"Aborting build to prevent supply chain tampering."
+            )
+
+    os.makedirs(os.path.dirname(os.path.abspath(cached_path)), exist_ok=True)
+    with open(cached_path, "wb") as f:
+        f.write(deb_bytes)
+    return deb_bytes
+
+
+def update_lockfile(lockfile_path: str, termux_arch: str, resolved_pkgs: Dict[str, dict]) -> dict:
+    lock_data = {"lock_version": 1, "updated_at": "", "packages": {}}
+    if os.path.exists(lockfile_path):
+        try:
+            with open(lockfile_path, "r", encoding="utf-8") as f:
+                lock_data = json.load(f)
+        except Exception as e:
+            print(f"[!] Warning reading existing lockfile: {e}. Reinitializing.")
+
+    lock_data["lock_version"] = 1
+    lock_data["updated_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    if "packages" not in lock_data:
+        lock_data["packages"] = {}
+
+    old_pkgs = lock_data["packages"].get(termux_arch, {})
+    new_pkgs = {}
+    for pkg_name in sorted(resolved_pkgs.keys()):
+        meta = resolved_pkgs[pkg_name]
+        new_pkgs[pkg_name] = {
+            "version": meta.get("Version", ""),
+            "sha256": meta.get("SHA256", ""),
+            "filename": meta.get("Filename", ""),
+            "repo": meta.get("_repo", "main")
+        }
+
+    added = set(new_pkgs.keys()) - set(old_pkgs.keys())
+    removed = set(old_pkgs.keys()) - set(new_pkgs.keys())
+    updated = [k for k in (set(new_pkgs.keys()) & set(old_pkgs.keys())) if old_pkgs[k].get("version") != new_pkgs[k].get("version")]
+
+    print(f"==================================================")
+    print(f"[*] Lockfile Update Summary for [{termux_arch}]")
+    print(f"[*] Total locked packages : {len(new_pkgs)}")
+    if added:
+        print(f"[+] Added ({len(added)}): {', '.join(sorted(added))}")
+    if removed:
+        print(f"[-] Removed ({len(removed)}): {', '.join(sorted(removed))}")
+    if updated:
+        for u in sorted(updated):
+            print(f"[~] Updated: {u} ({old_pkgs[u].get('version')} -> {new_pkgs[u].get('version')})")
+    if not added and not removed and not updated:
+        print(f"[=] All packages up-to-date with upstream repository.")
+    print(f"==================================================")
+
+    lock_data["packages"][termux_arch] = new_pkgs
+    os.makedirs(os.path.dirname(os.path.abspath(lockfile_path)), exist_ok=True)
+    with open(lockfile_path, "w", encoding="utf-8") as f:
+        json.dump(lock_data, f, indent=2, sort_keys=False)
+    print(f"[✔] Lockfile written to {lockfile_path}")
+    return lock_data
+
+
 def main():
     parser = argparse.ArgumentParser(description="Build bootstrap.tar.xz for Xournal++ Android (Multi-Arch)")
     parser.add_argument("--arch", "-a", default="aarch64", help="Target architecture (aarch64, x86_64, arm, i686 / arm64-v8a, etc.)")
-    parser.add_argument("--output", "-o", required=True, help="Destination path for bootstrap.tar.xz")
+    parser.add_argument("--output", "-o", required=False, default=None, help="Destination path for bootstrap.tar.xz")
     parser.add_argument("--staging", default=None, help="Working staging directory")
     parser.add_argument("--cache-dir", default=None, help="Local .deb package cache directory")
     parser.add_argument("--jnilibs-dir", default=None, help="Output directory for packaged native library executables (lib*.so)")
+    parser.add_argument("--lockfile", default=None, help="Path to bootstrap.lock.json lockfile")
+    parser.add_argument("--update-lock", action="store_true", help="Resolve latest dependencies from upstream repos and update lockfile")
     args = parser.parse_args()
 
     arch_key = args.arch.lower().strip()
@@ -381,79 +511,121 @@ def main():
         print(f"[!] Error: Unsupported architecture '{args.arch}'. Supported: {list(ARCH_MAPPINGS.keys())}")
         sys.exit(1)
 
+    if not args.output and not args.update_lock:
+        print(f"[!] Error: Destination path --output is required when building bootstrap archive.")
+        sys.exit(1)
+
     arch_info = ARCH_MAPPINGS[arch_key]
     termux_arch = arch_info["termux"]
     clang_target = arch_info["clang"]
     abi_name = arch_info["abi"]
 
-    print(f"==================================================")
-    print(f"[*] Building Bootstrap Archive")
-    print(f"[*] Target Architecture : {args.arch} -> Termux [{termux_arch}], ABI [{abi_name}]")
-    print(f"[*] Output Destination  : {args.output}")
-    print(f"==================================================")
+    scripts_dir = os.path.dirname(os.path.abspath(__file__))
+    lockfile_path = args.lockfile or os.path.join(scripts_dir, "bootstrap.lock.json")
+
+    repo_bases = {
+        "main": "https://packages.termux.dev/apt/termux-main/",
+        "x11": "https://packages.termux.dev/apt/termux-x11/"
+    }
+    archive_bases = {
+        "main": "https://archive.termux.dev/apt/termux-main/",
+        "x11": "https://archive.termux.dev/apt/termux-x11/"
+    }
+
+    if args.update_lock:
+        print(f"==================================================")
+        print(f"[*] Updating Bootstrap Lockfile from Upstream")
+        print(f"[*] Target Architecture : {args.arch} -> Termux [{termux_arch}], ABI [{abi_name}]")
+        print(f"[*] Target Lockfile     : {lockfile_path}")
+        print(f"==================================================")
+
+        repos = {
+            "main": ("stable", "https://packages.termux.dev/apt/termux-main/dists/stable/InRelease"),
+            "x11": ("x11", "https://packages.termux.dev/apt/termux-x11/dists/x11/InRelease")
+        }
+        keyring_path = os.path.join(scripts_dir, "keys", "termux-archive-keyring.gpg")
+        ensure_keyring(keyring_path)
+
+        index = RepositoryIndex(repo_bases)
+        for key, (dist, inrelease_url) in repos.items():
+            index.load_index(key, dist, inrelease_url, termux_arch, keyring_path)
+
+        print(f"[*] Resolving recursive dependency graph for: {ROOT_PACKAGES}")
+        all_packages = index.resolve_dependencies(ROOT_PACKAGES)
+        print(f"[+] Resolved {len(all_packages)} total packages (including transitive dependencies).")
+
+        resolved_dict = {pkg: index.packages[pkg] for pkg in all_packages if pkg in index.packages}
+        lock_data = update_lockfile(lockfile_path, termux_arch, resolved_dict)
+
+        if not args.output:
+            print(f"[✔] Lockfile updated for {termux_arch}. Exiting.")
+            return
+
+        arch_lock = lock_data["packages"][termux_arch]
+    else:
+        # Default: Enforce locked versions and cryptographic checksums
+        print(f"==================================================")
+        print(f"[*] Building Bootstrap Archive (Hermetic / Locked Mode)")
+        print(f"[*] Target Architecture : {args.arch} -> Termux [{termux_arch}], ABI [{abi_name}]")
+        print(f"[*] Output Destination  : {args.output}")
+        print(f"[*] Lockfile            : {lockfile_path}")
+        print(f"==================================================")
+
+        if not os.path.exists(lockfile_path):
+            print(f"[!] Error: Lockfile not found at {lockfile_path}!")
+            print(f"[!] Run 'python3 scripts/build_bootstrap.py --update-lock --arch {args.arch}' to generate it.")
+            sys.exit(1)
+
+        with open(lockfile_path, "r", encoding="utf-8") as f:
+            lock_data = json.load(f)
+
+        arch_lock = lock_data.get("packages", {}).get(termux_arch)
+        if not arch_lock:
+            print(f"[!] Error: Target architecture '{termux_arch}' is not in lockfile {lockfile_path}!")
+            print(f"[!] Run 'python3 scripts/build_bootstrap.py --update-lock --arch {args.arch}' to lock this architecture.")
+            sys.exit(1)
+
+        # Verify root packages are present
+        missing_roots = [p for p in ROOT_PACKAGES if p not in arch_lock]
+        if missing_roots:
+            raise RuntimeError(f"Lockfile is missing root packages: {missing_roots}! Run with --update-lock.")
+
+        print(f"[✔] Loaded lockfile: {lockfile_path} ({len(arch_lock)} packages for {termux_arch})")
 
     staging_dir = args.staging or os.path.join("build", f"bootstrap_staging_{termux_arch}")
     cache_dir = args.cache_dir or os.path.join("build", "deb_cache", termux_arch)
     os.makedirs(cache_dir, exist_ok=True)
     os.makedirs(staging_dir, exist_ok=True)
 
-    repos = {
-        "main": ("stable", "https://packages.termux.dev/apt/termux-main/dists/stable/InRelease"),
-        "x11": ("x11", "https://packages.termux.dev/apt/termux-x11/dists/x11/InRelease")
-    }
-    repo_bases = {
-        "main": "https://packages.termux.dev/apt/termux-main/",
-        "x11": "https://packages.termux.dev/apt/termux-x11/"
-    }
-
-    scripts_dir = os.path.dirname(os.path.abspath(__file__))
-    keyring_path = os.path.join(scripts_dir, "keys", "termux-archive-keyring.gpg")
-    ensure_keyring(keyring_path)
-
-    index = RepositoryIndex(repo_bases)
-    for key, (dist, inrelease_url) in repos.items():
-        index.load_index(key, dist, inrelease_url, termux_arch, keyring_path)
-
-    print(f"[*] Resolving recursive dependency graph for: {ROOT_PACKAGES}")
-    all_packages = index.resolve_dependencies(ROOT_PACKAGES)
-    print(f"[+] Resolved {len(all_packages)} total packages (including transitive dependencies).")
-
     staging_usr = os.path.join(staging_dir, "usr")
     os.makedirs(staging_usr, exist_ok=True)
 
-    for pkg_name in sorted(all_packages):
-        if pkg_name not in index.packages:
-            continue
-        meta = index.packages[pkg_name]
-        download_url = meta["_repo_base"] + meta["Filename"]
-        deb_filename = os.path.basename(meta["Filename"])
+    all_packages = sorted(arch_lock.keys())
+    package_metrics = {}
+    for pkg_name in all_packages:
+        pkg_info = arch_lock[pkg_name]
+        rel_filename = pkg_info["filename"]
+        deb_filename = os.path.basename(rel_filename)
         cached_deb_path = os.path.join(cache_dir, deb_filename)
-        expected_size = int(meta.get("Size", 0))
-        expected_sha = meta.get("SHA256")
+        expected_sha = pkg_info.get("sha256")
+        repo_name = pkg_info.get("repo", "main")
+        primary_url = repo_bases.get(repo_name, repo_bases["main"]) + rel_filename
+        archive_url = archive_bases.get(repo_name, archive_bases["main"]) + rel_filename
 
-        deb_bytes = None
-        if os.path.exists(cached_deb_path) and (expected_size == 0 or os.path.getsize(cached_deb_path) == expected_size):
-            with open(cached_deb_path, "rb") as f:
-                deb_bytes = f.read()
-            if expected_sha and hashlib.sha256(deb_bytes).hexdigest() != expected_sha:
-                print(f"[!] Cached deb checksum mismatch for {pkg_name}, redownloading...")
-                deb_bytes = None
+        deb_bytes = download_deb_secure(
+            url_primary=primary_url,
+            url_archive=archive_url,
+            expected_sha=expected_sha,
+            cached_path=cached_deb_path,
+            pkg_name=pkg_name,
+            version=pkg_info.get("version", "")
+        )
 
-        if deb_bytes is None:
-            print(f" -> [Download] {pkg_name} ({meta.get('Version')}) from {download_url}")
-            req = urllib.request.Request(download_url, headers={"User-Agent": "xopp-builder"})
-            with urllib.request.urlopen(req, timeout=45) as resp:
-                deb_bytes = resp.read()
-            if expected_sha:
-                actual_sha = hashlib.sha256(deb_bytes).hexdigest()
-                if actual_sha != expected_sha:
-                    raise RuntimeError(f"Poisoned or corrupted package {pkg_name}! SHA-256 mismatch (got {actual_sha}, expected {expected_sha})")
-            with open(cached_deb_path, "wb") as f:
-                f.write(deb_bytes)
-        else:
-            print(f" -> [Cache Hit Verified] Extracting: {pkg_name} ({meta.get('Version')})")
-
-        DebExtractor.extract_data_tar(deb_bytes, staging_dir)
+        installed_size = DebExtractor.extract_data_tar(deb_bytes, staging_dir)
+        package_metrics[pkg_name] = {
+            "deb_size": len(deb_bytes),
+            "installed_size": installed_size
+        }
 
     # Move extracted Termux rootfs to the standard usr/ prefix
     termux_usr = os.path.join(staging_dir, "data", "data", "com.termux", "files", "usr")
@@ -644,12 +816,13 @@ def main():
 
     manifest_packages = {}
     for pkg in sorted(all_packages):
-        if pkg in index.packages:
-            meta = index.packages[pkg]
+        if pkg in arch_lock:
+            meta = arch_lock[pkg]
+            metrics = package_metrics.get(pkg, {})
             manifest_packages[pkg] = {
-                "version": meta.get("Version", ""),
-                "installed_size": int(meta.get("Installed-Size", 0)) * 1024,
-                "deb_size": int(meta.get("Size", 0))
+                "version": meta.get("version", ""),
+                "installed_size": metrics.get("installed_size", 0),
+                "deb_size": metrics.get("deb_size", 0)
             }
 
     manifest_data = {

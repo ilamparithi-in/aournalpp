@@ -24,7 +24,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v7
         with:
-          submodules: recursive
+          submodules: false
           fetch-depth: 0
 
       - name: Set up JDK 17
@@ -33,7 +33,42 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Compute Deterministic x11-core Cache Key
+        id: x11-cache-key
+        run: |
+          SUBMODULE_SHA=$(git rev-parse HEAD:submodules/termux-x11)
+          CORE_SHA=$(git rev-parse HEAD:x11-core)
+          echo "key=x11-core-aar-${SUBMODULE_SHA}-${CORE_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Prebuilt x11-core AAR
+        id: x11-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: libs/x11-core-release.aar
+          key: ${{ steps.x11-cache-key.outputs.key }}
+          restore-keys: |
+            x11-core-aar-
+
+      - name: Restore Bootstrap Assets (Arm64)
+        id: bootstrap-cache-arm64
+        uses: actions/cache/restore@v4
+        with:
+          path: app/build/generated/bootstrap-assets/arm64
+          key: bootstrap-assets-arm64-${{ hashFiles('scripts/build_bootstrap.py', 'scripts/bootstrap.lock.json', 'scripts/*.c') }}
+          restore-keys: |
+            bootstrap-assets-arm64-
+
+      - name: Restore Bootstrap Assets (X86_64)
+        id: bootstrap-cache-x86_64
+        uses: actions/cache/restore@v4
+        with:
+          path: app/build/generated/bootstrap-assets/x86_64
+          key: bootstrap-assets-x86_64-${{ hashFiles('scripts/build_bootstrap.py', 'scripts/bootstrap.lock.json', 'scripts/*.c') }}
+          restore-keys: |
+            bootstrap-assets-x86_64-
+
       - name: Set up Android NDK (r27d)
+        if: steps.x11-cache.outputs.cache-hit != 'true' || steps.bootstrap-cache-arm64.outputs.cache-hit != 'true' || steps.bootstrap-cache-x86_64.outputs.cache-hit != 'true'
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r27d
@@ -41,14 +76,6 @@ jobs:
 
       - name: Set up Gradle Build Cache
         uses: gradle/actions/setup-gradle@v6
-
-      - name: Cache Debian Packages
-        uses: actions/cache@v6
-        with:
-          path: scripts/build/deb_cache
-          key: deb-cache-${{ runner.os }}-${{ hashFiles('scripts/build_bootstrap.py') }}
-          restore-keys: |
-            deb-cache-${{ runner.os }}-
 
       - name: Decode Beta Keystore
         if: env.BETA_KEYSTORE_BASE64 != ''
