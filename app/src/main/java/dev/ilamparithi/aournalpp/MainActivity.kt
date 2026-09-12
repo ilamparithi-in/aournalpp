@@ -112,9 +112,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Purge any cloud services marked for deletion from previous app sessions
-        CredentialsVault(this).purgePendingDeletedServices(this)
-
         BackupScheduler.updateSchedules(this)
 
         pendingIntentToProcess = intent
@@ -320,7 +317,7 @@ class MainActivity : ComponentActivity() {
                     val result = dev.ilamparithi.aournalpp.backup.security.GoogleOAuthManager.handleRedirectUri(uri)
                     if (result.isSuccess) {
                         val tokenResponse = result.getOrThrow()
-                        val vault = dev.ilamparithi.aournalpp.backup.security.CredentialsVault(this@MainActivity)
+                        val vault = dev.ilamparithi.aournalpp.backup.security.CredentialsVault.getInstance(this@MainActivity)
                         val existingGdrive = vault.getAllServices().firstOrNull { it.providerType == dev.ilamparithi.aournalpp.backup.model.StorageProviderType.GOOGLE_DRIVE }
                         if (existingGdrive != null) {
                             val updated = existingGdrive.copy(

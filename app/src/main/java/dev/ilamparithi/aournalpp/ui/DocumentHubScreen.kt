@@ -132,8 +132,12 @@ import java.util.Locale
 
 private const val SEARCH_DEBOUNCE_MS = 250L
 
+@Volatile
+private var cachedHasStoragePermission: Boolean? = null
+
 private fun hasStoragePermission(context: Context): Boolean {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+    cachedHasStoragePermission?.let { return it }
+    val granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         Environment.isExternalStorageManager()
     } else {
         val readGranted = ContextCompat.checkSelfPermission(
@@ -144,6 +148,10 @@ private fun hasStoragePermission(context: Context): Boolean {
         ) == PackageManager.PERMISSION_GRANTED
         readGranted && writeGranted
     }
+    if (granted) {
+        cachedHasStoragePermission = true
+    }
+    return granted
 }
 
 private fun requestStoragePermission(context: Context) {
@@ -369,7 +377,10 @@ fun DocumentHubScreen(
                 hasPermission = hasStoragePermission(context)
                 if (hasPermission) {
                     showPermissionDialog = false
-                    viewModel.loadContent()
+                    scope.launch {
+                        delay(250)
+                        viewModel.loadContentNow()
+                    }
                 }
             }
         }
@@ -382,7 +393,13 @@ fun DocumentHubScreen(
             hasPermission = hasStoragePermission(context)
             if (!hasPermission) return@LaunchedEffect
         }
-        if (searchQuery.isNotEmpty()) delay(SEARCH_DEBOUNCE_MS)
+        if (searchQuery.isNotEmpty()) {
+            delay(SEARCH_DEBOUNCE_MS)
+        } else {
+            // Give the entering spring animation (duration ~300ms) uninterrupted UI thread time
+            // before scanning disk and updating folders/notes state.
+            delay(250)
+        }
         viewModel.loadContentNow()
     }
 
@@ -1031,7 +1048,7 @@ fun DocumentHubScreen(
         }
 
         folderToMapToCloud?.let { folder ->
-            val vault = remember { dev.ilamparithi.aournalpp.backup.security.CredentialsVault(context) }
+            val vault = remember { dev.ilamparithi.aournalpp.backup.security.CredentialsVault.getInstance(context) }
             val services = remember { vault.getAllServices() }
             CustomMappingDialog(
                 services = services,

@@ -91,6 +91,9 @@ class DocumentHubViewModel(application: Application) : AndroidViewModel(applicat
 
     fun setCurrentDirectory(directory: File) {
         _currentDirectory.value = directory
+        val cached = repository.getCachedDirectory(directory, _searchQuery.value, _showHiddenFiles.value)
+        _folders.value = cached?.first ?: emptyList()
+        _notes.value = cached?.second ?: emptyList()
     }
 
     fun setViewingTrash(viewing: Boolean) {

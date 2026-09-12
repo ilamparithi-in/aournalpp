@@ -49,7 +49,7 @@ import java.util.UUID
 class BackupEngine(
     private val context: Context,
     private val env: LinuxEnvironment = LinuxEnvironment(context),
-    private val vault: CredentialsVault = CredentialsVault(context),
+    private val vault: CredentialsVault = CredentialsVault.getInstance(context),
     private val db: SyncDatabase = SyncDatabase.getInstance(context)
 ) {
     companion object {

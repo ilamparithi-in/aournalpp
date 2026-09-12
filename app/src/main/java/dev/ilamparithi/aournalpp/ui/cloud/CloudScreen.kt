@@ -217,9 +217,9 @@ fun CloudScreen(
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val vault = remember { CredentialsVault(context) }
+    val vault = remember { CredentialsVault.getInstance(context) }
     val backupPrefs = remember { BackupPreferences(context) }
-    val engine = remember { BackupEngine(context) }
+    val engine = remember { BackupEngine(context, vault = vault) }
     val mappingRepo = remember { CustomMappingRepository(context) }
 
     var currentSubpage by remember { mutableStateOf(initialSubpage) }

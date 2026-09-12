@@ -29,7 +29,30 @@ class CredentialsVault(context: Context) {
         private const val KEY_EXCLUSION_FILTER = "exclusion_filter_json"
         private const val KEY_PENDING_DELETIONS = "pending_deleted_service_ids"
         private val vaultScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+
+        @Volatile
+        private var INSTANCE: CredentialsVault? = null
+
+        fun getInstance(context: Context): CredentialsVault {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: CredentialsVault(context.applicationContext).also { INSTANCE = it }
+            }
+        }
     }
+
+    @Volatile
+    private var cachedServices: List<ServiceConfig>? = null
+
+    @Volatile
+    private var cachedPendingDeletions: Set<String>? = null
+
+    @Volatile
+    private var cachedExclusionFilter: ExclusionFilterConfig? = null
+
+    @Volatile
+    private var cachedActiveServiceId: String? = null
+    @Volatile
+    private var activeServiceIdLoaded: Boolean = false
 
     private val masterKey = MasterKey.Builder(context)
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -50,7 +73,8 @@ class CredentialsVault(context: Context) {
 
     @Synchronized
     fun getAllServices(): List<ServiceConfig> {
-        val jsonStr = securePrefs.getString(KEY_SERVICES, null) ?: return emptyList()
+        cachedServices?.let { return it }
+        val jsonStr = securePrefs.getString(KEY_SERVICES, null) ?: return emptyList<ServiceConfig>().also { cachedServices = it }
         return try {
             val array = JSONArray(jsonStr)
             val list = mutableListOf<ServiceConfig>()
@@ -58,9 +82,11 @@ class CredentialsVault(context: Context) {
                 val obj = array.getJSONObject(i)
                 list.add(deserializeService(obj))
             }
+            cachedServices = list
             list
         } catch (e: Exception) {
             Log.e(TAG, "Error deserializing services", e)
+            cachedServices = emptyList()
             emptyList()
         }
     }
@@ -93,13 +119,17 @@ class CredentialsVault(context: Context) {
 
     @Synchronized
     fun getPendingDeletedServiceIds(): Set<String> {
-        return securePrefs.getStringSet(KEY_PENDING_DELETIONS, emptySet())?.toSet() ?: emptySet()
+        cachedPendingDeletions?.let { return it }
+        val ids = securePrefs.getStringSet(KEY_PENDING_DELETIONS, emptySet())?.toSet() ?: emptySet()
+        cachedPendingDeletions = ids
+        return ids
     }
 
     @Synchronized
     fun markServicePendingDeletion(serviceId: String) {
         val current = getPendingDeletedServiceIds().toMutableSet()
         current.add(serviceId)
+        cachedPendingDeletions = current
         securePrefs.edit().putStringSet(KEY_PENDING_DELETIONS, current).apply()
     }
 
@@ -107,6 +137,7 @@ class CredentialsVault(context: Context) {
     fun restorePendingDeletedService(serviceId: String) {
         val current = getPendingDeletedServiceIds().toMutableSet()
         current.remove(serviceId)
+        cachedPendingDeletions = current
         securePrefs.edit().putStringSet(KEY_PENDING_DELETIONS, current).apply()
     }
 
@@ -136,6 +167,7 @@ class CredentialsVault(context: Context) {
         // Also remove from pending deletions set
         val pending = getPendingDeletedServiceIds().toMutableSet()
         if (pending.remove(serviceId)) {
+            cachedPendingDeletions = pending
             securePrefs.edit().putStringSet(KEY_PENDING_DELETIONS, pending).apply()
         }
 
@@ -190,11 +222,17 @@ class CredentialsVault(context: Context) {
 
     @Synchronized
     fun getActiveServiceId(): String? {
-        return securePrefs.getString(KEY_ACTIVE_SERVICE_ID, null)
+        if (activeServiceIdLoaded) return cachedActiveServiceId
+        val id = securePrefs.getString(KEY_ACTIVE_SERVICE_ID, null)
+        cachedActiveServiceId = id
+        activeServiceIdLoaded = true
+        return id
     }
 
     @Synchronized
     fun setActiveServiceId(serviceId: String?) {
+        cachedActiveServiceId = serviceId
+        activeServiceIdLoaded = true
         if (serviceId == null) {
             securePrefs.edit().remove(KEY_ACTIVE_SERVICE_ID).apply()
         } else {
@@ -204,7 +242,13 @@ class CredentialsVault(context: Context) {
 
     @Synchronized
     fun getExclusionFilter(): ExclusionFilterConfig {
-        val jsonStr = securePrefs.getString(KEY_EXCLUSION_FILTER, null) ?: return ExclusionFilterConfig.DEFAULT
+        cachedExclusionFilter?.let { return it }
+        val jsonStr = securePrefs.getString(KEY_EXCLUSION_FILTER, null)
+        if (jsonStr == null) {
+            val defaultFilter = ExclusionFilterConfig.DEFAULT
+            cachedExclusionFilter = defaultFilter
+            return defaultFilter
+        }
         return try {
             val obj = JSONObject(jsonStr)
             val regexArray = obj.optJSONArray("regexPatterns") ?: JSONArray()
@@ -223,7 +267,7 @@ class CredentialsVault(context: Context) {
             val isWhitelist = obj.optBoolean("isWhitelistMode", false)
             val syncTrash = obj.optBoolean("syncTrash", false)
 
-            ExclusionFilterConfig(
+            val filter = ExclusionFilterConfig(
                 isWhitelistMode = isWhitelist,
                 syncTrash = syncTrash,
                 regexPatterns = regexList,
@@ -232,14 +276,19 @@ class CredentialsVault(context: Context) {
                 excludedFolderPaths = folderSet,
                 skipDefaultTransient = skipDefault
             )
+            cachedExclusionFilter = filter
+            filter
         } catch (e: Exception) {
             Log.e(TAG, "Error deserializing exclusion filter", e)
-            ExclusionFilterConfig.DEFAULT
+            val defaultFilter = ExclusionFilterConfig.DEFAULT
+            cachedExclusionFilter = defaultFilter
+            defaultFilter
         }
     }
 
     @Synchronized
     fun saveExclusionFilter(config: ExclusionFilterConfig) {
+        cachedExclusionFilter = config
         try {
             val obj = JSONObject()
             obj.put("isWhitelistMode", config.isWhitelistMode)
@@ -257,6 +306,7 @@ class CredentialsVault(context: Context) {
     }
 
     private fun persistServices(services: List<ServiceConfig>) {
+        cachedServices = services
         try {
             val array = JSONArray()
             for (s in services) {

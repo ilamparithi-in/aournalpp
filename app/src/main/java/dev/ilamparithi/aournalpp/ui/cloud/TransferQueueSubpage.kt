@@ -98,7 +98,7 @@ fun TransferQueueSubpage(
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val vault = remember { CredentialsVault(context) }
+    val vault = remember { CredentialsVault.getInstance(context) }
     val items: List<TransferItem> by FileTransferQueueManager.items.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
 

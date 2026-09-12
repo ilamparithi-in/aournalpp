@@ -51,7 +51,7 @@ fun QuickSyncButton(
     val coroutineScope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
 
-    val vault = remember { CredentialsVault(context) }
+    val vault = remember { CredentialsVault.getInstance(context) }
     val prefs = remember { dev.ilamparithi.aournalpp.backup.worker.BackupPreferences(context) }
     val isSyncRunningByManager by FileTransferQueueManager.isSyncRunning.collectAsStateWithLifecycle()
 
