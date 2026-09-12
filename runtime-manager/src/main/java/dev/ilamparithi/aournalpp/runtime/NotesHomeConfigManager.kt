@@ -482,7 +482,10 @@ object NotesHomeConfigManager {
                 }
             }
             json.put(META_TYPES_KEY, metaTypes)
-            destFile.writeText(json.toString(2), Charsets.UTF_8)
+            val newJson = json.toString(2)
+            if (!destFile.exists() || destFile.readText(Charsets.UTF_8) != newJson) {
+                destFile.writeText(newJson, Charsets.UTF_8)
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to export SharedPreferences to ${destFile.name}", e)
         }

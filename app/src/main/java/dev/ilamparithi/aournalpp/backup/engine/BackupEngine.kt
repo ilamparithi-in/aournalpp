@@ -42,12 +42,14 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileNotFoundException
 import java.security.MessageDigest
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
+import org.json.JSONArray
+import org.json.JSONObject
 import dev.ilamparithi.aournalpp.backup.model.ConfigSyncStatus
 import dev.ilamparithi.aournalpp.backup.model.BackupScope
-import java.io.FileNotFoundException
-import java.util.UUID
 
 /**
  * Core differential synchronization engine supporting multi-service complete backups,
@@ -66,6 +68,108 @@ class BackupEngine(
 
         fun getCompleteBackupRemoteRoot(serviceConfig: ServiceConfig): String {
             return serviceConfig.remoteBasePath.trim().trim('/').ifBlank { COMPLETE_BACKUP_REMOTE_ROOT }
+        }
+
+        fun isConfigFile(pathOrName: String): Boolean {
+            val clean = pathOrName.replace('\\', '/')
+            val fileName = File(clean).name.lowercase()
+            return fileName in setOf(
+                "x11_prefs.json",
+                "app_settings.json",
+                "settings.xml",
+                "settings.ini",
+                "sync_mappings.json"
+            ) || clean.startsWith(".config/") || clean.contains("/.config/") || clean == ".config"
+        }
+
+        fun hasContentChanges(f1: File, f2: File): Boolean {
+            if (!f1.exists() || !f2.exists()) return true
+            val hash1 = calculateFileHash(f1)
+            val hash2 = calculateFileHash(f2)
+            if (hash1.isNotEmpty() && hash1 == hash2) {
+                return false
+            }
+            val ext = f1.extension.lowercase()
+            if (ext == "json") {
+                return try {
+                    !areJsonFilesEqual(f1, f2)
+                } catch (_: Exception) {
+                    val lines1 = f1.readLines().map { it.trim() }.filter { it.isNotEmpty() }
+                    val lines2 = f2.readLines().map { it.trim() }.filter { it.isNotEmpty() }
+                    lines1 != lines2
+                }
+            }
+            if (ext in listOf("xml", "ini", "txt", "conf", "cfg", "properties")) {
+                return try {
+                    val lines1 = f1.readLines().map { it.trim() }.filter { it.isNotEmpty() }
+                    val lines2 = f2.readLines().map { it.trim() }.filter { it.isNotEmpty() }
+                    lines1 != lines2
+                } catch (_: Exception) {
+                    true
+                }
+            }
+            return true
+        }
+
+        fun areJsonFilesEqual(f1: File, f2: File): Boolean {
+            val s1 = f1.readText(Charsets.UTF_8).trim()
+            val s2 = f2.readText(Charsets.UTF_8).trim()
+            if (s1 == s2) return true
+            if (s1.startsWith("{") && s2.startsWith("{")) {
+                return areJsonObjectsEqual(JSONObject(s1), JSONObject(s2))
+            }
+            if (s1.startsWith("[") && s2.startsWith("[")) {
+                return areJsonArraysEqual(JSONArray(s1), JSONArray(s2))
+            }
+            return false
+        }
+
+        fun areJsonObjectsEqual(j1: JSONObject, j2: JSONObject): Boolean {
+            if (j1.length() != j2.length()) return false
+            val keys = j1.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                if (!j2.has(key)) return false
+                val v1 = j1.get(key)
+                val v2 = j2.get(key)
+                if (!areJsonValuesEqual(v1, v2)) return false
+            }
+            return true
+        }
+
+        fun areJsonValuesEqual(v1: Any?, v2: Any?): Boolean {
+            if (v1 == null && v2 == null) return true
+            if (v1 == null || v2 == null) return false
+            if (v1 is JSONObject && v2 is JSONObject) return areJsonObjectsEqual(v1, v2)
+            if (v1 is JSONArray && v2 is JSONArray) return areJsonArraysEqual(v1, v2)
+            if (v1 is Number && v2 is Number) return v1.toDouble() == v2.toDouble()
+            if (v1 is Boolean && v2 is Boolean) return v1 == v2
+            return v1.toString() == v2.toString()
+        }
+
+        fun areJsonArraysEqual(a1: JSONArray, a2: JSONArray): Boolean {
+            if (a1.length() != a2.length()) return false
+            for (i in 0 until a1.length()) {
+                if (!areJsonValuesEqual(a1.get(i), a2.get(i))) return false
+            }
+            return true
+        }
+
+        fun calculateFileHash(file: File): String {
+            if (!file.exists() || !file.isFile || file.length() == 0L) return ""
+            return try {
+                val digest = MessageDigest.getInstance("SHA-256")
+                file.inputStream().use { input ->
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        digest.update(buffer, 0, bytesRead)
+                    }
+                }
+                digest.digest().joinToString("") { "%02x".format(it) }
+            } catch (e: Exception) {
+                ""
+            }
         }
     }
 
@@ -205,14 +309,54 @@ class BackupEngine(
 
             // Differential comparison via in-memory metadata lookup
             val uploadQueue = mutableListOf<Pair<ScannedLocalFile, String>>()
+            val cacheDir = File(context.cacheDir, "config_diff_cache").apply { if (!exists()) mkdirs() }
+
             for ((scanned, remotePath) in filesToSync) {
                 val record = existingMetaMap["${scanned.scope}:${scanned.relativePath}"]
-                if (record != null && record.localSha256 == scanned.sha256 && scanned.lastModified <= record.localLastModified) {
-                    // Unchanged file -> Skip (do not clutter active transfer queue)
+                val isConfig = isConfigFile(scanned.relativePath)
+
+                // 1. Content hash matches previous sync record: 0 diff changes -> skip
+                if (record != null && record.localSha256 == scanned.sha256) {
                     skippedCount++
-                } else {
-                    uploadQueue.add(scanned to remotePath)
+                    if (scanned.lastModified != record.localLastModified) {
+                        dao.insertOrUpdate(record.copy(localLastModified = scanned.lastModified))
+                    }
+                    continue
                 }
+
+                // 2. For config files (x11_prefs, settings, app_settings), check diff against remote instead of accessed/modified date
+                if (isConfig) {
+                    val tempRemoteFile = File(cacheDir, "remote_${serviceConfig.id}_${scanned.file.name}")
+                    val downloadRes = try {
+                        provider.downloadFile(remotePath, tempRemoteFile) { _, _ -> }
+                    } catch (_: Exception) {
+                        Result.failure(Exception("Download failed"))
+                    }
+
+                    if (downloadRes.isSuccess && tempRemoteFile.exists() && tempRemoteFile.length() > 0L) {
+                        if (!hasContentChanges(scanned.file, tempRemoteFile)) {
+                            // Remote config content matches local file (0 diff changes) -> Skip upload
+                            skippedCount++
+                            dao.insertOrUpdate(
+                                SyncMetadataEntity(
+                                    serviceId = serviceConfig.id,
+                                    relativePath = scanned.relativePath,
+                                    scope = scanned.scope,
+                                    localSha256 = scanned.sha256,
+                                    remoteHash = null,
+                                    localLastModified = scanned.lastModified,
+                                    sizeBytes = scanned.sizeBytes,
+                                    lastSyncedAt = System.currentTimeMillis()
+                                )
+                            )
+                            tempRemoteFile.delete()
+                            continue
+                        }
+                    }
+                    tempRemoteFile.delete()
+                }
+
+                uploadQueue.add(scanned to remotePath)
             }
 
             // Enqueue all active upload items with deterministic IDs
@@ -449,6 +593,21 @@ class BackupEngine(
                             skippedCount++
                         }
                         ConflictResolutionPolicy.KEEP_NEWER -> {
+                            if (isConfigFile(localFile.name)) {
+                                val cacheDir = File(context.cacheDir, "config_diff_cache").apply { if (!exists()) mkdirs() }
+                                val tempRemote = File(cacheDir, "remote_restore_${serviceConfig.id}_${localFile.name}")
+                                val dl = try {
+                                    provider.downloadFile(remotePath, tempRemote) { _, _ -> }
+                                } catch (_: Exception) {
+                                    Result.failure(Exception("Download failed"))
+                                }
+                                if (dl.isSuccess && tempRemote.exists() && !hasContentChanges(localFile, tempRemote)) {
+                                    skippedCount++
+                                    tempRemote.delete()
+                                    continue
+                                }
+                                tempRemote.delete()
+                            }
                             if (rf.lastModifiedEpochMs > localFile.lastModified()) {
                                 downloadQueue.add(remotePath to localFile)
                             } else {
@@ -682,9 +841,23 @@ class BackupEngine(
                 }
             }
 
+            val cacheDir = File(context.cacheDir, "config_diff_cache").apply { if (!exists()) mkdirs() }
             for ((remote, localFile) in remoteFiles) {
                 if (!localFile.exists()) {
                     changedRemoteFiles.add(remote)
+                } else if (isConfigFile(localFile.name)) {
+                    val tempRemote = File(cacheDir, "remote_check_${serviceConfig.id}_${localFile.name}")
+                    val downloadRes = try {
+                        provider.downloadFile(remote.remotePath, tempRemote) { _, _ -> }
+                    } catch (_: Exception) {
+                        Result.failure(Exception("Download failed"))
+                    }
+                    if (downloadRes.isSuccess && tempRemote.exists() && tempRemote.length() > 0L) {
+                        if (hasContentChanges(localFile, tempRemote)) {
+                            changedRemoteFiles.add(remote)
+                        }
+                    }
+                    tempRemote.delete()
                 } else if (remote.lastModifiedEpochMs > localFile.lastModified()) {
                     changedRemoteFiles.add(remote)
                 }
@@ -813,6 +986,7 @@ class BackupEngine(
                         versionsByLocalPath.getOrPut(canon) { mutableListOf() }.add(item)
                     }
 
+                    val cacheDir = File(context.cacheDir, "config_diff_cache").apply { if (!exists()) mkdirs() }
                     val remoteConfigs = listRemoteRecursively(provider, "$remoteRoot/.config")
                     val addedRemoteConfigPaths = mutableSetOf<String>()
                     for ((remotePath, isDirectory, sizeBytes, lastModifiedEpochMs, contentHash) in remoteConfigs) {
@@ -825,6 +999,20 @@ class BackupEngine(
                         if (!relativePathByLocalPath.containsKey(canon)) {
                             relativePathByLocalPath[canon] = displayRel
                         }
+                        var downloadedLocalPath = destFile.absolutePath
+                        var downloadedHash = contentHash
+                        if (isConfigFile(subPath)) {
+                            val tempRemote = File(cacheDir, "remote_conflict_${srv.id}_${destFile.name}")
+                            val dl = try {
+                                provider.downloadFile(remotePath, tempRemote) { _, _ -> }
+                            } catch (_: Exception) {
+                                Result.failure(Exception("Download failed"))
+                            }
+                            if (dl.isSuccess && tempRemote.exists() && tempRemote.length() > 0L) {
+                                downloadedLocalPath = tempRemote.absolutePath
+                                downloadedHash = calculateFileHash(tempRemote)
+                            }
+                        }
                         val item = FileVersionItem(
                             source = FileVersionSource.REMOTE(
                                 serviceId = srv.id,
@@ -835,10 +1023,10 @@ class BackupEngine(
                             ),
                             fileName = destFile.name,
                             relativePath = displayRel,
-                            localFilePath = destFile.absolutePath,
+                            localFilePath = downloadedLocalPath,
                             sizeBytes = sizeBytes,
                             lastModifiedEpochMs = lastModifiedEpochMs,
-                            contentHash = contentHash,
+                            contentHash = downloadedHash,
                             remotePath = remotePath
                         )
                         versionsByLocalPath.getOrPut(canon) { mutableListOf() }.add(item)
@@ -857,6 +1045,20 @@ class BackupEngine(
                         if (!relativePathByLocalPath.containsKey(canon)) {
                             relativePathByLocalPath[canon] = displayRel
                         }
+                        var downloadedLocalPath = destFile.absolutePath
+                        var downloadedHash = contentHash
+                        if (isConfigFile(subPath)) {
+                            val tempRemote = File(cacheDir, "remote_conflict_${srv.id}_${destFile.name}")
+                            val dl = try {
+                                provider.downloadFile(remotePath, tempRemote) { _, _ -> }
+                            } catch (_: Exception) {
+                                Result.failure(Exception("Download failed"))
+                            }
+                            if (dl.isSuccess && tempRemote.exists() && tempRemote.length() > 0L) {
+                                downloadedLocalPath = tempRemote.absolutePath
+                                downloadedHash = calculateFileHash(tempRemote)
+                            }
+                        }
                         val item = FileVersionItem(
                             source = FileVersionSource.REMOTE(
                                 serviceId = srv.id,
@@ -867,10 +1069,10 @@ class BackupEngine(
                             ),
                             fileName = destFile.name,
                             relativePath = displayRel,
-                            localFilePath = destFile.absolutePath,
+                            localFilePath = downloadedLocalPath,
                             sizeBytes = sizeBytes,
                             lastModifiedEpochMs = lastModifiedEpochMs,
-                            contentHash = contentHash,
+                            contentHash = downloadedHash,
                             remotePath = remotePath
                         )
                         versionsByLocalPath.getOrPut(canon) { mutableListOf() }.add(item)
@@ -929,6 +1131,9 @@ class BackupEngine(
 
             if (remoteVersions.isEmpty()) continue
 
+            val displayRel = relativePathByLocalPath[canonPath] ?: File(canonPath).name
+            val isConfig = isConfigFile(displayRel)
+
             // Determine if versions genuinely differ:
             var hasConflict = false
             for ((i, v1) in allVersions.withIndex()) {
@@ -945,10 +1150,17 @@ class BackupEngine(
                     if (v1.localFilePath.isNotEmpty() && v2.localFilePath.isNotEmpty()) {
                         val f1 = File(v1.localFilePath)
                         val f2 = File(v2.localFilePath)
-                        if (f1.exists() && f2.exists() && !hasContentChanges(f1, f2)) {
-                            continue
+                        if (f1.exists() && f2.exists()) {
+                            if (!hasContentChanges(f1, f2)) {
+                                continue
+                            } else if (isConfig) {
+                                hasConflict = true
+                                break
+                            }
                         }
                     }
+
+                    if (isConfig) continue
 
                     val sizeDiff = v1.sizeBytes != v2.sizeBytes
                     val timeDiff = kotlin.math.abs(v1.lastModifiedEpochMs - v2.lastModifiedEpochMs) > 2000L
@@ -1530,41 +1742,6 @@ class BackupEngine(
             NotesHomeConfigManager.restoreSettingsFromNotesHome(localNotesDir, context, env)
         } catch (e: Exception) {
             Log.w(TAG, "Error applying config resolutions to internal settings", e)
-        }
-    }
-
-    private fun hasContentChanges(f1: File, f2: File): Boolean {
-        if (!f1.exists() || !f2.exists()) return true
-        if (f1.length() == f2.length() && calculateFileHash(f1) == calculateFileHash(f2)) {
-            return false
-        }
-        val ext = f1.extension.lowercase()
-        if (ext in listOf("xml", "json", "ini", "txt", "conf", "cfg", "properties")) {
-            return try {
-                val lines1 = f1.readLines().map { it.trimEnd() }.filter { it.isNotEmpty() }
-                val lines2 = f2.readLines().map { it.trimEnd() }.filter { it.isNotEmpty() }
-                lines1 != lines2
-            } catch (_: Exception) {
-                true
-            }
-        }
-        return true
-    }
-
-    private fun calculateFileHash(file: File): String {
-        if (!file.exists() || !file.isFile || file.length() == 0L) return ""
-        return try {
-            val digest = MessageDigest.getInstance("SHA-256")
-            file.inputStream().use { input ->
-                val buffer = ByteArray(8192)
-                var bytesRead: Int
-                while (input.read(buffer).also { bytesRead = it } != -1) {
-                    digest.update(buffer, 0, bytesRead)
-                }
-            }
-            digest.digest().joinToString("") { "%02x".format(it) }
-        } catch (e: Exception) {
-            ""
         }
     }
 
