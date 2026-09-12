@@ -100,14 +100,15 @@ fun TransferQueueSubpage(
     val context = LocalContext.current
     val vault = remember { CredentialsVault.getInstance(context) }
     val items: List<TransferItem> by FileTransferQueueManager.items.collectAsStateWithLifecycle()
+    val allServices by vault.servicesFlow.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
 
     // Multi-cloud detection & filtering
     val cloudServices = remember(items) {
         items.map { it.serviceId to it.serviceName }.distinct()
     }
-    val serviceProviderMap = remember(cloudServices) {
-        vault.getAllServices().associate { it.id to it.providerType }
+    val serviceProviderMap = remember(cloudServices, allServices) {
+        allServices.associate { it.id to it.providerType }
     }
     var selectedServiceId by remember { mutableStateOf<String?>(null) }
 

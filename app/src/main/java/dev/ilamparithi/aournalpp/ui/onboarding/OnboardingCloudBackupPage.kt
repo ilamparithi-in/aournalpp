@@ -12,6 +12,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
@@ -71,8 +72,8 @@ fun OnboardingCloudBackupPage(
     context: Context,
     onContinue: () -> Unit
 ) {
-    val vault = remember { CredentialsVault(context) }
-    var services by remember { mutableStateOf(vault.getAllServices()) }
+    val vault = remember { CredentialsVault.getInstance(context) }
+    val services by vault.servicesFlow.collectAsStateWithLifecycle()
     var showServiceConfigDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -161,14 +162,13 @@ fun OnboardingCloudBackupPage(
                                     modifier = Modifier.size(40.dp)
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.Default.Cloud,
+                                        CloudProviderIcon(
+                                            providerType = service.providerType,
                                             contentDescription = androidx.compose.ui.res.stringResource(
                                                 R.string.cd_cloud_service_icon,
                                                 service.name
                                             ),
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(22.dp)
+                                            size = 24.dp
                                         )
                                     }
                                 }
@@ -193,7 +193,6 @@ fun OnboardingCloudBackupPage(
                                 onCheckedChange = { isEnabled ->
                                     val updated = service.copy(isCompleteBackupEnabled = isEnabled)
                                     vault.saveService(updated)
-                                    services = vault.getAllServices()
                                 }
                             )
                         }
@@ -312,7 +311,6 @@ fun OnboardingCloudBackupPage(
             onDismissRequest = { showServiceConfigDialog = false },
             onSaveService = { newService ->
                 vault.saveService(newService)
-                services = vault.getAllServices()
                 showServiceConfigDialog = false
             }
         )

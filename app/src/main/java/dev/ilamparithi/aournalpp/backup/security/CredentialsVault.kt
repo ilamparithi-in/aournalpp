@@ -16,13 +16,16 @@ import org.json.JSONObject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import dev.ilamparithi.aournalpp.backup.worker.BackupScheduler
 
 /**
  * Hardware-backed encrypted credential vault for storing remote cloud credentials,
  * service configurations, custom folder mappings, and exclusion filter rules.
  */
-class CredentialsVault(context: Context) {
+class CredentialsVault private constructor(context: Context) {
 
     companion object {
         private const val TAG = "CredentialsVault"
@@ -38,16 +41,29 @@ class CredentialsVault(context: Context) {
 
         fun getInstance(context: Context): CredentialsVault {
             return INSTANCE ?: synchronized(this) {
-                INSTANCE ?: CredentialsVault(context.applicationContext).also { INSTANCE = it }
+                val appCtx = context.applicationContext ?: context
+                INSTANCE ?: CredentialsVault(appCtx).also { INSTANCE = it }
+            }
+        }
+
+        @androidx.annotation.VisibleForTesting
+        fun createForTesting(context: Context): CredentialsVault {
+            return CredentialsVault(context)
+        }
+
+        @androidx.annotation.VisibleForTesting
+        fun resetInstanceForTesting() {
+            synchronized(this) {
+                INSTANCE = null
             }
         }
     }
 
-    @Volatile
-    private var cachedServices: List<ServiceConfig>? = null
+    private val _servicesFlow = MutableStateFlow<List<ServiceConfig>>(emptyList())
+    val servicesFlow: StateFlow<List<ServiceConfig>> = _servicesFlow.asStateFlow()
 
-    @Volatile
-    private var cachedPendingDeletions: Set<String>? = null
+    private val _pendingDeletionsFlow = MutableStateFlow<Set<String>>(emptySet())
+    val pendingDeletionsFlow: StateFlow<Set<String>> = _pendingDeletionsFlow.asStateFlow()
 
     @Volatile
     private var cachedExclusionFilter: ExclusionFilterConfig? = null
@@ -64,13 +80,39 @@ class CredentialsVault(context: Context) {
 
     private val securePrefs: SharedPreferences = initSecurePrefs(context)
 
+    init {
+        _servicesFlow.value = loadServicesFromDisk()
+        _pendingDeletionsFlow.value = loadPendingDeletionsFromDisk()
+    }
+
+    private fun loadServicesFromDisk(): List<ServiceConfig> {
+        val jsonStr = securePrefs.getString(KEY_SERVICES, null) ?: return emptyList()
+        return try {
+            val array = JSONArray(jsonStr)
+            val list = mutableListOf<ServiceConfig>()
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                list.add(deserializeService(obj))
+            }
+            list
+        } catch (e: Exception) {
+            Log.e(TAG, "Error deserializing services", e)
+            emptyList()
+        }
+    }
+
+    private fun loadPendingDeletionsFromDisk(): Set<String> {
+        return securePrefs.getStringSet(KEY_PENDING_DELETIONS, emptySet())?.toSet() ?: emptySet()
+    }
+
     private fun initSecurePrefs(context: Context): SharedPreferences {
+        val safeContext = context.applicationContext ?: context
         fun createEncrypted(): SharedPreferences {
-            val masterKey = MasterKey.Builder(context)
+            val masterKey = MasterKey.Builder(safeContext)
                 .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
                 .build()
             return EncryptedSharedPreferences.create(
-                context,
+                safeContext,
                 PREFS_FILE,
                 masterKey,
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
@@ -84,7 +126,7 @@ class CredentialsVault(context: Context) {
             Log.w(TAG, "Failed to initialize EncryptedSharedPreferences with MasterKey, attempting KeyStore recovery", e)
             try {
                 // Delete corrupted preferences file
-                context.deleteSharedPreferences(PREFS_FILE)
+                safeContext.deleteSharedPreferences(PREFS_FILE)
                 // Delete corrupted master key alias from AndroidKeyStore if present
                 try {
                     val keyStore = java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -105,22 +147,7 @@ class CredentialsVault(context: Context) {
 
     @Synchronized
     fun getAllServices(): List<ServiceConfig> {
-        cachedServices?.let { return it }
-        val jsonStr = securePrefs.getString(KEY_SERVICES, null) ?: return emptyList<ServiceConfig>().also { cachedServices = it }
-        return try {
-            val array = JSONArray(jsonStr)
-            val list = mutableListOf<ServiceConfig>()
-            for (i in 0 until array.length()) {
-                val obj = array.getJSONObject(i)
-                list.add(deserializeService(obj))
-            }
-            cachedServices = list
-            list
-        } catch (e: Exception) {
-            Log.e(TAG, "Error deserializing services", e)
-            cachedServices = emptyList()
-            emptyList()
-        }
+        return _servicesFlow.value
     }
 
     @Synchronized
@@ -151,36 +178,33 @@ class CredentialsVault(context: Context) {
 
     @Synchronized
     fun getPendingDeletedServiceIds(): Set<String> {
-        cachedPendingDeletions?.let { return it }
-        val ids = securePrefs.getStringSet(KEY_PENDING_DELETIONS, emptySet())?.toSet() ?: emptySet()
-        cachedPendingDeletions = ids
-        return ids
+        return _pendingDeletionsFlow.value
     }
 
     @Synchronized
     fun markServicePendingDeletion(serviceId: String) {
-        val current = getPendingDeletedServiceIds().toMutableSet()
+        val current = _pendingDeletionsFlow.value.toMutableSet()
         current.add(serviceId)
-        cachedPendingDeletions = current
-        securePrefs.edit().putStringSet(KEY_PENDING_DELETIONS, current).apply()
+        _pendingDeletionsFlow.value = current
+        securePrefs.edit().putStringSet(KEY_PENDING_DELETIONS, current).commit()
     }
 
     @Synchronized
     fun restorePendingDeletedService(serviceId: String) {
-        val current = getPendingDeletedServiceIds().toMutableSet()
+        val current = _pendingDeletionsFlow.value.toMutableSet()
         current.remove(serviceId)
-        cachedPendingDeletions = current
-        securePrefs.edit().putStringSet(KEY_PENDING_DELETIONS, current).apply()
+        _pendingDeletionsFlow.value = current
+        securePrefs.edit().putStringSet(KEY_PENDING_DELETIONS, current).commit()
     }
 
     @Synchronized
     fun isServicePendingDeletion(serviceId: String): Boolean {
-        return getPendingDeletedServiceIds().contains(serviceId)
+        return _pendingDeletionsFlow.value.contains(serviceId)
     }
 
     @Synchronized
     fun getActiveConfiguredServices(): List<ServiceConfig> {
-        val pending = getPendingDeletedServiceIds()
+        val pending = _pendingDeletionsFlow.value
         return getAllServices().filterNot { it.id in pending }
     }
 
@@ -197,10 +221,10 @@ class CredentialsVault(context: Context) {
         deleteService(serviceId)
 
         // Also remove from pending deletions set
-        val pending = getPendingDeletedServiceIds().toMutableSet()
+        val pending = _pendingDeletionsFlow.value.toMutableSet()
         if (pending.remove(serviceId)) {
-            cachedPendingDeletions = pending
-            securePrefs.edit().putStringSet(KEY_PENDING_DELETIONS, pending).apply()
+            _pendingDeletionsFlow.value = pending
+            securePrefs.edit().putStringSet(KEY_PENDING_DELETIONS, pending).commit()
         }
 
         // 2. Delete Room database metadata
@@ -338,13 +362,13 @@ class CredentialsVault(context: Context) {
     }
 
     private fun persistServices(services: List<ServiceConfig>) {
-        cachedServices = services
+        _servicesFlow.value = services
         try {
             val array = JSONArray()
             for (s in services) {
                 array.put(serializeService(s))
             }
-            securePrefs.edit().putString(KEY_SERVICES, array.toString()).apply()
+            securePrefs.edit().putString(KEY_SERVICES, array.toString()).commit()
         } catch (e: Exception) {
             Log.e(TAG, "Error serializing services", e)
         }

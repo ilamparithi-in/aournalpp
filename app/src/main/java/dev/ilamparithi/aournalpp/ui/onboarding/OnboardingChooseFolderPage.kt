@@ -12,6 +12,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
@@ -75,7 +76,7 @@ fun OnboardingChooseFolderPage(
     onRestoreCloud: (ServiceConfig, String, File, Boolean, ConflictResolutionPolicy) -> Unit
 ) {
     val context = LocalContext.current
-    val vault = remember { CredentialsVault(context) }
+    val vault = remember { CredentialsVault.getInstance(context) }
     val backupEngine = remember { BackupEngine(context, env, vault) }
     val scope = rememberCoroutineScope()
 
@@ -95,7 +96,7 @@ fun OnboardingChooseFolderPage(
 
     var selectedCloudService by remember { mutableStateOf<ServiceConfig?>(null) }
     var currentRemotePath by remember { mutableStateOf(BackupEngine.COMPLETE_BACKUP_REMOTE_ROOT) }
-    var configuredServices by remember { mutableStateOf(vault.getAllServices()) }
+    val configuredServices by vault.servicesFlow.collectAsStateWithLifecycle()
 
     var detectedConfigConflicts by remember { mutableStateOf<List<FileConflictGroup>>(emptyList()) }
     var rememberedConfigSelections by remember { mutableStateOf<Map<String, Set<FileVersionItem>>>(emptyMap()) }
@@ -127,7 +128,6 @@ fun OnboardingChooseFolderPage(
 
     fun handleRestoreFromCloudClick() {
         val services = vault.getAllServices()
-        configuredServices = services
         if (services.isEmpty()) {
             showServiceConfigDialog = true
         } else if (services.size == 1) {
@@ -465,11 +465,10 @@ fun OnboardingChooseFolderPage(
                                 modifier = Modifier.padding(12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Cloud,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp)
+                                CloudProviderIcon(
+                                    providerType = service.providerType,
+                                    contentDescription = service.name,
+                                    size = 24.dp
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
@@ -521,7 +520,6 @@ fun OnboardingChooseFolderPage(
             onDismissRequest = { showServiceConfigDialog = false },
             onSaveService = { service ->
                 vault.saveService(service)
-                configuredServices = vault.getAllServices()
                 showServiceConfigDialog = false
                 selectedCloudService = service
                 val defaultPath = BackupEngine.getCompleteBackupRemoteRoot(service)
@@ -576,7 +574,6 @@ fun OnboardingChooseFolderPage(
                         onClick = {
                             showNoCompleteSyncDialog = false
                             val currentList = vault.getAllServices()
-                            configuredServices = currentList
                             if (currentList.size > 1) {
                                 showServiceSelectionDialog = true
                             } else {

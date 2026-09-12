@@ -227,8 +227,8 @@ fun CloudScreen(
     var selectedDetailServiceId by remember { mutableStateOf<String?>(null) }
     var showMappingSetsDialog by remember { mutableStateOf(false) }
 
-    var services by remember { mutableStateOf(vault.getAllServices()) }
-    var pendingDeletedServiceIds by remember { mutableStateOf(vault.getPendingDeletedServiceIds()) }
+    val services by vault.servicesFlow.collectAsStateWithLifecycle()
+    val pendingDeletedServiceIds by vault.pendingDeletionsFlow.collectAsStateWithLifecycle()
     var exclusionFilter by remember { mutableStateOf(vault.getExclusionFilter()) }
 
     var isAutoBackupOnExit by remember { mutableStateOf(backupPrefs.isAutoBackupOnExitEnabled) }
@@ -283,8 +283,6 @@ fun CloudScreen(
     val fabRotation by dev.ilamparithi.aournalpp.ui.animation.rememberFabRotation(isFabExpanded, reduceAnimations)
 
     fun refreshState() {
-        services = vault.getAllServices()
-        pendingDeletedServiceIds = vault.getPendingDeletedServiceIds()
         exclusionFilter = vault.getExclusionFilter()
     }
 

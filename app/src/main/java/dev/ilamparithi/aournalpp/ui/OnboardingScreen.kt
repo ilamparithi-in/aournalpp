@@ -474,7 +474,7 @@ fun OnboardingScreen(
                                     scope.launch {
                                         env.setNotesDirectoryPathOnly(localFolder.absolutePath)
                                         if (!skipDownload) {
-                                            val engine = BackupEngine(context, env, CredentialsVault(context))
+                                            val engine = BackupEngine(context, env, CredentialsVault.getInstance(context))
                                             engine.performRestore(
                                                 service.copy(remoteBasePath = remotePath),
                                                 conflictPolicy
