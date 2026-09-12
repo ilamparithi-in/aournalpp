@@ -9,7 +9,10 @@ import dev.ilamparithi.aournalpp.model.FolderItem
 import dev.ilamparithi.aournalpp.model.NoteDocument
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
 import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
+import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.utils.ThumbnailManager
+import android.content.SharedPreferences
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,13 +21,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-class DocumentHubViewModel(application: Application) : AndroidViewModel(application) {
-
-    val repository: DocumentRepository = DocumentRepository.getInstance(application)
-    val env = repository.getLinuxEnvironment()
-    val supervisor = ProcessSupervisor(env)
-    val pdfExportManager = PdfExportManager(env, supervisor)
-    val prefs = AppPreferences.getGeneral(application)
+class DocumentHubViewModel @JvmOverloads constructor(
+    application: Application,
+    val repository: DocumentRepository = DocumentRepository.getInstance(application),
+    val env: LinuxEnvironment = repository.getLinuxEnvironment(),
+    val supervisor: ProcessSupervisor = ProcessSupervisor(env),
+    val pdfExportManager: PdfExportManager = PdfExportManager(env, supervisor),
+    val prefs: SharedPreferences = AppPreferences.getGeneral(application),
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+) : AndroidViewModel(application) {
 
     private val _currentDirectory = MutableStateFlow(repository.getRootNotesDirectory())
     val currentDirectory: StateFlow<File> = _currentDirectory.asStateFlow()
@@ -173,7 +178,7 @@ class DocumentHubViewModel(application: Application) : AndroidViewModel(applicat
 
             ThumbnailManager.prefetchThumbnails(getApplication(), nList, pdfExportManager, viewModelScope)
 
-            val emergencyFile = withContext(Dispatchers.IO) {
+            val emergencyFile = withContext(ioDispatcher) {
                 val f = env.checkAndQuarantineEmergencySave()
                 if (f != null && f.exists() && f.length() > 0) f else null
             }
@@ -185,7 +190,7 @@ class DocumentHubViewModel(application: Application) : AndroidViewModel(applicat
             }
         }
 
-        val autoloadOverridden = withContext(Dispatchers.IO) { env.checkAndOverrideAutoloadPreference() }
+        val autoloadOverridden = withContext(ioDispatcher) { env.checkAndOverrideAutoloadPreference() }
         if (autoloadOverridden || env.hasPendingAutoloadOverrideNotification()) {
             _showAutoloadOverrideDialog.value = true
         }

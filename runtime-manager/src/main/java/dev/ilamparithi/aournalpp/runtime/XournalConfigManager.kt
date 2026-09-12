@@ -216,8 +216,8 @@ class XournalConfigManager(private val env: LinuxEnvironment) {
         extractedFiles
     }
 
-    private fun detectConfigFileType(uri: Uri, content: String): ConfigFileType? {
-        val path = uri.path?.lowercase() ?: ""
+    internal fun detectConfigFileType(uriPath: String?, content: String): ConfigFileType? {
+        val path = uriPath?.lowercase() ?: ""
         return when {
             path.endsWith("toolbar.ini") || (content.contains("[Toolbars]") || content.contains("[General]")) ->
                 ConfigFileType.TOOLBAR_INI
@@ -232,6 +232,9 @@ class XournalConfigManager(private val env: LinuxEnvironment) {
             else -> null
         }
     }
+
+    private fun detectConfigFileType(uri: Uri, content: String): ConfigFileType? =
+        detectConfigFileType(uri.path, content)
 
     private fun validateXmlStructure(xmlContent: String) {
         val parser = Xml.newPullParser()
@@ -253,7 +256,7 @@ class XournalConfigManager(private val env: LinuxEnvironment) {
         if (!hasRoot) error("Invalid XML: No root element detected.")
     }
 
-    private fun validateIniStructure(iniContent: String) {
+    internal fun validateIniStructure(iniContent: String) {
         val nonCommentLines = iniContent.lineSequence()
             .map { it.trim() }
             .filter { it.isNotEmpty() && !it.startsWith("#") && !it.startsWith(";") }
@@ -264,7 +267,7 @@ class XournalConfigManager(private val env: LinuxEnvironment) {
         }
     }
 
-    private fun validateGplStructure(gplContent: String) {
+    internal fun validateGplStructure(gplContent: String) {
         if (!gplContent.trimStart().startsWith("GIMP Palette")) {
             error("Invalid palette file: Must start with 'GIMP Palette' header.")
         }

@@ -135,6 +135,63 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
             return normalized.startsWith(canonicalRoot) || targetFile.canonicalFile.toPath().startsWith(canonicalRoot)
         }
         private const val LOCK_FILE_NAME = ".bootstrap_extract.lock"
+
+        fun needsBootstrap(installedVersion: Long?, currentAppVersion: Long): Boolean {
+            if (installedVersion == null) return true
+            return installedVersion < currentAppVersion
+        }
+
+        fun isUpgradeAvailable(hasValidInstallation: Boolean, needsBootstrap: Boolean): Boolean {
+            return hasValidInstallation && needsBootstrap
+        }
+
+        fun isUpgradeAvailable(
+            hasValidInstallation: Boolean,
+            installedVersion: Long?,
+            currentAppVersion: Long
+        ): Boolean {
+            return hasValidInstallation && needsBootstrap(installedVersion, currentAppVersion)
+        }
+
+        fun computeDiff(
+            installed: BootstrapManifest?,
+            incoming: BootstrapManifest,
+            availableStorageBytes: Long = 0L,
+            requiredStorageBytes: Long = 0L
+        ): BootstrapDiff {
+            val added = mutableListOf<PackageChange>()
+            val updated = mutableListOf<PackageChange>()
+            val removed = mutableListOf<PackageChange>()
+
+            if (installed == null) {
+                incoming.packages.values.forEach {
+                    added.add(PackageChange(it.name, null, it.version))
+                }
+            } else {
+                for ((name, newPkg) in incoming.packages) {
+                    val oldPkg = installed.packages[name]
+                    if (oldPkg == null) {
+                        added.add(PackageChange(name, null, newPkg.version))
+                    } else if (oldPkg.version != newPkg.version) {
+                        updated.add(PackageChange(name, oldPkg.version, newPkg.version))
+                    }
+                }
+                for ((name, oldPkg) in installed.packages) {
+                    if (!incoming.packages.containsKey(name)) {
+                        removed.add(PackageChange(name, oldPkg.version, null))
+                    }
+                }
+            }
+
+            return BootstrapDiff(
+                added = added.sortedBy { it.name },
+                updated = updated.sortedBy { it.name },
+                removed = removed.sortedBy { it.name },
+                requiredSpaceBytes = requiredStorageBytes,
+                availableSpaceBytes = availableStorageBytes,
+                hasSufficientSpace = availableStorageBytes >= requiredStorageBytes
+            )
+        }
     }
 
     private val lockFile get() = File(context.filesDir, LOCK_FILE_NAME)
@@ -186,15 +243,7 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
     }
 
     fun needsBootstrap(): Boolean {
-        val versionFile = File(env.rootDir, VERSION_FLAG)
-        if (!versionFile.exists()) return true
-        return try {
-            val installedVersion = versionFile.readText().trim().toLong()
-            val currentVersion = getCurrentAppVersionCode()
-            installedVersion < currentVersion
-        } catch (e: Exception) {
-            true
-        }
+        return needsBootstrap(getInstalledVersion(), getCurrentAppVersionCode())
     }
 
     fun getInstalledVersion(): Long? {
@@ -214,7 +263,7 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
     }
 
     fun isUpgradeAvailable(): Boolean {
-        return hasValidInstallation() && needsBootstrap()
+        return isUpgradeAvailable(hasValidInstallation(), needsBootstrap())
     }
 
     fun getInstalledManifest(): BootstrapManifest? {
@@ -304,42 +353,9 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
     fun computeDiff(isDynamicDownload: Boolean = false): BootstrapDiff? {
         val incoming = getIncomingManifest() ?: return null
         val installed = getInstalledManifest()
-
-        val added = mutableListOf<PackageChange>()
-        val updated = mutableListOf<PackageChange>()
-        val removed = mutableListOf<PackageChange>()
-
-        if (installed == null) {
-            incoming.packages.values.forEach {
-                added.add(PackageChange(it.name, null, it.version))
-            }
-        } else {
-            for ((name, newPkg) in incoming.packages) {
-                val oldPkg = installed.packages[name]
-                if (oldPkg == null) {
-                    added.add(PackageChange(name, null, newPkg.version))
-                } else if (oldPkg.version != newPkg.version) {
-                    updated.add(PackageChange(name, oldPkg.version, newPkg.version))
-                }
-            }
-            for ((name, oldPkg) in installed.packages) {
-                if (!incoming.packages.containsKey(name)) {
-                    removed.add(PackageChange(name, oldPkg.version, null))
-                }
-            }
-        }
-
         val available = getAvailableStorageBytes()
         val required = computeRequiredStorageBytes(incoming, isDynamicDownload)
-
-        return BootstrapDiff(
-            added = added.sortedBy { it.name },
-            updated = updated.sortedBy { it.name },
-            removed = removed.sortedBy { it.name },
-            requiredSpaceBytes = required,
-            availableSpaceBytes = available,
-            hasSufficientSpace = available >= required
-        )
+        return computeDiff(installed, incoming, available, required)
     }
 
     fun isInstalled(): Boolean = !needsBootstrap()

@@ -38,15 +38,16 @@ sealed interface BootstrapState {
     data class Error(val throwable: Throwable) : BootstrapState
 }
 
-class BootstrapViewModel(application: Application) : AndroidViewModel(application) {
+class BootstrapViewModel @JvmOverloads constructor(
+    application: Application,
+    private val env: LinuxEnvironment = LinuxEnvironment(application),
+    private val installer: BootstrapInstaller = BootstrapInstaller(application, env)
+) : AndroidViewModel(application) {
 
     companion object {
         private const val TAG = "BootstrapViewModel"
         private const val UPDATE_TIMEOUT_SECONDS = 10
     }
-
-    private val env = LinuxEnvironment(application)
-    private val installer = BootstrapInstaller(application, env)
 
     private val _uiState = MutableStateFlow<BootstrapState>(
         if (env.isOnboardingCompleted() && installer.hasValidInstallation() && !installer.isUpgradeAvailable()) {

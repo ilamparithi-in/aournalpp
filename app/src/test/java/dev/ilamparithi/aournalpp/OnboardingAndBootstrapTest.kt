@@ -1,5 +1,6 @@
 package dev.ilamparithi.aournalpp
 
+import dev.ilamparithi.aournalpp.runtime.BootstrapInstaller
 import dev.ilamparithi.aournalpp.runtime.InstallProgress
 import dev.ilamparithi.aournalpp.ui.BootstrapState
 import org.junit.Assert.assertEquals
@@ -74,64 +75,40 @@ class OnboardingAndBootstrapTest {
 
     @Test
     fun `test upgrade detection helper logic`() {
-        fun needsBootstrap(installedVersion: Long?, currentAppVersion: Long): Boolean {
-            if (installedVersion == null) return true
-            return installedVersion < currentAppVersion
-        }
-
-        fun isUpgradeAvailable(
-            versionFileExists: Boolean,
-            binaryExists: Boolean,
-            binaryCanExecute: Boolean,
-            installedVersion: Long?,
-            currentAppVersion: Long
-        ): Boolean {
-            val hasValidInstallation = versionFileExists && binaryExists && binaryCanExecute
-            return hasValidInstallation && needsBootstrap(installedVersion, currentAppVersion)
-        }
-
         // Case 1: Fresh install (no version file, no binaries)
         assertFalse(
-            isUpgradeAvailable(
-                versionFileExists = false,
-                binaryExists = false,
-                binaryCanExecute = false,
+            BootstrapInstaller.isUpgradeAvailable(
+                hasValidInstallation = false,
                 installedVersion = null,
-                currentAppVersion = 10
+                currentAppVersion = 10L
             )
         )
-        assertTrue(needsBootstrap(null, 10))
+        assertTrue(BootstrapInstaller.needsBootstrap(null, 10L))
 
         // Case 2: Up to date install
         assertFalse(
-            isUpgradeAvailable(
-                versionFileExists = true,
-                binaryExists = true,
-                binaryCanExecute = true,
+            BootstrapInstaller.isUpgradeAvailable(
+                hasValidInstallation = true,
                 installedVersion = 10L,
                 currentAppVersion = 10L
             )
         )
-        assertFalse(needsBootstrap(10L, 10L))
+        assertFalse(BootstrapInstaller.needsBootstrap(10L, 10L))
 
         // Case 3: Upgrade available from v9 to v10 with working binaries
         assertTrue(
-            isUpgradeAvailable(
-                versionFileExists = true,
-                binaryExists = true,
-                binaryCanExecute = true,
+            BootstrapInstaller.isUpgradeAvailable(
+                hasValidInstallation = true,
                 installedVersion = 9L,
                 currentAppVersion = 10L
             )
         )
-        assertTrue(needsBootstrap(9L, 10L))
+        assertTrue(BootstrapInstaller.needsBootstrap(9L, 10L))
 
         // Case 4: Broken installation (version file exists but binary is missing)
         assertFalse(
-            isUpgradeAvailable(
-                versionFileExists = true,
-                binaryExists = false,
-                binaryCanExecute = false,
+            BootstrapInstaller.isUpgradeAvailable(
+                hasValidInstallation = false,
                 installedVersion = 9L,
                 currentAppVersion = 10L
             )

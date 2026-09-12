@@ -27,7 +27,7 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.GZIPOutputStream
 
-class DocumentRepository private constructor(private val context: Context) {
+class DocumentRepository internal constructor(private val context: Context) {
 
     companion object {
         val SUPPORTED_EXTENSIONS = setOf("xopp", "xoj", "pdf")

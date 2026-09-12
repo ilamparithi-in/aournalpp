@@ -20,6 +20,42 @@ class LinuxEnvironment(private val context: Context) {
         const val PREF_KEY_EMERGENCY_DIR = "pref_special_emergency_dir"
         const val PREF_KEY_ONBOARDING_COMPLETED = "pref_onboarding_completed"
         const val PREF_KEY_REDUCE_ANIMATIONS = "pref_reduce_animations"
+
+        /**
+         * Sanitizes Xournal++ settings XML content by ensuring 'autoloadMostRecent' and legacy 'autoloadLastFile'
+         * are overridden to "false", and injecting 'autoloadMostRecent' if absent.
+         *
+         * @return Pair of updated XML content and boolean indicating whether an active preference was overridden.
+         */
+        fun overrideAutoloadInXml(xmlContent: String): Pair<String, Boolean> {
+            var content = xmlContent
+            var overridden = false
+
+            val propertyNames = listOf("autoloadMostRecent", "autoloadLastFile")
+            for (prop in propertyNames) {
+                val propRegex = Regex("""<property\b(?=[^>]*\bname\s*=\s*["']$prop["'])(?=[^>]*\bvalue\s*=\s*["']([^"']*)["'])[^>]*/>""")
+                val match = propRegex.find(content)
+
+                if (match != null) {
+                    val currentValue = match.groupValues[1].trim()
+                    val isEnabled = currentValue.equals("true", ignoreCase = true) ||
+                            currentValue == "1" ||
+                            currentValue.equals("yes", ignoreCase = true) ||
+                            currentValue.equals("on", ignoreCase = true)
+
+                    if (isEnabled) {
+                        content = content.replace(match.value, "<property name=\"$prop\" value=\"false\"/>")
+                        overridden = true
+                    }
+                }
+            }
+
+            if (!content.contains("autoloadMostRecent") && content.contains("</settings>")) {
+                content = content.replace("</settings>", "  <property name=\"autoloadMostRecent\" value=\"false\"/>\n</settings>")
+            }
+
+            return Pair(content, overridden)
+        }
     }
 
     val appPreferences = AppPreferences(context)
@@ -645,39 +681,12 @@ class LinuxEnvironment(private val context: Context) {
                 return false
             }
 
-            var content = settingsFile.readText()
-            var modified = false
-            var overridden = false
+            val originalContent = settingsFile.readText()
+            val (updatedContent, overridden) = overrideAutoloadInXml(originalContent)
 
-            val propertyNames = listOf("autoloadMostRecent", "autoloadLastFile")
-            for (prop in propertyNames) {
-                val propRegex = Regex("""<property\b(?=[^>]*\bname\s*=\s*["']$prop["'])(?=[^>]*\bvalue\s*=\s*["']([^"']*)["'])[^>]*/>""")
-                val match = propRegex.find(content)
-
-                if (match != null) {
-                    val currentValue = match.groupValues[1].trim()
-                    val isEnabled = currentValue.equals("true", ignoreCase = true) ||
-                            currentValue == "1" ||
-                            currentValue.equals("yes", ignoreCase = true) ||
-                            currentValue.equals("on", ignoreCase = true)
-
-                    if (isEnabled) {
-                        content = content.replace(match.value, "<property name=\"$prop\" value=\"false\"/>")
-                        modified = true
-                        overridden = true
-                        Log.i(TAG, "Overrode Xournal++ $prop preference from '$currentValue' to 'false'. Marked pending notification.")
-                    }
-                }
-            }
-
-            if (!content.contains("autoloadMostRecent") && content.contains("</settings>")) {
-                content = content.replace("</settings>", "  <property name=\"autoloadMostRecent\" value=\"false\"/>\n</settings>")
-                modified = true
-                Log.i(TAG, "Injected missing autoloadMostRecent='false' into settings.xml.")
-            }
-
-            if (modified) {
-                settingsFile.writeText(content)
+            if (updatedContent != originalContent) {
+                settingsFile.writeText(updatedContent)
+                Log.i(TAG, "Updated Xournal++ settings.xml with autoload overrides.")
             }
 
             if (overridden) {

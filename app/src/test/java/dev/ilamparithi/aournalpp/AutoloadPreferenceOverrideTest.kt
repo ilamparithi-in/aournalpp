@@ -1,40 +1,12 @@
 package dev.ilamparithi.aournalpp
 
+import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AutoloadPreferenceOverrideTest {
-
-    private fun sanitizeXml(xmlContent: String): Pair<String, Boolean> {
-        var content = xmlContent
-        var overridden = false
-
-        val propertyNames = listOf("autoloadMostRecent", "autoloadLastFile")
-        for (prop in propertyNames) {
-            val propRegex = Regex("""<property\b(?=[^>]*\bname\s*=\s*["']$prop["'])(?=[^>]*\bvalue\s*=\s*["']([^"']*)["'])[^>]*/>""")
-            val match = propRegex.find(content)
-            if (match != null) {
-                val currentValue = match.groupValues[1].trim()
-                val isEnabled = currentValue.equals("true", ignoreCase = true) ||
-                        currentValue == "1" ||
-                        currentValue.equals("yes", ignoreCase = true) ||
-                        currentValue.equals("on", ignoreCase = true)
-
-                if (isEnabled) {
-                    content = content.replace(match.value, """<property name="$prop" value="false"/>""")
-                    overridden = true
-                }
-            }
-        }
-
-        if (!content.contains("autoloadMostRecent") && content.contains("</settings>")) {
-            content = content.replace("</settings>", "  <property name=\"autoloadMostRecent\" value=\"false\"/>\n</settings>")
-        }
-
-        return Pair(content, overridden)
-    }
 
     @Test
     fun `test autoloadMostRecent true is overridden to false`() {
@@ -47,7 +19,7 @@ class AutoloadPreferenceOverrideTest {
             </settings>
         """.trimIndent()
 
-        val (result, overridden) = sanitizeXml(input)
+        val (result, overridden) = LinuxEnvironment.overrideAutoloadInXml(input)
 
         assertTrue(overridden)
         assertTrue(result.contains("""<property name="autoloadMostRecent" value="false"/>"""))
@@ -63,7 +35,7 @@ class AutoloadPreferenceOverrideTest {
             </settings>
         """.trimIndent()
 
-        val (result, overridden) = sanitizeXml(input)
+        val (result, overridden) = LinuxEnvironment.overrideAutoloadInXml(input)
 
         assertTrue(overridden)
         assertTrue(result.contains("""<property name="autoloadMostRecent" value="false"/>"""))
@@ -79,7 +51,7 @@ class AutoloadPreferenceOverrideTest {
             </settings>
         """.trimIndent()
 
-        val (result, overridden) = sanitizeXml(input)
+        val (result, overridden) = LinuxEnvironment.overrideAutoloadInXml(input)
 
         assertFalse(overridden)
         assertEquals(input, result)
@@ -94,7 +66,7 @@ class AutoloadPreferenceOverrideTest {
             </settings>
         """.trimIndent()
 
-        val (result, overridden) = sanitizeXml(input)
+        val (result, overridden) = LinuxEnvironment.overrideAutoloadInXml(input)
 
         assertFalse(overridden)
         assertTrue(result.contains("""<property name="autoloadMostRecent" value="false"/>"""))
@@ -109,7 +81,7 @@ class AutoloadPreferenceOverrideTest {
             </settings>
         """.trimIndent()
 
-        val (result, overridden) = sanitizeXml(input)
+        val (result, overridden) = LinuxEnvironment.overrideAutoloadInXml(input)
 
         assertTrue(overridden)
         assertTrue(result.contains("""<property name="autoloadMostRecent" value="false"/>"""))
@@ -124,7 +96,7 @@ class AutoloadPreferenceOverrideTest {
             </settings>
         """.trimIndent()
 
-        val (result, overridden) = sanitizeXml(input)
+        val (result, overridden) = LinuxEnvironment.overrideAutoloadInXml(input)
 
         assertTrue(overridden)
         assertTrue(result.contains("""<property name="autoloadLastFile" value="false"/>"""))

@@ -26,6 +26,11 @@ android {
         sourceCompatibility = jv
         targetCompatibility = jv
     }
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 val usePrebuiltX11 = (providers.gradleProperty("usePrebuiltX11").orNull?.toBoolean()
@@ -45,6 +50,10 @@ dependencies {
     implementation(libs.xz)
     
     testImplementation(libs.junit)
+    testImplementation("org.json:json:20240303")
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.turbine)
+    testImplementation(libs.mockk)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 }
