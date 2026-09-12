@@ -2,6 +2,7 @@ package dev.ilamparithi.aournalpp.ui.animation
 
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -39,11 +40,28 @@ object SpringSlideTransition {
     fun <T> createSpec(
         isForward: Boolean,
         reduceAnimations: Boolean = false,
+        isRapid: Boolean = false,
         offsetFraction: Int = DEFAULT_OFFSET_FRACTION
     ): AnimatedContentTransitionScope<T>.() -> ContentTransform = {
         if (reduceAnimations) {
             fadeIn(animationSpec = tween(120))
                 .togetherWith(fadeOut(animationSpec = tween(100)))
+        } else if (isRapid) {
+            // Rapid switching fallback: Fast, crisp directional slide & fade without residual spring bounce
+            (slideInHorizontally(
+                animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+                initialOffsetX = { calculateInitialOffsetX(it, isForward, offsetFraction) }
+            ) + fadeIn(
+                animationSpec = tween(durationMillis = 140)
+            ))
+                .togetherWith(
+                    slideOutHorizontally(
+                        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+                        targetOffsetX = { calculateTargetOffsetX(it, isForward, offsetFraction) }
+                    ) + fadeOut(
+                        animationSpec = tween(durationMillis = 120)
+                    )
+                )
         } else {
             (slideInHorizontally(
                 animationSpec = spring(

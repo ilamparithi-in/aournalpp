@@ -4,6 +4,7 @@ import dev.ilamparithi.aournalpp.data.X11Preferences
 import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -233,6 +234,26 @@ class FloatingToolbarWindowSwitcherTest {
         val backwardTarget = dev.ilamparithi.aournalpp.ui.animation.SpringSlideTransition.calculateTargetOffsetX(width, isForward = false, offsetFraction)
         assertEquals(-300, backwardInitial)
         assertEquals(300, backwardTarget)
+    }
+
+    @Test
+    fun testSpringSlideTransitionRapidSpecNonNull() {
+        val spec = dev.ilamparithi.aournalpp.ui.animation.SpringSlideTransition.createSpec<Int>(
+            isForward = true,
+            reduceAnimations = false,
+            isRapid = true
+        )
+        assertNotNull(spec)
+    }
+
+    @Test
+    fun testSpringSlideTransitionReduceAnimationsSpecNonNull() {
+        val spec = dev.ilamparithi.aournalpp.ui.animation.SpringSlideTransition.createSpec<Int>(
+            isForward = true,
+            reduceAnimations = true,
+            isRapid = true
+        )
+        assertNotNull(spec)
     }
 
     @Test

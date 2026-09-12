@@ -408,12 +408,17 @@ fun MainResponsiveAppShell() {
 
     var lastClickTime by remember { mutableLongStateOf(0L) }
     var lastClickedTab by remember { mutableIntStateOf(-1) }
+    var lastTabSwitchTime by remember { mutableLongStateOf(0L) }
+    var isRapidSwitch by remember { mutableStateOf(false) }
 
     val onTabSelect: (Int) -> Unit = { tabId ->
         val currentTime = System.currentTimeMillis()
         val isDoubleTap = (lastClickedTab == tabId) && (currentTime - lastClickTime < 400L)
 
         if (selectedTab != tabId) {
+            val delta = currentTime - lastTabSwitchTime
+            isRapidSwitch = lastTabSwitchTime > 0L && delta < 320L
+            lastTabSwitchTime = currentTime
             selectedTab = tabId
         }
 
@@ -474,7 +479,7 @@ fun MainResponsiveAppShell() {
     }
 
     BackHandler(enabled = selectedTab != AppTab.HOME.id) {
-        selectedTab = AppTab.HOME.id
+        onTabSelect(AppTab.HOME.id)
     }
 
     BackHandler(enabled = selectedTab == AppTab.HOME.id && isCanvasSessionActive?.isRunning == true && !isClosingSession) {
@@ -490,23 +495,23 @@ fun MainResponsiveAppShell() {
     fun RenderTabContent(tab: Int) {
         when (tab) {
             AppTab.HOME.id -> HomeScreen(
-                onNavigateToFiles = { selectedTab = AppTab.FILES.id },
-                onNavigateToSettings = { selectedTab = AppTab.SETTINGS.id },
-                onNavigateToAbout = { selectedTab = AppTab.ABOUT.id }
+                onNavigateToFiles = { onTabSelect(AppTab.FILES.id) },
+                onNavigateToSettings = { onTabSelect(AppTab.SETTINGS.id) },
+                onNavigateToAbout = { onTabSelect(AppTab.ABOUT.id) }
             )
             AppTab.FILES.id -> DocumentHubScreen(
-                onNavigateToSettings = { selectedTab = AppTab.SETTINGS.id },
-                onNavigateToLicenses = { selectedTab = AppTab.ABOUT.id }
+                onNavigateToSettings = { onTabSelect(AppTab.SETTINGS.id) },
+                onNavigateToLicenses = { onTabSelect(AppTab.ABOUT.id) }
             )
             AppTab.CLOUD.id -> CloudScreen(
-                onNavigateToSettings = { selectedTab = AppTab.SETTINGS.id }
+                onNavigateToSettings = { onTabSelect(AppTab.SETTINGS.id) }
             )
-            AppTab.SETTINGS.id -> SettingsScreen(onBack = { selectedTab = AppTab.HOME.id })
-            AppTab.ABOUT.id -> LicensesScreen(onBack = { selectedTab = AppTab.HOME.id })
+            AppTab.SETTINGS.id -> SettingsScreen(onBack = { onTabSelect(AppTab.HOME.id) })
+            AppTab.ABOUT.id -> LicensesScreen(onBack = { onTabSelect(AppTab.HOME.id) })
             else -> HomeScreen(
-                onNavigateToFiles = { selectedTab = AppTab.FILES.id },
-                onNavigateToSettings = { selectedTab = AppTab.SETTINGS.id },
-                onNavigateToAbout = { selectedTab = AppTab.ABOUT.id }
+                onNavigateToFiles = { onTabSelect(AppTab.FILES.id) },
+                onNavigateToSettings = { onTabSelect(AppTab.SETTINGS.id) },
+                onNavigateToAbout = { onTabSelect(AppTab.ABOUT.id) }
             )
         }
     }
@@ -524,7 +529,11 @@ fun MainResponsiveAppShell() {
 
     val tabTransitionSpec: androidx.compose.animation.AnimatedContentTransitionScope<Int>.() -> androidx.compose.animation.ContentTransform = {
         val isForward = targetState > initialState
-        SpringSlideTransition.createSpec<Int>(isForward = isForward, reduceAnimations = reduceAnimations)(this)
+        SpringSlideTransition.createSpec<Int>(
+            isForward = isForward,
+            reduceAnimations = reduceAnimations,
+            isRapid = isRapidSwitch
+        )(this)
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {

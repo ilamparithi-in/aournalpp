@@ -12,6 +12,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import dev.ilamparithi.aournalpp.ui.animation.SpringSlideTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -629,17 +630,20 @@ fun DocumentHubScreen(
                         }
                     }
 
-                    // Main Content Grid
+                    val reduceAnimations = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
                     AnimatedContent(
                         targetState = currentDirectory.canonicalPath to isViewingTrash,
                         transitionSpec = {
-                            if (targetState.first.length > initialState.first.length) {
-                                (slideInHorizontally(animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f), initialOffsetX = { it / 3 }) + fadeIn())
-                                    .togetherWith(slideOutHorizontally(animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f), targetOffsetX = { -it / 3 }) + fadeOut())
-                            } else {
-                                (slideInHorizontally(animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f), initialOffsetX = { -it / 3 }) + fadeIn())
-                                    .togetherWith(slideOutHorizontally(animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f), targetOffsetX = { it / 3 }) + fadeOut())
+                            val isForward = when {
+                                targetState.second != initialState.second -> targetState.second
+                                targetState.first.startsWith(initialState.first) -> true
+                                initialState.first.startsWith(targetState.first) -> false
+                                else -> targetState.first.length >= initialState.first.length
                             }
+                            SpringSlideTransition.createSpec<Pair<String, Boolean>>(
+                                isForward = isForward,
+                                reduceAnimations = reduceAnimations
+                            )(this)
                         },
                         label = "folderNavigationTransition",
                         modifier = Modifier.weight(1f)
