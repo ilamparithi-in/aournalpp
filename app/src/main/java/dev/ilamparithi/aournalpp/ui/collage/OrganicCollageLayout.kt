@@ -163,7 +163,7 @@ object OrganicCollageEngine {
             val note = notes[i]
             val (w, h) = getCardDimensions(note, index = i, isSingle = false, maxWidthDp = maxWidthDp, random = random)
 
-            val candidate = findBestAdjacentPosition(
+            val (candX, candY) = findBestAdjacentPosition(
                 placed = placedList,
                 width = w,
                 height = h,
@@ -175,8 +175,8 @@ object OrganicCollageEngine {
             placedList.add(
                 PlacedCollageCard(
                     note = note,
-                    x = candidate.x,
-                    y = candidate.y,
+                    x = candX,
+                    y = candY,
                     width = w,
                     height = h,
                     shape = defaultShape
@@ -190,11 +190,11 @@ object OrganicCollageEngine {
         var maxX = Float.MIN_VALUE
         var maxY = Float.MIN_VALUE
 
-        for (c in placedList) {
-            minX = minOf(minX, c.x)
-            minY = minOf(minY, c.y)
-            maxX = maxOf(maxX, c.x + c.width)
-            maxY = maxOf(maxY, c.y + c.height)
+        for ((_, x, y, width, height) in placedList) {
+            minX = minOf(minX, x)
+            minY = minOf(minY, y)
+            maxX = maxOf(maxX, x + width)
+            maxY = maxOf(maxY, y + height)
         }
 
         val totalW = maxX - minX
@@ -263,14 +263,14 @@ object OrganicCollageEngine {
         val alignOptions = listOf(0.0f, 0.25f, 0.5f, 0.75f, 1.0f)
         val allDirections = listOf(CollageDirection.RIGHT, CollageDirection.LEFT, CollageDirection.BOTTOM, CollageDirection.TOP)
 
-        for (target in placed) {
+        for ((_, tx, ty, tw, th) in placed) {
             for (dir in allDirections) {
                 for (align in alignOptions) {
                     val (x, y) = when (dir) {
-                        CollageDirection.RIGHT -> Pair(target.x + target.width + SPACING_DP, target.y + align * (target.height - height))
-                        CollageDirection.LEFT -> Pair(target.x - SPACING_DP - width, target.y + align * (target.height - height))
-                        CollageDirection.BOTTOM -> Pair(target.x + align * (target.width - width), target.y + target.height + SPACING_DP)
-                        CollageDirection.TOP -> Pair(target.x + align * (target.width - width), target.y - SPACING_DP - height)
+                        CollageDirection.RIGHT -> Pair(tx + tw + SPACING_DP, ty + align * (th - height))
+                        CollageDirection.LEFT -> Pair(tx - SPACING_DP - width, ty + align * (th - height))
+                        CollageDirection.BOTTOM -> Pair(tx + align * (tw - width), ty + th + SPACING_DP)
+                        CollageDirection.TOP -> Pair(tx + align * (tw - width), ty - SPACING_DP - height)
                     }
 
                     if (isValidPlacement(x, y, width, height, placed, usableWidth, stepIndex)) {
@@ -315,9 +315,9 @@ object OrganicCollageEngine {
         }
 
         // Overlap check with existing cards
-        for (c in placed) {
-            val overlapX = (x < c.x + c.width) && (x + width > c.x)
-            val overlapY = (y < c.y + c.height) && (y + height > c.y)
+        for ((_, cx, cy, cw, ch) in placed) {
+            val overlapX = (x < cx + cw) && (x + width > cx)
+            val overlapY = (y < cy + ch) && (y + height > cy)
             if (overlapX && overlapY) return false
         }
         return true
@@ -338,15 +338,15 @@ object OrganicCollageEngine {
 
         // 1. Shared edge contact length (Snugness / Corner packing)
         var sharedContactLength = 0f
-        for (c in placed) {
-            val touchingH = (abs(x - (c.x + c.width + SPACING_DP)) < 1.5f) || (abs((x + w + SPACING_DP) - c.x) < 1.5f)
+        for ((_, cx, cy, cw, ch) in placed) {
+            val touchingH = (abs(x - (cx + cw + SPACING_DP)) < 1.5f) || (abs((x + w + SPACING_DP) - cx) < 1.5f)
             if (touchingH) {
-                val overlapY = maxOf(0f, minOf(y + h, c.y + c.height) - maxOf(y, c.y))
+                val overlapY = maxOf(0f, minOf(y + h, cy + ch) - maxOf(y, cy))
                 sharedContactLength += overlapY
             }
-            val touchingV = (abs(y - (c.y + c.height + SPACING_DP)) < 1.5f) || (abs((y + h + SPACING_DP) - c.y) < 1.5f)
+            val touchingV = (abs(y - (cy + ch + SPACING_DP)) < 1.5f) || (abs((y + h + SPACING_DP) - cy) < 1.5f)
             if (touchingV) {
-                val overlapX = maxOf(0f, minOf(x + w, c.x + c.width) - maxOf(x, c.x))
+                val overlapX = maxOf(0f, minOf(x + w, cx + cw) - maxOf(x, cx))
                 sharedContactLength += overlapX
             }
         }
@@ -506,22 +506,23 @@ fun OrganicCollageView(
                         .height(340.dp)
                 )
             } else {
+                val (cards, totalW, totalH) = layout
                 val notesMap = remember(notes) { notes.associateBy { it.path } }
                 Box(
                     modifier = Modifier
-                        .width(layout.totalWidth.dp)
-                        .height(layout.totalHeight.dp)
+                        .width(totalW.dp)
+                        .height(totalH.dp)
                 ) {
-                    layout.cards.forEachIndexed { index, card ->
-                        val liveNote = notesMap[card.note.path] ?: notes.getOrNull(index) ?: card.note
+                    cards.forEachIndexed { index, (cardNote, cardX, cardY, cardW, cardH, cardShape) ->
+                        val liveNote = notesMap[cardNote.path] ?: notes.getOrNull(index) ?: cardNote
                         Box(
                             modifier = Modifier
-                                .offset(x = card.x.dp, y = card.y.dp)
-                                .size(card.width.dp, card.height.dp)
+                                .offset(x = cardX.dp, y = cardY.dp)
+                                .size(cardW.dp, cardH.dp)
                         ) {
                             CollageCardView(
                                 note = liveNote,
-                                shape = card.shape,
+                                shape = cardShape,
                                 pdfExportManager = pdfExportManager,
                                 onClick = { onNoteClick(liveNote) },
                                 onTogglePin = onTogglePin?.let { { it(liveNote) } },
@@ -837,47 +838,38 @@ fun CreativeEmptyCollageState(
     modifier: Modifier = Modifier
 ) {
     val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
-    val floatAnim1: Float
-    val floatAnim2: Float
-    val rotAnim: Float
+    val infiniteTransition = rememberInfiniteTransition(label = "emptyShapesMotion")
+    val animF1 by infiniteTransition.animateFloat(
+        initialValue = -8f,
+        targetValue = 8f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "float1"
+    )
+    val animF2 by infiniteTransition.animateFloat(
+        initialValue = 10f,
+        targetValue = -10f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(3400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "float2"
+    )
+    val animRot by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(24000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rot"
+    )
 
-    if (reduceMotion) {
-        floatAnim1 = 0f
-        floatAnim2 = 0f
-        rotAnim = 0f
-    } else {
-        val infiniteTransition = rememberInfiniteTransition(label = "emptyShapesMotion")
-        val f1 by infiniteTransition.animateFloat(
-            initialValue = -8f,
-            targetValue = 8f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(2800, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "float1"
-        )
-        val f2 by infiniteTransition.animateFloat(
-            initialValue = 10f,
-            targetValue = -10f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(3400, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "float2"
-        )
-        val r by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(24000, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "rot"
-        )
-        floatAnim1 = f1
-        floatAnim2 = f2
-        rotAnim = r
-    }
+    val floatAnim1 = if (reduceMotion) 0f else animF1
+    val floatAnim2 = if (reduceMotion) 0f else animF2
+    val rotAnim = if (reduceMotion) 0f else animRot
 
     Box(
         modifier = modifier

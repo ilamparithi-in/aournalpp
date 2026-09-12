@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 @Composable
 fun SnapDividerOverlay(
@@ -102,7 +104,7 @@ fun SnapDividerOverlay(
                         .offset {
                             val effRatio =
                                 if (isResetAnimating) animRatio.value else if (isDragging) currentLiveRatio else currentDiv.currentRatio
-                            val handleX = Math.round(effRatio * viewportWidth).toInt()
+                            val handleX = (effRatio * viewportWidth).roundToInt()
                             val handleLeftPx = handleX - (hitThicknessPx / 2f).toInt()
                             IntOffset(handleLeftPx, currentDiv.y)
                         }
@@ -151,7 +153,7 @@ fun SnapDividerOverlay(
                                     coroutineScope.launch { animRatio.stop() }
                                     rawDragRatio = currentDiv.currentRatio
                                     currentLiveRatio = currentDiv.currentRatio
-                                    isMagneticallySnapped = kotlin.math.abs(currentDiv.currentRatio - 0.5f) < 0.005f
+                                    isMagneticallySnapped = abs(currentDiv.currentRatio - 0.5f) < 0.005f
                                     try {
                                         view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                                     } catch (_: Exception) {
@@ -176,7 +178,7 @@ fun SnapDividerOverlay(
                                     val deltaRatio = dragAmount.x / viewportWidth.toFloat()
                                     rawDragRatio =
                                         (rawDragRatio + deltaRatio).coerceIn(currentDiv.minRatio, currentDiv.maxRatio)
-                                    val distToCenter = kotlin.math.abs(rawDragRatio - 0.5f)
+                                    val distToCenter = abs(rawDragRatio - 0.5f)
                                     val snapThreshold = 0.024f
                                     val releaseThreshold = 0.038f
                                     val shouldSnap =
@@ -219,7 +221,7 @@ fun SnapDividerOverlay(
                         .offset {
                             val effRatio =
                                 if (isResetAnimating) animRatio.value else if (isDragging) currentLiveRatio else currentDiv.currentRatio
-                            val handleY = Math.round(effRatio * viewportHeight).toInt()
+                            val handleY = (effRatio * viewportHeight).roundToInt()
                             val handleTopPx = handleY - (hitThicknessPx / 2f).toInt()
                             IntOffset(currentDiv.x, handleTopPx)
                         }
@@ -268,7 +270,7 @@ fun SnapDividerOverlay(
                                     coroutineScope.launch { animRatio.stop() }
                                     rawDragRatio = currentDiv.currentRatio
                                     currentLiveRatio = currentDiv.currentRatio
-                                    isMagneticallySnapped = kotlin.math.abs(currentDiv.currentRatio - 0.5f) < 0.005f
+                                    isMagneticallySnapped = abs(currentDiv.currentRatio - 0.5f) < 0.005f
                                     try {
                                         view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                                     } catch (_: Exception) {
@@ -293,7 +295,7 @@ fun SnapDividerOverlay(
                                     val deltaRatio = dragAmount.y / viewportHeight.toFloat()
                                     rawDragRatio =
                                         (rawDragRatio + deltaRatio).coerceIn(currentDiv.minRatio, currentDiv.maxRatio)
-                                    val distToCenter = kotlin.math.abs(rawDragRatio - 0.5f)
+                                    val distToCenter = abs(rawDragRatio - 0.5f)
                                     val snapThreshold = 0.024f
                                     val releaseThreshold = 0.038f
                                     val shouldSnap =

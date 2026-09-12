@@ -9,6 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import dev.ilamparithi.aournalpp.backup.security.CredentialsVault
+import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedVisibility
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
@@ -615,10 +616,10 @@ fun MainResponsiveAppShell() {
         }
     }
 
-    androidx.compose.animation.AnimatedVisibility(
+    AppAnimatedVisibility(
         visible = isClosingSession,
-        enter = if (reduceAnimations) androidx.compose.animation.EnterTransition.None else androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(300)),
-        exit = if (reduceAnimations) androidx.compose.animation.ExitTransition.None else androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(300))
+        enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(300)),
+        exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(300))
     ) {
         dev.ilamparithi.aournalpp.ui.SessionClosingScreen(
             documentTitle = isCanvasSessionActive?.documentTitle

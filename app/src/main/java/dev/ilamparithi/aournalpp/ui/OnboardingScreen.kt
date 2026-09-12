@@ -9,9 +9,9 @@ import android.os.Build
 import android.os.Environment
 import android.provider.Settings
 import android.widget.Toast
+import kotlin.time.Duration.Companion.milliseconds
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -455,13 +455,13 @@ fun OnboardingScreen(
                                         localFolder.name
                                     )
                                     scope.launch {
-                                        delay(400)
+                                        delay(400.milliseconds)
                                         env.setNotesDirectoryPathOnly(localFolder.absolutePath)
                                         NotesHomeConfigManager.restoreSettingsFromNotesHome(localFolder, context, env)
                                         NotesHomeConfigManager.sync(context, env)
-                                        delay(600)
+                                        delay(600.milliseconds)
                                         isRestorationComplete = true
-                                        delay(500)
+                                        delay(500.milliseconds)
                                         triggerRevealAnimation()
                                     }
                                 },
@@ -482,9 +482,9 @@ fun OnboardingScreen(
                                         }
                                         NotesHomeConfigManager.restoreSettingsFromNotesHome(localFolder, context, env)
                                         NotesHomeConfigManager.sync(context, env)
-                                        delay(600)
+                                        delay(600.milliseconds)
                                         isRestorationComplete = true
-                                        delay(500)
+                                        delay(500.milliseconds)
                                         triggerRevealAnimation()
                                     }
                                 }

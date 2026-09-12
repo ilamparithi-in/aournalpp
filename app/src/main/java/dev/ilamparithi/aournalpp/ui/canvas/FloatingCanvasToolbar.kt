@@ -4,7 +4,7 @@ import android.graphics.BitmapFactory
 import android.os.SystemClock
 import android.view.KeyEvent
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
+import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.SizeTransform
@@ -134,6 +134,7 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun TemporarySaveCard(
@@ -328,7 +329,7 @@ fun FloatingToolbarOverlay(
     LaunchedEffect(altTabClickCount) {
         if (altTabClickCount > 0) {
             isAltTabDebouncing = true
-            delay(toolbarResizeDebounceMs)
+            delay(toolbarResizeDebounceMs.milliseconds)
             isAltTabDebouncing = false
             heldDebounceWidthDp = 0.dp
         }
@@ -377,7 +378,7 @@ fun FloatingToolbarOverlay(
     LaunchedEffect(isHeaderExpanded, isPinned, pinButtonMode, autoCollapseTimeoutMs, isSnapDropdownOpen) {
         if (pinButtonMode && isHeaderExpanded && !isPinned && !isSnapDropdownOpen) {
             while (isActive) {
-                val triggered = withTimeoutOrNull(autoCollapseTimeoutMs.toLong()) {
+                val triggered = withTimeoutOrNull(autoCollapseTimeoutMs.milliseconds) {
                     interactionSignal.first()
                 }
                 if (triggered == null) {
@@ -403,8 +404,6 @@ fun FloatingToolbarOverlay(
         modifier = Modifier
             .zIndex(100f)
             .offset {
-                val totalWidthPx = canvasWidthPx
-                val totalHeightPx = canvasHeightPx
                 val tWidthPx = if (toolbarSizePx.width > 0) toolbarSizePx.width.toFloat() else 320.dp.toPx()
                 val tHeightPx = if (toolbarSizePx.height > 0) toolbarSizePx.height.toFloat() else 48.dp.toPx()
 
@@ -414,19 +413,29 @@ fun FloatingToolbarOverlay(
                 val maxY: Float
 
                 if (centerTopBarWithinBounds) {
-                    minX = effectiveInsets.left.dp.toPx() + systemBarPadding.calculateStartPadding(LayoutDirection.Ltr).toPx() + 8.dp.toPx()
-                    maxX = maxOf(minX, totalWidthPx - tWidthPx - effectiveInsets.right.dp.toPx() - systemBarPadding.calculateEndPadding(LayoutDirection.Ltr).toPx() - 8.dp.toPx())
+                    minX = effectiveInsets.left.dp.toPx() + systemBarPadding.calculateStartPadding(LayoutDirection.Ltr)
+                        .toPx() + 8.dp.toPx()
+                    maxX = maxOf(
+                        minX,
+                        canvasWidthPx - tWidthPx - effectiveInsets.right.dp.toPx() - systemBarPadding.calculateEndPadding(
+                            LayoutDirection.Ltr
+                        ).toPx() - 8.dp.toPx()
+                    )
                     minY = effectiveInsets.top.dp.toPx() + systemBarPadding.calculateTopPadding().toPx() + 8.dp.toPx()
-                    maxY = maxOf(minY, totalHeightPx - tHeightPx - effectiveInsets.bottom.dp.toPx() - systemBarPadding.calculateBottomPadding().toPx() - 8.dp.toPx())
+                    maxY = maxOf(
+                        minY,
+                        canvasHeightPx - tHeightPx - effectiveInsets.bottom.dp.toPx() - systemBarPadding.calculateBottomPadding()
+                            .toPx() - 8.dp.toPx()
+                    )
                 } else {
                     minX = 8.dp.toPx()
-                    maxX = maxOf(minX, totalWidthPx - tWidthPx - 8.dp.toPx())
+                    maxX = maxOf(minX, canvasWidthPx - tWidthPx - 8.dp.toPx())
                     minY = if (isFullscreen) {
                         if (cutoutPlacement.hasCenterCutout) cutoutTopOffsetDp.toPx() + 8.dp.toPx() else 8.dp.toPx()
                     } else {
                         systemBarPadding.calculateTopPadding().toPx() + 8.dp.toPx()
                     }
-                    maxY = maxOf(minY, totalHeightPx - tHeightPx - 8.dp.toPx())
+                    maxY = maxOf(minY, canvasHeightPx - tHeightPx - 8.dp.toPx())
                 }
 
                 val basePosX = minX + (maxX - minX) * dragNormX
@@ -455,15 +464,15 @@ fun FloatingToolbarOverlay(
                 transitionSpec = {
                     if (reduceMotion) {
                         fadeIn(animationSpec = snap()) togetherWith
-                            fadeOut(animationSpec = snap()) using
-                            SizeTransform(clip = true, sizeAnimationSpec = { _, _ -> snap() })
+                                fadeOut(animationSpec = snap()) using
+                                SizeTransform(clip = true, sizeAnimationSpec = { _, _ -> snap() })
                     } else {
                         fadeIn(animationSpec = tween(durationMillis = 180, easing = m3MorphEasing)) togetherWith
-                            fadeOut(animationSpec = tween(durationMillis = 120, easing = m3MorphEasing)) using
-                            SizeTransform(
-                                clip = true,
-                                sizeAnimationSpec = { _, _ -> tween(durationMillis = 300, easing = m3MorphEasing) }
-                            )
+                                fadeOut(animationSpec = tween(durationMillis = 120, easing = m3MorphEasing)) using
+                                SizeTransform(
+                                    clip = true,
+                                    sizeAnimationSpec = { _, _ -> tween(durationMillis = 300, easing = m3MorphEasing) }
+                                )
                     }
                 },
                 contentAlignment = Alignment.Center,
@@ -508,7 +517,10 @@ fun FloatingToolbarOverlay(
                                             indication = null
                                         ) {
                                             interactionSignal.tryEmit(Unit)
-                                            try { haptics.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                                            try {
+                                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            } catch (_: Exception) {
+                                            }
                                             onCloseWindow()
                                         }
                                 ) {
@@ -538,14 +550,21 @@ fun FloatingToolbarOverlay(
                                             indication = null,
                                             onClick = {
                                                 interactionSignal.tryEmit(Unit)
-                                                try { haptics.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
-                                                heldDebounceWidthDp = maxOf(heldDebounceWidthDp, safeCurrentTitleWidthDp)
+                                                try {
+                                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                } catch (_: Exception) {
+                                                }
+                                                heldDebounceWidthDp =
+                                                    maxOf(heldDebounceWidthDp, safeCurrentTitleWidthDp)
                                                 altTabClickCount++
                                                 onQuickSwitchWindow()
                                             },
                                             onLongClick = {
                                                 interactionSignal.tryEmit(Unit)
-                                                try { haptics.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                                                try {
+                                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                } catch (_: Exception) {
+                                                }
                                                 onOpenWindowGallery()
                                             }
                                         )
@@ -610,7 +629,10 @@ fun FloatingToolbarOverlay(
                                         targetState = Triple(cleanDisplayTitle, windowIcon, windowIndex),
                                         transitionSpec = {
                                             val isForward = targetState.third >= initialState.third
-                                            SpringSlideTransition.createSpec<Triple<String, ImageVector, Int>>(isForward = isForward, reduceAnimations = reduceMotion)(this)
+                                            SpringSlideTransition.createSpec<Triple<String, ImageVector, Int>>(
+                                                isForward = isForward,
+                                                reduceAnimations = reduceMotion
+                                            )(this)
                                         },
                                         label = "windowTitleSwitchTransition"
                                     ) { (currentCleanTitle, currentIcon, _) ->
@@ -659,7 +681,10 @@ fun FloatingToolbarOverlay(
 
                                 val indicatorOffset by animateDpAsState(
                                     targetValue = (itemWidth + spacing) * selectedIndex,
-                                    animationSpec = if (reduceMotion) snap() else tween(durationMillis = 240, easing = m3MorphEasing),
+                                    animationSpec = if (reduceMotion) snap() else tween(
+                                        durationMillis = 240,
+                                        easing = m3MorphEasing
+                                    ),
                                     label = "StylusIndicatorOffset"
                                 )
 
@@ -718,7 +743,9 @@ fun FloatingToolbarOverlay(
 
                             if (showTouchStylus) {
                                 val activeBgColor by animateColorAsState(
-                                    targetValue = if (isFingerAsStylus) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    targetValue = if (isFingerAsStylus) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(
+                                        alpha = 0.5f
+                                    ),
                                     animationSpec = AppAnimationSpecs.springColor(),
                                     label = "TouchStylusBgColor"
                                 )
@@ -739,7 +766,10 @@ fun FloatingToolbarOverlay(
                                             indication = null
                                         ) {
                                             interactionSignal.tryEmit(Unit)
-                                            try { haptics.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                                            try {
+                                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            } catch (_: Exception) {
+                                            }
                                             onToggleFingerAsStylus()
                                         }
                                 ) {
@@ -771,7 +801,10 @@ fun FloatingToolbarOverlay(
                                             IconButton(
                                                 onClick = {
                                                     interactionSignal.tryEmit(Unit)
-                                                    try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
+                                                    try {
+                                                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    } catch (_: Exception) {
+                                                    }
                                                     onInjectShortcut(KeyEvent.KEYCODE_X, "ctrl+x")
                                                 },
                                                 modifier = Modifier.size(32.dp)
@@ -789,7 +822,10 @@ fun FloatingToolbarOverlay(
                                             IconButton(
                                                 onClick = {
                                                     interactionSignal.tryEmit(Unit)
-                                                    try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
+                                                    try {
+                                                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    } catch (_: Exception) {
+                                                    }
                                                     onInjectShortcut(KeyEvent.KEYCODE_C, "ctrl+c")
                                                 },
                                                 modifier = Modifier.size(32.dp)
@@ -807,7 +843,10 @@ fun FloatingToolbarOverlay(
                                             IconButton(
                                                 onClick = {
                                                     interactionSignal.tryEmit(Unit)
-                                                    try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
+                                                    try {
+                                                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    } catch (_: Exception) {
+                                                    }
                                                     onInjectShortcut(KeyEvent.KEYCODE_V, "ctrl+v")
                                                 },
                                                 modifier = Modifier.size(32.dp)
@@ -825,7 +864,10 @@ fun FloatingToolbarOverlay(
                                             IconButton(
                                                 onClick = {
                                                     interactionSignal.tryEmit(Unit)
-                                                    try { haptics.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                                                    try {
+                                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    } catch (_: Exception) {
+                                                    }
                                                     onOpenImageSelector()
                                                 },
                                                 modifier = Modifier.size(32.dp)
@@ -844,7 +886,9 @@ fun FloatingToolbarOverlay(
 
                             if (showKeyboard) {
                                 val activeBgColor by animateColorAsState(
-                                    targetValue = if (isKeyboardOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    targetValue = if (isKeyboardOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(
+                                        alpha = 0.5f
+                                    ),
                                     animationSpec = AppAnimationSpecs.springColor(),
                                     label = "KeyboardBgColor"
                                 )
@@ -882,41 +926,58 @@ fun FloatingToolbarOverlay(
                                 }
                             }
 
-                            AnimatedVisibility(
+                            AppAnimatedVisibility(
                                 visible = isMovedFromDefault,
-                                enter = if (reduceMotion) EnterTransition.None else (fadeIn() + scaleIn(initialScale = 0.6f)),
-                                exit = if (reduceMotion) ExitTransition.None else (fadeOut() + scaleOut(targetScale = 0.6f))
+                                enter = fadeIn() + scaleIn(initialScale = 0.6f),
+                                exit = fadeOut() + scaleOut(targetScale = 0.6f)
                             ) {
                                 IconButton(
                                     onClick = {
                                         interactionSignal.tryEmit(Unit)
-                                        try { haptics.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                                        try {
+                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        } catch (_: Exception) {
+                                        }
 
                                         val (startDeltaX, startDeltaY) = with(density) {
-                                            val totalW = canvasWidthPx
-                                            val totalH = canvasHeightPx
-                                            val tW = if (toolbarSizePx.width > 0) toolbarSizePx.width.toFloat() else 320f
-                                            val tH = if (toolbarSizePx.height > 0) toolbarSizePx.height.toFloat() else 48f
+                                            val tW =
+                                                if (toolbarSizePx.width > 0) toolbarSizePx.width.toFloat() else 320f
+                                            val tH =
+                                                if (toolbarSizePx.height > 0) toolbarSizePx.height.toFloat() else 48f
 
                                             val minX: Float
-                                             val maxX: Float
+                                            val maxX: Float
                                             val minY: Float
                                             val maxY: Float
 
                                             if (centerTopBarWithinBounds) {
-                                                minX = effectiveInsets.left.dp.toPx() + systemBarPadding.calculateStartPadding(LayoutDirection.Ltr).toPx() + 8.dp.toPx()
-                                                maxX = maxOf(minX, totalW - tW - effectiveInsets.right.dp.toPx() - systemBarPadding.calculateEndPadding(LayoutDirection.Ltr).toPx() - 8.dp.toPx())
-                                                minY = effectiveInsets.top.dp.toPx() + systemBarPadding.calculateTopPadding().toPx() + 8.dp.toPx()
-                                                maxY = maxOf(minY, totalH - tH - effectiveInsets.bottom.dp.toPx() - systemBarPadding.calculateBottomPadding().toPx() - 8.dp.toPx())
+                                                minX =
+                                                    effectiveInsets.left.dp.toPx() + systemBarPadding.calculateStartPadding(
+                                                        LayoutDirection.Ltr
+                                                    ).toPx() + 8.dp.toPx()
+                                                maxX = maxOf(
+                                                    minX,
+                                                    canvasWidthPx - tW - effectiveInsets.right.dp.toPx() - systemBarPadding.calculateEndPadding(
+                                                        LayoutDirection.Ltr
+                                                    ).toPx() - 8.dp.toPx()
+                                                )
+                                                minY =
+                                                    effectiveInsets.top.dp.toPx() + systemBarPadding.calculateTopPadding()
+                                                        .toPx() + 8.dp.toPx()
+                                                maxY = maxOf(
+                                                    minY,
+                                                    canvasHeightPx - tH - effectiveInsets.bottom.dp.toPx() - systemBarPadding.calculateBottomPadding()
+                                                        .toPx() - 8.dp.toPx()
+                                                )
                                             } else {
                                                 minX = 8.dp.toPx()
-                                                maxX = maxOf(minX, totalW - tW - 8.dp.toPx())
+                                                maxX = maxOf(minX, canvasWidthPx - tW - 8.dp.toPx())
                                                 minY = if (isFullscreen) {
                                                     if (cutoutPlacement.hasCenterCutout) cutoutTopOffsetDp.toPx() + 8.dp.toPx() else 8.dp.toPx()
                                                 } else {
                                                     systemBarPadding.calculateTopPadding().toPx() + 8.dp.toPx()
                                                 }
-                                                maxY = maxOf(minY, totalH - tH - 8.dp.toPx())
+                                                maxY = maxOf(minY, canvasHeightPx - tH - 8.dp.toPx())
                                             }
 
                                             val currentBaseX = minX + (maxX - minX) * dragNormX
@@ -963,7 +1024,10 @@ fun FloatingToolbarOverlay(
                                     onClick = {
                                         interactionSignal.tryEmit(Unit)
                                         isPinned = !isPinned
-                                        try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
+                                        try {
+                                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        } catch (_: Exception) {
+                                        }
                                     },
                                     modifier = Modifier.size(36.dp)
                                 ) {
@@ -1002,25 +1066,33 @@ fun FloatingToolbarOverlay(
                                                 onDragStart = {
                                                     coroutineScope.launch { animPixelOffset.snapTo(Offset.Zero) }
                                                     interactionSignal.tryEmit(Unit)
-                                                    try { haptics.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                                                    try {
+                                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    } catch (_: Exception) {
+                                                    }
                                                 },
                                                 onDrag = { change, dragAmount ->
                                                     change.consume()
                                                     interactionSignal.tryEmit(Unit)
-                                                    val totalW = canvasWidthPx
-                                                    val totalH = canvasHeightPx
-                                                    val tW = if (toolbarSizePx.width > 0) toolbarSizePx.width.toFloat() else 320f
-                                                    val tH = if (toolbarSizePx.height > 0) toolbarSizePx.height.toFloat() else 48f
-                                                    val spanX = maxOf(1f, totalW - tW)
-                                                    val spanY = maxOf(1f, totalH - tH)
+                                                    val tW =
+                                                        if (toolbarSizePx.width > 0) toolbarSizePx.width.toFloat() else 320f
+                                                    val tH =
+                                                        if (toolbarSizePx.height > 0) toolbarSizePx.height.toFloat() else 48f
+                                                    val spanX = maxOf(1f, canvasWidthPx - tW)
+                                                    val spanY = maxOf(1f, canvasHeightPx - tH)
                                                     dragNormX = (dragNormX + dragAmount.x / spanX).coerceIn(0f, 1f)
                                                     dragNormY = (dragNormY + dragAmount.y / spanY).coerceIn(0f, 1f)
-                                                    isMovedFromDefault = abs(dragNormX - defaultNormX) > 0.03f || abs(dragNormY - defaultNormY) > 0.03f
+                                                    isMovedFromDefault =
+                                                        abs(dragNormX - defaultNormX) > 0.03f || abs(dragNormY - defaultNormY) > 0.03f
                                                 },
                                                 onDragEnd = {
                                                     interactionSignal.tryEmit(Unit)
-                                                    try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
-                                                    isMovedFromDefault = abs(dragNormX - defaultNormX) > 0.03f || abs(dragNormY - defaultNormY) > 0.03f
+                                                    try {
+                                                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    } catch (_: Exception) {
+                                                    }
+                                                    isMovedFromDefault =
+                                                        abs(dragNormX - defaultNormX) > 0.03f || abs(dragNormY - defaultNormY) > 0.03f
                                                 },
                                                 onDragCancel = {}
                                             )
@@ -1071,25 +1143,31 @@ fun FloatingToolbarOverlay(
                                     onDragStart = {
                                         coroutineScope.launch { animPixelOffset.snapTo(Offset.Zero) }
                                         interactionSignal.tryEmit(Unit)
-                                        try { haptics.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Exception) {}
+                                        try {
+                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        } catch (_: Exception) {
+                                        }
                                     },
                                     onDrag = { change, dragAmount ->
                                         change.consume()
                                         interactionSignal.tryEmit(Unit)
-                                        val totalW = canvasWidthPx
-                                        val totalH = canvasHeightPx
                                         val tW = if (toolbarSizePx.width > 0) toolbarSizePx.width.toFloat() else 140f
                                         val tH = if (toolbarSizePx.height > 0) toolbarSizePx.height.toFloat() else 36f
-                                        val spanX = maxOf(1f, totalW - tW)
-                                        val spanY = maxOf(1f, totalH - tH)
+                                        val spanX = maxOf(1f, canvasWidthPx - tW)
+                                        val spanY = maxOf(1f, canvasHeightPx - tH)
                                         dragNormX = (dragNormX + dragAmount.x / spanX).coerceIn(0f, 1f)
                                         dragNormY = (dragNormY + dragAmount.y / spanY).coerceIn(0f, 1f)
-                                        isMovedFromDefault = abs(dragNormX - defaultNormX) > 0.03f || abs(dragNormY - defaultNormY) > 0.03f
+                                        isMovedFromDefault =
+                                            abs(dragNormX - defaultNormX) > 0.03f || abs(dragNormY - defaultNormY) > 0.03f
                                     },
                                     onDragEnd = {
                                         interactionSignal.tryEmit(Unit)
-                                        try { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
-                                        isMovedFromDefault = abs(dragNormX - defaultNormX) > 0.03f || abs(dragNormY - defaultNormY) > 0.03f
+                                        try {
+                                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        } catch (_: Exception) {
+                                        }
+                                        isMovedFromDefault =
+                                            abs(dragNormX - defaultNormX) > 0.03f || abs(dragNormY - defaultNormY) > 0.03f
                                     },
                                     onDragCancel = {}
                                 )
@@ -1107,7 +1185,10 @@ fun FloatingToolbarOverlay(
                                     targetState = Triple(cleanDisplayTitle, windowIcon, windowIndex),
                                     transitionSpec = {
                                         val isForward = targetState.third >= initialState.third
-                                        SpringSlideTransition.createSpec<Triple<String, ImageVector, Int>>(isForward = isForward, reduceAnimations = reduceMotion)(this)
+                                        SpringSlideTransition.createSpec<Triple<String, ImageVector, Int>>(
+                                            isForward = isForward,
+                                            reduceAnimations = reduceMotion
+                                        )(this)
                                     },
                                     label = "collapsedWindowTitleSwitchTransition"
                                 ) { (currentCleanTitle, currentIcon, _) ->

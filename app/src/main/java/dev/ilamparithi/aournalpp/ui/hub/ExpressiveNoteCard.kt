@@ -103,6 +103,8 @@ fun ExpressiveNoteCard(
 ) {
     val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
+    val onOpenMenu = remember { { showMenu = true } }
+    val onDismissMenu = remember { { showMenu = false } }
 
     val thumbnailImage by produceState<ImageBitmap?>(
         initialValue = ThumbnailManager.getCachedThumbnail(note.file, note.lastModifiedMs),
@@ -325,7 +327,7 @@ fun ExpressiveNoteCard(
                             Box {
                                 val moreOptionsLabel = stringResource(R.string.action_details)
                                 AppIconButton(
-                                    onClick = { showMenu = true },
+                                    onClick = onOpenMenu,
                                     tooltip = moreOptionsLabel,
                                     modifier = Modifier.size(24.dp)
                                 ) {
@@ -334,7 +336,7 @@ fun ExpressiveNoteCard(
                                 StandardNoteActionDropdown(
                                     expanded = showMenu,
                                     isPinned = note.isPinned,
-                                    onDismiss = { showMenu = false },
+                                    onDismiss = onDismissMenu,
                                     onTogglePin = onTogglePin,
                                     onShareExport = onShareExport,
                                     onExportPdf = onExportPdf,
@@ -457,7 +459,7 @@ fun ExpressiveNoteCard(
                     Box {
                         val moreOptionsLabel = stringResource(R.string.action_details)
                         AppIconButton(
-                            onClick = { showMenu = true },
+                            onClick = onOpenMenu,
                             tooltip = moreOptionsLabel
                         ) {
                             Icon(Icons.Default.MoreVert, contentDescription = moreOptionsLabel)
@@ -465,7 +467,7 @@ fun ExpressiveNoteCard(
                         StandardNoteActionDropdown(
                             expanded = showMenu,
                             isPinned = note.isPinned,
-                            onDismiss = { showMenu = false },
+                            onDismiss = onDismissMenu,
                             onTogglePin = onTogglePin,
                             onShareExport = onShareExport,
                             onExportPdf = onExportPdf,

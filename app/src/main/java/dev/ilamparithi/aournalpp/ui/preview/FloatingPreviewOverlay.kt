@@ -92,6 +92,7 @@ import dev.ilamparithi.aournalpp.model.NoteFileType
 import org.intellij.lang.annotations.Language
 import java.io.File
 import java.util.Random
+import kotlin.math.PI
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.sin
@@ -386,15 +387,13 @@ private fun FloatingPreviewOverlay(
         val actionBoxWidthPx = with(density) { 180.dp.toPx() }
         val actionBoxHeightPx = with(density) { 110.dp.toPx() }
 
-        val availableSideSpacePx = targetLeftPx
         val requiredSideSpacePx = actionBoxWidthPx + with(density) { 20.dp.toPx() }
-        val isLandscapeSpaceConstrained = availableSideSpacePx < requiredSideSpacePx
-        val maxPushX = if (isLandscapeSpaceConstrained) (requiredSideSpacePx - availableSideSpacePx) else 0f
+        val isLandscapeSpaceConstrained = targetLeftPx < requiredSideSpacePx
+        val maxPushX = if (isLandscapeSpaceConstrained) (requiredSideSpacePx - targetLeftPx) else 0f
 
-        val availableVerticalSpacePx = targetTopPx
         val requiredVerticalSpacePx = actionBoxHeightPx + with(density) { 20.dp.toPx() }
-        val isPortraitSpaceConstrained = availableVerticalSpacePx < requiredVerticalSpacePx
-        val maxPushY = if (isPortraitSpaceConstrained) (requiredVerticalSpacePx - availableVerticalSpacePx) else 0f
+        val isPortraitSpaceConstrained = targetTopPx < requiredVerticalSpacePx
+        val maxPushY = if (isPortraitSpaceConstrained) (requiredVerticalSpacePx - targetTopPx) else 0f
 
         val targetPushX = when {
             !isLandscape -> 0f
@@ -698,7 +697,7 @@ private fun FloatingPreviewOverlay(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        val folderDisplayName = if (data.note.folder.isBlank()) "Notes Home" else data.note.folder
+                        val folderDisplayName = data.note.folder.ifBlank { "Notes Home" }
                         val isHome = data.note.folder.isBlank() || data.note.folder == "Notes Home"
                         val isEmergency = data.note.folderIconType == "emergency" || data.note.folder.equals("Emergency Saves", ignoreCase = true)
 
@@ -933,7 +932,7 @@ private fun PixelParticleField(
                 baseRadiusPx = radius,
                 baseAlpha = 0.35f + random.nextFloat() * 0.45f,
                 shimmerSpeed = 1.2f + random.nextFloat() * 2.2f,
-                phase = random.nextFloat() * (2f * Math.PI.toFloat())
+                phase = random.nextFloat() * (2f * PI.toFloat())
             )
         }
     }
@@ -946,7 +945,7 @@ private fun PixelParticleField(
         val infiniteTransition = rememberInfiniteTransition(label = "particleShimmer")
         val animTime by infiniteTransition.animateFloat(
             initialValue = 0f,
-            targetValue = (2f * Math.PI.toFloat()),
+            targetValue = (2f * PI.toFloat()),
             animationSpec = infiniteRepeatable(
                 animation = tween(durationMillis = 2800, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart
@@ -959,9 +958,7 @@ private fun PixelParticleField(
     Canvas(modifier = modifier) {
         val canvasWidth = size.width
         val canvasHeight = size.height
-        val totalAlphaMultiplier = alpha
-
-        if (totalAlphaMultiplier <= 0.01f || progress <= 0.001f) return@Canvas
+        if (alpha <= 0.01f || progress <= 0.001f) return@Canvas
 
         val maxDist = hypot(
             max(origin.x, canvasWidth - origin.x),
@@ -979,9 +976,9 @@ private fun PixelParticleField(
             drawCircle(
                 brush = Brush.radialGradient(
                     colorStops = arrayOf(
-                        0.0f to Color(0xFF0A0C10).copy(alpha = 0.74f * progress * totalAlphaMultiplier),
-                        (waveEdgeFraction * 0.85f).coerceIn(0f, 1f) to Color(0xFF0A0C10).copy(alpha = 0.70f * progress * totalAlphaMultiplier),
-                        waveEdgeFraction to accentColor.copy(alpha = 0.25f * (1f - progress * 0.45f) * totalAlphaMultiplier),
+                        0.0f to Color(0xFF0A0C10).copy(alpha = 0.74f * progress * alpha),
+                        (waveEdgeFraction * 0.85f).coerceIn(0f, 1f) to Color(0xFF0A0C10).copy(alpha = 0.70f * progress * alpha),
+                        waveEdgeFraction to accentColor.copy(alpha = 0.25f * (1f - progress * 0.45f) * alpha),
                         1.0f to Color.Transparent
                     ),
                     center = origin,
@@ -1014,7 +1011,7 @@ private fun PixelParticleField(
             }
 
             val shimmer = (sin(time * p.shimmerSpeed + p.phase) * 0.40f + 0.60f)
-            val dynamicAlpha = ((p.baseAlpha * shimmer + flash * 0.65f) * totalAlphaMultiplier).coerceIn(0f, 1f)
+            val dynamicAlpha = ((p.baseAlpha * shimmer + flash * 0.65f) * alpha).coerceIn(0f, 1f)
             val dynamicRadius = p.baseRadiusPx * (1f + flash * 0.50f)
 
             drawCircle(

@@ -204,7 +204,7 @@ class ConfigDiffActivity : ComponentActivity() {
                     )
                 )
                 j--
-            } else if (i > 0 && (j == 0 || lcs[i][j - 1] < lcs[i - 1][j])) {
+            } else {
                 result.add(
                     DiffLine(
                         type = DiffLineType.DELETED,

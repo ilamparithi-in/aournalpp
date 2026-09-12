@@ -1,6 +1,6 @@
 package dev.ilamparithi.aournalpp.ui.hub
 
-import androidx.compose.animation.AnimatedVisibility
+import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -135,7 +135,7 @@ fun DocumentHubFabScrim(
     isExpanded: Boolean,
     onDismiss: () -> Unit
 ) {
-    AnimatedVisibility(
+    AppAnimatedVisibility(
         visible = isExpanded,
         enter = fadeIn(animationSpec = spring(stiffness = 400f)),
         exit = fadeOut(animationSpec = spring(stiffness = 400f))

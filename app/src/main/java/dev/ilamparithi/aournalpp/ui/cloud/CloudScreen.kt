@@ -4,7 +4,7 @@ import android.widget.TimePicker
 import androidx.compose.ui.res.stringResource
 import dev.ilamparithi.aournalpp.R
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
+import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedVisibility
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -445,7 +445,7 @@ fun CloudScreen(
                             )
                             val nonPendingServices = services.filter { it.id !in pendingDeletedServiceIds }
                             val enabledCount = nonPendingServices.count { it.isEnabled }
-                            val lastSyncEpoch = nonPendingServices.map { it.lastSyncedAtEpochMs }.maxOrNull() ?: 0L
+                            val lastSyncEpoch = nonPendingServices.maxOfOrNull { it.lastSyncedAtEpochMs } ?: 0L
                             val neverSyncedText = stringResource(R.string.cloud_never_synced)
                             val lastSyncFormatted = if (lastSyncEpoch > 0) {
                                 FormatUtils.formatDateTimeMedium(lastSyncEpoch)
@@ -732,7 +732,7 @@ fun CloudScreen(
         }
     }
 
-    AnimatedVisibility(
+    AppAnimatedVisibility(
         visible = isFabExpanded,
         enter = fadeIn(animationSpec = spring(stiffness = 400f)),
         exit = fadeOut(animationSpec = spring(stiffness = 400f))
@@ -924,13 +924,12 @@ fun CloudScreen(
                 Button(
                     onClick = {
                         showRestoreConfirmDialog = false
-                        val target = srv
                         restoreTargetService = null
                         coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Restoring from ${target.name}...")
+                            snackbarHostState.showSnackbar("Restoring from ${srv.name}...")
                             try {
                                 val result = engine.performRestore(
-                                    serviceConfig = target,
+                                    serviceConfig = srv,
                                     conflictPolicy = selectedConflictPolicy,
                                     concurrency = concurrencyWorkers
                                 )
@@ -984,9 +983,8 @@ fun CloudScreen(
                 Button(
                     onClick = {
                         showDeleteConfirmDialog = false
-                        val targetService = target
                         servicePendingDeletion = null
-                        vault.markServicePendingDeletion(targetService.id)
+                        vault.markServicePendingDeletion(target.id)
                         selectedDetailServiceId = null
                         refreshState()
                         coroutineScope.launch {
@@ -996,7 +994,7 @@ fun CloudScreen(
                                 duration = SnackbarDuration.Long
                             )
                             if (result == SnackbarResult.ActionPerformed) {
-                                vault.restorePendingDeletedService(targetService.id)
+                                vault.restorePendingDeletedService(target.id)
                                 refreshState()
                             }
                         }

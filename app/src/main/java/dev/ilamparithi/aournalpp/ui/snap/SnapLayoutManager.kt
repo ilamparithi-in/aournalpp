@@ -2,6 +2,7 @@ package dev.ilamparithi.aournalpp.ui.snap
 
 import android.content.Context
 import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
+import kotlin.math.roundToInt
 
 class SnapLayoutManager(context: Context? = null) {
 
@@ -48,9 +49,12 @@ class SnapLayoutManager(context: Context? = null) {
 
     fun updateDividerRatio(dividerId: String, ratio: Float) {
         val config = configs.find { it.id == activeMode.id } ?: return
-        val allDividers = config.landscape.dividers + config.portrait.dividers +
-                (config.mirroredLandscape?.dividers ?: emptyList()) +
-                (config.mirroredPortrait?.dividers ?: emptyList())
+        val allDividers = buildList {
+            addAll(config.landscape.dividers)
+            addAll(config.portrait.dividers)
+            config.mirroredLandscape?.dividers?.let { addAll(it) }
+            config.mirroredPortrait?.dividers?.let { addAll(it) }
+        }
         val def = allDividers.find { it.id == dividerId }
         val minR = def?.minRatio ?: 0.15f
         val maxR = def?.maxRatio ?: 0.85f
@@ -182,9 +186,9 @@ class SnapLayoutManager(context: Context? = null) {
         val variant = getActiveVariant(viewportWidth, viewportHeight) ?: return emptyList()
 
         val resolvedRatios = mutableMapOf<String, Float>()
-        for (div in variant.dividers) {
-            val r = (dividerRatios[div.id] ?: div.defaultRatio).coerceIn(div.minRatio, div.maxRatio)
-            resolvedRatios[div.id] = r
+        for ((id, _, defaultRatio, minRatio, maxRatio) in variant.dividers) {
+            val r = (dividerRatios[id] ?: defaultRatio).coerceIn(minRatio, maxRatio)
+            resolvedRatios[id] = r
         }
 
         return variant.slots.map { slot ->
@@ -193,10 +197,10 @@ class SnapLayoutManager(context: Context? = null) {
             val top = resolveAnchor(slot.top, resolvedRatios, 0.0f)
             val bottom = resolveAnchor(slot.bottom, resolvedRatios, 1.0f)
 
-            val x = Math.round(left * viewportWidth).toInt()
-            val y = Math.round(top * viewportHeight).toInt()
-            val rightPx = Math.round(right * viewportWidth).toInt()
-            val bottomPx = Math.round(bottom * viewportHeight).toInt()
+            val x = (left * viewportWidth).roundToInt()
+            val y = (top * viewportHeight).roundToInt()
+            val rightPx = (right * viewportWidth).roundToInt()
+            val bottomPx = (bottom * viewportHeight).roundToInt()
 
             val w = (rightPx - x).coerceAtLeast(1)
             val h = (bottomPx - y).coerceAtLeast(1)
@@ -219,17 +223,17 @@ class SnapLayoutManager(context: Context? = null) {
         val variant = getActiveVariant(viewportWidth, viewportHeight) ?: return emptyList()
 
         val resolvedRatios = mutableMapOf<String, Float>()
-        for (div in variant.dividers) {
-            val r = (dividerRatios[div.id] ?: div.defaultRatio).coerceIn(div.minRatio, div.maxRatio)
-            resolvedRatios[div.id] = r
+        for ((id, _, defaultRatio, minRatio, maxRatio) in variant.dividers) {
+            val r = (dividerRatios[id] ?: defaultRatio).coerceIn(minRatio, maxRatio)
+            resolvedRatios[id] = r
         }
 
         return variant.dividers.map { div ->
             val ratio = resolvedRatios[div.id] ?: div.defaultRatio
             if (div.orientation == DividerOrientation.VERTICAL) {
-                val x = Math.round(ratio * viewportWidth).toInt()
-                val startY = Math.round(resolveAnchor(div.start, resolvedRatios, 0.0f) * viewportHeight).toInt()
-                val endY = Math.round(resolveAnchor(div.end, resolvedRatios, 1.0f) * viewportHeight).toInt()
+                val x = (ratio * viewportWidth).roundToInt()
+                val startY = (resolveAnchor(div.start, resolvedRatios, 0.0f) * viewportHeight).roundToInt()
+                val endY = (resolveAnchor(div.end, resolvedRatios, 1.0f) * viewportHeight).roundToInt()
                 DividerGeometry(
                     id = div.id,
                     orientation = DividerOrientation.VERTICAL,
@@ -242,9 +246,9 @@ class SnapLayoutManager(context: Context? = null) {
                     defaultRatio = div.defaultRatio
                 )
             } else {
-                val y = Math.round(ratio * viewportHeight).toInt()
-                val startX = Math.round(resolveAnchor(div.start, resolvedRatios, 0.0f) * viewportWidth).toInt()
-                val endX = Math.round(resolveAnchor(div.end, resolvedRatios, 1.0f) * viewportWidth).toInt()
+                val y = (ratio * viewportHeight).roundToInt()
+                val startX = (resolveAnchor(div.start, resolvedRatios, 0.0f) * viewportWidth).roundToInt()
+                val endX = (resolveAnchor(div.end, resolvedRatios, 1.0f) * viewportWidth).roundToInt()
                 DividerGeometry(
                     id = div.id,
                     orientation = DividerOrientation.HORIZONTAL,
@@ -291,8 +295,8 @@ class SnapLayoutManager(context: Context? = null) {
         val assignedWindowIds = mutableSetOf<String>()
 
         // Pass 1: Retain existing valid slot assignments
-        for (geo in geometries) {
-            val assignedWinId = slotAssignments[geo.slotIndex]
+        for ((slotIndex) in geometries) {
+            val assignedWinId = slotAssignments[slotIndex]
             if (assignedWinId != null && openWindowMap.containsKey(assignedWinId)) {
                 assignedWindowIds.add(assignedWinId)
                 remainingWindows.removeAll { it.id == assignedWinId }
@@ -301,17 +305,17 @@ class SnapLayoutManager(context: Context? = null) {
 
         // Pass 2: For slots without a valid assigned window, fill from remaining unassigned windows
         val activeWin = openWindows.find { it.isActive }
-        for (geo in geometries) {
-            var winId = slotAssignments[geo.slotIndex]
+        for ((slotIndex, x, y, width, height) in geometries) {
+            var winId = slotAssignments[slotIndex]
             if (winId == null || !openWindowMap.containsKey(winId)) {
-                val candidate = if (geo.slotIndex == 0 && activeWin != null && remainingWindows.contains(activeWin)) {
+                val candidate = if (slotIndex == 0 && activeWin != null && remainingWindows.contains(activeWin)) {
                     activeWin
                 } else {
                     remainingWindows.firstOrNull()
                 }
                 if (candidate != null) {
                     winId = candidate.id
-                    slotAssignments[geo.slotIndex] = winId
+                    slotAssignments[slotIndex] = winId
                     remainingWindows.remove(candidate)
                     assignedWindowIds.add(winId)
                 }
@@ -321,10 +325,10 @@ class SnapLayoutManager(context: Context? = null) {
                 result.add(
                     ProcessSupervisor.WindowSnapAssignment(
                         windowId = winId,
-                        x = geo.x,
-                        y = geo.y,
-                        width = geo.width,
-                        height = geo.height
+                        x = x,
+                        y = y,
+                        width = width,
+                        height = height
                     )
                 )
             }
@@ -382,9 +386,9 @@ class SnapLayoutManager(context: Context? = null) {
                 val targetSlotCount = newMode.minWindows
                 // Preserve surviving windows in their relative order
                 val orderedWindows = survivingSlots.entries.sortedBy { it.key }.map { it.value }.toMutableList()
-                for (win in currentOpenWindows) {
-                    if (win.id !in orderedWindows) {
-                        orderedWindows.add(win.id)
+                for ((id) in currentOpenWindows) {
+                    if (id !in orderedWindows) {
+                        orderedWindows.add(id)
                     }
                 }
                 for (i in 0 until minOf(targetSlotCount, orderedWindows.size)) {

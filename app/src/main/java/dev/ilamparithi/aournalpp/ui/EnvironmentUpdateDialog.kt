@@ -3,7 +3,7 @@ package dev.ilamparithi.aournalpp.ui
 import android.content.res.Configuration
 import android.text.format.Formatter
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
+import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -290,10 +290,10 @@ fun EnvironmentUpdateDialog(
                             )
                         }
 
-                        AnimatedVisibility(
+                        AppAnimatedVisibility(
                             visible = showDetails,
-                            enter = if (reduceMotion) androidx.compose.animation.EnterTransition.None else expandVertically(),
-                            exit = if (reduceMotion) androidx.compose.animation.ExitTransition.None else shrinkVertically()
+                            enter = expandVertically(),
+                            exit = shrinkVertically()
                         ) {
                             Surface(
                                 modifier = Modifier

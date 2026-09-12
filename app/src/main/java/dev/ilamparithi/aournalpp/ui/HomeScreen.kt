@@ -5,10 +5,14 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
+import androidx.core.content.edit
+import androidx.core.graphics.toColorInt
+import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.delay
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
+import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -282,7 +286,7 @@ fun HomeScreen(
                 ActiveSessionTracker.notifySessionChanged()
                 scope.launch {
                     // Brief delay to allow tab/activity entrance transition to settle smoothly before disk scan
-                    kotlinx.coroutines.delay(200)
+                    delay(200.milliseconds)
                     loadHomeDataNow()
                 }
             }
@@ -298,7 +302,7 @@ fun HomeScreen(
             override fun onReceive(c: android.content.Context?, intent: android.content.Intent?) {
                 ActiveSessionTracker.notifySessionChanged()
                 scope.launch {
-                    kotlinx.coroutines.delay(500)
+                    delay(500.milliseconds)
                     loadHomeDataNow()
                 }
             }
@@ -523,7 +527,7 @@ fun HomeScreen(
                             }
 
                             // Dynamic fun subhero badge appearing in top bar when scrolled up
-                            AnimatedVisibility(
+                            AppAnimatedVisibility(
                                 visible = isScrolled,
                                 enter = fadeIn() + slideInHorizontally { it / 2 },
                                 exit = fadeOut() + slideOutHorizontally { it / 2 }
@@ -545,10 +549,10 @@ fun HomeScreen(
                         }
                     },
                     actions = {
-                        AnimatedVisibility(
+                        AppAnimatedVisibility(
                             visible = activeSession?.isRunning == true,
-                            enter = if (reduceAnimations) androidx.compose.animation.EnterTransition.None else (fadeIn() + slideInHorizontally { it / 2 }),
-                            exit = if (reduceAnimations) androidx.compose.animation.ExitTransition.None else (fadeOut() + slideOutHorizontally { it / 2 })
+                            enter = fadeIn() + slideInHorizontally { it / 2 },
+                            exit = fadeOut() + slideOutHorizontally { it / 2 }
                         ) {
                             activeSession?.let { session ->
                                 ReturnToActiveSessionButton(
@@ -585,7 +589,7 @@ fun HomeScreen(
                         isRefreshing = true
                         refreshSeed = System.currentTimeMillis()
                         loadHomeData()
-                        delay(600)
+                        delay(600.milliseconds)
                         isRefreshing = false
                     }
                 },
@@ -723,7 +727,7 @@ fun HomeScreen(
                                         color = if (viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.primary else Color.Transparent,
                                         modifier = Modifier.clickable {
                                             viewMode = "EXPRESSIVE"
-                                            prefs.edit().putString("pref_home_view_mode", "EXPRESSIVE").apply()
+                                            prefs.edit {putString("pref_home_view_mode", "EXPRESSIVE")}
                                         }
                                     ) {
                                         Row(
@@ -751,7 +755,7 @@ fun HomeScreen(
                                         color = if (viewMode == "NORMAL") MaterialTheme.colorScheme.primary else Color.Transparent,
                                         modifier = Modifier.clickable {
                                             viewMode = "NORMAL"
-                                            prefs.edit().putString("pref_home_view_mode", "NORMAL").apply()
+                                            prefs.edit {putString("pref_home_view_mode", "NORMAL")}
                                         }
                                     ) {
                                         Row(
@@ -898,7 +902,7 @@ fun HomeScreen(
         }
 
         // 4. Expressive Speed Dial Floating Action Menu (Bottom Right)
-        AnimatedVisibility(
+        AppAnimatedVisibility(
             visible = isFabExpanded,
             enter = fadeIn(animationSpec = spring(stiffness = 400f)),
             exit = fadeOut(animationSpec = spring(stiffness = 400f))
@@ -1335,11 +1339,10 @@ fun HomeScreen(
             },
             confirmButton = {
                 Button(onClick = {
-                    val target = noteToRename
                     noteToRename = null
-                    if (target != null && renameInputText.isNotBlank()) {
+                    if (renameInputText.isNotBlank()) {
                         scope.launch {
-                            val result = repository.renameNote(target, renameInputText)
+                            val result = repository.renameNote(note, renameInputText)
                             if (result.isSuccess) {
                                 loadHomeData()
                                 snackbarHostState.showSnackbar("Renamed to \"${renameInputText.trim()}\"")
@@ -1374,24 +1377,21 @@ fun HomeScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        val target = noteToDelete
                         noteToDelete = null
-                        if (target != null) {
-                            scope.launch {
-                                val result = repository.moveToTrash(listOf(target))
-                                if (result.isSuccess) {
-                                    loadHomeData()
-                                    val action = snackbarHostState.showSnackbar(
-                                        message = "Moved \"${target.title}\" to Trash",
-                                        actionLabel = "Undo",
-                                        duration = androidx.compose.material3.SnackbarDuration.Short
-                                    )
-                                    if (action == androidx.compose.material3.SnackbarResult.ActionPerformed) {
-                                        val trashed = repository.scanTrash().find { it.title == target.title }
-                                        if (trashed != null) {
-                                            repository.restoreFromTrash(trashed)
-                                            loadHomeData()
-                                        }
+                        scope.launch {
+                            val result = repository.moveToTrash(listOf(note))
+                            if (result.isSuccess) {
+                                loadHomeData()
+                                val action = snackbarHostState.showSnackbar(
+                                    message = "Moved \"${note.title}\" to Trash",
+                                    actionLabel = "Undo",
+                                    duration = androidx.compose.material3.SnackbarDuration.Short
+                                )
+                                if (action == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                                    val trashed = repository.scanTrash().find { it.title == note.title }
+                                    if (trashed != null) {
+                                        repository.restoreFromTrash(trashed)
+                                        loadHomeData()
                                     }
                                 }
                             }
@@ -1490,7 +1490,7 @@ private fun EnlargedContinueHeroSection(
     }
 
     val heroFolderAccent = note.folderColorHex?.let {
-        try { Color(android.graphics.Color.parseColor(it)) } catch (e: Exception) { null }
+        try { Color(it.toColorInt()) } catch (e: Exception) { null }
     } ?: MaterialTheme.colorScheme.primary
 
     val resumeActionLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_hero_resume_action)

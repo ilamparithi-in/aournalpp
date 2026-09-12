@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -89,7 +90,7 @@ fun OnboardingExtractionBottomPill(
         }
     }
 
-    AnimatedVisibility(
+    AppAnimatedVisibility(
         visible = !isReadyDismissed,
         enter = fadeIn() + expandVertically(),
         exit = fadeOut() + shrinkVertically()
@@ -196,7 +197,7 @@ fun OnboardingExtractionBottomPill(
                 }
 
                 // Expandable Detailed Card
-                AnimatedVisibility(
+                AppAnimatedVisibility(
                     visible = isExpanded,
                     enter = fadeIn() + expandVertically(),
                     exit = fadeOut() + shrinkVertically()
@@ -242,7 +243,7 @@ fun OnboardingExtractionBottomPill(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         } else if (isError) {
-                            val err = (state as BootstrapState.Error).throwable
+                            val err = state.throwable
                             Text(
                                 text = androidx.compose.ui.res.stringResource(
                                     dev.ilamparithi.aournalpp.R.string.pill_error_prefix,

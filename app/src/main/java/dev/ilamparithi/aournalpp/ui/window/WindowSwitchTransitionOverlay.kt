@@ -21,6 +21,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.zIndex
 import dev.ilamparithi.aournalpp.ui.animation.SpringSlideTransition
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -59,7 +60,7 @@ fun WindowSwitchTransitionOverlay(
 
     LaunchedEffect(Unit) {
         // Allow the overlay and wallpaper backdrop to render on screen first, safely covering LorieView
-        delay(32)
+        delay(32.milliseconds)
         onStarted()
         animationState = 1
     }
@@ -73,7 +74,7 @@ fun WindowSwitchTransitionOverlay(
 
     // Fallback safety timeout in case of interrupted lifecycle
     LaunchedEffect(Unit) {
-        delay(900)
+        delay(900.milliseconds)
         onTransitionFinished()
     }
 

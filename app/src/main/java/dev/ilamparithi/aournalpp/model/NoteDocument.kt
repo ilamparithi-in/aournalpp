@@ -18,10 +18,10 @@ data class NoteDocument(
     val file: File,
     val title: String = file.nameWithoutExtension,
     val path: String = file.absolutePath,
-    val lastModifiedMs: Long = file.lastModified(),
-    val sizeBytes: Long = file.length(),
-    val lastModifiedFormatted: String = FormatUtils.formatDateTimeMedium(lastModifiedMs),
-    val sizeFormatted: String = FormatUtils.formatFileSize(sizeBytes),
+    val lastModifiedMs: Long = 0L,
+    val sizeBytes: Long = 0L,
+    val lastModifiedFormatted: String = if (lastModifiedMs > 0L) FormatUtils.formatDateTimeMedium(lastModifiedMs) else "",
+    val sizeFormatted: String = if (sizeBytes > 0L) FormatUtils.formatFileSize(sizeBytes) else "",
     val autosaveInfo: AutosaveInfo? = null,
     val isHidden: Boolean = false,
     val isEmergencyRecovery: Boolean = false,
@@ -40,13 +40,17 @@ data class NoteDocument(
             else -> NoteFileType.XOPP
         }
 
-    val fuzzyLastModified: String = formatFuzzyTime(lastModifiedMs, lastModifiedFormatted)
+    val fuzzyLastModified: String = if (lastModifiedMs > 0L) formatFuzzyTime(lastModifiedMs, lastModifiedFormatted) else ""
     val fuzzyLastOpened: String? = lastOpenedMs?.let { formatFuzzyTime(it, null) }
 
-    val fullFormattedDateTime: String = try {
-        FormatUtils.formatDateTimeMedium(lastModifiedMs)
-    } catch (_: Exception) {
-        lastModifiedFormatted
+    val fullFormattedDateTime: String = if (lastModifiedMs > 0L) {
+        try {
+            FormatUtils.formatDateTimeMedium(lastModifiedMs)
+        } catch (_: Exception) {
+            lastModifiedFormatted
+        }
+    } else {
+        ""
     }
 
     val fullFormattedOpenedDateTime: String? = lastOpenedMs?.let { opened ->

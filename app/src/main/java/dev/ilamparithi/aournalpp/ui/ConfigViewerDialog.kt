@@ -4,6 +4,8 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -73,7 +75,7 @@ fun ConfigViewerDialog(
 
     LaunchedEffect(copiedState) {
         if (copiedState) {
-            kotlinx.coroutines.delay(2000)
+            delay(2000.milliseconds)
             copiedState = false
         }
     }
@@ -217,7 +219,7 @@ fun ConfigViewerDialog(
                             Column {
                                 lines.forEach { line ->
                                     Text(
-                                        text = if (line.isEmpty()) " " else line,
+                                        text = line.ifEmpty { " " },
                                         fontFamily = FontFamily.Monospace,
                                         fontSize = 11.sp,
                                         color = MaterialTheme.colorScheme.onSurface,

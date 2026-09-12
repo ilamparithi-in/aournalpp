@@ -409,7 +409,7 @@ fun CloudServiceCarouselCard(
 
                 // Middle: Host / URL & Badges
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    val endpoint = if (service.serverUrl.isNotBlank()) service.serverUrl else service.host
+                    val endpoint = service.serverUrl.ifBlank { service.host }
                     if (endpoint.isNotBlank()) {
                         Text(
                             text = endpoint,
@@ -493,7 +493,7 @@ fun CloudServiceCarouselCard(
                         isServiceSyncing && activeCount > 0 -> "Syncing ($activeCount remaining)..."
                         isServiceSyncing -> "Syncing..."
                         reauthNeeded -> "Reauth needed · Tap to configure"
-                        hasError -> service.lastSyncStatus ?: "Sync error"
+                        hasError -> service.lastSyncStatus
                         else -> "Synced: $lastSyncFormatted"
                     }
                     val footerColor = when {

@@ -10,6 +10,7 @@ import android.util.Log
 import android.util.LruCache
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.graphics.createBitmap
 import dev.ilamparithi.aournalpp.model.NoteDocument
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
 import kotlinx.coroutines.CoroutineScope
@@ -119,7 +120,7 @@ object ThumbnailManager {
             }
         }
         val cleanName = noteFile.name.replace(sanitizeRegex, "_").take(32)
-        val modTime = if (lastModifiedMs > 0L) lastModifiedMs else try { noteFile.lastModified() } catch (_: Exception) { 0L }
+        val modTime = if (lastModifiedMs > 0L) lastModifiedMs else 0L
         return "thumb_${cleanName}_${pathHash}_${modTime}.webp"
     }
 
@@ -139,7 +140,7 @@ object ThumbnailManager {
         pdfExportManager: PdfExportManager? = null,
         lastModifiedMs: Long = 0L
     ): ImageBitmap? = withContext(renderDispatcher) {
-        val modTime = if (lastModifiedMs > 0L) lastModifiedMs else try { noteFile.lastModified() } catch (_: Exception) { 0L }
+        val modTime = if (lastModifiedMs > 0L) lastModifiedMs else 0L
         val cacheKey = cacheKeyFor(noteFile, modTime)
         decoded[cacheKey]?.let { return@withContext it }
 
@@ -189,7 +190,7 @@ object ThumbnailManager {
                         null
                     } finally {
                         synchronized(inFlightJobs) {
-                            inFlightJobs.remove(cacheKey)
+                            inFlightJobs.keys.remove(cacheKey)
                         }
                     }
                 }
@@ -208,7 +209,7 @@ object ThumbnailManager {
         pdfExportManager: PdfExportManager? = null,
         lastModifiedMs: Long = 0L
     ): File? = withContext(renderDispatcher) {
-        val modTime = if (lastModifiedMs > 0L) lastModifiedMs else try { noteFile.lastModified() } catch (_: Exception) { 0L }
+        val modTime = if (lastModifiedMs > 0L) lastModifiedMs else 0L
         val cacheKey = cacheKeyFor(noteFile, modTime)
         val thumbDir = File(context.cacheDir, "thumbnails").apply { if (!exists()) mkdirs() }
         val cachedFile = File(thumbDir, cacheKey)
@@ -284,7 +285,7 @@ object ThumbnailManager {
                         renderer.openPage(0).use { page ->
                             val targetHeight = ((targetWidth.toFloat() * page.height) / page.width).toInt().coerceIn(200, 2400)
 
-                            val bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
+                            val bitmap = createBitmap(targetWidth, targetHeight)
                             bitmap.eraseColor(android.graphics.Color.WHITE)
 
                             page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)

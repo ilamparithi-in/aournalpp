@@ -868,19 +868,19 @@ class DocumentRepository private constructor(private val context: Context) {
             json.remove("color")
         }
 
-        if (iconEmoji != null && iconEmoji.isNotBlank()) {
+        if (!iconEmoji.isNullOrBlank()) {
             json.put("emoji", iconEmoji.trim())
             json.remove("icon")
         } else {
             json.remove("emoji")
-            if (iconType != null && iconType.isNotBlank()) {
+            if (!iconType.isNullOrBlank()) {
                 json.put("icon", iconType.trim())
             } else {
                 json.remove("icon")
             }
         }
 
-        if (role != null && role.isNotBlank()) {
+        if (!role.isNullOrBlank()) {
             json.put("role", role.trim())
         }
 
@@ -1002,12 +1002,12 @@ class DocumentRepository private constructor(private val context: Context) {
             if (!destFolder.exists()) destFolder.mkdirs()
             var movedCount = 0
 
-            for (note in notes) {
-                if (!note.file.exists()) continue
-                var destFile = File(destFolder, note.file.name)
-                if (destFile.exists() && destFile.canonicalPath != note.file.canonicalPath) {
-                    val nameWithoutExt = note.file.nameWithoutExtension
-                    val ext = note.file.extension
+            for ((file) in notes) {
+                if (!file.exists()) continue
+                var destFile = File(destFolder, file.name)
+                if (destFile.exists() && destFile.canonicalPath != file.canonicalPath) {
+                    val nameWithoutExt = file.nameWithoutExtension
+                    val ext = file.extension
                     var counter = 1
                     while (destFile.exists()) {
                         destFile = File(destFolder, "${nameWithoutExt}_$counter.$ext")
@@ -1015,18 +1015,18 @@ class DocumentRepository private constructor(private val context: Context) {
                     }
                 }
 
-                val srcAssociated = findAssociatedAutosaveAndBackupFiles(note.file)
+                val srcAssociated = findAssociatedAutosaveAndBackupFiles(file)
 
-                if (note.file.renameTo(destFile)) {
+                if (file.renameTo(destFile)) {
                     movedCount++
 
                     // Move all associated autosave and backup files into destFolder as well
                     for (assoc in srcAssociated) {
                         if (assoc.exists()) {
-                            val newAssocName = if (assoc.name.contains(note.file.name)) {
-                                assoc.name.replace(note.file.name, destFile.name)
-                            } else if (assoc.name.contains(note.file.nameWithoutExtension)) {
-                                assoc.name.replace(note.file.nameWithoutExtension, destFile.nameWithoutExtension)
+                            val newAssocName = if (assoc.name.contains(file.name)) {
+                                assoc.name.replace(file.name, destFile.name)
+                            } else if (assoc.name.contains(file.nameWithoutExtension)) {
+                                assoc.name.replace(file.nameWithoutExtension, destFile.nameWithoutExtension)
                             } else {
                                 assoc.name
                             }
@@ -1060,15 +1060,15 @@ class DocumentRepository private constructor(private val context: Context) {
             val timestamp = System.currentTimeMillis()
             val trashFileNames = mutableListOf<String>()
 
-            for (note in notes) {
-                if (!note.file.exists()) continue
-                val trashFileName = "${timestamp}_${note.file.name}"
+            for ((file) in notes) {
+                if (!file.exists()) continue
+                val trashFileName = "${timestamp}_${file.name}"
                 val targetTrashFile = File(trashDir, trashFileName)
-                val srcAssociated = findAssociatedAutosaveAndBackupFiles(note.file)
+                val srcAssociated = findAssociatedAutosaveAndBackupFiles(file)
 
-                if (note.file.renameTo(targetTrashFile)) {
-                    manifest.put(trashFileName, note.file.absolutePath)
-                    removeOpenedNoteHistory(note.file.absolutePath)
+                if (file.renameTo(targetTrashFile)) {
+                    manifest.put(trashFileName, file.absolutePath)
+                    removeOpenedNoteHistory(file.absolutePath)
                     movedCount++
                     trashFileNames.add(trashFileName)
 
@@ -1236,17 +1236,17 @@ class DocumentRepository private constructor(private val context: Context) {
             }
 
             var count = 0
-            for (note in notes) {
-                val originalPath = manifest.optString(note.file.name).takeIf { it.isNotBlank() }
+            for ((file, title) in notes) {
+                val originalPath = manifest.optString(file.name).takeIf { it.isNotBlank() }
                 val destFile = if (!originalPath.isNullOrBlank()) {
                     File(originalPath)
                 } else {
-                    File(env.getNotesDirectory(), note.title)
+                    File(env.getNotesDirectory(), title)
                 }
 
                 destFile.parentFile?.mkdirs()
-                if (note.file.renameTo(destFile)) {
-                    manifest.remove(note.file.name)
+                if (file.renameTo(destFile)) {
+                    manifest.remove(file.name)
                     count++
                 }
             }
@@ -1267,9 +1267,9 @@ class DocumentRepository private constructor(private val context: Context) {
             }
 
             var count = 0
-            for (note in notes) {
-                if (note.file.deleteRecursively()) {
-                    manifest.remove(note.file.name)
+            for ((file) in notes) {
+                if (file.deleteRecursively()) {
+                    manifest.remove(file.name)
                     count++
                 }
             }
@@ -1284,7 +1284,6 @@ class DocumentRepository private constructor(private val context: Context) {
             val trashDir = getTrashDirectory()
             trashDir.listFiles()?.forEach { it.deleteRecursively() }
             invalidateAllCaches()
-            Unit
         }
     }
 
@@ -1399,8 +1398,8 @@ class DocumentRepository private constructor(private val context: Context) {
             context.startActivity(Intent.createChooser(intent, "Share Note"))
         } else {
             val uris = ArrayList<Uri>()
-            for (doc in docs) {
-                uris.add(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", doc.file))
+            for ((file) in docs) {
+                uris.add(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file))
             }
             val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
                 type = "*/*"
@@ -1464,11 +1463,11 @@ class DocumentRepository private constructor(private val context: Context) {
             if (docs.isEmpty()) return@runCatching
 
             val pdfUris = ArrayList<Uri>()
-            for (doc in docs) {
-                val pdfFile = if (doc.file.extension.equals("pdf", ignoreCase = true)) {
-                    doc.file
+            for ((file) in docs) {
+                val pdfFile = if (file.extension.equals("pdf", ignoreCase = true)) {
+                    file
                 } else {
-                    pdfExportManager.renderPdfForSharing(context, doc.file).getOrThrow()
+                    pdfExportManager.renderPdfForSharing(context, file).getOrThrow()
                 }
                 pdfUris.add(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", pdfFile))
             }
@@ -1492,7 +1491,6 @@ class DocumentRepository private constructor(private val context: Context) {
                     context.startActivity(Intent.createChooser(intent, chooserTitle))
                 }
             }
-            Unit
         }
     }
 
@@ -1603,8 +1601,8 @@ class DocumentRepository private constructor(private val context: Context) {
                     }
                     ShareExportFormat.ORIGINAL -> {
                         val uris = ArrayList<Uri>()
-                        for (doc in docs) {
-                            uris.add(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", doc.file))
+                        for ((file) in docs) {
+                            uris.add(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file))
                         }
                         withContext(Dispatchers.Main) {
                             val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
@@ -1618,7 +1616,6 @@ class DocumentRepository private constructor(private val context: Context) {
                     }
                 }
             }
-            Unit
         }
     }
 
@@ -2009,8 +2006,7 @@ class DocumentRepository private constructor(private val context: Context) {
         }
         // 2. Fallback to latest modified file
         val doc = collectOpenableFiles(getRootNotesDirectory(), cache, skipRecentsExcluded = true)
-            .sortedByDescending { it.lastModified() }
-            .firstOrNull()
+            .maxByOrNull { it.lastModified() }
             ?.let { buildNoteDocument(it, cache) }
         cachedContinueNote = doc
         doc

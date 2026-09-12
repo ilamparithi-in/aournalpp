@@ -1,7 +1,6 @@
 package dev.ilamparithi.aournalpp.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -9,8 +8,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,47 +58,38 @@ fun SessionClosingScreen(
     BackHandler(enabled = true) { /* no-op */ }
 
     val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
-    val rotation: Float
-    val counterRotation: Float
-    val pulseScale: Float
+    val infiniteTransition = rememberInfiniteTransition(label = "ClosingHeroAnimations")
+    val animatedRotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(12000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "HeroRotation"
+    )
+    val animatedCounterRotation by infiniteTransition.animateFloat(
+        initialValue = 360f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(8000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "HeroCounterRotation"
+    )
+    val animatedPulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.92f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "HeroPulse"
+    )
 
-    if (reduceMotion) {
-        rotation = 0f
-        counterRotation = 0f
-        pulseScale = 1f
-    } else {
-        val infiniteTransition = rememberInfiniteTransition(label = "ClosingHeroAnimations")
-        val r by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(12000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "HeroRotation"
-        )
-        val cr by infiniteTransition.animateFloat(
-            initialValue = 360f,
-            targetValue = 0f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(8000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "HeroCounterRotation"
-        )
-        val ps by infiniteTransition.animateFloat(
-            initialValue = 0.92f,
-            targetValue = 1.08f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(1400, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "HeroPulse"
-        )
-        rotation = r
-        counterRotation = cr
-        pulseScale = ps
-    }
+    val rotation = if (reduceMotion) 0f else animatedRotation
+    val counterRotation = if (reduceMotion) 0f else animatedCounterRotation
+    val pulseScale = if (reduceMotion) 1f else animatedPulseScale
 
     Surface(
         modifier = Modifier.fillMaxSize(),

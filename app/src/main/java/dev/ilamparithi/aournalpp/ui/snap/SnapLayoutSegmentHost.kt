@@ -92,17 +92,17 @@ fun SnapLayoutSegmentHost(
             strength = 0.35f
         )
 
-        for (geo in geometries) {
-            val assignedWinId = assignedSlotMap[geo.slotIndex]
+        for ((slotIndex, x, y, width, height) in geometries) {
+            val assignedWinId = assignedSlotMap[slotIndex]
             val assignedWin = openWindows.find { it.id == assignedWinId }
-            val isEditingThisSlot = editingSlotIndex == geo.slotIndex
+            val isEditingThisSlot = editingSlotIndex == slotIndex
 
-            val slotWidthDp = with(density) { geo.width.toDp() }
-            val slotHeightDp = with(density) { geo.height.toDp() }
+            val slotWidthDp = with(density) { width.toDp() }
+            val slotHeightDp = with(density) { height.toDp() }
 
             Box(
                 modifier = Modifier
-                    .offset { IntOffset(geo.x, geo.y) }
+                    .offset { IntOffset(x, y) }
                     .size(slotWidthDp, slotHeightDp)
                     .padding(6.dp)
                     .clip(RoundedCornerShape(16.dp))
@@ -118,8 +118,8 @@ fun SnapLayoutSegmentHost(
                         indication = null
                     ) {
                         if (assignedWin != null && !isEditingThisSlot) {
-                            editingSlotIndex = geo.slotIndex
-                            onSlotClicked(geo.slotIndex)
+                            editingSlotIndex = slotIndex
+                            onSlotClicked(slotIndex)
                         }
                     },
                 contentAlignment = Alignment.Center
@@ -161,7 +161,7 @@ fun SnapLayoutSegmentHost(
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Text(
-                                    text = "Slot ${geo.slotIndex + 1}: ${assignedWin.title}",
+                                    text = "Slot ${slotIndex + 1}: ${assignedWin.title}",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -227,8 +227,8 @@ fun SnapLayoutSegmentHost(
                             shape = RoundedCornerShape(12.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                             modifier = Modifier.clickable {
-                                editingSlotIndex = geo.slotIndex
-                                onSlotClicked(geo.slotIndex)
+                                editingSlotIndex = slotIndex
+                                onSlotClicked(slotIndex)
                             }
                         ) {
                             Row(
@@ -294,11 +294,11 @@ fun SnapLayoutSegmentHost(
                                 previewCache = previewCache,
                                 isCompact = true,
                                 isVerticalGrid = false,
-                                headerTitle = if (isEditingThisSlot) "Change Note for Slot ${geo.slotIndex + 1}"
-                                else "Select Note for Slot ${geo.slotIndex + 1}",
+                                headerTitle = if (isEditingThisSlot) "Change Note for Slot ${slotIndex + 1}"
+                                else "Select Note for Slot ${slotIndex + 1}",
                                 onSelectWindow = { win ->
                                     editingSlotIndex = null
-                                    onSelectWindowForSlot(geo.slotIndex, win)
+                                    onSelectWindowForSlot(slotIndex, win)
                                 },
                                 onCloseWindow = null
                             )
@@ -311,7 +311,7 @@ fun SnapLayoutSegmentHost(
                             ) {
                                 Text(
                                     text = if (isEditingThisSlot) "No other open notes available"
-                                    else "No open notes available for Slot ${geo.slotIndex + 1}",
+                                    else "No open notes available for Slot ${slotIndex + 1}",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

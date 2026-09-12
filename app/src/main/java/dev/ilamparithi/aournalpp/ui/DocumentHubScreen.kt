@@ -130,8 +130,9 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.time.Duration.Companion.milliseconds
 
-private const val SEARCH_DEBOUNCE_MS = 250L
+private val SEARCH_DEBOUNCE_DURATION = 250.milliseconds
 
 @Volatile
 private var cachedHasStoragePermission: Boolean? = null
@@ -379,7 +380,7 @@ fun DocumentHubScreen(
                 if (hasPermission) {
                     showPermissionDialog = false
                     scope.launch {
-                        delay(250)
+                        delay(250.milliseconds)
                         viewModel.loadContentNow()
                     }
                 }
@@ -395,11 +396,11 @@ fun DocumentHubScreen(
             if (!hasPermission) return@LaunchedEffect
         }
         if (searchQuery.isNotEmpty()) {
-            delay(SEARCH_DEBOUNCE_MS)
+            delay(SEARCH_DEBOUNCE_DURATION)
         } else {
             // Give the entering spring animation (duration ~300ms) uninterrupted UI thread time
             // before scanning disk and updating folders/notes state.
-            delay(250)
+            delay(250.milliseconds)
         }
         viewModel.loadContentNow()
     }
@@ -609,7 +610,7 @@ fun DocumentHubScreen(
                                     tint = MaterialTheme.colorScheme.outline
                                 )
                                 if (!currentFolderItem?.iconEmoji.isNullOrBlank()) {
-                                    Text(text = currentFolderItem!!.iconEmoji!!, fontSize = 13.sp)
+                                    Text(text = currentFolderItem.iconEmoji, fontSize = 13.sp)
                                     Spacer(modifier = Modifier.width(4.dp))
                                 } else if (currentFolderItem?.iconType == "emergency" || repository.isEmergencySavesFolder(currentDirectory)) {
                                     Icon(
@@ -666,7 +667,7 @@ fun DocumentHubScreen(
                             if (autoScrollSpeed != 0f) {
                                 while (isActive) {
                                     pageGridState.scrollBy(autoScrollSpeed)
-                                    delay(10)
+                                    delay(10.milliseconds)
                                 }
                             }
                         }
@@ -1036,10 +1037,10 @@ fun DocumentHubScreen(
                             }
                             viewModel.loadContentNow()
                             showUndoSnackbar("Renamed folder to \"$newName\"") {
-                                renamedDir?.let {
-                                    val undoResult = repository.renameFolder(it, oldName)
+                                renamedDir?.let { dir ->
+                                    val undoResult = repository.renameFolder(dir, oldName)
                                     if (wasCurrentDir && undoResult.isSuccess) {
-                                        undoResult.getOrNull()?.let { viewModel.setCurrentDirectory(it) }
+                                        undoResult.getOrNull()?.let { restoredDir -> viewModel.setCurrentDirectory(restoredDir) }
                                     }
                                 }
                             }

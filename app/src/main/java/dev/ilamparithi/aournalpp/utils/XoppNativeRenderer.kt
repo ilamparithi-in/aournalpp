@@ -19,6 +19,7 @@ import java.io.InputStream
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.zip.GZIPInputStream
+import kotlin.math.pow
 
 /**
  * Ultra-fast native Kotlin vector parser and Android Canvas renderer for Xournal++ (.xopp)
@@ -130,7 +131,29 @@ object XoppNativeRenderer {
         val color: Int,
         val width: Float,
         val points: FloatArray
-    )
+    ) {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+
+            other as StrokeElement
+
+            if (tool != other.tool) return false
+            if (color != other.color) return false
+            if (width != other.width) return false
+            if (!points.contentEquals(other.points)) return false
+
+            return true
+        }
+
+        override fun hashCode(): Int {
+            var result = tool.hashCode()
+            result = 31 * result + color
+            result = 31 * result + width.hashCode()
+            result = 31 * result + points.contentHashCode()
+            return result
+        }
+    }
 
     private data class TextElement(
         val text: String,
@@ -383,7 +406,7 @@ object XoppNativeRenderer {
         texts: List<TextElement>,
         images: List<ImageElement>,
         targetWidth: Int
-    ): Bitmap? {
+    ): Bitmap {
         val aspect = pageHeight / pageWidth
         val targetHeight = (targetWidth * aspect).toInt().coerceIn(200, 3000)
         val scale = targetWidth.toFloat() / pageWidth
@@ -395,13 +418,13 @@ object XoppNativeRenderer {
         renderBackground(context, noteFile, canvas, targetWidth, targetHeight, scale, background)
 
         // 2. Render Images (embedded pictures)
-        for (img in images) {
-            val bmp = img.bitmap ?: continue
+        for ((left, top, right, bottom, bmp) in images) {
+            if (bmp == null) continue
             val dstRect = android.graphics.RectF(
-                img.left * scale,
-                img.top * scale,
-                img.right * scale,
-                img.bottom * scale
+                left * scale,
+                top * scale,
+                right * scale,
+                bottom * scale
             )
             canvas.drawBitmap(bmp, null, dstRect, null)
             try { bmp.recycle() } catch (_: Exception) {}
@@ -411,37 +434,38 @@ object XoppNativeRenderer {
         val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.FILL
         }
-        for (txt in texts) {
-            textPaint.color = txt.color
-            textPaint.textSize = txt.size * scale
-            canvas.drawText(txt.text, txt.x * scale, txt.y * scale, textPaint)
+        for ((text, x, y, size, color) in texts) {
+            textPaint.color = color
+            textPaint.textSize = size * scale
+            canvas.drawText(text, x * scale, y * scale, textPaint)
         }
 
-        // 3. Render Vector Strokes
+        // 4. Render Vector Strokes
         val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeCap = Paint.Cap.ROUND
             strokeJoin = Paint.Join.ROUND
         }
 
-        for (stroke in strokes) {
-            val pts = stroke.points
+        for ((tool, color, width, pts) in strokes) {
             if (pts.size < 2) continue
 
-            val tool = stroke.tool.lowercase()
-            if (tool == "eraser") {
-                strokePaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
-                strokePaint.strokeWidth = (stroke.width * scale).coerceAtLeast(1f)
-            } else if (tool == "highlighter") {
-                strokePaint.xfermode = null
-                val baseColor = stroke.color
-                val alpha = (Color.alpha(baseColor) * 0.45f).toInt().coerceIn(30, 140)
-                strokePaint.color = Color.argb(alpha, Color.red(baseColor), Color.green(baseColor), Color.blue(baseColor))
-                strokePaint.strokeWidth = (stroke.width * scale * 1.6f).coerceAtLeast(3f)
-            } else {
-                strokePaint.xfermode = null
-                strokePaint.color = stroke.color
-                strokePaint.strokeWidth = (stroke.width * scale).coerceAtLeast(1f)
+            when (tool.lowercase()) {
+                "eraser" -> {
+                    strokePaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+                    strokePaint.strokeWidth = (width * scale).coerceAtLeast(1f)
+                }
+                "highlighter" -> {
+                    strokePaint.xfermode = null
+                    val alpha = (Color.alpha(color) * 0.45f).toInt().coerceIn(30, 140)
+                    strokePaint.color = Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color))
+                    strokePaint.strokeWidth = (width * scale * 1.6f).coerceAtLeast(3f)
+                }
+                else -> {
+                    strokePaint.xfermode = null
+                    strokePaint.color = color
+                    strokePaint.strokeWidth = (width * scale).coerceAtLeast(1f)
+                }
             }
 
             if (pts.size == 2) {
@@ -484,13 +508,10 @@ object XoppNativeRenderer {
                 renderPdfBackground(noteFile, canvas, width, height, bg)
             }
             "solid" -> {
-                val style = bg.style
-                if (style == "lined" || style == "ruled") {
-                    drawLinedPaper(canvas, width, height, scale)
-                } else if (style == "graph" || style == "grid") {
-                    drawGridPaper(canvas, width, height, scale)
-                } else if (style == "dotted" || style == "iso_dot") {
-                    drawDottedPaper(canvas, width, height, scale)
+                when (bg.style) {
+                    "lined", "ruled" -> drawLinedPaper(canvas, width, height, scale)
+                    "graph", "grid" -> drawGridPaper(canvas, width, height, scale)
+                    "dotted", "iso_dot" -> drawDottedPaper(canvas, width, height, scale)
                 }
             }
         }
@@ -691,7 +712,7 @@ object XoppNativeRenderer {
 
             var value = (whole + (frac / div))
             if (exp != 0) {
-                value *= Math.pow(10.0, exp.toDouble())
+                value *= 10.0.pow(exp)
             }
             if (isNegative) value = -value
 

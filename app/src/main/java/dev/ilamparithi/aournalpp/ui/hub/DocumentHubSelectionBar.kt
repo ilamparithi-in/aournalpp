@@ -1,6 +1,6 @@
 package dev.ilamparithi.aournalpp.ui.hub
 
-import androidx.compose.animation.AnimatedVisibility
+import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -50,7 +50,7 @@ fun DocumentHubSelectionBar(
     onMoveToTrashSelected: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    AnimatedVisibility(
+    AppAnimatedVisibility(
         visible = isVisible && selectedDocs.isNotEmpty(),
         enter = fadeIn() + scaleIn(),
         exit = fadeOut() + scaleOut(),

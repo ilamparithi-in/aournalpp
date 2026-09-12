@@ -5,6 +5,9 @@ import java.text.NumberFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.log10
+import kotlin.math.pow
 
 /**
  * Utility functions for locale-aware formatting of dates, times, file sizes, percentages, and numbers.
@@ -86,8 +89,8 @@ object FormatUtils {
     fun formatFileSize(bytes: Long, locale: Locale = Locale.getDefault()): String {
         if (bytes <= 0) return "0 B"
         val units = arrayOf("B", "KB", "MB", "GB", "TB")
-        val digitGroups = (Math.log10(bytes.toDouble()) / Math.log10(1024.0)).toInt().coerceIn(0, units.size - 1)
-        val value = bytes / Math.pow(1024.0, digitGroups.toDouble())
+        val digitGroups = (log10(bytes.toDouble()) / log10(1024.0)).toInt().coerceIn(0, units.size - 1)
+        val value = bytes / 1024.0.pow(digitGroups.toDouble())
 
         val nf = getCachedNumberFormat(locale, minDecimals = 0, maxDecimals = 1)
         return "${nf.format(value)} ${units[digitGroups]}"
@@ -122,12 +125,12 @@ object FormatUtils {
             return ""
         }
         val diffMs = epoch1 - epoch2
-        if (Math.abs(diffMs) < 60_000L) {
+        if (abs(diffMs) < 60_000L) {
             return "About the same time"
         }
         val isFirstNewer = diffMs > 0
         val newerLabel = if (isFirstNewer) label1 else label2
-        val absDiffSec = Math.abs(diffMs) / 1000L
+        val absDiffSec = abs(diffMs) / 1000L
 
         val durationStr = when {
             absDiffSec < 3600 -> "${absDiffSec / 60}m"

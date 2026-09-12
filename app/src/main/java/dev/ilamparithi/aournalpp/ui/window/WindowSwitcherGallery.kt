@@ -1,14 +1,9 @@
 package dev.ilamparithi.aournalpp.ui.window
 
 import android.graphics.Bitmap
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -180,12 +175,10 @@ fun WindowGalleryPicker(
         modifier = modifier.fillMaxWidth(),
         contentAlignment = Alignment.Center
     ) {
-        val availableW = maxWidth
-        val availableH = maxHeight
-        val compactMode = isCompact || availableW < 400.dp || availableH < 350.dp
+        val compactMode = isCompact || maxWidth < 400.dp || maxHeight < 350.dp
 
         val cardWidth = if (compactMode) {
-            (availableW * 0.65f).coerceIn(150.dp, 220.dp)
+            (maxWidth * 0.65f).coerceIn(150.dp, 220.dp)
         } else if (isLandscape) {
             280.dp
         } else {
@@ -193,7 +186,7 @@ fun WindowGalleryPicker(
         }
 
         val previewHeight = if (compactMode) {
-            (availableH * 0.45f).coerceIn(90.dp, 150.dp)
+            (maxHeight * 0.45f).coerceIn(90.dp, 150.dp)
         } else if (isLandscape) {
             175.dp
         } else {
@@ -433,20 +426,15 @@ fun WindowPreviewCard(
                     .padding(8.dp),
                 contentAlignment = Alignment.Center
             ) {
-                val currentFallback = fallbackThumbnail
+                val displayBitmap = if (preview != null && !preview.isRecycled) {
+                    preview.asImageBitmap()
+                } else {
+                    fallbackThumbnail
+                }
 
-                if (preview != null && !preview.isRecycled) {
+                if (displayBitmap != null) {
                     Image(
-                        bitmap = preview.asImageBitmap(),
-                        contentDescription = "Preview of ${windowInfo.title}",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(10.dp))
-                    )
-                } else if (currentFallback != null) {
-                    Image(
-                        bitmap = currentFallback,
+                        bitmap = displayBitmap,
                         contentDescription = "Preview of ${windowInfo.title}",
                         contentScale = ContentScale.Fit,
                         modifier = Modifier

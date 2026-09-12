@@ -5,9 +5,6 @@ import android.os.Build
 import android.view.Surface
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,8 +16,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.core.content.edit
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -60,7 +57,6 @@ import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -128,7 +124,6 @@ val STANDARD_TOOLBAR_PRESETS = listOf(
     ToolbarPresetOption("bottom_right", "Bottom Right", 1.0f, 1.0f)
 )
 
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun ToolbarPositionEditorScreen(
     onNavigateBack: () -> Unit
@@ -207,10 +202,8 @@ fun ToolbarPositionEditorScreen(
             .fillMaxSize()
             .background(Color(0xFF14151B))
     ) {
-        val screenW = maxWidth
-        val screenH = maxHeight
-        val screenWPx = with(density) { screenW.toPx() }
-        val screenHPx = with(density) { screenH.toPx() }
+        val screenWPx = with(density) { maxWidth.toPx() }
+        val screenHPx = with(density) { maxHeight.toPx() }
 
         // Physical Cutout metrics for snapping
         var cutoutRects by remember { mutableStateOf<List<CutoutRect>>(emptyList()) }
@@ -725,7 +718,7 @@ fun ToolbarPositionEditorScreen(
 
         // 5. Floating Bottom Calibration HUD Control Panel
         ElevatedCard(
-            modifier = if (screenH < 500.dp) {
+            modifier = if (maxHeight < 500.dp) {
                 Modifier
                     .align(Alignment.BottomCenter)
                     .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -868,12 +861,12 @@ fun ToolbarPositionEditorScreen(
 
                     Button(
                         onClick = {
-                            val editor = x11Prefs.edit()
-                            editor.putString(X11Preferences.KEY_TOOLBAR_POSITION_PRESET, selectedPreset)
-                            editor.putFloat(X11Preferences.KEY_TOOLBAR_POS_X_RATIO, normX)
-                            editor.putFloat(X11Preferences.KEY_TOOLBAR_POS_Y_RATIO, normY)
-                            editor.putBoolean(X11Preferences.KEY_TOP_BAR_CENTER_WITHIN_BOUNDS, centerWithinBounds)
-                            editor.apply()
+                            x11Prefs.edit {
+                                putString(X11Preferences.KEY_TOOLBAR_POSITION_PRESET, selectedPreset)
+                                putFloat(X11Preferences.KEY_TOOLBAR_POS_X_RATIO, normX)
+                                putFloat(X11Preferences.KEY_TOOLBAR_POS_Y_RATIO, normY)
+                                putBoolean(X11Preferences.KEY_TOP_BAR_CENTER_WITHIN_BOUNDS, centerWithinBounds)
+                            }
 
                             X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_POSITION_PRESET)
                             onNavigateBack()

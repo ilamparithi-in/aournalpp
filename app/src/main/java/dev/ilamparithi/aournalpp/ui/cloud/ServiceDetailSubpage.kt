@@ -2,7 +2,7 @@ package dev.ilamparithi.aournalpp.ui.cloud
 
 import android.content.Context
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
+import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -236,7 +236,7 @@ fun ServiceDetailSubpage(
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "${service.providerType.displayName} • ${if (service.serverUrl.isNotBlank()) service.serverUrl else service.host}",
+                                    text = "${service.providerType.displayName} • ${service.serverUrl.ifBlank { service.host }}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -294,7 +294,7 @@ fun ServiceDetailSubpage(
             }
         },
         bottomBar = {
-            AnimatedVisibility(
+            AppAnimatedVisibility(
                 visible = isBatchMode && selectedMappingIds.isNotEmpty(),
                 enter = fadeIn() + scaleIn(),
                 exit = fadeOut() + scaleOut()
@@ -519,7 +519,7 @@ fun ServiceDetailSubpage(
                     )
 
                     // Deferred Checking Progress Bar
-                    AnimatedVisibility(visible = isCheckingFolders) {
+                    AppAnimatedVisibility(visible = isCheckingFolders) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()

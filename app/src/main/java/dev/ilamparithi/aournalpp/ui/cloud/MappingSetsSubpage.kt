@@ -534,17 +534,14 @@ fun MappingSetsSubpage(
                 Button(
                     onClick = {
                         if (name.isNotBlank()) {
-                            val setToSave = if (editing != null) {
-                                editing.copy(name = name.trim(), description = description.trim())
-                            } else {
-                                MappingSet(
+                            val setToSave = editing?.copy(name = name.trim(), description = description.trim())
+                                ?: MappingSet(
                                     id = UUID.randomUUID().toString(),
                                     name = name.trim(),
                                     description = description.trim(),
                                     createdAtEpochMs = System.currentTimeMillis(),
                                     items = emptyList()
                                 )
-                            }
                             mappingRepo.saveMappingSet(setToSave)
                             refreshSets()
                             onShowSnackbar("Saved mapping set \"${setToSave.name}\"")

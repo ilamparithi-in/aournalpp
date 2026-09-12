@@ -55,6 +55,7 @@ import dev.ilamparithi.aournalpp.data.AppPreferences
 import dev.ilamparithi.aournalpp.data.X11Preferences
 import dev.ilamparithi.aournalpp.ui.settings.components.SettingsSwitchListItem
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -182,7 +183,7 @@ fun DisplaySettingsScreen(
                     ) {
                         scalePresets.forEach { preset ->
                             val presetFloat = preset.toFloat()
-                            val isSelected = Math.abs(uiScaleFloat - presetFloat) < 0.01f
+                            val isSelected = abs(uiScaleFloat - presetFloat) < 0.01f
                             OutlinedButton(
                                 onClick = {
                                     uiScaleFloat = presetFloat
@@ -441,7 +442,7 @@ fun DisplaySettingsScreen(
                     val summaryText = if (safeCustom) {
                         "Custom: L:${safeLeft}dp T:${safeTop}dp R:${safeRight}dp B:${safeBottom}dp"
                     } else if (safeAll > 0) {
-                        "Uniform: ${safeAll} dp on all edges"
+                        "Uniform: $safeAll dp on all edges"
                     } else {
                         "Full Screen (0 dp)"
                     }

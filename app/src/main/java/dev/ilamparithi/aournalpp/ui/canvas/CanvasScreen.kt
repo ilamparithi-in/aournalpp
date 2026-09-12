@@ -13,6 +13,8 @@ import android.view.PixelCopy
 import android.view.Surface
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.core.content.edit
+import androidx.core.graphics.createBitmap
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
@@ -89,6 +91,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.milliseconds
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -96,7 +99,7 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CanvasScreen(
     activity: CanvasActivity,
@@ -161,8 +164,9 @@ fun CanvasScreen(
                 }
                 val activeWindowIndex by remember {
                     derivedStateOf {
-                        val current = currentDisplayWindow
-                        if (current != null) openWindows.indexOfFirst { it.id == current.id }.coerceAtLeast(0) else 0
+                        currentDisplayWindow?.let { win ->
+                            openWindows.indexOfFirst { it.id == win.id }.coerceAtLeast(0)
+                        } ?: 0
                     }
                 }
 
@@ -171,7 +175,7 @@ fun CanvasScreen(
                     if (openWindows.isNotEmpty()) {
                         hadWindowsOpen = true
                     } else if (hadWindowsOpen) {
-                        delay(250)
+                        delay(250.milliseconds)
                         if (openWindows.isEmpty() && !activity.sessionManager.isModalOrDialogOpen() && !activity.isFinishing) {
                             Log.i("CanvasActivity", "All Xournal++ windows closed. Finishing session cleanly.")
                             activity.sessionManager.stopSession()
@@ -188,9 +192,8 @@ fun CanvasScreen(
                     val title = liveTitle?.removePrefix("*")?.removeSuffix("*")?.trim()
                     if (!title.isNullOrBlank() && title != "New Note" && title != "Unsaved Document" && title != "Preferences") {
                         withContext(Dispatchers.IO) {
-                            val currentTarget = targetPath
-                            if (currentTarget != null) {
-                                val currentFile = File(currentTarget)
+                            if (targetPath != null) {
+                                val currentFile = File(targetPath)
                                 if (currentFile.name.equals(title, ignoreCase = true) || currentFile.nameWithoutExtension.equals(title, ignoreCase = true)) {
                                     dev.ilamparithi.aournalpp.data.DocumentRepository.getInstance(activity).recordNoteOpened(currentFile.absolutePath)
                                     return@withContext
@@ -210,13 +213,14 @@ fun CanvasScreen(
                     targetPath?.let { File(it).nameWithoutExtension } ?: (initialTitle ?: "New Note")
                 }
                 val displayTitle = remember(openWindows, currentDisplayWindow, liveTitle, activePromptTitle, alwaysShowFileName, openPreferences, baseDocumentName, initialTitle) {
-                    val currentWin = currentDisplayWindow
-                    val raw = when {
-                        currentWin != null && currentWin.title.isNotBlank() && currentWin.title != "Xournal++" -> currentWin.title
-                        !liveTitle.isNullOrBlank() && liveTitle != "Xournal++" -> liveTitle!!
-                        openPreferences && (liveTitle == null || liveTitle?.removePrefix("*")?.trim() == "New Note" || liveTitle?.removePrefix("*")?.trim() == "Unsaved Document") -> "Preferences"
-                        else -> initialTitle ?: "New Note"
-                    }
+                    val raw = currentDisplayWindow?.title?.takeIf { it.isNotBlank() && it != "Xournal++" }
+                        ?: if (!liveTitle.isNullOrBlank() && liveTitle != "Xournal++") {
+                            liveTitle!!
+                        } else if (openPreferences && (liveTitle == null || liveTitle?.removePrefix("*")?.trim() == "New Note" || liveTitle?.removePrefix("*")?.trim() == "Unsaved Document")) {
+                            "Preferences"
+                        } else {
+                            initialTitle ?: "New Note"
+                        }
 
                     val fileName = if (alwaysShowFileName) {
                         val isDirty = raw.startsWith("*") || raw.endsWith("*")
@@ -224,8 +228,7 @@ fun CanvasScreen(
                         val base = if (clean.equals("New Note", ignoreCase = true) || clean.equals("Unsaved Document", ignoreCase = true) || clean.equals("Preferences", ignoreCase = true)) {
                             clean
                         } else {
-                            val nameWithoutExt = File(clean).nameWithoutExtension
-                            if (nameWithoutExt.isNotBlank()) nameWithoutExt else clean
+                            File(clean).nameWithoutExtension.ifBlank { clean }
                         }
                         if (isDirty) "*$base" else base
                     } else {
@@ -407,7 +410,7 @@ fun CanvasScreen(
                     val view = activity.activeLorieView ?: return
                     if (view.width <= 0 || view.height <= 0) return
                     try {
-                        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+                        val bitmap = createBitmap(view.width, view.height)
                         PixelCopy.request(view, bitmap, { result ->
                             if (result == PixelCopy.SUCCESS) {
                                 onCaptured?.invoke(bitmap)
@@ -425,13 +428,13 @@ fun CanvasScreen(
                             windowPreviewCache[activeWin.id] = bmp
                         }
                     } else {
-                        for (geo in snapGeometries) {
-                            val winId = snapLayoutManager.slotAssignments[geo.slotIndex]
+                        for ((slotIndex, x, y, width, height) in snapGeometries) {
+                            val winId = snapLayoutManager.slotAssignments[slotIndex]
                             if (winId != null) {
-                                val cropX = geo.x.coerceIn(0, bmp.width - 1)
-                                val cropY = geo.y.coerceIn(0, bmp.height - 1)
-                                val cropW = geo.width.coerceAtMost(bmp.width - cropX)
-                                val cropH = geo.height.coerceAtMost(bmp.height - cropY)
+                                val cropX = x.coerceIn(0, bmp.width - 1)
+                                val cropY = y.coerceIn(0, bmp.height - 1)
+                                val cropW = width.coerceAtMost(bmp.width - cropX)
+                                val cropH = height.coerceAtMost(bmp.height - cropY)
                                 if (cropW > 20 && cropH > 20) {
                                     try {
                                         val cropped = Bitmap.createBitmap(bmp, cropX, cropY, cropW, cropH)
@@ -458,7 +461,7 @@ fun CanvasScreen(
                     activeSnapMode = mode
                     isSnapMirrored = mirrored
                     snapLayoutManager.setMode(mode, mirrored)
-                    x11Prefs.edit().putString(X11Preferences.KEY_ACTIVE_SNAP_LAYOUT, mode.id).apply()
+                    x11Prefs.edit {putString(X11Preferences.KEY_ACTIVE_SNAP_LAYOUT, mode.id)}
 
                     val isSnapActive = (mode != SnapLayoutMode.SINGLE)
                     activity.lifecycleScope.launch(Dispatchers.IO) {
@@ -545,9 +548,8 @@ fun CanvasScreen(
 
                     if (isSwitchTransitionActive) {
                         // Rapid switching / spamming: advance immediately to the next target
-                        val previousTarget = transitionTargetWindow
                         transitionOutgoingBitmap = transitionIncomingBitmap
-                            ?: previousTarget?.let { windowPreviewCache[it.id] }
+                            ?: transitionTargetWindow?.let { windowPreviewCache[it.id] }
                             ?: activeWin?.let { windowPreviewCache[it.id] }
                         transitionIncomingBitmap = windowPreviewCache[targetWindow.id]
                         transitionTargetWindow = targetWindow
@@ -628,9 +630,9 @@ fun CanvasScreen(
                     val closedIds = previousWindowIds.minus(currentIds)
                     previousWindowIds = currentIds
                     windowMruList.removeAll { it !in currentIds }
-                    for (win in openWindows) {
-                        if (win.id !in windowMruList) {
-                            windowMruList.add(win.id)
+                    for ((id) in openWindows) {
+                        if (id !in windowMruList) {
+                            windowMruList.add(id)
                         }
                     }
 
@@ -747,15 +749,14 @@ fun CanvasScreen(
                         // Debounced window resize & preview synchronization
                         // Ensures active and background window previews match new window size without thrashing during active divider drag
                         LaunchedEffect(canvasWidthPx, canvasHeightPx, activeWindow?.id, isSwitchTransitionActive) {
-                            val curActive = activeWindow
-                            if (curActive != null && !isSwitchTransitionActive && !showSnapAssistHost && !showWindowSwitcherGallery && canvasWidthPx > 0 && canvasHeightPx > 0) {
-                                delay(300)
-                                val currentId = curActive.id
+                            val activeId = activeWindow?.id
+                            if (activeId != null && !isSwitchTransitionActive && !showSnapAssistHost && !showWindowSwitcherGallery && canvasWidthPx > 0 && canvasHeightPx > 0) {
+                                delay(300.milliseconds)
                                 val view = activity.activeLorieView
                                 if (view != null && view.width > 0 && view.height > 0) {
                                     captureCurrentWindowPreview { freshBmp ->
                                         if (activeSnapMode == SnapLayoutMode.SINGLE || activeSnapMode == SnapLayoutMode.UNLOCKED || snapGeometries.isEmpty()) {
-                                            windowPreviewCache[currentId] = freshBmp
+                                            windowPreviewCache[activeId] = freshBmp
                                         } else {
                                             updateSlotPreviewsFromScreen(freshBmp)
                                         }
@@ -834,17 +835,17 @@ fun CanvasScreen(
                             },
                             onInputHandlerReady = { handler ->
                                 activity.inputHandler = handler
-                                handler.setDisableTouchStylusOnStylusHover(disableTouchStylusOnStylusHover)
+                                handler.isDisableTouchStylusOnStylusHover = disableTouchStylusOnStylusHover
                                 handler.setTouchStylusStateListener {
                                     activity.runOnUiThread {
                                         isFingerAsStylus = false
                                         if (rememberFingerAsStylusState) {
-                                            x11Prefs.edit().putBoolean(X11Preferences.KEY_FINGER_AS_STYLUS_ENABLED, false).apply()
+                                            x11Prefs.edit {putBoolean(X11Preferences.KEY_FINGER_AS_STYLUS_ENABLED, false)}
                                         }
                                     }
                                 }
-                                handler.setFingerAsStylusEnabled(isFingerAsStylus)
-                                handler.setStylusInputHelperMode(stylusClickMode)
+                                handler.isFingerAsStylusEnabled = isFingerAsStylus
+                                handler.stylusInputHelperMode = stylusClickMode
                             },
                             onInputSenderReady = { sender ->
                                 activity.inputSender = sender
@@ -886,7 +887,7 @@ fun CanvasScreen(
                                             transitionOutgoingBitmap = null
                                             transitionIncomingBitmap = null
                                             activity.lifecycleScope.launch {
-                                                kotlinx.coroutines.delay(150)
+                                                delay(150.milliseconds)
                                                 captureCurrentWindowPreview { bmp ->
                                                     windowPreviewCache[targetWin.id] = bmp
                                                 }
@@ -933,7 +934,7 @@ fun CanvasScreen(
                                     },
                                     onDragEnd = {
                                         activity.lifecycleScope.launch {
-                                            delay(150)
+                                            delay(150.milliseconds)
                                             captureCurrentWindowPreview { freshBmp ->
                                                 updateSlotPreviewsFromScreen(freshBmp)
                                             }
@@ -985,7 +986,7 @@ fun CanvasScreen(
                                             showSnapAssistHost = false
                                             activeConfiguringSlot = null
                                             activity.lifecycleScope.launch {
-                                                delay(200)
+                                                delay(200.milliseconds)
                                                 captureCurrentWindowPreview { freshBmp ->
                                                     updateSlotPreviewsFromScreen(freshBmp)
                                                 }
@@ -1028,15 +1029,15 @@ fun CanvasScreen(
                             onToggleFingerAsStylus = {
                                 val next = !isFingerAsStylus
                                 isFingerAsStylus = next
-                                activity.inputHandler?.setFingerAsStylusEnabled(next)
+                                activity.inputHandler?.isFingerAsStylusEnabled = next
                                 if (rememberFingerAsStylusState) {
-                                    x11Prefs.edit().putBoolean(X11Preferences.KEY_FINGER_AS_STYLUS_ENABLED, next).apply()
+                                    x11Prefs.edit {putBoolean(X11Preferences.KEY_FINGER_AS_STYLUS_ENABLED, next)}
                                 }
                             },
                             stylusClickMode = stylusClickMode,
                             onStylusClickModeChange = { mode ->
                                 stylusClickMode = mode
-                                activity.inputHandler?.setStylusInputHelperMode(mode)
+                                activity.inputHandler?.stylusInputHelperMode = mode
                             },
                             showTitle = showTitle,
                             showBack = showBack,
@@ -1085,11 +1086,11 @@ fun CanvasScreen(
                                 activity.activeLorieView?.let { view ->
                                     val insetsCtrl = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
                                     if (activity.isKeyboardOpenState.value) {
-                                        view.setKeyboardVisible(false)
+                                        view.isKeyboardVisible = false
                                         insetsCtrl.hide(WindowInsetsCompat.Type.ime())
                                     } else {
                                         view.requestFocus()
-                                        view.setKeyboardVisible(true)
+                                        view.isKeyboardVisible = true
                                         insetsCtrl.show(WindowInsetsCompat.Type.ime())
                                     }
                                 } ?: run {

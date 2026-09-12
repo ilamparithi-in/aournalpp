@@ -91,9 +91,12 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
+import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.hypot
+import kotlin.math.sin
 
-private val TIPS_LIST = listOf(
+private val TIPS_LIST: List<Int> = listOf(
     dev.ilamparithi.aournalpp.R.string.bootstrap_tip_1,
     dev.ilamparithi.aournalpp.R.string.bootstrap_tip_2,
     dev.ilamparithi.aournalpp.R.string.bootstrap_tip_3,
@@ -170,17 +173,11 @@ fun BootstrapScreen(
             val rootCoords = rootLayoutCoordinates
             val heroCoords = heroCoordinates
 
-            val (heroW, heroH) = if (heroCoords != null) {
-                heroCoords.size.let { it.component1().toFloat() to it.component2().toFloat() }
-            } else {
-                (140f * density.density) to (140f * density.density)
-            }
+            val (heroW, heroH) = heroCoords?.size?.let { it.component1().toFloat() to it.component2().toFloat() }
+                ?: ((140f * density.density) to (140f * density.density))
 
-            val (rootW, rootH) = if (rootCoords != null) {
-                rootCoords.size.let { it.component1().toFloat() to it.component2().toFloat() }
-            } else {
-                2500f to 1600f
-            }
+            val (rootW, rootH) = rootCoords?.size?.let { it.component1().toFloat() to it.component2().toFloat() }
+                ?: (2500f to 1600f)
 
             val center = if (rootCoords != null && heroCoords != null && rootCoords.isAttached && heroCoords.isAttached) {
                 val pos = rootCoords.localPositionOf(heroCoords, Offset.Zero)
@@ -222,20 +219,20 @@ fun BootstrapScreen(
         val vertices = 10
         val roundness = 0.35f
         val r = 0.95f
-        val step = (2.0 * Math.PI / vertices)
+        val step = (2.0 * PI / vertices)
         val cornerOffset = step * roundness
 
         for (i in 0 until vertices) {
-            val angle = i * step - (Math.PI / 2.0)
+            val angle = i * step - (PI / 2.0)
             val p1Angle = angle - cornerOffset
             val p2Angle = angle + cornerOffset
 
-            val x1 = (r * Math.cos(p1Angle)).toFloat()
-            val y1 = (r * Math.sin(p1Angle)).toFloat()
-            val xc = (r * 1.05f * Math.cos(angle)).toFloat()
-            val yc = (r * 1.05f * Math.sin(angle)).toFloat()
-            val x2 = (r * Math.cos(p2Angle)).toFloat()
-            val y2 = (r * Math.sin(p2Angle)).toFloat()
+            val x1 = (r * cos(p1Angle)).toFloat()
+            val y1 = (r * sin(p1Angle)).toFloat()
+            val xc = (r * 1.05f * cos(angle)).toFloat()
+            val yc = (r * 1.05f * sin(angle)).toFloat()
+            val x2 = (r * cos(p2Angle)).toFloat()
+            val y2 = (r * sin(p2Angle)).toFloat()
 
             if (i == 0) {
                 path.moveTo(x1, y1)
@@ -517,7 +514,7 @@ fun BootstrapScreen(
                     }
                 } else {
                     // Error state details
-                    val errorThrowable = (state as BootstrapState.Error).throwable
+                    val errorThrowable = state.throwable
                     ElevatedCard(
                         modifier = Modifier.fillMaxWidth(0.9f),
                         shape = RoundedCornerShape(16.dp),

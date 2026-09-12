@@ -7,6 +7,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.core.graphics.toColorInt
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -124,6 +125,8 @@ fun StandardNoteCard(
 ) {
     val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
+    val onOpenMenu = remember { { showMenu = true } }
+    val onDismissMenu = remember { { showMenu = false } }
 
     val thumbnailImage by produceState<ImageBitmap?>(
         initialValue = ThumbnailManager.getCachedThumbnail(note.file, note.lastModifiedMs),
@@ -135,7 +138,7 @@ fun StandardNoteCard(
 
     val folderAccentColor = remember(note.folderColorHex) {
         note.folderColorHex?.let {
-            try { Color(android.graphics.Color.parseColor(it)) } catch (e: Exception) { null }
+            try { Color(it.toColorInt()) } catch (e: Exception) { null }
         }
     } ?: MaterialTheme.colorScheme.primary
 
@@ -331,7 +334,7 @@ fun StandardNoteCard(
                     val moreOptionsLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_details)
                     AppTooltipBox(tooltipText = moreOptionsLabel) {
                         IconButton(
-                            onClick = { showMenu = true },
+                            onClick = onOpenMenu,
                             modifier = Modifier.size(28.dp).minTouchTarget()
                         ) {
                             Surface(
@@ -354,7 +357,7 @@ fun StandardNoteCard(
                     StandardNoteActionDropdown(
                         expanded = showMenu,
                         isPinned = note.isPinned,
-                        onDismiss = { showMenu = false },
+                        onDismiss = onDismissMenu,
                         onTogglePin = onTogglePin,
                         onShareExport = onShareExport,
                         onExportPdf = onExportPdf,

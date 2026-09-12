@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.platform.LocalDensity
 import org.intellij.lang.annotations.Language
 import java.util.Random
+import kotlin.math.PI
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.sin
@@ -214,7 +215,7 @@ fun DreamyParticleField(
                 baseRadiusPx = radius,
                 baseAlpha = (0.35f + random.nextFloat() * 0.45f) * strength.coerceIn(0.4f, 1f),
                 shimmerSpeed = 1.2f + random.nextFloat() * 2.2f,
-                phase = random.nextFloat() * (2f * Math.PI.toFloat())
+                phase = random.nextFloat() * (2f * PI.toFloat())
             )
         }
     }
@@ -227,7 +228,7 @@ fun DreamyParticleField(
         val infiniteTransition = rememberInfiniteTransition(label = "particleShimmer")
         val animatedTime by infiniteTransition.animateFloat(
             initialValue = 0f,
-            targetValue = (2f * Math.PI.toFloat()),
+            targetValue = (2f * PI.toFloat()),
             animationSpec = infiniteRepeatable(
                 animation = tween(durationMillis = 2800, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart
@@ -240,9 +241,8 @@ fun DreamyParticleField(
     Canvas(modifier = modifier) {
         val canvasWidth = size.width
         val canvasHeight = size.height
-        val totalAlphaMultiplier = alpha
 
-        if (totalAlphaMultiplier <= 0.01f || progress <= 0.001f) return@Canvas
+        if (alpha <= 0.01f || progress <= 0.001f) return@Canvas
 
         val resolvedOrigin = origin ?: Offset(canvasWidth / 2f, canvasHeight / 2f)
         val maxDist = hypot(
@@ -261,8 +261,8 @@ fun DreamyParticleField(
             drawCircle(
                 brush = Brush.radialGradient(
                     colorStops = arrayOf(
-                        0.0f to accentColor.copy(alpha = 0.06f * totalAlphaMultiplier * strength),
-                        waveEdgeFraction to accentColor.copy(alpha = 0.15f * (1f - progress * 0.45f) * totalAlphaMultiplier * strength),
+                        0.0f to accentColor.copy(alpha = 0.06f * alpha * strength),
+                        waveEdgeFraction to accentColor.copy(alpha = 0.15f * (1f - progress * 0.45f) * alpha * strength),
                         1.0f to Color.Transparent
                     ),
                     center = resolvedOrigin,
@@ -274,8 +274,7 @@ fun DreamyParticleField(
         }
 
         // Draw Sweeping Particle Sparkle Ignition
-        for (i in 0 until particles.size) {
-            val p = particles[i]
+        for (p in particles) {
             val x = p.xNorm * canvasWidth
             val y = p.yNorm * canvasHeight
 
@@ -295,7 +294,7 @@ fun DreamyParticleField(
             }
 
             val shimmer = (sin(time * p.shimmerSpeed + p.phase) * 0.40f + 0.60f)
-            val dynamicAlpha = ((p.baseAlpha * shimmer + flash * 0.65f) * totalAlphaMultiplier * strength).coerceIn(0f, 1f)
+            val dynamicAlpha = ((p.baseAlpha * shimmer + flash * 0.65f) * alpha * strength).coerceIn(0f, 1f)
             val dynamicRadius = p.baseRadiusPx * (1f + flash * 0.50f)
 
             drawCircle(

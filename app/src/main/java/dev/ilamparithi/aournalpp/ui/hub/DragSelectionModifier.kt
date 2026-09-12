@@ -85,25 +85,22 @@ fun Modifier.notesGridDragSelect(
                     setIsInitialEntryDrag(true)
                 }
                 setIsDragSelecting(true)
-                val currentNotesList = initialList
-                val pathToIndex = initialPathMap
                 val currentSelected = selectedPaths()
 
                 val wasSelected = currentSelected.contains(hitPath)
-                val initialPath = hitPath
                 var lastReportedPath = hitPath
                 val baseSnapshot: Set<String>
 
                 if (activeSelection && !wasSelected && currentSelected.isNotEmpty()) {
                     // Shift-click range selection when long-pressing a deselected item in selection mode
                     val anchorPath = lastSelectedPath() ?: currentSelected.lastOrNull()
-                    val anchorIdx = pathToIndex[anchorPath] ?: -1
-                    val hitIdx = pathToIndex[hitPath] ?: -1
+                    val anchorIdx = initialPathMap[anchorPath] ?: -1
+                    val hitIdx = initialPathMap[hitPath] ?: -1
 
                     val rangePaths = if (anchorIdx >= 0 && hitIdx >= 0) {
                         val start = minOf(anchorIdx, hitIdx)
                         val end = maxOf(anchorIdx, hitIdx)
-                        currentNotesList.subList(start, end + 1).map { it.path }.toSet()
+                        initialList.subList(start, end + 1).map { it.path }.toSet()
                     } else {
                         setOf(hitPath)
                     }
@@ -147,13 +144,13 @@ fun Modifier.notesGridDragSelect(
 
                         val currentHit = findNotePathAt(currentDragPos)
                         if (currentHit != null && currentHit != lastReportedPath) {
-                            val initialIdx = pathToIndex[initialPath] ?: -1
-                            val currentIdx = pathToIndex[currentHit] ?: -1
+                            val initialIdx = initialPathMap[hitPath] ?: -1
+                            val currentIdx = initialPathMap[currentHit] ?: -1
 
                             if (initialIdx >= 0 && currentIdx >= 0) {
                                 val start = minOf(initialIdx, currentIdx)
                                 val end = maxOf(initialIdx, currentIdx)
-                                val dragRange = currentNotesList.subList(start, end + 1).map { it.path }.toSet()
+                                val dragRange = initialList.subList(start, end + 1).map { it.path }.toSet()
 
                                 val updatedSelection = baseSnapshot + dragRange
                                 setSelectedPaths(updatedSelection)
