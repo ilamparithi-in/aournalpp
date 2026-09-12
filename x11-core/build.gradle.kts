@@ -208,6 +208,10 @@ val applySubmodulePatches = tasks.register("applySubmodulePatches") {
         "pixman" to "patches/pixman.patch"
     )
 
+    val stampFile = layout.buildDirectory.file("patches_applied.stamp")
+    inputs.files(patches.map { File(lorieCppDir, it.second) })
+    outputs.file(stampFile)
+
     doLast {
         patches.forEach { (dirName, patchName) ->
             val targetDir = File(lorieCppDir, dirName)
@@ -221,6 +225,10 @@ val applySubmodulePatches = tasks.register("applySubmodulePatches") {
                     applyCmd.waitFor()
                 }
             }
+        }
+        stampFile.get().asFile.apply {
+            parentFile?.mkdirs()
+            writeText("applied")
         }
     }
 }

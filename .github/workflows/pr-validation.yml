@@ -46,7 +46,7 @@ jobs:
             deb-cache-${{ runner.os }}-
 
       - name: Run Static Analysis & Lint
-        run: ./gradlew lintArm64Debug checkJetifier --stacktrace
+        run: ./gradlew lintArm64Debug --stacktrace
 
       - name: Upload Lint Reports
         if: always()
@@ -54,7 +54,6 @@ jobs:
         with:
           name: lint-reports
           path: app/build/reports/lint-results*.*
-          archive: false
           compression-level: 0
           retention-days: 7
 
@@ -75,22 +74,8 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Android NDK (r27d)
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r27d
-          link-to-sdk: true
-
       - name: Set up Gradle Build Cache
         uses: gradle/actions/setup-gradle@v6
-
-      - name: Cache Debian Packages
-        uses: actions/cache@v6
-        with:
-          path: scripts/build/deb_cache
-          key: deb-cache-${{ runner.os }}-${{ hashFiles('scripts/build_bootstrap.py') }}
-          restore-keys: |
-            deb-cache-${{ runner.os }}-
 
       - name: Run Unit Tests
         run: ./gradlew testArm64DebugUnitTest --stacktrace
@@ -101,7 +86,6 @@ jobs:
         with:
           name: unit-test-results
           path: app/build/reports/tests/
-          archive: false
           compression-level: 0
           retention-days: 7
 

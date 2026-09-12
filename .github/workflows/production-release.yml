@@ -98,7 +98,6 @@ jobs:
         with:
           name: proguard-mappings
           path: app/build/outputs/mapping/
-          archive: false
           compression-level: 0
           retention-days: 90
 

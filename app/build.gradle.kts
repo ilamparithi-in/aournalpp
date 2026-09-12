@@ -303,7 +303,7 @@ bootstrapTasksMap.forEach { (flavorName, archName) ->
         description = "Downloads and builds bootstrap.tar.xz and jniLibs for $flavorName ($archName)"
         group = "build"
         workingDir = rootDir.resolve("scripts")
-        inputs.dir(rootDir.resolve("scripts"))
+        inputs.file(rootDir.resolve("scripts/build_bootstrap.py"))
         outputs.file(flavorOutputFile)
         outputs.file(flavorManifestFile)
         outputs.dir(flavorJniDir)
@@ -334,13 +334,9 @@ androidComponents.onVariants { variant ->
     val buildTypeName = variant.buildType!!.replaceFirstChar { it.uppercase() }
 
     val prefixes = listOf(
-        "pre${capitalizedFlavor}${buildTypeName}Build",
         "merge${capitalizedFlavor}${buildTypeName}Assets",
         "merge${capitalizedFlavor}${buildTypeName}JniLibFolders",
-        "merge${capitalizedFlavor}${buildTypeName}NativeLibs",
-        "generate${capitalizedFlavor}${buildTypeName}LintModel",
-        "generate${capitalizedFlavor}${buildTypeName}LintVitalModel",
-        "generate${capitalizedFlavor}${buildTypeName}LintVitalReportModel"
+        "merge${capitalizedFlavor}${buildTypeName}NativeLibs"
     )
     tasks.configureEach {
         if (name in prefixes) {
