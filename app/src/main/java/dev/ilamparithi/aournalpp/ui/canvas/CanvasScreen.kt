@@ -935,9 +935,7 @@ fun CanvasScreen(
                                         activity.lifecycleScope.launch {
                                             delay(150)
                                             captureCurrentWindowPreview { freshBmp ->
-                                                if (freshBmp != null) {
-                                                    updateSlotPreviewsFromScreen(freshBmp)
-                                                }
+                                                updateSlotPreviewsFromScreen(freshBmp)
                                             }
                                         }
                                     }
@@ -989,9 +987,7 @@ fun CanvasScreen(
                                             activity.lifecycleScope.launch {
                                                 delay(200)
                                                 captureCurrentWindowPreview { freshBmp ->
-                                                    if (freshBmp != null) {
-                                                        updateSlotPreviewsFromScreen(freshBmp)
-                                                    }
+                                                    updateSlotPreviewsFromScreen(freshBmp)
                                                 }
                                             }
                                         }
@@ -1061,7 +1057,7 @@ fun CanvasScreen(
                             onOpenWindowGallery = {
                                 val currentActiveId = openWindows.find { it.isActive }?.id
                                 captureCurrentWindowPreview { bmp ->
-                                    if (currentActiveId != null && bmp != null) {
+                                    if (currentActiveId != null) {
                                         windowPreviewCache[currentActiveId] = bmp
                                     }
                                     showWindowSwitcherGallery = true

@@ -14,6 +14,7 @@ import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okio.BufferedSink
 import org.json.JSONObject
@@ -275,7 +276,7 @@ class GoogleDriveProvider(
                 val response = executeWithAuth { token ->
                     val multipartBody = MultipartBody.Builder()
                         .setType(MultipartBody.FORM)
-                        .addFormDataPart("metadata", null, RequestBody.create("application/json; charset=UTF-8".toMediaTypeOrNull(), metadataJson))
+                        .addFormDataPart("metadata", null, metadataJson.toRequestBody("application/json; charset=UTF-8".toMediaTypeOrNull()))
                         .addFormDataPart("file", fileName, createProgressBody())
                         .build()
                     Request.Builder()
@@ -448,7 +449,7 @@ class GoogleDriveProvider(
                 Request.Builder()
                     .url("$DRIVE_API_BASE/files")
                     .header("Authorization", "Bearer $token")
-                    .post(RequestBody.create("application/json; charset=UTF-8".toMediaTypeOrNull(), meta))
+                    .post(meta.toRequestBody("application/json; charset=UTF-8".toMediaTypeOrNull()))
                     .build()
             }
             response.use { resp ->

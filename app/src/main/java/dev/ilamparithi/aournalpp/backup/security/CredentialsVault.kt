@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package dev.ilamparithi.aournalpp.backup.security
 
 import android.content.Context

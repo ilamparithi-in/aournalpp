@@ -96,7 +96,12 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import dev.ilamparithi.aournalpp.ui.animation.SpringSlideTransition
+import androidx.annotation.StringRes
+import dev.ilamparithi.aournalpp.backup.engine.BackupEngine
+import dev.ilamparithi.aournalpp.backup.worker.BackupPreferences
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -141,11 +146,11 @@ class MainActivity : ComponentActivity() {
                         LaunchedEffect(isOnboardingCompleted) {
                             if (!isOnboardingCompleted) return@LaunchedEffect
                             withContext(Dispatchers.IO) {
-                                kotlinx.coroutines.delay(850L)
+                                delay(850L)
                                 LinuxEnvironment(this@MainActivity).ensureDirectoryTree()
-                                val backupPrefs = dev.ilamparithi.aournalpp.backup.worker.BackupPreferences(this@MainActivity)
+                                val backupPrefs = BackupPreferences(this@MainActivity)
                                 if (backupPrefs.isCheckRemoteChangesOnLaunchEnabled) {
-                                    val engine = dev.ilamparithi.aournalpp.backup.engine.BackupEngine(this@MainActivity)
+                                    val engine = BackupEngine(this@MainActivity)
                                     val remoteChanges = engine.checkAllServicesForRemoteChanges()
                                     if (remoteChanges.isNotEmpty()) {
                                         val serviceNames = remoteChanges.keys.joinToString(", ")
@@ -158,21 +163,21 @@ class MainActivity : ComponentActivity() {
                         // In-App Periodic Sync while app is actively running
                         LaunchedEffect(isOnboardingCompleted) {
                             if (!isOnboardingCompleted) return@LaunchedEffect
-                            val backupPrefs = dev.ilamparithi.aournalpp.backup.worker.BackupPreferences(this@MainActivity)
-                            while (true) {
+                            val backupPrefs = BackupPreferences(this@MainActivity)
+                            while (isActive) {
                                 val intervalMins = backupPrefs.periodicSyncIntervalMinutes
                                 if (intervalMins > 0) {
-                                    kotlinx.coroutines.delay(intervalMins * 60 * 1000L)
+                                    delay(intervalMins * 60 * 1000L)
                                     withContext(Dispatchers.IO) {
                                         try {
-                                            val engine = dev.ilamparithi.aournalpp.backup.engine.BackupEngine(this@MainActivity)
+                                            val engine = BackupEngine(this@MainActivity)
                                             engine.performMultiServiceBackup()
                                         } catch (e: Exception) {
                                             Log.w("MainActivity", "In-app periodic sync failed", e)
                                         }
                                     }
                                 } else {
-                                    kotlinx.coroutines.delay(60_000L)
+                                    delay(60_000L)
                                 }
                             }
                         }
@@ -384,7 +389,7 @@ class MainActivity : ComponentActivity() {
 }
 
 enum class AppTab(
-    @androidx.annotation.StringRes val titleRes: Int,
+    @param:StringRes val titleRes: Int,
     val filledIcon: ImageVector,
     val outlinedIcon: ImageVector
 ) {

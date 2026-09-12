@@ -12,6 +12,7 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import okio.BufferedSink
 import okio.buffer
 import okio.sink
@@ -79,7 +80,7 @@ class WebDavStorageProvider(
             val request = addAuth(
                 Request.Builder()
                     .url(baseUrl)
-                    .method("PROPFIND", RequestBody.create("text/xml".toMediaTypeOrNull(), ""))
+                    .method("PROPFIND", "".toRequestBody("text/xml".toMediaTypeOrNull()))
                     .header("Depth", "0")
             ).build()
 
@@ -112,7 +113,7 @@ class WebDavStorageProvider(
             val request = addAuth(
                 Request.Builder()
                     .url(targetUrl)
-                    .method("PROPFIND", RequestBody.create("application/xml; charset=utf-8".toMediaTypeOrNull(), propfindXml))
+                    .method("PROPFIND", propfindXml.toRequestBody("application/xml; charset=utf-8".toMediaTypeOrNull()))
                     .header("Depth", "1")
             ).build()
 

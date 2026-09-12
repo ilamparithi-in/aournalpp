@@ -24,7 +24,7 @@ abstract class SyncDatabase : RoomDatabase() {
                     context.applicationContext,
                     SyncDatabase::class.java,
                     "aournal_sync_metadata.db"
-                ).fallbackToDestructiveMigration()
+                ).fallbackToDestructiveMigration(dropAllTables = true)
                 .enableMultiInstanceInvalidation()
                 .build()
                 INSTANCE = instance

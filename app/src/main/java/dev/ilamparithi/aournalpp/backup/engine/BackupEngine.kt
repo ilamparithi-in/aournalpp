@@ -947,7 +947,7 @@ class BackupEngine(
                     }
 
                     // If both files exist locally to inspect, check if actual content diff has 0 changes
-                    if (v1.localFilePath != null && v2.localFilePath != null) {
+                    if (v1.localFilePath.isNotEmpty() && v2.localFilePath.isNotEmpty()) {
                         val f1 = File(v1.localFilePath)
                         val f2 = File(v2.localFilePath)
                         if (f1.exists() && f2.exists() && !hasContentChanges(f1, f2)) {
@@ -956,7 +956,7 @@ class BackupEngine(
                     }
 
                     val sizeDiff = v1.sizeBytes != v2.sizeBytes
-                    val timeDiff = Math.abs(v1.lastModifiedEpochMs - v2.lastModifiedEpochMs) > 2000L
+                    val timeDiff = kotlin.math.abs(v1.lastModifiedEpochMs - v2.lastModifiedEpochMs) > 2000L
                     val hashDiff = v1.contentHash != null && v2.contentHash != null && !v1.contentHash.equals(v2.contentHash, ignoreCase = true)
                     // If content hashes are unavailable on either side and sizes match, fallback to timestamp difference
                     val unknownHashDiff = (v1.contentHash == null || v2.contentHash == null) && timeDiff
@@ -1007,7 +1007,7 @@ class BackupEngine(
                         val chosen = action.chosenVersion
                         val localFile = File(chosen.localFilePath)
                         val parentDir = localFile.parentFile ?: env.getNotesDirectory()
-                        if (!parentDir.exists()) parentDir.mkdirs()
+                        parentDir.mkdirs()
 
                         when (val src = chosen.source) {
                             is FileVersionSource.LOCAL -> {
@@ -1055,7 +1055,7 @@ class BackupEngine(
                         val primary = action.primaryVersion
                         val localFile = File(primary.localFilePath)
                         val parentDir = localFile.parentFile ?: env.getNotesDirectory()
-                        if (!parentDir.exists()) parentDir.mkdirs()
+                        parentDir.mkdirs()
 
                         // 1. Primary version
                         when (val src = primary.source) {
@@ -1511,7 +1511,7 @@ class BackupEngine(
         localNotesDir: File
     ) = withContext(Dispatchers.IO) {
         for ((_, chosenVer) in resolutions) {
-            if (chosenVer.source is FileVersionSource.REMOTE && chosenVer.localFilePath != null) {
+            if (chosenVer.source is FileVersionSource.REMOTE && chosenVer.localFilePath.isNotEmpty()) {
                 val downloadedCache = File(chosenVer.localFilePath)
                 if (downloadedCache.exists() && downloadedCache.isFile) {
                     val targetRelPath = when (chosenVer.fileName) {

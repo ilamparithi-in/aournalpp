@@ -35,11 +35,13 @@ import com.termux.x11.LorieView
 import com.termux.x11.input.InputEventSender
 import com.termux.x11.input.LenovoPenButtonMapper
 import com.termux.x11.input.TouchInputHandler
+import android.annotation.SuppressLint
 import dev.ilamparithi.aournalpp.data.AppPreferences
 import dev.ilamparithi.aournalpp.data.DocumentRepository
 import dev.ilamparithi.aournalpp.data.X11Preferences
 import dev.ilamparithi.aournalpp.runtime.CanvasSessionManager
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
+import dev.ilamparithi.aournalpp.runtime.MainProcessBridgeService
 import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
 import dev.ilamparithi.aournalpp.ui.canvas.CanvasScreen
 import dev.ilamparithi.aournalpp.ui.theme.AournalTheme
@@ -100,7 +102,7 @@ class CanvasActivity : ComponentActivity() {
         if (success && file != null && file.exists() && file.length() > 0L) {
             processAndPasteCameraImage(file)
         } else if (file != null && file.exists() && file.length() == 0L) {
-            try { file.delete() } catch (_: Exception) {}
+            runCatching { file.delete() }
         }
     }
 
@@ -116,7 +118,6 @@ class CanvasActivity : ComponentActivity() {
         }
     }
 
-    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         instance = this
@@ -130,12 +131,11 @@ class CanvasActivity : ComponentActivity() {
         })
 
         // Initialize X11 preferences with defaults (e.g. Direct Touch)
-        dev.ilamparithi.aournalpp.data.X11Preferences.initDefaults(this)
-        val x11Prefs = dev.ilamparithi.aournalpp.data.X11Preferences.getPrefs(this)
+        X11Preferences.initDefaults(this)
+        val x11Prefs = X11Preferences.getPrefs(this)
 
-        val isFullscreen = x11Prefs.getBoolean(dev.ilamparithi.aournalpp.data.X11Preferences.KEY_FULLSCREEN, false)
+        val isFullscreen = x11Prefs.getBoolean(X11Preferences.KEY_FULLSCREEN, false)
         val insetsController = WindowCompat.getInsetsController(window, window.decorView)
-        WindowCompat.setDecorFitsSystemWindows(window, false)
         if (isFullscreen) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 window.attributes.layoutInDisplayCutoutMode =
@@ -156,7 +156,7 @@ class CanvasActivity : ComponentActivity() {
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
 
         // Screen idle timeout configuration
-        val idleTimeoutMode = x11Prefs.getString(dev.ilamparithi.aournalpp.data.X11Preferences.KEY_SCREEN_IDLE_TIMEOUT, "system") ?: "system"
+        val idleTimeoutMode = x11Prefs.getString(X11Preferences.KEY_SCREEN_IDLE_TIMEOUT, "system") ?: "system"
         when (idleTimeoutMode) {
             "never" -> window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             "system" -> window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -164,7 +164,7 @@ class CanvasActivity : ComponentActivity() {
         }
 
         // High-performance debounce-aware soft keyboard Reseed and state listener
-        val reseedEnabled = x11Prefs.getBoolean(dev.ilamparithi.aournalpp.data.X11Preferences.KEY_RESEED, false)
+        val reseedEnabled = x11Prefs.getBoolean(X11Preferences.KEY_RESEED, false)
         var lastImeHeight = -1
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { _, insets ->
             val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
@@ -223,11 +223,11 @@ class CanvasActivity : ComponentActivity() {
             || intent.getBooleanExtra("EXTRA_OPEN_PREFS", false)
 
         val targetPath = intent.getStringExtra(EXTRA_NOTE_PATH)
-        val prefs = dev.ilamparithi.aournalpp.data.AppPreferences.getGeneral(this)
+        val prefs = AppPreferences.getGeneral(this)
         if (targetPath != null) {
             prefs.edit().putString("pref_last_opened_note_path", targetPath).apply()
             lifecycleScope.launch(Dispatchers.IO) {
-                dev.ilamparithi.aournalpp.data.DocumentRepository.getInstance(this@CanvasActivity).recordNoteOpened(targetPath)
+                DocumentRepository.getInstance(this@CanvasActivity).recordNoteOpened(targetPath)
             }
         } else {
             prefs.edit().remove("pref_last_opened_note_path").apply()
@@ -245,7 +245,7 @@ class CanvasActivity : ComponentActivity() {
 
         setContent {
             AournalTheme {
-                dev.ilamparithi.aournalpp.ui.canvas.CanvasScreen(
+                CanvasScreen(
                     activity = this,
                     targetPath = targetPath,
                     initialTitle = initialTitle,
@@ -629,6 +629,7 @@ class CanvasActivity : ComponentActivity() {
         }
     }
 
+    @SuppressLint("RestrictedApi", "GestureBackNavigation")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.keyCode == KeyEvent.KEYCODE_BACK) {
             return super.dispatchKeyEvent(event)
@@ -663,10 +664,10 @@ class CanvasActivity : ComponentActivity() {
 
         val targetPath = intent.getStringExtra(EXTRA_NOTE_PATH)
         if (!targetPath.isNullOrBlank()) {
-            val prefs = dev.ilamparithi.aournalpp.data.AppPreferences.getGeneral(this)
+            val prefs = AppPreferences.getGeneral(this)
             prefs.edit().putString("pref_last_opened_note_path", targetPath).apply()
             lifecycleScope.launch(Dispatchers.IO) {
-                dev.ilamparithi.aournalpp.data.DocumentRepository.getInstance(this@CanvasActivity).recordNoteOpened(targetPath)
+                DocumentRepository.getInstance(this@CanvasActivity).recordNoteOpened(targetPath)
             }
             sessionManager.openNoteInNewWindow(targetPath)
         }
@@ -685,7 +686,7 @@ class CanvasActivity : ComponentActivity() {
                 Log.d("CanvasActivity", "Disconnected from MainProcessBridgeService")
             }
         }
-        val intent = Intent(this, dev.ilamparithi.aournalpp.runtime.MainProcessBridgeService::class.java)
+        val intent = Intent(this, MainProcessBridgeService::class.java)
         try {
             if (bindService(intent, connection, Context.BIND_AUTO_CREATE or Context.BIND_IMPORTANT)) {
                 bridgeServiceConnection = connection

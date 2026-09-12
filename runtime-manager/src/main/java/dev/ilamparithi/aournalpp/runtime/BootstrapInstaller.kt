@@ -408,7 +408,7 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
                 countingInputStream.use { inputStream ->
                     XZInputStream(inputStream).use { xzIn ->
                         TarArchiveInputStream(xzIn).use { tarIn ->
-                            var entry = tarIn.nextTarEntry
+                            var entry = tarIn.nextEntry
                             while (entry != null) {
                                 // Archive root entries start with "usr/" or might be relative
                                 val destFile = if (entry.name.startsWith("usr/")) {
@@ -489,7 +489,7 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
                                     percentage = finalPct.coerceIn(0f, 100f)
                                 ))
                                 
-                                entry = tarIn.nextTarEntry
+                                entry = tarIn.nextEntry
                             }
                         }
                     }
