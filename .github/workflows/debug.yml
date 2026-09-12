@@ -3,10 +3,7 @@ name: Debug CI Build
 on:
   push:
     branches:
-      - main
-      - dev
-      - 'feature/**'
-      - 'feat/**'
+      - '**'
     tags-ignore:
       - 'v*'
   workflow_dispatch:
