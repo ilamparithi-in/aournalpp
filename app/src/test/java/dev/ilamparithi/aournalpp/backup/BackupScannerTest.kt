@@ -212,5 +212,48 @@ class BackupScannerTest {
         assertTrue(scannedWithTrash.any { it.file.name == "DeletedNote.xopp" })
         assertTrue(scannedWithTrash.any { it.file.name == "ActiveNote.xopp" })
     }
+
+    @Test
+    fun testMultipleCustomMappingsMetadataIsolation() {
+        val folderA = File(rootDir, "FolderA").apply { mkdirs() }
+        val folderB = File(rootDir, "FolderB").apply { mkdirs() }
+
+        val fileA = File(folderA, ".folder.json").apply { writeText("{\"color\": 1}") }
+        val fileB = File(folderB, ".folder.json").apply { writeText("{\"color\": 2}") }
+
+        val mappingA = dev.ilamparithi.aournalpp.backup.model.CustomFolderMapping(
+            id = "mapping_a",
+            serviceId = "srv_1",
+            localFolderPath = folderA.absolutePath,
+            remoteFolderPath = "RemoteA",
+            isEnabled = true
+        )
+        val mappingB = dev.ilamparithi.aournalpp.backup.model.CustomFolderMapping(
+            id = "mapping_b",
+            serviceId = "srv_1",
+            localFolderPath = folderB.absolutePath,
+            remoteFolderPath = "RemoteB",
+            isEnabled = true
+        )
+
+        val scanner = BackupScanner(env = null, exclusionFilter = ExclusionFilterConfig.DEFAULT)
+
+        val scannedA = scanner.scanCustomMapping(mappingA)
+        val scannedB = scanner.scanCustomMapping(mappingB)
+
+        org.junit.Assert.assertEquals(1, scannedA.size)
+        org.junit.Assert.assertEquals(1, scannedB.size)
+        org.junit.Assert.assertEquals(".folder.json", scannedA[0].relativePath)
+        org.junit.Assert.assertEquals(".folder.json", scannedB[0].relativePath)
+        org.junit.Assert.assertEquals("custom_mapping_a", scannedA[0].scope)
+        org.junit.Assert.assertEquals("custom_mapping_b", scannedB[0].scope)
+
+        // Simulating the composite key in BackupEngine: "${scope}:${relativePath}"
+        val keyA = "${scannedA[0].scope}:${scannedA[0].relativePath}"
+        val keyB = "${scannedB[0].scope}:${scannedB[0].relativePath}"
+        org.junit.Assert.assertNotEquals(keyA, keyB)
+        org.junit.Assert.assertEquals("custom_mapping_a:.folder.json", keyA)
+        org.junit.Assert.assertEquals("custom_mapping_b:.folder.json", keyB)
+    }
 }
 

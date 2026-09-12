@@ -8,7 +8,7 @@ import androidx.room.Entity
  */
 @Entity(
     tableName = "sync_metadata",
-    primaryKeys = ["serviceId", "relativePath"]
+    primaryKeys = ["serviceId", "scope", "relativePath"]
 )
 data class SyncMetadataEntity(
     val serviceId: String,

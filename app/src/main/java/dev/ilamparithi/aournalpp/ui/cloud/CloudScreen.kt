@@ -163,6 +163,7 @@ import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -238,6 +239,12 @@ fun CloudScreen(
     var dailyMinute by remember { mutableIntStateOf(backupPrefs.dailyScheduledMinute) }
     var isWifiOnly by remember { mutableStateOf(backupPrefs.isWifiOnlyEnabled) }
     var concurrencyWorkers by remember { mutableIntStateOf(backupPrefs.concurrencyWorkers) }
+    val activeConcurrency by FileTransferQueueManager.concurrencyWorkers.collectAsStateWithLifecycle()
+    LaunchedEffect(activeConcurrency) {
+        if (concurrencyWorkers != activeConcurrency) {
+            concurrencyWorkers = activeConcurrency
+        }
+    }
     var selectedConflictPolicy by remember { mutableStateOf(backupPrefs.defaultConflictPolicy) }
 
     var showServiceDialog by remember { mutableStateOf(false) }
@@ -279,6 +286,12 @@ fun CloudScreen(
         services = vault.getAllServices()
         pendingDeletedServiceIds = vault.getPendingDeletedServiceIds()
         exclusionFilter = vault.getExclusionFilter()
+    }
+
+    LaunchedEffect(isSyncRunningByManager) {
+        if (!isSyncRunningByManager) {
+            refreshState()
+        }
     }
 
     BackHandler(enabled = currentSubpage != CloudSubpage.OVERVIEW || selectedDetailServiceId != null) {
@@ -621,7 +634,11 @@ fun CloudScreen(
                 ConfiguredServicesCarousel(
                     services = services,
                     pendingDeletedServiceIds = pendingDeletedServiceIds,
-                    onSelectService = { service -> selectedDetailServiceId = service.id },
+                    onSelectService = { service ->
+                        showServiceDialog = false
+                        editingService = null
+                        selectedDetailServiceId = service.id
+                    },
                     onEditService = { service ->
                         editingService = service
                         showServiceDialog = true
@@ -704,6 +721,7 @@ fun CloudScreen(
                     onConcurrencyChange = { updated ->
                         concurrencyWorkers = updated
                         backupPrefs.concurrencyWorkers = updated
+                        FileTransferQueueManager.setConcurrencyWorkers(updated)
                     }
                 )
             }
@@ -815,22 +833,24 @@ fun CloudScreen(
 }
 
     if (showServiceDialog) {
-        ServiceConfigDialog(
-            initialService = editingService,
-            existingServices = services,
-            onDismissRequest = {
-                showServiceDialog = false
-                editingService = null
-            },
-            onSaveService = { service ->
-                vault.saveService(service)
-                refreshState()
-                BackupScheduler.updateSchedules(context)
-                coroutineScope.launch {
-                    snackbarHostState.showSnackbar("Saved service \"${service.name}\"")
+        key(editingService?.id ?: "new_service") {
+            ServiceConfigDialog(
+                initialService = editingService,
+                existingServices = services,
+                onDismissRequest = {
+                    showServiceDialog = false
+                    editingService = null
+                },
+                onSaveService = { service ->
+                    vault.saveService(service)
+                    refreshState()
+                    BackupScheduler.updateSchedules(context)
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar("Saved service \"${service.name}\"")
+                    }
                 }
-            }
-        )
+            )
+        }
     }
 
     if (showMappingDialog) {

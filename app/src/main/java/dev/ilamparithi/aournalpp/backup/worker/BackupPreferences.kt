@@ -3,6 +3,7 @@ package dev.ilamparithi.aournalpp.backup.worker
 import android.content.Context
 import android.content.SharedPreferences
 import dev.ilamparithi.aournalpp.backup.model.ConflictResolutionPolicy
+import dev.ilamparithi.aournalpp.backup.queue.FileTransferQueueManager
 
 /**
  * Storage and configuration for background automation preferences and sync constraints.
@@ -24,6 +25,10 @@ class BackupPreferences(context: Context) {
     }
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    init {
+        FileTransferQueueManager.setConcurrencyWorkers(concurrencyWorkers)
+    }
 
     var isAutoBackupOnExitEnabled: Boolean
         get() = prefs.getBoolean(KEY_AUTO_BACKUP_ON_EXIT, false)
@@ -55,7 +60,11 @@ class BackupPreferences(context: Context) {
 
     var concurrencyWorkers: Int
         get() = prefs.getInt(KEY_CONCURRENCY_WORKERS, 2).coerceIn(1, 4)
-        set(value) = prefs.edit().putInt(KEY_CONCURRENCY_WORKERS, value.coerceIn(1, 4)).apply()
+        set(value) {
+            val clamped = value.coerceIn(1, 4)
+            prefs.edit().putInt(KEY_CONCURRENCY_WORKERS, clamped).apply()
+            FileTransferQueueManager.setConcurrencyWorkers(clamped)
+        }
 
     var defaultConflictPolicy: ConflictResolutionPolicy
         get() {

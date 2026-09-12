@@ -43,6 +43,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -77,39 +78,46 @@ fun ServiceConfigDialog(
     onSaveService: (ServiceConfig) -> Unit
 ) {
     val context = LocalContext.current
-    var name by remember { mutableStateOf(initialService?.name ?: "") }
-    var selectedType by remember { mutableStateOf(initialService?.providerType ?: StorageProviderType.NEXTCLOUD) }
-    var serverUrl by remember { mutableStateOf(initialService?.serverUrl ?: "") }
-    var host by remember { mutableStateOf(initialService?.host ?: "") }
-    var port by remember { mutableIntStateOf(initialService?.port ?: (selectedType.defaultPort ?: 443)) }
-    var username by remember { mutableStateOf(initialService?.username ?: "") }
-    var passwordOrSecret by remember { mutableStateOf(initialService?.passwordOrSecret ?: "") }
-    var privateKey by remember { mutableStateOf(initialService?.privateKey ?: "") }
-    var privateKeyPassphrase by remember { mutableStateOf(initialService?.privateKeyPassphrase ?: "") }
-    var authToken by remember { mutableStateOf(initialService?.authToken ?: "") }
-    var refreshToken by remember { mutableStateOf(initialService?.refreshToken ?: "") }
-    var tokenExpiryEpochMs by remember { mutableStateOf(initialService?.tokenExpiryEpochMs ?: 0L) }
-    var accountIdentifier by remember { mutableStateOf(initialService?.accountIdentifier ?: "") }
-    var shareName by remember { mutableStateOf(initialService?.shareName ?: "") }
-    var domain by remember { mutableStateOf(initialService?.domain ?: "") }
-    var remoteBasePath by remember { mutableStateOf(initialService?.remoteBasePath ?: "") }
-    var isFtpsExplicit by remember { mutableStateOf(initialService?.isFtpsExplicit ?: true) }
-    var isFtpsImplicit by remember { mutableStateOf(initialService?.isFtpsImplicit ?: false) }
-    var isCompleteBackupEnabled by remember { mutableStateOf(initialService?.isCompleteBackupEnabled ?: true) }
-    var isEnabled by remember { mutableStateOf(initialService?.isEnabled ?: true) }
+    val serviceKey = initialService?.id ?: "new_service"
+    var name by remember(serviceKey) { mutableStateOf(initialService?.name ?: "") }
+    var selectedType by remember(serviceKey) { mutableStateOf(initialService?.providerType ?: StorageProviderType.NEXTCLOUD) }
+    var serverUrl by remember(serviceKey) { mutableStateOf(initialService?.serverUrl ?: "") }
+    var host by remember(serviceKey) { mutableStateOf(initialService?.host ?: "") }
+    var port by remember(serviceKey) { mutableIntStateOf(initialService?.port ?: (selectedType.defaultPort ?: 443)) }
+    var username by remember(serviceKey) { mutableStateOf(initialService?.username ?: "") }
+    var passwordOrSecret by remember(serviceKey) { mutableStateOf(initialService?.passwordOrSecret ?: "") }
+    var privateKey by remember(serviceKey) { mutableStateOf(initialService?.privateKey ?: "") }
+    var privateKeyPassphrase by remember(serviceKey) { mutableStateOf(initialService?.privateKeyPassphrase ?: "") }
+    var authToken by remember(serviceKey) { mutableStateOf(initialService?.authToken ?: "") }
+    var refreshToken by remember(serviceKey) { mutableStateOf(initialService?.refreshToken ?: "") }
+    var tokenExpiryEpochMs by remember(serviceKey) { mutableStateOf(initialService?.tokenExpiryEpochMs ?: 0L) }
+    var accountIdentifier by remember(serviceKey) { mutableStateOf(initialService?.accountIdentifier ?: "") }
+    var shareName by remember(serviceKey) { mutableStateOf(initialService?.shareName ?: "") }
+    var domain by remember(serviceKey) { mutableStateOf(initialService?.domain ?: "") }
+    var remoteBasePath by remember(serviceKey) { mutableStateOf(initialService?.remoteBasePath ?: "") }
+    var isFtpsExplicit by remember(serviceKey) { mutableStateOf(initialService?.isFtpsExplicit ?: true) }
+    var isFtpsImplicit by remember(serviceKey) { mutableStateOf(initialService?.isFtpsImplicit ?: false) }
+    var isCompleteBackupEnabled by remember(serviceKey) { mutableStateOf(initialService?.isCompleteBackupEnabled ?: true) }
+    var isEnabled by remember(serviceKey) { mutableStateOf(initialService?.isEnabled ?: true) }
 
-    var isPasswordVisible by remember { mutableStateOf(false) }
-    var sftpAuthMode by remember { mutableIntStateOf(if (initialService?.privateKey?.isNotBlank() == true) 1 else 0) }
+    var isPasswordVisible by remember(serviceKey) { mutableStateOf(false) }
+    var sftpAuthMode by remember(serviceKey) { mutableIntStateOf(if (initialService?.privateKey?.isNotBlank() == true) 1 else 0) }
 
-    var isTestingConnection by remember { mutableStateOf(false) }
-    var testResultSuccess by remember { mutableStateOf<Boolean?>(null) }
-    var testResultMessage by remember { mutableStateOf<String?>(null) }
-    var uniquenessErrorMessage by remember { mutableStateOf<String?>(null) }
+    var isTestingConnection by remember(serviceKey) { mutableStateOf(false) }
+    var testResultSuccess by remember(serviceKey) { mutableStateOf<Boolean?>(null) }
+    var testResultMessage by remember(serviceKey) { mutableStateOf<String?>(null) }
+    var uniquenessErrorMessage by remember(serviceKey) { mutableStateOf<String?>(null) }
 
-    var isTypeDropdownExpanded by remember { mutableStateOf(false) }
-    var showQrScannerDialog by remember { mutableStateOf(false) }
+    var isTypeDropdownExpanded by remember(serviceKey) { mutableStateOf(false) }
+    var showQrScannerDialog by remember(serviceKey) { mutableStateOf(false) }
 
     val coroutineScope = rememberCoroutineScope()
+
+    DisposableEffect(serviceKey) {
+        onDispose {
+            GoogleOAuthManager.clearAuthResponse()
+        }
+    }
 
     val latestOAuthResponse by GoogleOAuthManager.authResponseFlow.collectAsState()
     LaunchedEffect(latestOAuthResponse) {
@@ -362,9 +370,7 @@ fun ServiceConfigDialog(
                             testResultMessage?.contains("auth", ignoreCase = true) == true ||
                             testResultMessage?.contains("UNAUTHENTICATED", ignoreCase = true) == true
                         ))
-                        val isTokenExpired = isGoogleLoggedIn && (
-                            (tokenExpiryEpochMs > 0L && System.currentTimeMillis() >= tokenExpiryEpochMs) || isAuthFailed
-                        )
+                        val isTokenExpired = isGoogleLoggedIn && isAuthFailed
 
                         Surface(
                             shape = MaterialTheme.shapes.medium,

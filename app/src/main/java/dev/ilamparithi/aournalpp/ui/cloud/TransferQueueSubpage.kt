@@ -111,15 +111,9 @@ fun TransferQueueSubpage(
     }
     var selectedServiceId by remember { mutableStateOf<String?>(null) }
 
-    // Adaptive filter behavior:
-    // If only one cloud service is present in the queue, adapt to it automatically.
-    // If multiple exist, keep user selection or default to all.
+    // If selected service is no longer in the queue, reset to All Clouds
     LaunchedEffect(cloudServices) {
-        if (cloudServices.size == 1) {
-            selectedServiceId = cloudServices.first().first
-        } else if (cloudServices.isEmpty()) {
-            selectedServiceId = null
-        } else if (selectedServiceId != null && cloudServices.none { it.first == selectedServiceId }) {
+        if (selectedServiceId != null && cloudServices.none { it.first == selectedServiceId }) {
             selectedServiceId = null
         }
     }
@@ -129,7 +123,7 @@ fun TransferQueueSubpage(
         if (selectedServiceId == null) items else items.filter { it.serviceId == selectedServiceId }
     }
 
-    var selectedFilter by remember { mutableStateOf(QueueFilter.ALL) }
+    var selectedFilter by remember { mutableStateOf(QueueFilter.ACTIVE) }
 
     val activeCount = cloudFilteredItems.count { it.status == TransferStatus.IN_PROGRESS }
     val queuedCount = cloudFilteredItems.count { it.status == TransferStatus.QUEUED }

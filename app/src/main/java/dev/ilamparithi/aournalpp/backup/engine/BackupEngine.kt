@@ -28,15 +28,22 @@ import dev.ilamparithi.aournalpp.backup.security.CredentialsVault
 import dev.ilamparithi.aournalpp.runtime.CrossProcessLock
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.runtime.NotesHomeConfigManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicInteger
 import dev.ilamparithi.aournalpp.backup.model.ConfigSyncStatus
 import dev.ilamparithi.aournalpp.backup.model.BackupScope
 import java.io.FileNotFoundException
@@ -71,10 +78,13 @@ class BackupEngine(
      */
     suspend fun performBackup(
         serviceConfig: ServiceConfig,
-        concurrency: Int = 2,
+        concurrency: Int? = null,
         onProgress: ((current: Int, total: Int, currentFile: String) -> Unit)? = null,
         clearCompletedQueue: Boolean = true
     ): BackupResult {
+        if (concurrency != null) {
+            FileTransferQueueManager.setConcurrencyWorkers(concurrency)
+        }
         val lock = CrossProcessLock.tryAcquire(syncLockFile)
         if (lock == null) {
             Log.w(TAG, "Cloud sync is already active in another window or process. Skipping concurrent sync for ${serviceConfig.name}.")
@@ -99,10 +109,13 @@ class BackupEngine(
 
     private suspend fun performBackupInternal(
         serviceConfig: ServiceConfig,
-        concurrency: Int = 2,
+        concurrency: Int? = null,
         onProgress: ((current: Int, total: Int, currentFile: String) -> Unit)? = null,
         clearCompletedQueue: Boolean = true
     ): BackupResult = withContext(Dispatchers.IO) {
+        if (concurrency != null) {
+            FileTransferQueueManager.setConcurrencyWorkers(concurrency)
+        }
         if (clearCompletedQueue) {
             FileTransferQueueManager.clearCompleted()
         }
@@ -112,14 +125,18 @@ class BackupEngine(
         val dao = db.syncMetadataDao()
 
         // Batch-retrieve all existing metadata for this service upfront
-        val existingMetaMap = dao.getAllForService(serviceConfig.id).associateBy { it.relativePath }
+        val allMetadata = dao.getAllForService(serviceConfig.id)
+        val existingMetaMap = allMetadata.associateBy { "${it.scope}:${it.relativePath}" }
 
         val filesToSync = mutableListOf<Pair<ScannedLocalFile, String>>() // (ScannedFile, remoteDestinationPath)
         val seenRemotePaths = mutableSetOf<String>()
 
         // 1. Complete Backup domain scanning
         if (serviceConfig.isCompleteBackupEnabled) {
-            val completeFiles = scanner.scanCompleteBackup(existingMetaMap)
+            val completeCache = allMetadata
+                .filter { it.scope == BackupScope.NOTES.id || it.scope == BackupScope.CONFIG.id }
+                .associateBy { it.relativePath }
+            val completeFiles = scanner.scanCompleteBackup(completeCache)
             val remoteRoot = getCompleteBackupRemoteRoot(serviceConfig)
             for (f in completeFiles) {
                 val remotePath = "$remoteRoot/${f.relativePath}"
@@ -141,7 +158,11 @@ class BackupEngine(
         }
         for (mapping in activeMappings) {
             if (!mapping.isEnabled) continue
-            val mappedFiles = scanner.scanCustomMapping(mapping, existingMetaMap)
+            val mappingScope = "custom_${mapping.id}"
+            val mappingCache = allMetadata
+                .filter { it.scope == mappingScope }
+                .associateBy { it.relativePath }
+            val mappedFiles = scanner.scanCustomMapping(mapping, mappingCache)
             val remoteTargetBase = mapping.remoteFolderPath.trim().trim('/')
             for (f in mappedFiles) {
                 val remotePath = if (remoteTargetBase.isEmpty()) f.relativePath else "$remoteTargetBase/${f.relativePath}"
@@ -187,7 +208,7 @@ class BackupEngine(
             // Differential comparison via in-memory metadata lookup
             val uploadQueue = mutableListOf<Pair<ScannedLocalFile, String>>()
             for ((scanned, remotePath) in filesToSync) {
-                val record = existingMetaMap[scanned.relativePath]
+                val record = existingMetaMap["${scanned.scope}:${scanned.relativePath}"]
                 if (record != null && record.localSha256 == scanned.sha256 && scanned.lastModified <= record.localLastModified) {
                     // Unchanged file -> Skip (do not clutter active transfer queue)
                     skippedCount++
@@ -216,78 +237,72 @@ class BackupEngine(
 
             FileTransferQueueManager.enqueueAll(transferItems.map { it.first })
 
-            val semaphore = Semaphore(concurrency.coerceIn(1, 4))
-            var processedCount = skippedCount
+            val processedCounter = AtomicInteger(skippedCount)
 
-            coroutineScope {
-                val tasks = transferItems.map { (item, payload) ->
-                    val (scanned, remotePath) = payload
-                    async {
-                        semaphore.withPermit {
-                            if (FileTransferQueueManager.isCancelled(item.id) || FileTransferQueueManager.isPaused(item.id)) {
-                                return@withPermit
-                            }
+            processWithDynamicConcurrency(
+                items = transferItems,
+                concurrencyFlow = FileTransferQueueManager.concurrencyWorkers
+            ) { (item, payload) ->
+                val (scanned, remotePath) = payload
+                if (FileTransferQueueManager.isCancelled(item.id) || FileTransferQueueManager.isPaused(item.id)) {
+                    return@processWithDynamicConcurrency
+                }
 
-                            FileTransferQueueManager.markStarted(item.id)
-                            onProgress?.invoke(processedCount + 1, totalFiles, scanned.file.name)
+                FileTransferQueueManager.markStarted(item.id)
+                val currentProcessed = processedCounter.incrementAndGet()
+                onProgress?.invoke(currentProcessed, totalFiles, scanned.file.name)
 
-                            val uploadResult = try {
-                                provider.uploadFile(
-                                    localFile = scanned.file,
-                                    remotePath = remotePath,
-                                    onProgress = { transferred, total ->
-                                        if (FileTransferQueueManager.isPaused(item.id)) {
-                                            throw java.io.IOException("Transfer paused by user")
-                                        }
-                                        if (FileTransferQueueManager.isCancelled(item.id)) {
-                                            throw java.io.IOException("Transfer cancelled by user")
-                                        }
-                                        FileTransferQueueManager.updateProgress(item.id, transferred, total)
-                                    }
-                                )
-                            } catch (e: Exception) {
-                                Result.failure(e)
-                            }
-
+                val uploadResult = try {
+                    provider.uploadFile(
+                        localFile = scanned.file,
+                        remotePath = remotePath,
+                        onProgress = { transferred, total ->
                             if (FileTransferQueueManager.isPaused(item.id)) {
-                                return@withPermit
+                                throw java.io.IOException("Transfer paused by user")
                             }
                             if (FileTransferQueueManager.isCancelled(item.id)) {
-                                return@withPermit
+                                throw java.io.IOException("Transfer cancelled by user")
                             }
-
-                            if (uploadResult.isSuccess) {
-                                FileTransferQueueManager.markCompleted(item.id)
-                                synchronized(this@BackupEngine) {
-                                    uploadedCount++
-                                    totalBytesTransferred += scanned.sizeBytes
-                                    processedCount++
-                                }
-                                dao.insertOrUpdate(
-                                    SyncMetadataEntity(
-                                        serviceId = serviceConfig.id,
-                                        relativePath = scanned.relativePath,
-                                        scope = scanned.scope,
-                                        localSha256 = scanned.sha256,
-                                        remoteHash = null,
-                                        localLastModified = scanned.lastModified,
-                                        sizeBytes = scanned.sizeBytes,
-                                        lastSyncedAt = System.currentTimeMillis()
-                                    )
-                                )
-                            } else {
-                                val errMsg = uploadResult.exceptionOrNull()?.message ?: "Upload failed"
-                                FileTransferQueueManager.markFailed(item.id, errMsg)
-                                synchronized(this@BackupEngine) {
-                                    failedCount++
-                                    errors.add("${scanned.file.name}: $errMsg")
-                                    processedCount++
-                                }
-                            }
+                            FileTransferQueueManager.updateProgress(item.id, transferred, total)
                         }
+                    )
+                } catch (e: Exception) {
+                    Result.failure(e)
+                }
+
+                if (FileTransferQueueManager.isPaused(item.id)) {
+                    return@processWithDynamicConcurrency
+                }
+                if (FileTransferQueueManager.isCancelled(item.id)) {
+                    return@processWithDynamicConcurrency
+                }
+
+                if (uploadResult.isSuccess) {
+                    FileTransferQueueManager.markCompleted(item.id)
+                    synchronized(this@BackupEngine) {
+                        uploadedCount++
+                        totalBytesTransferred += scanned.sizeBytes
+                    }
+                    dao.insertOrUpdate(
+                        SyncMetadataEntity(
+                            serviceId = serviceConfig.id,
+                            relativePath = scanned.relativePath,
+                            scope = scanned.scope,
+                            localSha256 = scanned.sha256,
+                            remoteHash = null,
+                            localLastModified = scanned.lastModified,
+                            sizeBytes = scanned.sizeBytes,
+                            lastSyncedAt = System.currentTimeMillis()
+                        )
+                    )
+                } else {
+                    val errMsg = uploadResult.exceptionOrNull()?.message ?: "Upload failed"
+                    FileTransferQueueManager.markFailed(item.id, errMsg)
+                    synchronized(this@BackupEngine) {
+                        failedCount++
+                        errors.add("${scanned.file.name}: $errMsg")
                     }
                 }
-                tasks.awaitAll()
             }
         } finally {
             provider.disconnect()
@@ -320,10 +335,13 @@ class BackupEngine(
     suspend fun performRestore(
         serviceConfig: ServiceConfig,
         conflictPolicy: ConflictResolutionPolicy = ConflictResolutionPolicy.KEEP_NEWER,
-        concurrency: Int = 2,
+        concurrency: Int? = null,
         onProgress: ((current: Int, total: Int, currentFile: String) -> Unit)? = null,
         clearCompletedQueue: Boolean = true
     ): RestoreResult = withContext(Dispatchers.IO) {
+        if (concurrency != null) {
+            FileTransferQueueManager.setConcurrencyWorkers(concurrency)
+        }
         if (clearCompletedQueue) {
             FileTransferQueueManager.clearCompleted()
         }
@@ -462,70 +480,64 @@ class BackupEngine(
 
             FileTransferQueueManager.enqueueAll(transferItems.map { it.first })
 
-            val semaphore = Semaphore(concurrency.coerceIn(1, 4))
-            var processed = skippedCount
+            val processedCounter = AtomicInteger(skippedCount)
 
-            coroutineScope {
-                val tasks = transferItems.map { (item, payload) ->
-                    val (remotePath, localFile) = payload
-                    async {
-                        semaphore.withPermit {
-                            if (FileTransferQueueManager.isCancelled(item.id) || FileTransferQueueManager.isPaused(item.id)) {
-                                return@withPermit
-                            }
+            processWithDynamicConcurrency(
+                items = transferItems,
+                concurrencyFlow = FileTransferQueueManager.concurrencyWorkers
+            ) { (item, payload) ->
+                val (remotePath, localFile) = payload
+                if (FileTransferQueueManager.isCancelled(item.id) || FileTransferQueueManager.isPaused(item.id)) {
+                    return@processWithDynamicConcurrency
+                }
 
-                            FileTransferQueueManager.markStarted(item.id)
-                            onProgress?.invoke(processed + 1, totalDiscovered, localFile.name)
+                FileTransferQueueManager.markStarted(item.id)
+                val currentProcessed = processedCounter.incrementAndGet()
+                onProgress?.invoke(currentProcessed, totalDiscovered, localFile.name)
 
-                            val downloadResult = try {
-                                localFile.parentFile?.mkdirs()
-                                provider.downloadFile(
-                                    remotePath = remotePath,
-                                    destinationFile = localFile,
-                                    onProgress = { transferred, total ->
-                                        if (FileTransferQueueManager.isPaused(item.id)) {
-                                            throw java.io.IOException("Transfer paused by user")
-                                        }
-                                        if (FileTransferQueueManager.isCancelled(item.id)) {
-                                            throw java.io.IOException("Transfer cancelled by user")
-                                        }
-                                        FileTransferQueueManager.updateProgress(item.id, transferred, total)
-                                    }
-                                )
-                            } catch (e: Exception) {
-                                Result.failure(e)
-                            }
-
+                val downloadResult = try {
+                    localFile.parentFile?.mkdirs()
+                    provider.downloadFile(
+                        remotePath = remotePath,
+                        destinationFile = localFile,
+                        onProgress = { transferred, total ->
                             if (FileTransferQueueManager.isPaused(item.id)) {
-                                return@withPermit
+                                throw java.io.IOException("Transfer paused by user")
                             }
                             if (FileTransferQueueManager.isCancelled(item.id)) {
-                                return@withPermit
+                                throw java.io.IOException("Transfer cancelled by user")
                             }
+                            FileTransferQueueManager.updateProgress(item.id, transferred, total)
+                        }
+                    )
+                } catch (e: Exception) {
+                    Result.failure(e)
+                }
 
-                            if (downloadResult.isSuccess) {
-                                FileTransferQueueManager.markCompleted(item.id)
-                                synchronized(this@BackupEngine) {
-                                    restoredCount++
-                                    totalBytesDownloaded += localFile.length()
-                                    processed++
-                                    if (localFile.absolutePath.contains("/.config/") || localFile.absolutePath.startsWith(env.xournalConfigDir.absolutePath)) {
-                                        hasRestoredConfigs = true
-                                    }
-                                }
-                            } else {
-                                val errMsg = downloadResult.exceptionOrNull()?.message ?: "Download failed"
-                                FileTransferQueueManager.markFailed(item.id, errMsg)
-                                synchronized(this@BackupEngine) {
-                                    failedCount++
-                                    errors.add("${localFile.name}: $errMsg")
-                                    processed++
-                                }
-                            }
+                if (FileTransferQueueManager.isPaused(item.id)) {
+                    return@processWithDynamicConcurrency
+                }
+                if (FileTransferQueueManager.isCancelled(item.id)) {
+                    return@processWithDynamicConcurrency
+                }
+
+                if (downloadResult.isSuccess) {
+                    FileTransferQueueManager.markCompleted(item.id)
+                    synchronized(this@BackupEngine) {
+                        restoredCount++
+                        totalBytesDownloaded += localFile.length()
+                        if (localFile.absolutePath.contains("/.config/") || localFile.absolutePath.startsWith(env.xournalConfigDir.absolutePath)) {
+                            hasRestoredConfigs = true
                         }
                     }
+                } else {
+                    val errMsg = downloadResult.exceptionOrNull()?.message ?: "Download failed"
+                    FileTransferQueueManager.markFailed(item.id, errMsg)
+                    synchronized(this@BackupEngine) {
+                        failedCount++
+                        errors.add("${localFile.name}: $errMsg")
+                    }
                 }
-                tasks.awaitAll()
             }
 
             // Sanitize settings and restore internal configurations if .config files were restored
@@ -558,9 +570,12 @@ class BackupEngine(
      * Runs backup across all enabled services.
      */
     suspend fun performMultiServiceBackup(
-        concurrency: Int = 2,
+        concurrency: Int? = null,
         onProgress: ((current: Int, total: Int, currentFile: String) -> Unit)? = null
     ): List<BackupResult> {
+        if (concurrency != null) {
+            FileTransferQueueManager.setConcurrencyWorkers(concurrency)
+        }
         val lock = CrossProcessLock.tryAcquire(syncLockFile)
         if (lock == null) {
             Log.w(TAG, "Cloud sync is already active in another window or process. Skipping concurrent multi-service sync.")
@@ -1706,5 +1721,87 @@ class BackupEngine(
      */
     suspend fun resumeItems(items: List<TransferItem>): List<Result<Unit>> = withContext(Dispatchers.IO) {
         items.map { resumeTransfer(it) }
+    }
+
+    /**
+     * Executes items concurrently with dynamic worker scaling based on [concurrencyFlow].
+     * If concurrency is adjusted during execution (e.g. from UI settings), workers scale up
+     * immediately or scale down gracefully as in-flight items complete.
+     */
+    private suspend fun <T> processWithDynamicConcurrency(
+        items: List<T>,
+        concurrencyFlow: StateFlow<Int> = FileTransferQueueManager.concurrencyWorkers,
+        processItem: suspend (T) -> Unit
+    ) = coroutineScope {
+        if (items.isEmpty()) return@coroutineScope
+
+        val totalItems = items.size
+        val processedItems = AtomicInteger(0)
+
+        val channel = Channel<T>(Channel.UNLIMITED)
+        for (item in items) {
+            channel.send(item)
+        }
+        channel.close()
+
+        val activeWorkers = AtomicInteger(0)
+        lateinit var supervisor: Job
+
+        fun launchWorker() {
+            launch {
+                try {
+                    while (isActive) {
+                        if (activeWorkers.get() > concurrencyFlow.value.coerceIn(1, 4)) {
+                            // Target concurrency reduced: worker gracefully steps down
+                            break
+                        }
+                        val receive = channel.receiveCatching()
+                        if (receive.isClosed) {
+                            break
+                        }
+                        val item = receive.getOrNull() ?: break
+                        try {
+                            processItem(item)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Throwable) {
+                            Log.e(TAG, "Error in dynamic concurrency worker", e)
+                        } finally {
+                            val finished = processedItems.incrementAndGet()
+                            if (finished >= totalItems) {
+                                supervisor.cancel()
+                            }
+                        }
+                    }
+                } finally {
+                    val remaining = activeWorkers.decrementAndGet()
+                    if (remaining == 0 && processedItems.get() >= totalItems) {
+                        supervisor.cancel()
+                    } else if (processedItems.get() < totalItems && activeWorkers.get() < concurrencyFlow.value.coerceIn(1, 4)) {
+                        val current = activeWorkers.incrementAndGet()
+                        if (current <= concurrencyFlow.value.coerceIn(1, 4)) {
+                            launchWorker()
+                        } else {
+                            activeWorkers.decrementAndGet()
+                        }
+                    }
+                }
+            }
+        }
+
+        supervisor = launch {
+            concurrencyFlow.collect { desired ->
+                val target = desired.coerceIn(1, 4)
+                while (activeWorkers.get() < target && processedItems.get() < totalItems) {
+                    val current = activeWorkers.incrementAndGet()
+                    if (current <= target) {
+                        launchWorker()
+                    } else {
+                        activeWorkers.decrementAndGet()
+                        break
+                    }
+                }
+            }
+        }
     }
 }

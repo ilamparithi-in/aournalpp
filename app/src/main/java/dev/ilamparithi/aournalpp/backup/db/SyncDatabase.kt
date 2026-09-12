@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [SyncMetadataEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class SyncDatabase : RoomDatabase() {

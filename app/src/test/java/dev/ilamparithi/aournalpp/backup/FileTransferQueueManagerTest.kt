@@ -465,4 +465,28 @@ class FileTransferQueueManagerTest {
         assertEquals(1, FileTransferQueueManager.items.value.size)
         assertEquals("duplicate_id", FileTransferQueueManager.items.value[0].id)
     }
+
+    @Test
+    fun testConcurrencyWorkersUpdatesAndClamping() {
+        FileTransferQueueManager.setConcurrencyWorkers(3)
+        assertEquals(3, FileTransferQueueManager.concurrencyWorkers.value)
+
+        // Lower clamp bound
+        FileTransferQueueManager.setConcurrencyWorkers(0)
+        assertEquals(1, FileTransferQueueManager.concurrencyWorkers.value)
+
+        FileTransferQueueManager.setConcurrencyWorkers(-5)
+        assertEquals(1, FileTransferQueueManager.concurrencyWorkers.value)
+
+        // Upper clamp bound
+        FileTransferQueueManager.setConcurrencyWorkers(5)
+        assertEquals(4, FileTransferQueueManager.concurrencyWorkers.value)
+
+        FileTransferQueueManager.setConcurrencyWorkers(10)
+        assertEquals(4, FileTransferQueueManager.concurrencyWorkers.value)
+
+        // Valid adjustment
+        FileTransferQueueManager.setConcurrencyWorkers(2)
+        assertEquals(2, FileTransferQueueManager.concurrencyWorkers.value)
+    }
 }

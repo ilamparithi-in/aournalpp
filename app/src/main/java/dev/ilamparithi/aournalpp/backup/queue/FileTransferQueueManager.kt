@@ -21,6 +21,13 @@ object FileTransferQueueManager {
     private val _isSyncRunning = MutableStateFlow(false)
     val isSyncRunning: StateFlow<Boolean> = _isSyncRunning.asStateFlow()
 
+    private val _concurrencyWorkers = MutableStateFlow(2)
+    val concurrencyWorkers: StateFlow<Int> = _concurrencyWorkers.asStateFlow()
+
+    fun setConcurrencyWorkers(count: Int) {
+        _concurrencyWorkers.value = count.coerceIn(1, 4)
+    }
+
     private val cancellationFlags = ConcurrentHashMap<String, Boolean>()
     private val pauseFlags = ConcurrentHashMap<String, Boolean>()
     private val speedTrackers = ConcurrentHashMap<String, Pair<Long, Long>>() // id -> (lastBytes, lastTimestampMs)

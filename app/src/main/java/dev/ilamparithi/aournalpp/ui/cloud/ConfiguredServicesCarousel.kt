@@ -36,6 +36,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.ilamparithi.aournalpp.backup.model.TransferStatus
+import dev.ilamparithi.aournalpp.backup.queue.FileTransferQueueManager
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -96,8 +100,6 @@ fun EmptyServicesCard(onAddService: () -> Unit) {
 }
 
 fun isReauthNeeded(service: ServiceConfig): Boolean {
-    val isGoogleDriveExpired = service.providerType == StorageProviderType.GOOGLE_DRIVE &&
-        service.tokenExpiryEpochMs > 0L && System.currentTimeMillis() >= service.tokenExpiryEpochMs
     val hasAuthFailure = service.lastSyncStatus != null && (
         service.lastSyncStatus.contains("401") ||
         service.lastSyncStatus.contains("auth", ignoreCase = true) ||
@@ -105,7 +107,7 @@ fun isReauthNeeded(service: ServiceConfig): Boolean {
         service.lastSyncStatus.contains("OAuth", ignoreCase = true) ||
         service.lastSyncStatus.contains("invalid_grant", ignoreCase = true)
     )
-    return isGoogleDriveExpired || hasAuthFailure
+    return hasAuthFailure
 }
 
 @Composable
@@ -212,6 +214,12 @@ fun CloudServiceCarouselCard(
     onToggleEnabled: (Boolean) -> Unit,
     onRestore: () -> Unit = {}
 ) {
+    val queueItems by FileTransferQueueManager.items.collectAsStateWithLifecycle()
+    val isSyncRunning by FileTransferQueueManager.isSyncRunning.collectAsStateWithLifecycle()
+    val serviceQueue = queueItems.filter { it.serviceId == service.id }
+    val activeCount = serviceQueue.count { it.status == TransferStatus.IN_PROGRESS || it.status == TransferStatus.QUEUED }
+    val isServiceSyncing = activeCount > 0 || (isSyncRunning && service.isEnabled)
+
     val lastSyncFormatted = if (service.lastSyncedAtEpochMs > 0) {
         FormatUtils.formatDateTimeMedium(service.lastSyncedAtEpochMs)
     } else stringResource(R.string.cloud_never_synced)
@@ -473,20 +481,23 @@ fun CloudServiceCarouselCard(
                     }
                 }
 
-                // Footer: Last Synced + Arrow affordance
+                // Footer: Last Synced / Active Sync + Arrow affordance
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     val reauthNeeded = isReauthNeeded(service)
-                    val hasError = !reauthNeeded && (service.lastSyncStatus?.startsWith("Failed") == true || service.lastSyncStatus?.startsWith("Connection failed") == true)
+                    val hasError = !isServiceSyncing && !reauthNeeded && (service.lastSyncStatus?.startsWith("Failed") == true || service.lastSyncStatus?.startsWith("Connection failed") == true)
                     val footerText = when {
+                        isServiceSyncing && activeCount > 0 -> "Syncing ($activeCount remaining)..."
+                        isServiceSyncing -> "Syncing..."
                         reauthNeeded -> "Reauth needed · Tap to configure"
                         hasError -> service.lastSyncStatus ?: "Sync error"
                         else -> "Synced: $lastSyncFormatted"
                     }
                     val footerColor = when {
+                        isServiceSyncing -> MaterialTheme.colorScheme.primary
                         reauthNeeded || hasError -> MaterialTheme.colorScheme.error
                         else -> MaterialTheme.colorScheme.outline
                     }

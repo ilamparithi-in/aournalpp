@@ -14,6 +14,9 @@ interface SyncMetadataDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdateAll(entities: List<SyncMetadataEntity>)
 
+    @Query("SELECT * FROM sync_metadata WHERE serviceId = :serviceId AND scope = :scope AND relativePath = :relativePath LIMIT 1")
+    suspend fun getByServiceScopeAndPath(serviceId: String, scope: String, relativePath: String): SyncMetadataEntity?
+
     @Query("SELECT * FROM sync_metadata WHERE serviceId = :serviceId AND relativePath = :relativePath LIMIT 1")
     suspend fun getByServiceAndPath(serviceId: String, relativePath: String): SyncMetadataEntity?
 
@@ -22,6 +25,9 @@ interface SyncMetadataDao {
 
     @Query("SELECT * FROM sync_metadata WHERE serviceId = :serviceId AND scope = :scope")
     suspend fun getForServiceAndScope(serviceId: String, scope: String): List<SyncMetadataEntity>
+
+    @Query("DELETE FROM sync_metadata WHERE serviceId = :serviceId AND scope = :scope AND relativePath = :relativePath")
+    suspend fun delete(serviceId: String, scope: String, relativePath: String)
 
     @Query("DELETE FROM sync_metadata WHERE serviceId = :serviceId AND relativePath = :relativePath")
     suspend fun delete(serviceId: String, relativePath: String)
