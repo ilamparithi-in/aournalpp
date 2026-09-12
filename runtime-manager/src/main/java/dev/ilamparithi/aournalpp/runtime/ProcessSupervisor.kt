@@ -90,10 +90,8 @@ class ProcessSupervisor(val env: LinuxEnvironment) {
             command.add(targetFilePath)
         }
         
-        val notesDir = env.getNotesDirectory()
-        val xoppWorkingDir = if (notesDir.exists()) notesDir else env.homeDir
         val process = ProcessBuilder(command)
-            .directory(xoppWorkingDir)
+            .directory(env.homeDir)
             .redirectErrorStream(true)
             .apply { environment().putAll(env.getEnvMap()) }
             .start()

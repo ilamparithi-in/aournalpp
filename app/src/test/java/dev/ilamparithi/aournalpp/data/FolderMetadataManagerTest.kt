@@ -46,6 +46,7 @@ class FolderMetadataManagerTest {
         assertNull(meta.iconType)
         assertNull(meta.role)
         assertFalse(meta.excludeFromRecents)
+        assertFalse(meta.isPinned)
     }
 
     @Test
@@ -55,16 +56,19 @@ class FolderMetadataManagerTest {
         assertEquals("emergency", emergencyMeta.role)
         assertEquals(FolderMetadataManager.EMERGENCY_SAVES_DEFAULT_COLOR, emergencyMeta.colorHex)
         assertEquals(FolderMetadataManager.EMERGENCY_SAVES_DEFAULT_ICON, emergencyMeta.iconType)
+        assertTrue(emergencyMeta.isPinned)
 
         val importedFolder = File(rootDir, "Imported").apply { mkdirs() }
         val importedMeta = manager.getFolderMeta(importedFolder)
         assertEquals("import", importedMeta.role)
         assertEquals("import", importedMeta.iconType)
+        assertTrue(importedMeta.isPinned)
 
         val audioFolder = File(rootDir, "Audio").apply { mkdirs() }
         val audioMeta = manager.getFolderMeta(audioFolder)
         assertEquals("audio", audioMeta.role)
         assertEquals("audio", audioMeta.iconType)
+        assertFalse(audioMeta.isPinned)
     }
 
     @Test
@@ -77,10 +81,15 @@ class FolderMetadataManagerTest {
             iconEmoji = "⚛️",
             iconType = null,
             role = "study",
-            excludeFromRecents = true
+            excludeFromRecents = true,
+            pinned = true
         )
         assertTrue(writeResult.isSuccess)
         assertTrue(cacheInvalidated)
+
+        val metaFile = File(folder, FolderMetadataManager.FOLDER_META_FILE)
+        assertTrue(metaFile.exists())
+        assertEquals(".aoppfolder", metaFile.name)
 
         val meta = manager.getFolderMeta(folder)
         assertEquals("#336699", meta.colorHex)
@@ -88,6 +97,7 @@ class FolderMetadataManagerTest {
         assertNull(meta.iconType)
         assertEquals("study", meta.role)
         assertTrue(meta.excludeFromRecents)
+        assertTrue(meta.isPinned)
     }
 
     @Test
@@ -105,5 +115,26 @@ class FolderMetadataManagerTest {
 
         manager.setFolderExcludeFromRecents(folder, false)
         assertFalse(manager.getFolderMeta(folder).excludeFromRecents)
+
+        manager.setFolderPinned(folder, true)
+        assertTrue(manager.getFolderMeta(folder).isPinned)
+
+        manager.setFolderPinned(folder, false)
+        assertFalse(manager.getFolderMeta(folder).isPinned)
+    }
+
+    @Test
+    fun testUnpinningSpecialFolderPersistsAcrossCacheClears() {
+        val emergencyFolder = File(rootDir, "Emergency Saves").apply { mkdirs() }
+        assertTrue(manager.getFolderMeta(emergencyFolder).isPinned)
+
+        // Explicitly unpin
+        manager.setFolderPinned(emergencyFolder, false)
+        assertFalse(manager.getFolderMeta(emergencyFolder).isPinned)
+
+        // Simulate reinstall or complete cache wipe
+        cache.clear()
+        val reloadedMeta = manager.getFolderMeta(emergencyFolder)
+        assertFalse(reloadedMeta.isPinned)
     }
 }

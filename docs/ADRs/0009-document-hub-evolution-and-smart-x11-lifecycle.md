@@ -5,7 +5,7 @@ Accepted
 
 ## Context
 1. **Material 3 Expressive (M3E) & Responsive Form Factors**: Tablet, foldable, and desktop-class display environments require adaptive multi-column layouts and responsive navigation rails to avoid wasted horizontal space while maintaining mobile bottom bar ergonomics.
-2. **Document Hub Operations & File Hierarchy**: Users need deep subfolder navigation (`~/Notes/<Subject>/`), custom folder color metadata (`.folder.json`), batch actions (select all, invert, batch PDF/note share), and a non-destructive Trashcan (`.Trash/`) with restore support.
+2. **Document Hub Operations & File Hierarchy**: Users need deep subfolder navigation (`~/Notes/<Subject>/`), custom folder metadata and pinning (`.aoppfolder`), batch actions (select all, invert, batch PDF/note share), and a non-destructive Trashcan (`.Trash/`) with restore support.
 3. **Headless Page-0 Previews**: Users need visual thumbnail previews for `.xopp`, `.xoj`, and `.pdf` notes without starting an X11 display session.
 4. **Strict Format Ingestion**: To prevent file manager clutter, only files openable by Xournal++ (`.xopp`, `.xoj`, `.pdf`) should be indexed, ignoring non-openable hidden system files.
 5. **Smart X11 Back Gesture & Lifecycle**: When pressing Back in canvas mode, the system should trigger Xournal++'s native `Ctrl+Q` close sequence (which shows GTK's native Save/Discard/Cancel dialog if unsaved). In case of X11 freeze, 3 rapid back presses trigger an emergency force close dialog that is immune to accidental dismissal by subsequent back taps.
@@ -23,9 +23,9 @@ Accepted
    - `.pdf` files are rendered directly from disk.
    - `.xopp` / `.xoj` notes are converted headlessly to temporary PDFs via `PdfExportManager` and rendered to disk-cached 400px PNGs in `cacheDir/thumbnails/`.
 
-3. **Subfolders, `.folder.json` Metadata & Trashcan (`DocumentRepository.kt`)**:
+3. **Subfolders, `.aoppfolder` Metadata & Trashcan (`DocumentRepository.kt`)**:
    - Strictly scans `.xopp`, `.xoj`, and `.pdf` formats.
-   - Folder theming supported via `.folder.json` (`{"color": "#..."}`).
+   - Folder theming and pinning supported via `.aoppfolder` (`{"color": "#...", "pinned": true}`).
    - Non-destructive `.Trash/` directory storing deleted notes and `.trash_manifest.json` mapping original absolute paths for 1-tap restore.
 
 4. **Multi-Selection & Batch Operations (`DocumentHubScreen.kt`)**:

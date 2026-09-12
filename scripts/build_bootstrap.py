@@ -723,8 +723,9 @@ def main():
 <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
 <fontconfig>
     <dir>/system/fonts</dir>
+    <dir prefix="xdg">fonts</dir>
     <dir prefix="default">share/fonts</dir>
-    <cachedir prefix="default">var/cache/fontconfig</cachedir>
+    <cachedir prefix="xdg">fontconfig</cachedir>
     <cachedir>/data/local/tmp</cachedir>
 </fontconfig>
 """)

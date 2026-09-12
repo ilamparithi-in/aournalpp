@@ -171,7 +171,33 @@ class DocumentRepositoryTest {
         assertTrue(repository.isFolderPinned(path))
         assertTrue(repository.getPinnedFolderPaths().contains(path))
 
+        // Verify .aoppfolder was written
+        val metaFile = File(folder, ".aoppfolder")
+        assertTrue(metaFile.exists())
+        val metaJson = org.json.JSONObject(metaFile.readText())
+        assertTrue(metaJson.optBoolean("pinned"))
+
         repository.unpinFolder(path)
         assertFalse(repository.isFolderPinned(path))
+        assertFalse(org.json.JSONObject(metaFile.readText()).optBoolean("pinned"))
+    }
+
+    @Test
+    fun `test emergency saves unpinning persists to aoppfolder`() {
+        val emergencyFolder = File(notesDir, "Emergency Saves").apply { mkdirs() }
+        val folderItem = repository.getFolderItem(emergencyFolder)
+        assertTrue(folderItem.isPinned)
+
+        val willPin = repository.togglePinFolder(folderItem)
+        assertFalse(willPin)
+        assertFalse(repository.isFolderPinned(emergencyFolder.absolutePath))
+
+        // Re-read item
+        val updatedItem = repository.getFolderItem(emergencyFolder)
+        assertFalse(updatedItem.isPinned)
+
+        val metaFile = File(emergencyFolder, ".aoppfolder")
+        assertTrue(metaFile.exists())
+        assertFalse(org.json.JSONObject(metaFile.readText()).optBoolean("pinned"))
     }
 }

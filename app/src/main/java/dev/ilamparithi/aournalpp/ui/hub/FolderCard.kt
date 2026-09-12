@@ -79,15 +79,14 @@ fun FolderCard(
         AccessibilityUtils.buildFolderCardA11yDescription(
             folderName = folder.name,
             noteCount = folder.itemCount,
-            isPinned = folder.isPinned || folder.isVirtuallyPinned,
+            isPinned = folder.isPinned,
             isExcludedFromRecents = folder.isExcludedFromRecents,
             role = folder.role ?: folder.iconType
         )
     }
 
     val openFolderActionLabel = stringResource(R.string.action_open_folder)
-    val isPinnedOrVirtual = folder.isPinned || folder.isVirtuallyPinned
-    val pinFolderActionLabel = if (isPinnedOrVirtual) {
+    val pinFolderActionLabel = if (folder.isPinned) {
         stringResource(R.string.action_unpin_folder)
     } else {
         stringResource(R.string.action_pin_folder)
@@ -180,7 +179,7 @@ fun FolderCard(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
                     )
-                    if (folder.isPinned || folder.isVirtuallyPinned) {
+                    if (folder.isPinned) {
                         Icon(
                             imageVector = Icons.Default.PushPin,
                             contentDescription = null,
@@ -220,12 +219,12 @@ fun FolderCard(
                     onDismissRequest = { showFolderMenu = false }
                 ) {
                     DropdownMenuItem(
-                        text = { Text(if (isPinnedOrVirtual) "Unpin Folder" else "Pin Folder") },
+                        text = { Text(if (folder.isPinned) "Unpin Folder" else "Pin Folder") },
                         leadingIcon = {
                             Icon(
                                 Icons.Default.PushPin,
                                 contentDescription = null,
-                                tint = if (isPinnedOrVirtual) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = if (folder.isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         },
                         onClick = {

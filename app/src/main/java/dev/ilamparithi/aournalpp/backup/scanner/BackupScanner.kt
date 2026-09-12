@@ -29,7 +29,7 @@ class BackupScanner(
 ) {
     companion object {
         private const val TAG = "BackupScanner"
-        private val DEFAULT_NOTES_EXTENSIONS = setOf("xopp", "xoj", "pdf")
+        private val DEFAULT_NOTES_EXTENSIONS = setOf("xopp", "xoj", "pdf", "aoppfolder")
         private val DEFAULT_CONFIG_EXTENSIONS = setOf("xml", "ini", "gpl", "lua", "json")
 
         fun calculateSha256(file: File): String {
@@ -159,8 +159,9 @@ class BackupScanner(
                 continue
             }
 
+            val isMetadataFile = file.name == ".aoppfolder"
             val extension = file.extension.lowercase()
-            if (allowedExtensions != null && extension !in allowedExtensions) {
+            if (!isMetadataFile && allowedExtensions != null && extension !in allowedExtensions) {
                 continue
             }
 
@@ -211,7 +212,7 @@ class BackupScanner(
                 return true
             }
             // Skip hidden dot-files in notes unless explicit
-            if (name.startsWith(".") && !name.startsWith(".folder.json")) {
+            if (name.startsWith(".") && !name.startsWith(".aoppfolder")) {
                 return true
             }
         }

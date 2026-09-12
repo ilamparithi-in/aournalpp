@@ -129,7 +129,7 @@ class LinuxEnvironment(private val context: Context) {
         if (!dir.exists()) {
             dir.mkdirs()
         }
-        val metaFile = File(dir, ".folder.json")
+        val metaFile = File(dir, ".aoppfolder")
         if (!metaFile.exists()) {
             try {
                 metaFile.writeText(
@@ -137,7 +137,8 @@ class LinuxEnvironment(private val context: Context) {
                     {
                       "role": "emergency",
                       "color": "#F44336",
-                      "icon": "emergency"
+                      "icon": "emergency",
+                      "pinned": true
                     }
                     """.trimIndent()
                 )
@@ -160,14 +161,15 @@ class LinuxEnvironment(private val context: Context) {
         if (!dir.exists()) {
             dir.mkdirs()
         }
-        val metaFile = File(dir, ".folder.json")
+        val metaFile = File(dir, ".aoppfolder")
         if (!metaFile.exists()) {
             try {
                 metaFile.writeText(
                     """
                     {
                       "role": "import",
-                      "icon": "import"
+                      "icon": "import",
+                      "pinned": true
                     }
                     """.trimIndent()
                 )
@@ -190,7 +192,7 @@ class LinuxEnvironment(private val context: Context) {
         if (!dir.exists()) {
             dir.mkdirs()
         }
-        val metaFile = File(dir, ".folder.json")
+        val metaFile = File(dir, ".aoppfolder")
         if (!metaFile.exists()) {
             try {
                 metaFile.writeText(
@@ -348,6 +350,53 @@ class LinuxEnvironment(private val context: Context) {
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to generate loaders.cache during ensureDirectoryTree", e)
             }
+        }
+
+        // Self-heal: Ensure fontconfig fonts.conf points strictly to private XDG and internal cache dirs,
+        // avoiding relative var/cache/fontconfig polluting user directories.
+        val fontsConf = File(usrDir, "etc/fonts/fonts.conf")
+        val fontCacheDir = File(cacheDir, "fontconfig").apply { mkdirs() }
+        val needsFontsConfUpdate = !fontsConf.exists() || try {
+            val content = fontsConf.readText()
+            content.contains("""prefix="default">var/cache/fontconfig""") || !content.contains(fontCacheDir.absolutePath)
+        } catch (_: Exception) { true }
+
+        if (needsFontsConfUpdate) {
+            try {
+                fontsConf.parentFile?.mkdirs()
+                fontsConf.writeText(
+                    """
+                    <?xml version="1.0"?>
+                    <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+                    <fontconfig>
+                        <dir>/system/fonts</dir>
+                        <dir prefix="xdg">fonts</dir>
+                        <dir prefix="default">share/fonts</dir>
+                        <cachedir prefix="xdg">fontconfig</cachedir>
+                        <cachedir>${fontCacheDir.absolutePath}</cachedir>
+                        <cachedir>/data/local/tmp</cachedir>
+                    </fontconfig>
+                    """.trimIndent()
+                )
+                Log.i(TAG, "Self-healed & updated fontconfig configuration at ${fontsConf.absolutePath}")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to update fonts.conf during ensureDirectoryTree", e)
+            }
+        }
+
+        // Clean up rogue notesDir/var created by earlier fontconfig versions
+        try {
+            val rogueVar = File(getNotesDirectory(), "var")
+            if (rogueVar.exists() && rogueVar.isDirectory) {
+                val subFiles = rogueVar.walkBottomUp().toList()
+                val isOnlyFontConfig = subFiles.all { it.isDirectory || it.name.endsWith(".cache-12") || it.name.endsWith(".cache-7") || it.name == "CACHEDIR.TAG" || it.parentFile?.name == "fontconfig" }
+                if (isOnlyFontConfig) {
+                    rogueVar.deleteRecursively()
+                    Log.i(TAG, "Cleaned up rogue fontconfig var directory in notes directory: ${rogueVar.absolutePath}")
+                }
+            }
+        } catch (e: Exception) {
+            // ignore
         }
 
         val titleWatcherBin = File(binDir, "xopp-title-watcher")

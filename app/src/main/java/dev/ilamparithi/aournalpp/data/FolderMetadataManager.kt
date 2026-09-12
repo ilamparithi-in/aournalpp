@@ -5,18 +5,19 @@ import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Metadata associated with a notes folder stored in `.folder.json`.
+ * Metadata associated with a notes folder stored in `.aoppfolder`.
  */
 data class FolderMetaData(
     val colorHex: String? = null,
     val iconEmoji: String? = null,
     val iconType: String? = null,
     val role: String? = null,
-    val excludeFromRecents: Boolean = false
+    val excludeFromRecents: Boolean = false,
+    val isPinned: Boolean = false
 )
 
 /**
- * Manages `.folder.json` parsing, caching, and persistence.
+ * Manages `.aoppfolder` parsing, caching, and persistence.
  */
 class FolderMetadataManager(
     private val folderMetaCache: ConcurrentHashMap<String, Pair<Long, FolderMetaData>>,
@@ -26,7 +27,7 @@ class FolderMetadataManager(
     private val onInvalidateCaches: () -> Unit
 ) {
     companion object {
-        const val FOLDER_META_FILE = ".folder.json"
+        const val FOLDER_META_FILE = ".aoppfolder"
         const val EMERGENCY_SAVES_DEFAULT_COLOR = "#E06C75"
         const val EMERGENCY_SAVES_DEFAULT_ICON = "emergency"
     }
@@ -70,13 +71,19 @@ class FolderMetadataManager(
             }
         }
 
+        val defaultPinned = when (detectedRole?.lowercase()) {
+            "emergency", "import", "imported" -> true
+            else -> false
+        }
+
         if (!metaFile.exists()) {
             val meta = FolderMetaData(
                 colorHex = defaultColor,
                 iconEmoji = null,
                 iconType = defaultIcon,
                 role = detectedRole,
-                excludeFromRecents = false
+                excludeFromRecents = false,
+                isPinned = defaultPinned
             )
             folderMetaCache[cacheKey] = Pair(metaLastModified, meta)
             return meta
@@ -112,14 +119,24 @@ class FolderMetadataManager(
 
             val excludeFromRecents = json.optBoolean("excludeFromRecents", false) || json.optBoolean("exclude_from_recents", false)
 
-            FolderMetaData(color, emoji, icon, role, excludeFromRecents)
+            val isPinned = if (json.has("pinned")) {
+                json.optBoolean("pinned")
+            } else {
+                when (role?.lowercase()) {
+                    "emergency", "import", "imported" -> true
+                    else -> false
+                }
+            }
+
+            FolderMetaData(color, emoji, icon, role, excludeFromRecents, isPinned)
         } catch (e: Exception) {
             FolderMetaData(
                 colorHex = defaultColor,
                 iconEmoji = null,
                 iconType = defaultIcon,
                 role = detectedRole,
-                excludeFromRecents = false
+                excludeFromRecents = false,
+                isPinned = defaultPinned
             )
         }
 
@@ -133,7 +150,8 @@ class FolderMetadataManager(
         iconEmoji: String?,
         iconType: String? = null,
         role: String? = null,
-        excludeFromRecents: Boolean? = null
+        excludeFromRecents: Boolean? = null,
+        pinned: Boolean? = null
     ): Result<Unit> = runCatching {
         val metaFile = File(folderDir, FOLDER_META_FILE)
         val json = if (metaFile.exists()) {
@@ -173,29 +191,38 @@ class FolderMetadataManager(
             }
         }
 
+        if (pinned != null) {
+            json.put("pinned", pinned)
+        }
+
         metaFile.writeText(json.toString(2))
         folderMetaCache.remove(folderDir.absolutePath)
         onInvalidateCaches()
     }
 
+    fun setFolderPinned(folderDir: File, pinned: Boolean): Result<Unit> {
+        val meta = readFolderMeta(folderDir)
+        return writeFolderMeta(folderDir, meta.colorHex, meta.iconEmoji, meta.iconType, meta.role, meta.excludeFromRecents, pinned)
+    }
+
     fun setFolderColor(folderDir: File, colorHex: String?): Result<Unit> {
         val meta = readFolderMeta(folderDir)
-        return writeFolderMeta(folderDir, colorHex, meta.iconEmoji, meta.iconType, meta.role, meta.excludeFromRecents)
+        return writeFolderMeta(folderDir, colorHex, meta.iconEmoji, meta.iconType, meta.role, meta.excludeFromRecents, meta.isPinned)
     }
 
     fun setFolderEmoji(folderDir: File, emoji: String?): Result<Unit> {
         val meta = readFolderMeta(folderDir)
-        return writeFolderMeta(folderDir, meta.colorHex, emoji, if (emoji == null) (meta.iconType ?: "folder") else null, meta.role, meta.excludeFromRecents)
+        return writeFolderMeta(folderDir, meta.colorHex, emoji, if (emoji == null) (meta.iconType ?: "folder") else null, meta.role, meta.excludeFromRecents, meta.isPinned)
     }
 
     fun setFolderIcon(folderDir: File, iconType: String?): Result<Unit> {
         val meta = readFolderMeta(folderDir)
-        return writeFolderMeta(folderDir, meta.colorHex, null, iconType, meta.role, meta.excludeFromRecents)
+        return writeFolderMeta(folderDir, meta.colorHex, null, iconType, meta.role, meta.excludeFromRecents, meta.isPinned)
     }
 
     fun setFolderExcludeFromRecents(folderDir: File, exclude: Boolean): Result<Unit> {
         val meta = readFolderMeta(folderDir)
-        return writeFolderMeta(folderDir, meta.colorHex, meta.iconEmoji, meta.iconType, meta.role, exclude)
+        return writeFolderMeta(folderDir, meta.colorHex, meta.iconEmoji, meta.iconType, meta.role, exclude, meta.isPinned)
     }
 
     fun updateFolderMeta(
@@ -204,11 +231,13 @@ class FolderMetadataManager(
         iconEmoji: String?,
         iconType: String? = null,
         role: String? = null,
-        excludeFromRecents: Boolean? = null
+        excludeFromRecents: Boolean? = null,
+        pinned: Boolean? = null
     ): Result<Unit> {
         val existing = readFolderMeta(folderDir)
         val existingRole = role ?: existing.role
         val existingExclude = excludeFromRecents ?: existing.excludeFromRecents
-        return writeFolderMeta(folderDir, colorHex, iconEmoji, iconType, existingRole, existingExclude)
+        val existingPinned = pinned ?: existing.isPinned
+        return writeFolderMeta(folderDir, colorHex, iconEmoji, iconType, existingRole, existingExclude, existingPinned)
     }
 }

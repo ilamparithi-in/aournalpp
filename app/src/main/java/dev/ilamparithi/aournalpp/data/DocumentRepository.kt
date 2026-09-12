@@ -31,12 +31,11 @@ class DocumentRepository internal constructor(private val context: Context) {
 
     companion object {
         val SUPPORTED_EXTENSIONS = setOf("xopp", "xoj", "pdf")
-        private const val FOLDER_META_FILE = ".folder.json"
+        private const val FOLDER_META_FILE = FolderMetadataManager.FOLDER_META_FILE
         const val TRASH_DIR_NAME = TrashRepository.TRASH_DIR_NAME
         const val TRASH_MANIFEST_FILE = TrashRepository.TRASH_MANIFEST_FILE
         const val EMERGENCY_SAVES_DEFAULT_COLOR = "#F44336"
         const val EMERGENCY_SAVES_DEFAULT_ICON = "emergency"
-        val DEFAULT_VIRTUALLY_PINNED_ROLES = setOf("emergency", "import", "imported")
 
         private val cache = DocumentCache()
         private val repoScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
@@ -76,10 +75,6 @@ class DocumentRepository internal constructor(private val context: Context) {
         private var cachedPinnedFolders: List<String>?
             get() = cache.cachedPinnedFolders
             set(value) { cache.cachedPinnedFolders = value }
-
-        private var cachedUnpinnedSpecialRoles: Set<String>?
-            get() = cache.cachedUnpinnedSpecialRoles
-            set(value) { cache.cachedUnpinnedSpecialRoles = value }
 
         private var cachedOpenedNotesHistory: List<String>?
             get() = cache.cachedOpenedNotesHistory
@@ -288,43 +283,14 @@ class DocumentRepository internal constructor(private val context: Context) {
         return list
     }
 
-    fun getUnpinnedSpecialRoles(): Set<String> {
-        var set = cachedUnpinnedSpecialRoles
-        if (set == null) {
-            val raw = prefs.getString("pref_unpinned_special_roles_json", null)
-            set = if (raw != null) {
-                try {
-                    val array = org.json.JSONArray(raw)
-                    val s = mutableSetOf<String>()
-                    for (i in 0 until array.length()) {
-                        val r = array.optString(i)
-                        if (r.isNotBlank()) s.add(r.lowercase())
-                    }
-                    s
-                } catch (e: Exception) {
-                    emptySet()
-                }
-            } else {
-                emptySet()
-            }
-            cachedUnpinnedSpecialRoles = set
-        }
-        return set
-    }
-
-    private fun saveUnpinnedSpecialRoles(roles: Set<String>) {
-        cachedUnpinnedSpecialRoles = roles
-        val array = org.json.JSONArray()
-        roles.forEach { array.put(it.lowercase()) }
-        prefs.edit().putString("pref_unpinned_special_roles_json", array.toString()).apply()
-        invalidateAllCaches()
-    }
-
     fun isFolderPinned(path: String): Boolean {
-        return getPinnedFolderPaths().contains(path)
+        val file = File(path)
+        return folderMetadataManager.getFolderMeta(file).isPinned
     }
 
     fun pinFolder(path: String) {
+        val file = File(path)
+        folderMetadataManager.setFolderPinned(file, true)
         val current = getPinnedFolderPaths().toMutableList()
         current.remove(path)
         current.add(0, path)
@@ -332,6 +298,8 @@ class DocumentRepository internal constructor(private val context: Context) {
     }
 
     fun unpinFolder(path: String) {
+        val file = File(path)
+        folderMetadataManager.setFolderPinned(file, false)
         val current = getPinnedFolderPaths().toMutableList()
         current.remove(path)
         savePinnedFolders(current)
@@ -339,36 +307,13 @@ class DocumentRepository internal constructor(private val context: Context) {
 
     fun togglePinFolder(folder: FolderItem): Boolean {
         val path = folder.file.absolutePath
-        val role = folder.role
-        val userPinned = isFolderPinned(path)
-
-        if (userPinned) {
-            unpinFolder(path)
-            if (role != null) {
-                // Also mark special role as unpinned
-                val unpinnedRoles = getUnpinnedSpecialRoles().toMutableSet()
-                unpinnedRoles.add(role.lowercase())
-                saveUnpinnedSpecialRoles(unpinnedRoles)
-            }
-            return false
-        } else if (folder.isVirtuallyPinned) {
-            // User wants to unpin a virtually pinned special folder
-            if (role != null) {
-                val unpinnedRoles = getUnpinnedSpecialRoles().toMutableSet()
-                unpinnedRoles.add(role.lowercase())
-                saveUnpinnedSpecialRoles(unpinnedRoles)
-            }
-            return false
-        } else {
-            // Pin the folder
+        val willPin = !folder.isPinned
+        if (willPin) {
             pinFolder(path)
-            if (role != null) {
-                val unpinnedRoles = getUnpinnedSpecialRoles().toMutableSet()
-                unpinnedRoles.remove(role.lowercase())
-                saveUnpinnedSpecialRoles(unpinnedRoles)
-            }
-            return true
+        } else {
+            unpinFolder(path)
         }
+        return willPin
     }
 
     private fun savePinnedFolders(paths: List<String>) {
@@ -390,7 +335,6 @@ class DocumentRepository internal constructor(private val context: Context) {
         val pinnedFolderOrder: List<String> by lazy { getPinnedFolderPaths() }
         val pinnedFolderPaths: Set<String> by lazy { pinnedFolderOrder.toSet() }
         val pinnedFolderOrderMap: Map<String, Int> by lazy { pinnedFolderOrder.withIndex().associate { it.value to it.index } }
-        val unpinnedSpecialRoles: Set<String> by lazy { getUnpinnedSpecialRoles() }
         val openedTimestamps: Map<String, Long> by lazy { getOpenedNotesTimestamps() }
 
         val rootCanonical: String by lazy { rootNotesDirCanonicalPath }
@@ -453,8 +397,7 @@ class DocumentRepository internal constructor(private val context: Context) {
             val meta = cache.folderMeta(dir)
             val isEmergency = meta.role == "emergency" || isEmergencySavesFolder(dir)
             val role = meta.role
-            val isUserPinned = cache.pinnedFolderPaths.contains(dir.absolutePath)
-            val isVirtuallyPinned = role != null && DEFAULT_VIRTUALLY_PINNED_ROLES.contains(role.lowercase()) && !cache.unpinnedSpecialRoles.contains(role.lowercase()) && !isUserPinned
+            val isPinned = meta.isPinned
             val itemCount = dir.list { _, name ->
                 !name.startsWith(".") && (name.endsWith(".xopp", ignoreCase = true) || name.endsWith(".xoj", ignoreCase = true) || name.endsWith(".pdf", ignoreCase = true))
             }?.size ?: 0
@@ -467,8 +410,7 @@ class DocumentRepository internal constructor(private val context: Context) {
                     iconEmoji = meta.iconEmoji,
                     iconType = meta.iconType,
                     isEmergencyFolder = isEmergency,
-                    isPinned = isUserPinned,
-                    isVirtuallyPinned = isVirtuallyPinned,
+                    isPinned = isPinned,
                     role = role,
                     isExcludedFromRecents = meta.excludeFromRecents,
                     itemCount = itemCount,
@@ -563,19 +505,20 @@ class DocumentRepository internal constructor(private val context: Context) {
         // 2. Virtually pinned special folders in alphabetical order
         // 3. Regular unpinned folders in alphabetical order
         val sortedFolders = folderItems.sortedWith { a, b ->
-            val aUserPinned = a.isPinned
-            val bUserPinned = b.isPinned
+            val aPinned = a.isPinned
+            val bPinned = b.isPinned
             when {
-                aUserPinned && bUserPinned -> {
+                aPinned && bPinned -> {
                     val aIndex = cache.pinnedFolderOrderMap[a.file.absolutePath] ?: Int.MAX_VALUE
                     val bIndex = cache.pinnedFolderOrderMap[b.file.absolutePath] ?: Int.MAX_VALUE
-                    aIndex.compareTo(bIndex)
+                    if (aIndex != bIndex) {
+                        aIndex.compareTo(bIndex)
+                    } else {
+                        a.name.lowercase().compareTo(b.name.lowercase())
+                    }
                 }
-                aUserPinned -> -1
-                bUserPinned -> 1
-                a.isVirtuallyPinned && b.isVirtuallyPinned -> a.name.lowercase().compareTo(b.name.lowercase())
-                a.isVirtuallyPinned -> -1
-                b.isVirtuallyPinned -> 1
+                aPinned -> -1
+                bPinned -> 1
                 else -> a.name.lowercase().compareTo(b.name.lowercase())
             }
         }
@@ -751,8 +694,7 @@ class DocumentRepository internal constructor(private val context: Context) {
         val meta = cache.folderMeta(dir)
         val isEmergency = meta.role == "emergency" || isEmergencySavesFolder(dir)
         val role = meta.role
-        val isUserPinned = cache.pinnedFolderPaths.contains(dir.absolutePath)
-        val isVirtuallyPinned = role != null && DEFAULT_VIRTUALLY_PINNED_ROLES.contains(role.lowercase()) && !cache.unpinnedSpecialRoles.contains(role.lowercase()) && !isUserPinned
+        val isPinned = meta.isPinned
         val count = dir.listFiles { f -> f.isFile && isOpenableFile(f) && !f.name.startsWith(".") }?.size ?: 0
         return FolderItem(
             file = dir,
@@ -761,8 +703,7 @@ class DocumentRepository internal constructor(private val context: Context) {
             iconEmoji = meta.iconEmoji,
             iconType = meta.iconType,
             isEmergencyFolder = isEmergency,
-            isPinned = isUserPinned,
-            isVirtuallyPinned = isVirtuallyPinned,
+            isPinned = isPinned,
             role = role,
             isExcludedFromRecents = meta.excludeFromRecents,
             itemCount = count,
@@ -780,8 +721,7 @@ class DocumentRepository internal constructor(private val context: Context) {
                 val meta = cache.folderMeta(sub)
                 val isEmergency = meta.role == "emergency" || isEmergencySavesFolder(sub)
                 val role = meta.role
-                val isUserPinned = cache.pinnedFolderPaths.contains(sub.absolutePath)
-                val isVirtuallyPinned = role != null && DEFAULT_VIRTUALLY_PINNED_ROLES.contains(role.lowercase()) && !cache.unpinnedSpecialRoles.contains(role.lowercase()) && !isUserPinned
+                val isPinned = meta.isPinned
                 val count = sub.listFiles { f -> f.isFile && isOpenableFile(f) && !f.name.startsWith(".") }?.size ?: 0
                 list.add(
                     FolderItem(
@@ -791,8 +731,7 @@ class DocumentRepository internal constructor(private val context: Context) {
                         iconEmoji = meta.iconEmoji,
                         iconType = meta.iconType,
                         isEmergencyFolder = isEmergency,
-                        isPinned = isUserPinned,
-                        isVirtuallyPinned = isVirtuallyPinned,
+                        isPinned = isPinned,
                         role = role,
                         isExcludedFromRecents = meta.excludeFromRecents,
                         itemCount = count,
@@ -805,19 +744,20 @@ class DocumentRepository internal constructor(private val context: Context) {
         recurse(root)
 
         list.sortedWith { a, b ->
-            val aUserPinned = cache.pinnedFolderPaths.contains(a.file.absolutePath)
-            val bUserPinned = cache.pinnedFolderPaths.contains(b.file.absolutePath)
+            val aPinned = a.isPinned
+            val bPinned = b.isPinned
             when {
-                aUserPinned && bUserPinned -> {
-                    val aIndex = cache.pinnedFolderOrder.indexOf(a.file.absolutePath)
-                    val bIndex = cache.pinnedFolderOrder.indexOf(b.file.absolutePath)
-                    aIndex.compareTo(bIndex)
+                aPinned && bPinned -> {
+                    val aIndex = cache.pinnedFolderOrder.indexOf(a.file.absolutePath).takeIf { it >= 0 } ?: Int.MAX_VALUE
+                    val bIndex = cache.pinnedFolderOrder.indexOf(b.file.absolutePath).takeIf { it >= 0 } ?: Int.MAX_VALUE
+                    if (aIndex != bIndex) {
+                        aIndex.compareTo(bIndex)
+                    } else {
+                        a.name.lowercase().compareTo(b.name.lowercase())
+                    }
                 }
-                aUserPinned -> -1
-                bUserPinned -> 1
-                a.isVirtuallyPinned && b.isVirtuallyPinned -> a.name.lowercase().compareTo(b.name.lowercase())
-                a.isVirtuallyPinned -> -1
-                b.isVirtuallyPinned -> 1
+                aPinned -> -1
+                bPinned -> 1
                 else -> a.name.lowercase().compareTo(b.name.lowercase())
             }
         }

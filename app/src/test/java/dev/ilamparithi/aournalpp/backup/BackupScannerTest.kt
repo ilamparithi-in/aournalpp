@@ -218,8 +218,8 @@ class BackupScannerTest {
         val folderA = File(rootDir, "FolderA").apply { mkdirs() }
         val folderB = File(rootDir, "FolderB").apply { mkdirs() }
 
-        val fileA = File(folderA, ".folder.json").apply { writeText("{\"color\": 1}") }
-        val fileB = File(folderB, ".folder.json").apply { writeText("{\"color\": 2}") }
+        val fileA = File(folderA, ".aoppfolder").apply { writeText("{\"color\": 1}") }
+        val fileB = File(folderB, ".aoppfolder").apply { writeText("{\"color\": 2}") }
 
         val mappingA = dev.ilamparithi.aournalpp.backup.model.CustomFolderMapping(
             id = "mapping_a",
@@ -243,8 +243,8 @@ class BackupScannerTest {
 
         org.junit.Assert.assertEquals(1, scannedA.size)
         org.junit.Assert.assertEquals(1, scannedB.size)
-        org.junit.Assert.assertEquals(".folder.json", scannedA[0].relativePath)
-        org.junit.Assert.assertEquals(".folder.json", scannedB[0].relativePath)
+        org.junit.Assert.assertEquals(".aoppfolder", scannedA[0].relativePath)
+        org.junit.Assert.assertEquals(".aoppfolder", scannedB[0].relativePath)
         org.junit.Assert.assertEquals("custom_mapping_a", scannedA[0].scope)
         org.junit.Assert.assertEquals("custom_mapping_b", scannedB[0].scope)
 
@@ -252,8 +252,27 @@ class BackupScannerTest {
         val keyA = "${scannedA[0].scope}:${scannedA[0].relativePath}"
         val keyB = "${scannedB[0].scope}:${scannedB[0].relativePath}"
         org.junit.Assert.assertNotEquals(keyA, keyB)
-        org.junit.Assert.assertEquals("custom_mapping_a:.folder.json", keyA)
-        org.junit.Assert.assertEquals("custom_mapping_b:.folder.json", keyB)
+        org.junit.Assert.assertEquals("custom_mapping_a:.aoppfolder", keyA)
+        org.junit.Assert.assertEquals("custom_mapping_b:.aoppfolder", keyB)
+    }
+
+    @Test
+    fun testCompleteBackupIncludesAoppfolder() {
+        val notesDir = File(rootDir, "NotesHome").apply { mkdirs() }
+        val mathDir = File(notesDir, "Math").apply { mkdirs() }
+        val note = File(mathDir, "algebra.xopp").apply { writeText("dummy note") }
+        val meta = File(mathDir, ".aoppfolder").apply { writeText("{\"pinned\": true}") }
+
+        val mockEnv = io.mockk.mockk<dev.ilamparithi.aournalpp.runtime.LinuxEnvironment>()
+        io.mockk.every { mockEnv.getNotesDirectory() } returns notesDir
+        io.mockk.every { mockEnv.xournalConfigDir } returns File(rootDir, "non_existent_config")
+
+        val scanner = BackupScanner(env = mockEnv, exclusionFilter = ExclusionFilterConfig.DEFAULT)
+        val scanned = scanner.scanCompleteBackup()
+
+        val scannedPaths = scanned.map { it.relativePath }
+        org.junit.Assert.assertTrue("Should contain note", scannedPaths.contains("Notes/Math/algebra.xopp"))
+        org.junit.Assert.assertTrue("Should contain .aoppfolder", scannedPaths.contains("Notes/Math/.aoppfolder"))
     }
 }
 

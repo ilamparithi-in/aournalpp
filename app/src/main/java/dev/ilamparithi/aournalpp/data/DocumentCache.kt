@@ -21,7 +21,6 @@ class DocumentCache {
     @Volatile var cachedPinnedNotes: List<String>? = null
     @Volatile var cachedPinnedNotesSet: Set<String>? = null
     @Volatile var cachedPinnedFolders: List<String>? = null
-    @Volatile var cachedUnpinnedSpecialRoles: Set<String>? = null
     @Volatile var cachedOpenedNotesHistory: List<String>? = null
     @Volatile var cachedOpenedNotesTimestamps: Map<String, Long>? = null
 
@@ -36,7 +35,6 @@ class DocumentCache {
         cachedPinnedNotes = null
         cachedPinnedNotesSet = null
         cachedPinnedFolders = null
-        cachedUnpinnedSpecialRoles = null
         cachedOpenedNotesHistory = null
         cachedOpenedNotesTimestamps = null
     }

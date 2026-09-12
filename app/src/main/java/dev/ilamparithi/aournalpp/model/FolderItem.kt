@@ -10,7 +10,6 @@ data class FolderItem(
     val iconType: String? = null,
     val isEmergencyFolder: Boolean = false,
     val isPinned: Boolean = false,
-    val isVirtuallyPinned: Boolean = false,
     val role: String? = null,
     val isExcludedFromRecents: Boolean = false,
     val itemCount: Int = 0,
