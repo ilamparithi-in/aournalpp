@@ -22,8 +22,18 @@ dependencyResolutionManagement {
     }
 }
 
+val isX11TaskRequested = gradle.startParameter.taskNames.any { it.contains("x11-core") }
+val usePrebuiltX11 = if (isX11TaskRequested) {
+    false
+} else {
+    providers.gradleProperty("usePrebuiltX11").orNull?.toBoolean()
+        ?: file("libs/x11-core-release.aar").exists()
+}
+
 rootProject.name = "Aournal++"
 include(":app")
-include(":x11-core")
+if (!usePrebuiltX11) {
+    include(":x11-core")
+}
 include(":runtime-manager")
 include(":scripts")

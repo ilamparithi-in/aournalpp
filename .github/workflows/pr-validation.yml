@@ -28,7 +28,15 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Restore Prebuilt x11-core AAR
+        id: x11-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: libs/x11-core-release.aar
+          key: x11-core-aar-${{ hashFiles('submodules/termux-x11/**', 'x11-core/**') }}
+
       - name: Set up Android NDK (r27d)
+        if: steps.x11-cache.outputs.cache-hit != 'true'
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r27d
@@ -111,7 +119,15 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Restore Prebuilt x11-core AAR
+        id: x11-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: libs/x11-core-release.aar
+          key: x11-core-aar-${{ hashFiles('submodules/termux-x11/**', 'x11-core/**') }}
+
       - name: Set up Android NDK (r27d)
+        if: steps.x11-cache.outputs.cache-hit != 'true'
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r27d

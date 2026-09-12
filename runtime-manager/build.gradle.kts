@@ -28,8 +28,16 @@ android {
     }
 }
 
+val usePrebuiltX11 = (providers.gradleProperty("usePrebuiltX11").orNull?.toBoolean()
+    ?: rootProject.file("libs/x11-core-release.aar").exists())
+
 dependencies {
-    implementation(project(":x11-core"))
+    if (usePrebuiltX11) {
+        implementation(files(rootProject.file("libs/x11-core-release.aar")))
+        implementation(libs.androidx.preference.ktx)
+    } else {
+        implementation(project(":x11-core"))
+    }
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.commons.compress)

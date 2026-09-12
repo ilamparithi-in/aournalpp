@@ -1,0 +1,68 @@
+name: Build & Cache Termux-X11 Core AAR
+
+on:
+  push:
+    paths:
+      - 'submodules/termux-x11/**'
+      - 'x11-core/**'
+      - '.github/workflows/build-x11-core.yml'
+  pull_request:
+    paths:
+      - 'submodules/termux-x11/**'
+      - 'x11-core/**'
+      - '.github/workflows/build-x11-core.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: build-x11-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-aar:
+    name: Build & Cache x11-core.aar
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android NDK (r27d)
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27d
+          link-to-sdk: true
+
+      - name: Set up Gradle Build Cache
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Grant Execute Permissions for Gradle Wrapper
+        run: chmod +x gradlew
+
+      - name: Build x11-core AAR
+        run: |
+          ./gradlew :x11-core:assembleRelease -PusePrebuiltX11=false --stacktrace
+          mkdir -p libs
+          cp x11-core/build/outputs/aar/x11-core-release.aar libs/x11-core-release.aar
+
+      - name: Cache Prebuilt x11-core AAR
+        uses: actions/cache/save@v4
+        with:
+          path: libs/x11-core-release.aar
+          key: x11-core-aar-${{ hashFiles('submodules/termux-x11/**', 'x11-core/**') }}
+
+      - name: Upload x11-core AAR Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: x11-core-release.aar
+          path: libs/x11-core-release.aar
+          archive: false
+          retention-days: 30
