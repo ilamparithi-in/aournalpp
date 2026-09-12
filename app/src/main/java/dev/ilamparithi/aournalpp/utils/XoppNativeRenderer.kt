@@ -20,6 +20,9 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.zip.GZIPInputStream
 import kotlin.math.pow
+import dev.ilamparithi.aournalpp.utils.xopp.XoppPageBackground as PageBackground
+import dev.ilamparithi.aournalpp.utils.xopp.XoppStrokeElement as StrokeElement
+import dev.ilamparithi.aournalpp.utils.xopp.XoppTextElement as TextElement
 
 /**
  * Ultra-fast native Kotlin vector parser and Android Canvas renderer for Xournal++ (.xopp)
@@ -117,52 +120,6 @@ object XoppNativeRenderer {
         }
     }
 
-    private data class PageBackground(
-        val type: String, // "solid", "pdf", "pixmap"
-        val color: Int = Color.WHITE,
-        val style: String = "plain", // "plain", "lined", "ruled", "graph", "grid", "dotted", "iso_dot"
-        val pdfFilename: String? = null,
-        val pdfPageNo: Int = 1,
-        val pdfDomain: String? = null
-    )
-
-    private data class StrokeElement(
-        val tool: String, // "pen", "highlighter", "eraser"
-        val color: Int,
-        val width: Float,
-        val points: FloatArray
-    ) {
-        override fun equals(other: Any?): Boolean {
-            if (this === other) return true
-            if (javaClass != other?.javaClass) return false
-
-            other as StrokeElement
-
-            if (tool != other.tool) return false
-            if (color != other.color) return false
-            if (width != other.width) return false
-            if (!points.contentEquals(other.points)) return false
-
-            return true
-        }
-
-        override fun hashCode(): Int {
-            var result = tool.hashCode()
-            result = 31 * result + color
-            result = 31 * result + width.hashCode()
-            result = 31 * result + points.contentHashCode()
-            return result
-        }
-    }
-
-    private data class TextElement(
-        val text: String,
-        val x: Float,
-        val y: Float,
-        val size: Float,
-        val color: Int
-    )
-
     private data class ImageElement(
         val left: Float,
         val top: Float,
@@ -203,197 +160,30 @@ object XoppNativeRenderer {
         stream: InputStream,
         targetWidth: Int
     ): Bitmap? {
-        val parser = Xml.newPullParser()
-        parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
-        parser.setInput(stream, "UTF-8")
-
-        var pageWidth = 595.28f
-        var pageHeight = 841.89f
-        var background: PageBackground? = null
-        val strokes = mutableListOf<StrokeElement>()
-        val texts = mutableListOf<TextElement>()
-        val images = mutableListOf<ImageElement>()
-
-        var inPage = false
-        var inLayer = false
-        var currentTag: String? = null
-        val textBuffer = StringBuilder()
-
-        var currentTool = "pen"
-        var currentColor = Color.BLACK
-        var currentWidth = 1.41f
-        var currentTextSize = 12f
-        var currentTextX = 0f
-        var currentTextY = 0f
-        var currentTextColor = Color.BLACK
-        var imgLeft = 0f
-        var imgTop = 0f
-        var imgRight = 0f
-        var imgBottom = 0f
-
-        var creatorVersion = "unknown"
-
-        var eventType = parser.eventType
-        while (eventType != XmlPullParser.END_DOCUMENT) {
-            when (eventType) {
-                XmlPullParser.START_TAG -> {
-                    currentTag = parser.name
-                    textBuffer.setLength(0)
-                    when (parser.name) {
-                        "xournal" -> {
-                            creatorVersion = parser.getAttributeValue(null, "creator") ?: "unknown"
-                            if (disabledForVersion[creatorVersion] == true) {
-                                return null
-                            }
-                        }
-                        "page" -> {
-                            if (!inPage) {
-                                inPage = true
-                                val wStr = parser.getAttributeValue(null, "width")
-                                val hStr = parser.getAttributeValue(null, "height")
-                                pageWidth = wStr?.toFloatOrNull()?.coerceAtLeast(100f) ?: 595.28f
-                                pageHeight = hStr?.toFloatOrNull()?.coerceAtLeast(100f) ?: 841.89f
-                            }
-                        }
-                        "background" -> {
-                            if (inPage) {
-                                val type = parser.getAttributeValue(null, "type") ?: "solid"
-                                val colorStr = parser.getAttributeValue(null, "color")
-                                val style = parser.getAttributeValue(null, "style") ?: "plain"
-                                val pdfFile = parser.getAttributeValue(null, "filename")
-                                val pdfPage = parser.getAttributeValue(null, "pageno")?.toIntOrNull() ?: 1
-                                val domain = parser.getAttributeValue(null, "domain")
-
-                                val color = if (!colorStr.isNullOrBlank()) {
-                                    parseXoppColor(colorStr, Color.WHITE)
-                                } else {
-                                    Color.WHITE
-                                }
-
-                                background = PageBackground(
-                                    type = type,
-                                    color = color,
-                                    style = style.lowercase(),
-                                    pdfFilename = pdfFile,
-                                    pdfPageNo = pdfPage,
-                                    pdfDomain = domain
-                                )
-                            }
-                        }
-                        "layer" -> {
-                            if (inPage) inLayer = true
-                        }
-                        "stroke" -> {
-                            if (inPage && inLayer) {
-                                currentTool = parser.getAttributeValue(null, "tool") ?: "pen"
-                                val colorStr = parser.getAttributeValue(null, "color")
-                                currentColor = parseXoppColor(colorStr, Color.BLACK)
-                                val widthStr = parser.getAttributeValue(null, "width")
-                                currentWidth = parseStrokeWidth(widthStr)
-                            }
-                        }
-                        "text" -> {
-                            if (inPage && inLayer) {
-                                val sizeStr = parser.getAttributeValue(null, "size")
-                                currentTextSize = sizeStr?.toFloatOrNull() ?: 12f
-                                val xStr = parser.getAttributeValue(null, "x")
-                                val yStr = parser.getAttributeValue(null, "y")
-                                currentTextX = xStr?.toFloatOrNull() ?: 0f
-                                currentTextY = yStr?.toFloatOrNull() ?: 0f
-                                val colorStr = parser.getAttributeValue(null, "color")
-                                currentTextColor = parseXoppColor(colorStr, Color.BLACK)
-                            }
-                        }
-                        "image", "teximage" -> {
-                            if (inPage && inLayer) {
-                                imgLeft = parser.getAttributeValue(null, "left")?.toFloatOrNull() ?: 0f
-                                imgTop = parser.getAttributeValue(null, "top")?.toFloatOrNull() ?: 0f
-                                imgRight = parser.getAttributeValue(null, "right")?.toFloatOrNull() ?: 0f
-                                imgBottom = parser.getAttributeValue(null, "bottom")?.toFloatOrNull() ?: 0f
-                            }
-                        }
-                    }
-                }
-                XmlPullParser.TEXT -> {
-                    if (inPage && inLayer) {
-                        when (currentTag) {
-                            "stroke" -> {
-                                val text = parser.text
-                                if (!text.isNullOrBlank() && strokes.size < 5000) {
-                                    val parsedPoints = parseCoordinates(text)
-                                    if (parsedPoints.isNotEmpty()) {
-                                        strokes.add(
-                                            StrokeElement(
-                                                tool = currentTool,
-                                                color = currentColor,
-                                                width = currentWidth,
-                                                points = parsedPoints
-                                            )
-                                        )
-                                    }
-                                }
-                            }
-                            "text" -> {
-                                val text = parser.text
-                                if (!text.isNullOrBlank()) {
-                                    textBuffer.append(text)
-                                }
-                            }
-                            "image", "teximage" -> {
-                                val text = parser.text
-                                if (!text.isNullOrBlank() && images.size < 5) {
-                                    textBuffer.append(text)
-                                }
-                            }
-                        }
-                    }
-                }
-                XmlPullParser.END_TAG -> {
-                    when (parser.name) {
-                        "text" -> {
-                            if (inPage && inLayer && texts.size < 200) {
-                                val str = textBuffer.toString().trim()
-                                if (str.isNotEmpty()) {
-                                    texts.add(TextElement(str, currentTextX, currentTextY, currentTextSize, currentTextColor))
-                                }
-                            }
-                            textBuffer.setLength(0)
-                            currentTag = null
-                        }
-                        "image", "teximage" -> {
-                            if (inPage && inLayer && images.size < 5) {
-                                val str = textBuffer.toString().trim()
-                                if (str.isNotEmpty()) {
-                                    val scale = targetWidth.toFloat() / pageWidth
-                                    val reqW = ((imgRight - imgLeft) * scale).toInt()
-                                    val reqH = ((imgBottom - imgTop) * scale).toInt()
-                                    val bmp = decodeBase64Image(str, reqW, reqH)
-                                    if (bmp != null) {
-                                        images.add(ImageElement(imgLeft, imgTop, imgRight, imgBottom, bmp))
-                                    }
-                                }
-                            }
-                            textBuffer.setLength(0)
-                            currentTag = null
-                        }
-                        "stroke" -> {
-                            currentTag = null
-                        }
-                        "layer" -> {
-                            inLayer = false
-                            currentTag = null
-                        }
-                        "page" -> {
-                            // Done parsing Page 0! Stop immediately for maximum performance
-                            break
-                        }
-                    }
-                }
-            }
-            eventType = parser.next()
+        val parsed = dev.ilamparithi.aournalpp.utils.xopp.XoppParser.parsePageZero(stream) ?: return null
+        if (disabledForVersion[parsed.creatorVersion] == true) {
+            return null
         }
 
-        return renderToBitmap(context, noteFile, pageWidth, pageHeight, background, strokes, texts, images, targetWidth)
+        val decodedImages = parsed.images.mapNotNull { img ->
+            val scale = targetWidth.toFloat() / parsed.pageWidth
+            val reqW = ((img.right - img.left) * scale).toInt()
+            val reqH = ((img.bottom - img.top) * scale).toInt()
+            val bmp = decodeBase64Image(img.base64Data, reqW, reqH) ?: return@mapNotNull null
+            ImageElement(img.left, img.top, img.right, img.bottom, bmp)
+        }
+
+        return renderToBitmap(
+            context = context,
+            noteFile = noteFile,
+            pageWidth = parsed.pageWidth,
+            pageHeight = parsed.pageHeight,
+            background = parsed.background,
+            strokes = parsed.strokes,
+            texts = parsed.texts,
+            images = decodedImages,
+            targetWidth = targetWidth
+        )
     }
 
     private fun renderToBitmap(
@@ -640,159 +430,12 @@ object XoppNativeRenderer {
         }
     }
 
-    private fun parseCoordinates(raw: String): FloatArray {
-        var tokenCount = 0
-        var inToken = false
-        val len = raw.length
-        for (i in 0 until len) {
-            val c = raw[i]
-            if (c > ' ') {
-                if (!inToken) {
-                    tokenCount++
-                    inToken = true
-                }
-            } else {
-                inToken = false
-            }
-        }
-        if (tokenCount < 2) return FloatArray(0)
-
-        val result = FloatArray(tokenCount)
-        var writeIdx = 0
-        var i = 0
-        while (i < len) {
-            // Skip whitespace
-            while (i < len && raw[i] <= ' ') {
-                i++
-            }
-            if (i >= len) break
-
-            val start = i
-            var isNegative = false
-            if (raw[i] == '-') {
-                isNegative = true
-                i++
-            } else if (raw[i] == '+') {
-                i++
-            }
-
-            var whole = 0.0
-            while (i < len && raw[i] in '0'..'9') {
-                whole = whole * 10.0 + (raw[i] - '0')
-                i++
-            }
-
-            var frac = 0.0
-            var div = 1.0
-            if (i < len && raw[i] == '.') {
-                i++
-                while (i < len && raw[i] in '0'..'9') {
-                    frac = frac * 10.0 + (raw[i] - '0')
-                    div *= 10.0
-                    i++
-                }
-            }
-
-            var exp = 0
-            if (i < len && (raw[i] == 'e' || raw[i] == 'E')) {
-                i++
-                var expNeg = false
-                if (i < len && raw[i] == '-') {
-                    expNeg = true
-                    i++
-                } else if (i < len && raw[i] == '+') {
-                    i++
-                }
-                while (i < len && raw[i] in '0'..'9') {
-                    exp = exp * 10 + (raw[i] - '0')
-                    i++
-                }
-                if (expNeg) exp = -exp
-            }
-
-            var value = (whole + (frac / div))
-            if (exp != 0) {
-                value *= 10.0.pow(exp)
-            }
-            if (isNegative) value = -value
-
-            if (i > start) {
-                result[writeIdx++] = value.toFloat()
-            } else {
-                while (i < len && raw[i] > ' ') {
-                    i++
-                }
-            }
-        }
-
-        return if (writeIdx == tokenCount) result else result.copyOf(writeIdx)
-    }
-
-    private fun parseStrokeWidth(raw: String?): Float {
-        if (raw.isNullOrBlank()) return 1.41f
-        var i = 0
-        val len = raw.length
-        while (i < len && raw[i] <= ' ') i++
-        val start = i
-        while (i < len && raw[i] > ' ') i++
-        if (start >= len) return 1.41f
-        val first = raw.substring(start, i)
-        return first.toFloatOrNull()?.coerceIn(0.2f, 80f) ?: 1.41f
-    }
+    private fun parseCoordinates(raw: String): FloatArray =
+        dev.ilamparithi.aournalpp.utils.xopp.XoppParser.parseCoordinates(raw)
 
     /**
      * Parses standard Xournal hex colors (`#rrggbbaa`, `#rrggbb`) or named colors into Android ARGB Int.
      */
-    fun parseXoppColor(raw: String?, defaultColor: Int): Int {
-        if (raw.isNullOrBlank()) return defaultColor
-        val s = raw.trim()
-
-        if (s.startsWith("#")) {
-            val hex = s.substring(1)
-            return when (hex.length) {
-                8 -> {
-                    // Xournal stores RGBA -> Android expects ARGB
-                    val r = hex.substring(0, 2).toIntOrNull(16) ?: 0
-                    val g = hex.substring(2, 4).toIntOrNull(16) ?: 0
-                    val b = hex.substring(4, 6).toIntOrNull(16) ?: 0
-                    val a = hex.substring(6, 8).toIntOrNull(16) ?: 255
-                    ((a and 0xFF) shl 24) or ((r and 0xFF) shl 16) or ((g and 0xFF) shl 8) or (b and 0xFF)
-                }
-                6 -> {
-                    val r = hex.substring(0, 2).toIntOrNull(16) ?: 0
-                    val g = hex.substring(2, 4).toIntOrNull(16) ?: 0
-                    val b = hex.substring(4, 6).toIntOrNull(16) ?: 0
-                    ((0xFF) shl 24) or ((r and 0xFF) shl 16) or ((g and 0xFF) shl 8) or (b and 0xFF)
-                }
-                3 -> {
-                    val r = hex.substring(0, 1).repeat(2).toIntOrNull(16) ?: 0
-                    val g = hex.substring(1, 2).repeat(2).toIntOrNull(16) ?: 0
-                    val b = hex.substring(2, 3).repeat(2).toIntOrNull(16) ?: 0
-                    ((0xFF) shl 24) or ((r and 0xFF) shl 16) or ((g and 0xFF) shl 8) or (b and 0xFF)
-                }
-                else -> defaultColor
-            }
-        }
-
-        // Named Xournal colors
-        return when (s.lowercase()) {
-            "black" -> 0xFF000000.toInt()
-            "blue" -> 0xFF3333CC.toInt()
-            "red" -> 0xFFFF0000.toInt()
-            "green" -> 0xFF008000.toInt()
-            "gray", "grey" -> 0xFF808080.toInt()
-            "lightgray", "lightgrey" -> 0xFFD3D3D3.toInt()
-            "darkgray", "darkgrey" -> 0xFF404040.toInt()
-            "yellow" -> 0xFFFFFF00.toInt()
-            "magenta" -> 0xFFFF00FF.toInt()
-            "cyan" -> 0xFF00FFFF.toInt()
-            "orange" -> 0xFFFFA500.toInt()
-            "brown" -> 0xFF8B4513.toInt()
-            "pink" -> 0xFFFFC0CB.toInt()
-            "white" -> 0xFFFFFFFF.toInt()
-            "lightblue" -> 0xFFADD8E6.toInt()
-            "lightgreen" -> 0xFF90EE90.toInt()
-            else -> defaultColor
-        }
-    }
+    fun parseXoppColor(raw: String?, defaultColor: Int): Int =
+        dev.ilamparithi.aournalpp.utils.xopp.XoppParser.parseXoppColor(raw, defaultColor)
 }

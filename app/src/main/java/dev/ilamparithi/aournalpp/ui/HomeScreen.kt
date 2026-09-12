@@ -1,6 +1,9 @@
 package dev.ilamparithi.aournalpp.ui
 
 import dev.ilamparithi.aournalpp.ui.dialog.AutosaveResolutionDialog
+import dev.ilamparithi.aournalpp.ui.home.HomeTopAppBar
+import dev.ilamparithi.aournalpp.ui.home.HomeFloatingActionMenu
+import dev.ilamparithi.aournalpp.ui.home.HomeActiveSessionBanner
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
@@ -488,13 +491,6 @@ fun HomeScreen(
 
     val reduceAnimations = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
 
-    // FAB Rotation Animation
-    val fabRotation by animateFloatAsState(
-        targetValue = if (isFabExpanded) 135f else 0f,
-        animationSpec = if (reduceAnimations) snap() else spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-        label = "fabRotation"
-    )
-
     val configuration = LocalConfiguration.current
     val isWideOrLandscape = configuration.screenWidthDp >= 600 || configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
@@ -503,82 +499,23 @@ fun HomeScreen(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
-                TopAppBar(
-                    title = {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(end = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                // Suppress the "A" logo badge in landscape/wide mode (where the navigation rail is on the left)
-                                if (!isWideOrLandscape) {
-                                    AppLogoBadge(
-                                        size = 36.dp,
-                                        shape = RoundedCornerShape(12.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                }
-                                Text(
-                                    text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.app_name),
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            // Dynamic fun subhero badge appearing in top bar when scrolled up
-                            AppAnimatedVisibility(
-                                visible = isScrolled,
-                                enter = fadeIn() + slideInHorizontally { it / 2 },
-                                exit = fadeOut() + slideOutHorizontally { it / 2 }
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(16.dp),
-                                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f),
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                ) {
-                                    Text(
-                                        text = funSubhero,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                                    )
-                                }
+                HomeTopAppBar(
+                    isWideOrLandscape = isWideOrLandscape,
+                    isScrolled = isScrolled,
+                    funSubhero = funSubhero,
+                    activeSession = activeSession,
+                    onReturnToActiveSession = {
+                        val intent = Intent(context, CanvasActivity::class.java).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            if (context is android.app.Activity && context.isInMultiWindowMode) {
+                                addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
                             }
                         }
+                        context.startActivity(intent)
                     },
-                    actions = {
-                        AppAnimatedVisibility(
-                            visible = activeSession?.isRunning == true,
-                            enter = fadeIn() + slideInHorizontally { it / 2 },
-                            exit = fadeOut() + slideOutHorizontally { it / 2 }
-                        ) {
-                            activeSession?.let { session ->
-                                ReturnToActiveSessionButton(
-                                    sessionInfo = session,
-                                    onClick = {
-                                        val intent = Intent(context, CanvasActivity::class.java).apply {
-                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                            if (context is android.app.Activity && context.isInMultiWindowMode) {
-                                                addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
-                                            }
-                                        }
-                                        context.startActivity(intent)
-                                    }
-                                )
-                            }
-                        }
-
-                        dev.ilamparithi.aournalpp.ui.cloud.QuickSyncButton(
-                            onSyncFinished = { message ->
-                                scope.launch { snackbarHostState.showSnackbar(message) }
-                            }
-                        )
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
+                    onSyncFinished = { message ->
+                        scope.launch { snackbarHostState.showSnackbar(message) }
+                    }
                 )
             }
         ) { innerPadding ->
@@ -902,116 +839,21 @@ fun HomeScreen(
         }
 
         // 4. Expressive Speed Dial Floating Action Menu (Bottom Right)
-        AppAnimatedVisibility(
-            visible = isFabExpanded,
-            enter = fadeIn(animationSpec = spring(stiffness = 400f)),
-            exit = fadeOut(animationSpec = spring(stiffness = 400f))
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.45f))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { isFabExpanded = false }
-            )
-        }
-
-        // Speed Dial Action Items + Main FAB
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(24.dp)
-        ) {
-            val folderItemSpring by animateFloatAsState(
-                targetValue = if (isFabExpanded) 1f else 0f,
-                animationSpec = spring(dampingRatio = 0.78f, stiffness = 320f),
-                label = "folderItemSpring"
-            )
-            val pdfItemSpring by animateFloatAsState(
-                targetValue = if (isFabExpanded) 1f else 0f,
-                animationSpec = spring(dampingRatio = 0.78f, stiffness = 340f),
-                label = "pdfItemSpring"
-            )
-            val noteItemSpring by animateFloatAsState(
-                targetValue = if (isFabExpanded) 1f else 0f,
-                animationSpec = spring(dampingRatio = 0.78f, stiffness = 360f),
-                label = "noteItemSpring"
-            )
-
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                // Staggered Spring Action Items
-                SpeedDialActionItem(
-                    progress = folderItemSpring,
-                    icon = Icons.Default.CreateNewFolder,
-                    label = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_create_folder),
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    onClick = {
-                        isFabExpanded = false
-                        newFolderName = ""
-                        showCreateFolderDialog = true
-                    }
-                )
-
-                SpeedDialActionItem(
-                    progress = pdfItemSpring,
-                    icon = Icons.Default.FileOpen,
-                    label = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_open),
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    onClick = {
-                        isFabExpanded = false
-                        importFileLauncher.launch(arrayOf("*/*", "application/pdf", "application/x-xopp", "application/x-xoj", "application/octet-stream"))
-                    }
-                )
-
-                SpeedDialActionItem(
-                    progress = noteItemSpring,
-                    icon = Icons.Default.Edit,
-                    label = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_create_note),
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    onClick = {
-                        isFabExpanded = false
-                        promptNewNote()
-                    }
-                )
-
-                // Main Speed Dial FAB with spring physics on press & rotate
-                val fabInteractionSource = remember { MutableInteractionSource() }
-                val isFabPressed by fabInteractionSource.collectIsPressedAsState()
-                val fabPressScale by animateFloatAsState(
-                    targetValue = if (isFabPressed) 0.90f else 1f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-                    label = "fabPressScale"
-                )
-
-                FloatingActionButton(
-                    onClick = { isFabExpanded = !isFabExpanded },
-                    interactionSource = fabInteractionSource,
-                    shape = RoundedCornerShape(20.dp),
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 8.dp),
-                    modifier = Modifier
-                        .size(64.dp)
-                        .scale(fabPressScale)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.cd_expand_doc_actions),
-                        modifier = Modifier
-                            .size(32.dp)
-                            .rotate(fabRotation)
-                    )
-                }
-            }
-        }
+        HomeFloatingActionMenu(
+            isExpanded = isFabExpanded,
+            onExpandedChange = { isFabExpanded = it },
+            onCreateFolderClick = {
+                newFolderName = ""
+                showCreateFolderDialog = true
+            },
+            onOpenFileClick = {
+                importFileLauncher.launch(arrayOf("*/*", "application/pdf", "application/x-xopp", "application/x-xoj", "application/octet-stream"))
+            },
+            onCreateNoteClick = {
+                promptNewNote()
+            },
+            modifier = Modifier.align(Alignment.BottomEnd)
+        )
     }
 
     // Create Folder Dialog
@@ -1808,100 +1650,4 @@ private fun NormalHomeGalleryView(
     }
 }
 
-@Composable
-private fun ReturnToActiveSessionButton(
-    sessionInfo: ActiveSessionInfo,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
-    val pulseAlpha = if (reduceMotion) {
-        1.0f
-    } else {
-        val infiniteTransition = rememberInfiniteTransition(label = "pulseTransition")
-        val alpha by infiniteTransition.animateFloat(
-            initialValue = 0.4f,
-            targetValue = 1.0f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(1000, easing = LinearEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "pulseAlpha"
-        )
-        alpha
-    }
-
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.primaryContainer,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
-        shadowElevation = 3.dp,
-        modifier = modifier
-            .padding(vertical = 4.dp, horizontal = 4.dp)
-            .semantics {
-                contentDescription = "Return to active session: ${sessionInfo.documentTitle ?: "Note"}"
-            }
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-        ) {
-            // Glowing pulse indicator
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = pulseAlpha),
-                        shape = CircleShape
-                    )
-            )
-
-            Icon(
-                imageVector = Icons.Filled.Edit,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-
-            Text(
-                text = "Return to Active Session",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-
-            val cleanTitle = sessionInfo.documentTitle?.removePrefix("*")?.removeSuffix("*")?.trim()
-            if (!cleanTitle.isNullOrBlank() && cleanTitle != "New Note" && cleanTitle != "Unsaved Document" && cleanTitle != "Preferences") {
-                Text(
-                    text = "• $cleanTitle",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 110.dp)
-                )
-            }
-
-            if (sessionInfo.openWindowCount > 1) {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            text = "${sessionInfo.openWindowCount}",
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
 

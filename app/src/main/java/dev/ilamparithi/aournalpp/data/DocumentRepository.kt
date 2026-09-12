@@ -14,12 +14,14 @@ import dev.ilamparithi.aournalpp.runtime.PdfExportManager
 import dev.ilamparithi.aournalpp.R
 import dev.ilamparithi.aournalpp.utils.FormatUtils
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
+import java.util.Collections
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
@@ -30,8 +32,8 @@ class DocumentRepository private constructor(private val context: Context) {
     companion object {
         val SUPPORTED_EXTENSIONS = setOf("xopp", "xoj", "pdf")
         private const val FOLDER_META_FILE = ".folder.json"
-        private const val TRASH_DIR_NAME = ".Trash"
-        private const val TRASH_MANIFEST_FILE = ".trash_manifest.json"
+        const val TRASH_DIR_NAME = TrashRepository.TRASH_DIR_NAME
+        const val TRASH_MANIFEST_FILE = TrashRepository.TRASH_MANIFEST_FILE
         const val EMERGENCY_SAVES_DEFAULT_COLOR = "#F44336"
         const val EMERGENCY_SAVES_DEFAULT_ICON = "emergency"
         val DEFAULT_VIRTUALLY_PINNED_ROLES = setOf("emergency", "import", "imported")
@@ -121,14 +123,6 @@ class DocumentRepository private constructor(private val context: Context) {
 
     fun getCachedTotalFoldersCount(): Int? = cache.cachedTotalFoldersCount
 
-    data class FolderMetaData(
-        val colorHex: String? = null,
-        val iconEmoji: String? = null,
-        val iconType: String? = null,
-        val role: String? = null,
-        val excludeFromRecents: Boolean = false
-    )
-
     private val env = LinuxEnvironment(context)
     private val prefs = AppPreferences.getDocumentHub(context)
 
@@ -147,9 +141,32 @@ class DocumentRepository private constructor(private val context: Context) {
         return path == rootNotesDirAbsolutePath
     }
 
-    fun getTrashDirectory(): File = File(env.getNotesDirectory(), TRASH_DIR_NAME).apply {
-        if (!exists()) mkdirs()
-    }
+    val folderMetadataManager = FolderMetadataManager(
+        folderMetaCache = cache.folderMetaCache,
+        isEmergencySavesFolder = { isEmergencySavesFolder(it) },
+        getImportedCanonical = { importedCanonical },
+        getAudioCanonical = { audioCanonical },
+        onInvalidateCaches = { invalidateAllCaches() }
+    )
+
+    val noteHistoryTracker = NoteHistoryTracker(
+        context = context,
+        prefs = prefs,
+        cache = cache,
+        scope = repoScope,
+        isExcludedFromRecents = { file -> isExcludedFromRecents(file) },
+        isWithinRootDirectory = { file -> isWithinRootDirectory(file) }
+    )
+
+    val trashRepository = TrashRepository(
+        notesDirectoryProvider = { env.getNotesDirectory() },
+        findAssociatedFiles = { file -> findAssociatedAutosaveAndBackupFiles(file) },
+        onRemoveOpenedNoteHistory = { path -> removeOpenedNoteHistory(path) },
+        onInvalidateCaches = { invalidateAllCaches() },
+        isOpenableFile = { file -> isOpenableFile(file) }
+    )
+
+    fun getTrashDirectory(): File = trashRepository.getTrashDirectory()
 
     private fun isOpenableFile(file: File): Boolean {
         val ext = file.extension.lowercase()
@@ -365,30 +382,7 @@ class DocumentRepository private constructor(private val context: Context) {
     private fun canonicalOf(file: File): String =
         try { file.canonicalPath } catch (e: Exception) { file.absolutePath }
 
-    fun getOpenedNotesTimestamps(): Map<String, Long> {
-        var map = cachedOpenedNotesTimestamps
-        if (map == null) {
-            val raw = prefs.getString("pref_opened_notes_timestamps_json", null)
-            map = if (raw != null) {
-                try {
-                    val obj = org.json.JSONObject(raw)
-                    val m = HashMap<String, Long>()
-                    val keys = obj.keys()
-                    while (keys.hasNext()) {
-                        val k = keys.next()
-                        m[k] = obj.optLong(k)
-                    }
-                    m
-                } catch (e: Exception) {
-                    emptyMap()
-                }
-            } else {
-                emptyMap()
-            }
-            cachedOpenedNotesTimestamps = map
-        }
-        return map
-    }
+    fun getOpenedNotesTimestamps(): Map<String, Long> = noteHistoryTracker.getOpenedNotesTimestamps()
 
     /** Per-scan cache for the values every file in a scan shares. */
     private inner class ScanCache {
@@ -671,25 +665,17 @@ class DocumentRepository private constructor(private val context: Context) {
         return Result.success(newDir)
     }
 
-    fun setFolderColor(folderDir: File, colorHex: String?): Result<Unit> {
-        val meta = readFolderMeta(folderDir)
-        return writeFolderMeta(folderDir, colorHex, meta.iconEmoji, meta.iconType, meta.role, meta.excludeFromRecents)
-    }
+    fun setFolderColor(folderDir: File, colorHex: String?): Result<Unit> =
+        folderMetadataManager.setFolderColor(folderDir, colorHex)
 
-    fun setFolderEmoji(folderDir: File, emoji: String?): Result<Unit> {
-        val meta = readFolderMeta(folderDir)
-        return writeFolderMeta(folderDir, meta.colorHex, emoji, if (emoji == null) (meta.iconType ?: "folder") else null, meta.role, meta.excludeFromRecents)
-    }
+    fun setFolderEmoji(folderDir: File, emoji: String?): Result<Unit> =
+        folderMetadataManager.setFolderEmoji(folderDir, emoji)
 
-    fun setFolderIcon(folderDir: File, iconType: String?): Result<Unit> {
-        val meta = readFolderMeta(folderDir)
-        return writeFolderMeta(folderDir, meta.colorHex, null, iconType, meta.role, meta.excludeFromRecents)
-    }
+    fun setFolderIcon(folderDir: File, iconType: String?): Result<Unit> =
+        folderMetadataManager.setFolderIcon(folderDir, iconType)
 
-    fun setFolderExcludeFromRecents(folderDir: File, exclude: Boolean): Result<Unit> {
-        val meta = readFolderMeta(folderDir)
-        return writeFolderMeta(folderDir, meta.colorHex, meta.iconEmoji, meta.iconType, meta.role, exclude)
-    }
+    fun setFolderExcludeFromRecents(folderDir: File, exclude: Boolean): Result<Unit> =
+        folderMetadataManager.setFolderExcludeFromRecents(folderDir, exclude)
 
     fun updateFolderMeta(
         folderDir: File,
@@ -698,12 +684,7 @@ class DocumentRepository private constructor(private val context: Context) {
         iconType: String? = null,
         role: String? = null,
         excludeFromRecents: Boolean? = null
-    ): Result<Unit> {
-        val existing = readFolderMeta(folderDir)
-        val existingRole = role ?: existing.role
-        val existingExclude = excludeFromRecents ?: existing.excludeFromRecents
-        return writeFolderMeta(folderDir, colorHex, iconEmoji, iconType, existingRole, existingExclude)
-    }
+    ): Result<Unit> = folderMetadataManager.updateFolderMeta(folderDir, colorHex, iconEmoji, iconType, role, excludeFromRecents)
 
     suspend fun renameFolder(folderDir: File, newFolderName: String): Result<File> = withContext(Dispatchers.IO) {
         runCatching {
@@ -752,100 +733,9 @@ class DocumentRepository private constructor(private val context: Context) {
         }
     }
 
-    fun getFolderMeta(folderDir: File): FolderMetaData {
-        return readFolderMeta(folderDir)
-    }
+    fun getFolderMeta(folderDir: File): FolderMetaData = folderMetadataManager.getFolderMeta(folderDir)
 
-    private fun readFolderMeta(folderDir: File): FolderMetaData {
-        val metaFile = File(folderDir, FOLDER_META_FILE)
-        val metaLastModified = if (metaFile.exists()) metaFile.lastModified() else -1L
-        val cacheKey = folderDir.absolutePath
-        val cached = folderMetaCache[cacheKey]
-        if (cached != null && cached.first == metaLastModified) {
-            return cached.second
-        }
-
-        val dirName = folderDir.name
-        var detectedRole: String? = null
-        var defaultColor: String? = null
-        var defaultIcon: String? = null
-
-        when {
-            dirName.equals("Emergency Saves", ignoreCase = true) || isEmergencySavesFolder(folderDir) -> {
-                detectedRole = "emergency"
-                defaultColor = EMERGENCY_SAVES_DEFAULT_COLOR
-                defaultIcon = EMERGENCY_SAVES_DEFAULT_ICON
-            }
-            dirName.equals("Imported", ignoreCase = true) ||
-                folderDir.absolutePath == env.getImportedDirectory().absolutePath ||
-                (try { canonicalOf(folderDir) == importedCanonical } catch (_: Exception) { false }) -> {
-                detectedRole = "import"
-                defaultIcon = "import"
-            }
-            dirName.equals("Audio", ignoreCase = true) ||
-                folderDir.absolutePath == env.getAudioDirectory().absolutePath ||
-                (try { canonicalOf(folderDir) == audioCanonical } catch (_: Exception) { false }) -> {
-                detectedRole = "audio"
-                defaultIcon = "audio"
-            }
-        }
-
-        if (!metaFile.exists()) {
-            val meta = FolderMetaData(
-                colorHex = defaultColor,
-                iconEmoji = null,
-                iconType = defaultIcon,
-                role = detectedRole,
-                excludeFromRecents = false
-            )
-            folderMetaCache[cacheKey] = Pair(metaLastModified, meta)
-            return meta
-        }
-
-        val resultMeta = try {
-            val json = JSONObject(metaFile.readText())
-            val role = if (json.has("role")) {
-                json.optString("role").takeIf { it.isNotBlank() } ?: detectedRole
-            } else {
-                detectedRole
-            }
-
-            val color = if (json.has("color")) {
-                json.optString("color").takeIf { it.isNotBlank() }
-            } else {
-                defaultColor
-            }
-
-            val emoji = if (json.has("emoji")) {
-                json.optString("emoji").takeIf { it.isNotBlank() }
-            } else {
-                null
-            }
-
-            val icon = if (json.has("icon")) {
-                json.optString("icon").takeIf { it.isNotBlank() }
-            } else if (emoji == null) {
-                defaultIcon
-            } else {
-                null
-            }
-
-            val excludeFromRecents = json.optBoolean("excludeFromRecents", false) || json.optBoolean("exclude_from_recents", false)
-
-            FolderMetaData(color, emoji, icon, role, excludeFromRecents)
-        } catch (e: Exception) {
-            FolderMetaData(
-                colorHex = defaultColor,
-                iconEmoji = null,
-                iconType = defaultIcon,
-                role = detectedRole,
-                excludeFromRecents = false
-            )
-        }
-
-        folderMetaCache[cacheKey] = Pair(metaLastModified, resultMeta)
-        return resultMeta
-    }
+    private fun readFolderMeta(folderDir: File): FolderMetaData = folderMetadataManager.readFolderMeta(folderDir)
 
     private fun writeFolderMeta(
         folderDir: File,
@@ -854,49 +744,7 @@ class DocumentRepository private constructor(private val context: Context) {
         iconType: String? = null,
         role: String? = null,
         excludeFromRecents: Boolean? = null
-    ): Result<Unit> = runCatching {
-        val metaFile = File(folderDir, FOLDER_META_FILE)
-        val json = if (metaFile.exists()) {
-            try { JSONObject(metaFile.readText()) } catch (e: Exception) { JSONObject() }
-        } else {
-            JSONObject()
-        }
-
-        if (!colorHex.isNullOrBlank()) {
-            json.put("color", colorHex)
-        } else {
-            json.remove("color")
-        }
-
-        if (!iconEmoji.isNullOrBlank()) {
-            json.put("emoji", iconEmoji.trim())
-            json.remove("icon")
-        } else {
-            json.remove("emoji")
-            if (!iconType.isNullOrBlank()) {
-                json.put("icon", iconType.trim())
-            } else {
-                json.remove("icon")
-            }
-        }
-
-        if (!role.isNullOrBlank()) {
-            json.put("role", role.trim())
-        }
-
-        if (excludeFromRecents != null) {
-            if (excludeFromRecents) {
-                json.put("excludeFromRecents", true)
-            } else {
-                json.remove("excludeFromRecents")
-                json.remove("exclude_from_recents")
-            }
-        }
-
-        metaFile.writeText(json.toString(2))
-        folderMetaCache.remove(folderDir.absolutePath)
-        invalidateAllCaches()
-    }
+    ): Result<Unit> = folderMetadataManager.writeFolderMeta(folderDir, colorHex, iconEmoji, iconType, role, excludeFromRecents)
 
     fun getFolderItem(dir: File): FolderItem {
         val cache = ScanCache()
@@ -1040,252 +888,33 @@ class DocumentRepository private constructor(private val context: Context) {
         }
     }
 
-    // Trashcan Operations
-    data class TrashReceipt(
-        val movedCount: Int,
-        val trashFileNames: List<String>
-    )
+    // Trashcan Operations delegated to TrashRepository
+    suspend fun moveToTrash(notes: List<NoteDocument>): Result<TrashReceipt> =
+        trashRepository.moveToTrash(notes)
 
-    suspend fun moveToTrash(notes: List<NoteDocument>): Result<TrashReceipt> = withContext(Dispatchers.IO) {
-        runCatching {
-            val trashDir = getTrashDirectory()
-            val manifestFile = File(trashDir, TRASH_MANIFEST_FILE)
-            val manifest = if (manifestFile.exists()) {
-                try { JSONObject(manifestFile.readText()) } catch (e: Exception) { JSONObject() }
-            } else {
-                JSONObject()
-            }
+    suspend fun moveFolderToTrash(folder: File): Result<String> =
+        trashRepository.moveFolderToTrash(folder)
 
-            var movedCount = 0
-            val timestamp = System.currentTimeMillis()
-            val trashFileNames = mutableListOf<String>()
+    suspend fun restoreTrashItems(trashFileNames: List<String>): Result<Int> =
+        trashRepository.restoreTrashItems(trashFileNames)
 
-            for ((file) in notes) {
-                if (!file.exists()) continue
-                val trashFileName = "${timestamp}_${file.name}"
-                val targetTrashFile = File(trashDir, trashFileName)
-                val srcAssociated = findAssociatedAutosaveAndBackupFiles(file)
+    suspend fun restoreFolderFromTrash(trashFolderName: String): Result<File> =
+        trashRepository.restoreFolderFromTrash(trashFolderName)
 
-                if (file.renameTo(targetTrashFile)) {
-                    manifest.put(trashFileName, file.absolutePath)
-                    removeOpenedNoteHistory(file.absolutePath)
-                    movedCount++
-                    trashFileNames.add(trashFileName)
+    suspend fun scanTrash(): List<NoteDocument> =
+        trashRepository.scanTrash()
 
-                    // Move all associated autosave and backup files to Trash
-                    for (assoc in srcAssociated) {
-                        if (assoc.exists()) {
-                            val autoTrashName = "${timestamp}_${assoc.name}"
-                            val autoTrashFile = File(trashDir, autoTrashName)
-                            if (assoc.renameTo(autoTrashFile)) {
-                                manifest.put(autoTrashName, assoc.absolutePath)
-                                trashFileNames.add(autoTrashName)
-                            }
-                        }
-                    }
-                }
-            }
+    suspend fun restoreFromTrash(note: NoteDocument): Result<File> =
+        trashRepository.restoreFromTrash(note)
 
-            manifestFile.writeText(manifest.toString(2))
-            TrashReceipt(movedCount, trashFileNames).also { invalidateAllCaches() }
-        }
-    }
+    suspend fun restoreMultipleFromTrash(notes: List<NoteDocument>): Result<Int> =
+        trashRepository.restoreMultipleFromTrash(notes)
 
-    suspend fun moveFolderToTrash(folder: File): Result<String> = withContext(Dispatchers.IO) {
-        runCatching {
-            val trashDir = getTrashDirectory()
-            val manifestFile = File(trashDir, TRASH_MANIFEST_FILE)
-            val manifest = if (manifestFile.exists()) {
-                try { JSONObject(manifestFile.readText()) } catch (e: Exception) { JSONObject() }
-            } else {
-                JSONObject()
-            }
+    suspend fun deletePermanently(notes: List<NoteDocument>): Result<Int> =
+        trashRepository.deletePermanently(notes)
 
-            val timestamp = System.currentTimeMillis()
-            val trashFolderName = "${timestamp}_${folder.name}"
-            val targetTrashFolder = File(trashDir, trashFolderName)
-
-            if (folder.renameTo(targetTrashFolder)) {
-                manifest.put(trashFolderName, folder.absolutePath)
-                manifestFile.writeText(manifest.toString(2))
-                invalidateAllCaches()
-                trashFolderName
-            } else {
-                error("Failed to move folder to trash")
-            }
-        }
-    }
-
-    suspend fun restoreTrashItems(trashFileNames: List<String>): Result<Int> = withContext(Dispatchers.IO) {
-        runCatching {
-            val trashDir = getTrashDirectory()
-            val manifestFile = File(trashDir, TRASH_MANIFEST_FILE)
-            val manifest = if (manifestFile.exists()) {
-                try { JSONObject(manifestFile.readText()) } catch (e: Exception) { JSONObject() }
-            } else {
-                JSONObject()
-            }
-
-            var count = 0
-            for (name in trashFileNames) {
-                val trashFile = File(trashDir, name)
-                if (!trashFile.exists()) continue
-                val originalPath = manifest.optString(name).takeIf { it.isNotBlank() }
-                val destFile = if (!originalPath.isNullOrBlank()) {
-                    File(originalPath)
-                } else {
-                    File(env.getNotesDirectory(), name.substringAfter("_"))
-                }
-                destFile.parentFile?.mkdirs()
-                if (trashFile.renameTo(destFile)) {
-                    manifest.remove(name)
-                    count++
-                }
-            }
-            manifestFile.writeText(manifest.toString(2))
-            count.also { invalidateAllCaches() }
-        }
-    }
-
-    suspend fun restoreFolderFromTrash(trashFolderName: String): Result<File> = withContext(Dispatchers.IO) {
-        runCatching {
-            val trashDir = getTrashDirectory()
-            val manifestFile = File(trashDir, TRASH_MANIFEST_FILE)
-            val manifest = if (manifestFile.exists()) {
-                try { JSONObject(manifestFile.readText()) } catch (e: Exception) { JSONObject() }
-            } else {
-                JSONObject()
-            }
-
-            val originalPath = manifest.optString(trashFolderName).takeIf { it.isNotBlank() }
-            val targetTrashFolder = File(trashDir, trashFolderName)
-            if (!targetTrashFolder.exists()) error("Trash folder does not exist")
-
-            val destDir = if (!originalPath.isNullOrBlank()) {
-                File(originalPath)
-            } else {
-                File(env.getNotesDirectory(), trashFolderName.substringAfter("_"))
-            }
-
-            destDir.parentFile?.mkdirs()
-            if (targetTrashFolder.renameTo(destDir)) {
-                manifest.remove(trashFolderName)
-                manifestFile.writeText(manifest.toString(2))
-                invalidateAllCaches()
-                destDir
-            } else {
-                error("Failed to restore folder from trash")
-            }
-        }
-    }
-
-    suspend fun scanTrash(): List<NoteDocument> = withContext(Dispatchers.IO) {
-        val trashDir = getTrashDirectory()
-        val allFiles = trashDir.listFiles() ?: return@withContext emptyList()
-        allFiles.filter { it.isFile && isOpenableFile(it) }
-            .map { file ->
-                NoteDocument(
-                    file = file,
-                    title = file.name.substringAfter("_"),
-                    path = file.absolutePath,
-                    lastModifiedMs = file.lastModified(),
-                    sizeBytes = file.length(),
-                    lastModifiedFormatted = FormatUtils.formatDateTimeMedium(file.lastModified()),
-                    sizeFormatted = FormatUtils.formatFileSize(file.length()),
-                    folder = "Trash"
-                )
-            }.sortedByDescending { it.lastModifiedMs }
-    }
-
-    suspend fun restoreFromTrash(note: NoteDocument): Result<File> = withContext(Dispatchers.IO) {
-        runCatching {
-            val trashDir = getTrashDirectory()
-            val manifestFile = File(trashDir, TRASH_MANIFEST_FILE)
-            val manifest = if (manifestFile.exists()) {
-                try { JSONObject(manifestFile.readText()) } catch (e: Exception) { JSONObject() }
-            } else {
-                JSONObject()
-            }
-
-            val originalPath = manifest.optString(note.file.name).takeIf { it.isNotBlank() }
-            val destFile = if (!originalPath.isNullOrBlank()) {
-                File(originalPath)
-            } else {
-                File(env.getNotesDirectory(), note.title)
-            }
-
-            destFile.parentFile?.mkdirs()
-            if (note.file.renameTo(destFile)) {
-                manifest.remove(note.file.name)
-                manifestFile.writeText(manifest.toString(2))
-                destFile
-            } else {
-                error("Failed to restore ${note.title}")
-            }
-        }
-    }
-
-    suspend fun restoreMultipleFromTrash(notes: List<NoteDocument>): Result<Int> = withContext(Dispatchers.IO) {
-        runCatching {
-            val trashDir = getTrashDirectory()
-            val manifestFile = File(trashDir, TRASH_MANIFEST_FILE)
-            val manifest = if (manifestFile.exists()) {
-                try { JSONObject(manifestFile.readText()) } catch (e: Exception) { JSONObject() }
-            } else {
-                JSONObject()
-            }
-
-            var count = 0
-            for ((file, title) in notes) {
-                val originalPath = manifest.optString(file.name).takeIf { it.isNotBlank() }
-                val destFile = if (!originalPath.isNullOrBlank()) {
-                    File(originalPath)
-                } else {
-                    File(env.getNotesDirectory(), title)
-                }
-
-                destFile.parentFile?.mkdirs()
-                if (file.renameTo(destFile)) {
-                    manifest.remove(file.name)
-                    count++
-                }
-            }
-
-            manifestFile.writeText(manifest.toString(2))
-            count
-        }
-    }
-
-    suspend fun deletePermanently(notes: List<NoteDocument>): Result<Int> = withContext(Dispatchers.IO) {
-        runCatching {
-            val trashDir = getTrashDirectory()
-            val manifestFile = File(trashDir, TRASH_MANIFEST_FILE)
-            val manifest = if (manifestFile.exists()) {
-                try { JSONObject(manifestFile.readText()) } catch (e: Exception) { JSONObject() }
-            } else {
-                JSONObject()
-            }
-
-            var count = 0
-            for ((file) in notes) {
-                if (file.deleteRecursively()) {
-                    manifest.remove(file.name)
-                    count++
-                }
-            }
-
-            manifestFile.writeText(manifest.toString(2))
-            count.also { invalidateAllCaches() }
-        }
-    }
-
-    suspend fun emptyTrash(): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
-            val trashDir = getTrashDirectory()
-            trashDir.listFiles()?.forEach { it.deleteRecursively() }
-            invalidateAllCaches()
-        }
-    }
+    suspend fun emptyTrash(): Result<Unit> =
+        trashRepository.emptyTrash()
 
     // CRUD for individual note
     suspend fun renameNote(doc: NoteDocument, newTitle: String): Result<File> = withContext(Dispatchers.IO) {
@@ -1867,129 +1496,15 @@ class DocumentRepository private constructor(private val context: Context) {
     }
 
     // Open History Tracking
-    fun recordNoteOpened(path: String) {
-        if (path.isBlank() || path.contains("staged_imports") || path.contains("/cache/") || path.contains("/.Trash/")) return
-        val file = File(path)
-        if (isExcludedFromRecents(file)) return
+    fun recordNoteOpened(path: String) = noteHistoryTracker.recordNoteOpened(path)
 
-        val currentList = (cachedOpenedNotesHistory ?: getRecentlyOpenedHistoryFromPrefs()).toMutableList()
-        currentList.remove(path)
-        currentList.add(0, path)
-        val trimmed = currentList.take(50)
-        cachedOpenedNotesHistory = trimmed
+    private fun getRecentlyOpenedHistoryFromPrefs(): List<String> = noteHistoryTracker.getRecentlyOpenedHistoryFromPrefs()
 
-        val timestampsMap = (cachedOpenedNotesTimestamps ?: getOpenedNotesTimestamps()).toMutableMap()
-        val now = System.currentTimeMillis()
-        timestampsMap[path] = now
-        cachedOpenedNotesTimestamps = timestampsMap
+    fun removeOpenedNoteHistory(path: String) = noteHistoryTracker.removeOpenedNoteHistory(path)
 
-        repoScope.launch {
-            try {
-                val jsonArray = org.json.JSONArray()
-                trimmed.forEach { jsonArray.put(it) }
+    fun updateOpenedNotePath(oldPath: String, newPath: String) = noteHistoryTracker.updateOpenedNotePath(oldPath, newPath)
 
-                val timestampsObj = org.json.JSONObject()
-                timestampsMap.forEach { (k, v) -> timestampsObj.put(k, v) }
-
-                prefs.edit()
-                    .putString("pref_opened_notes_history_json", jsonArray.toString())
-                    .putString("pref_opened_notes_timestamps_json", timestampsObj.toString())
-                    .putString("pref_last_opened_note_path", path)
-                    .apply()
-
-                try {
-                    AppPreferences.getGeneral(context)
-                        .edit()
-                        .putString("pref_last_opened_note_path", path)
-                        .apply()
-                } catch (_: Exception) {
-                    // ignore
-                }
-            } catch (_: Exception) {
-                // ignore
-            }
-        }
-    }
-
-    private fun getRecentlyOpenedHistoryFromPrefs(): List<String> {
-        val raw = prefs.getString("pref_opened_notes_history_json", null) ?: return emptyList()
-        return try {
-            val array = org.json.JSONArray(raw)
-            val l = mutableListOf<String>()
-            for (i in 0 until array.length()) {
-                val p = array.optString(i)
-                if (p.isNotBlank() && !p.contains("staged_imports") && !p.contains("/cache/")) {
-                    l.add(p)
-                }
-            }
-            l
-        } catch (e: Exception) {
-            emptyList()
-        }
-    }
-
-    fun removeOpenedNoteHistory(path: String) {
-        if (path.isBlank()) return
-        val currentList = (cachedOpenedNotesHistory ?: getRecentlyOpenedHistoryFromPrefs()).toMutableList()
-        if (currentList.remove(path)) {
-            cachedOpenedNotesHistory = currentList
-            val jsonArray = org.json.JSONArray()
-            currentList.forEach { jsonArray.put(it) }
-            prefs.edit().putString("pref_opened_notes_history_json", jsonArray.toString()).apply()
-        }
-    }
-
-    fun updateOpenedNotePath(oldPath: String, newPath: String) {
-        if (oldPath.isBlank() || newPath.isBlank()) return
-        val currentList = (cachedOpenedNotesHistory ?: getRecentlyOpenedHistoryFromPrefs()).toMutableList()
-        val index = currentList.indexOf(oldPath)
-        if (index != -1) {
-            currentList[index] = newPath
-            cachedOpenedNotesHistory = currentList
-            val jsonArray = org.json.JSONArray()
-            currentList.forEach { jsonArray.put(it) }
-            prefs.edit().putString("pref_opened_notes_history_json", jsonArray.toString()).apply()
-        }
-        if (prefs.getString("pref_last_opened_note_path", null) == oldPath) {
-            prefs.edit().putString("pref_last_opened_note_path", newPath).apply()
-        }
-    }
-
-    fun getRecentlyOpenedPaths(strictlyWithinRoot: Boolean = true): List<String> {
-        var baseList = cachedOpenedNotesHistory
-        if (baseList == null) {
-            baseList = getRecentlyOpenedHistoryFromPrefs()
-            cachedOpenedNotesHistory = baseList
-        }
-
-        val list = mutableListOf<String>()
-        for (p in baseList) {
-            if (!list.contains(p) && !p.contains("staged_imports") && !p.contains("/cache/")) {
-                if (!strictlyWithinRoot || isWithinRootDirectory(File(p))) {
-                    list.add(p)
-                }
-            }
-        }
-
-        val mainPrefsLastOpened = try {
-            AppPreferences.getGeneral(context)
-                .getString("pref_last_opened_note_path", null)
-        } catch (e: Exception) {
-            null
-        }
-        if (!mainPrefsLastOpened.isNullOrBlank() && !mainPrefsLastOpened.contains("staged_imports") && !mainPrefsLastOpened.contains("/cache/") && !list.contains(mainPrefsLastOpened)) {
-            if (!strictlyWithinRoot || isWithinRootDirectory(File(mainPrefsLastOpened))) {
-                list.add(0, mainPrefsLastOpened)
-            }
-        }
-        val docHubLastOpened = prefs.getString("pref_last_opened_note_path", null)
-        if (!docHubLastOpened.isNullOrBlank() && !docHubLastOpened.contains("staged_imports") && !docHubLastOpened.contains("/cache/") && !list.contains(docHubLastOpened)) {
-            if (!strictlyWithinRoot || isWithinRootDirectory(File(docHubLastOpened))) {
-                list.add(0, docHubLastOpened)
-            }
-        }
-        return list
-    }
+    fun getRecentlyOpenedPaths(strictlyWithinRoot: Boolean = true): List<String> = noteHistoryTracker.getRecentlyOpenedPaths(strictlyWithinRoot)
 
     suspend fun getLastOpenedOrModifiedNote(): NoteDocument? = withContext(Dispatchers.IO) {
         val cache = ScanCache()

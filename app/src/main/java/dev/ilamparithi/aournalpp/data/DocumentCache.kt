@@ -13,7 +13,7 @@ class DocumentCache {
     val directoryCache = ConcurrentHashMap<String, Pair<List<FolderItem>, List<NoteDocument>>>()
     val homeNotesCache = ConcurrentHashMap<Int, List<NoteDocument>>()
     val recentNotesCache = ConcurrentHashMap<Int, List<NoteDocument>>()
-    val folderMetaCache = ConcurrentHashMap<String, Pair<Long, DocumentRepository.FolderMetaData>>()
+    val folderMetaCache = ConcurrentHashMap<String, Pair<Long, FolderMetaData>>()
 
     @Volatile var cachedContinueNote: NoteDocument? = null
     @Volatile var cachedTotalNotesCount: Int? = null

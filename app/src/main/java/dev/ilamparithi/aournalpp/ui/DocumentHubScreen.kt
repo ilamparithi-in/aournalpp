@@ -582,53 +582,14 @@ fun DocumentHubScreen(
                 Column(modifier = Modifier.fillMaxSize()) {
                     // Breadcrumbs
                     if (!isRootDirectory && !isViewingTrash) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                                    .fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Notes",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.clickable {
-                                        viewModel.setCurrentDirectory(repository.getRootNotesDirectory())
-                                    }
-                                )
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .size(14.dp)
-                                        .padding(horizontal = 2.dp),
-                                    tint = MaterialTheme.colorScheme.outline
-                                )
-                                if (!currentFolderItem?.iconEmoji.isNullOrBlank()) {
-                                    Text(text = currentFolderItem.iconEmoji, fontSize = 13.sp)
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                } else if (currentFolderItem?.iconType == "emergency" || repository.isEmergencySavesFolder(currentDirectory)) {
-                                    Icon(
-                                        imageVector = Icons.Default.Emergency,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(14.dp),
-                                        tint = currentFolderItem?.colorHex?.let { try { Color(android.graphics.Color.parseColor(it)) } catch (e: Exception) { null } } ?: MaterialTheme.colorScheme.error
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                }
-                                Text(
-                                    text = currentDirectory.name,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
+                        dev.ilamparithi.aournalpp.ui.hub.FolderBreadcrumbsBar(
+                            currentDirectory = currentDirectory,
+                            currentFolderItem = currentFolderItem,
+                            isEmergencySavesFolder = repository.isEmergencySavesFolder(currentDirectory),
+                            onNavigateToRoot = {
+                                viewModel.setCurrentDirectory(repository.getRootNotesDirectory())
                             }
-                        }
+                        )
                     }
 
                     val reduceAnimations = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations

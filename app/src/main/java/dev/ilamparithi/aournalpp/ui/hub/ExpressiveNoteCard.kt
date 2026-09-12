@@ -75,7 +75,11 @@ import dev.ilamparithi.aournalpp.model.NoteFileType
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
 import dev.ilamparithi.aournalpp.ui.FileTypePill
 import dev.ilamparithi.aournalpp.ui.InteractiveMarqueeText
-import dev.ilamparithi.aournalpp.ui.StandardNoteActionDropdown
+import dev.ilamparithi.aournalpp.ui.hub.NoteActionDropdown
+import dev.ilamparithi.aournalpp.ui.hub.NoteCardCallbacks
+import dev.ilamparithi.aournalpp.ui.hub.PinnedBadge
+import dev.ilamparithi.aournalpp.ui.hub.SelectionCheckboxBadge
+import dev.ilamparithi.aournalpp.ui.hub.rememberNoteAccessibilityActions
 import dev.ilamparithi.aournalpp.ui.common.AppIconButton
 import dev.ilamparithi.aournalpp.utils.AccessibilityUtils
 import dev.ilamparithi.aournalpp.utils.ThumbnailManager
@@ -99,7 +103,8 @@ fun ExpressiveNoteCard(
     onRename: () -> Unit,
     onDuplicate: () -> Unit,
     onDelete: () -> Unit,
-    onRestore: (() -> Unit)? = null
+    onRestore: (() -> Unit)? = null,
+    thumbnailManager: dev.ilamparithi.aournalpp.utils.IThumbnailManager = dev.ilamparithi.aournalpp.utils.LocalThumbnailManager.current
 ) {
     val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
@@ -107,46 +112,41 @@ fun ExpressiveNoteCard(
     val onDismissMenu = remember { { showMenu = false } }
 
     val thumbnailImage by produceState<ImageBitmap?>(
-        initialValue = ThumbnailManager.getCachedThumbnail(note.file, note.lastModifiedMs),
+        initialValue = thumbnailManager.getCachedThumbnail(note.file, note.lastModifiedMs),
         key1 = note.lastModifiedMs
     ) {
-        value = ThumbnailManager.getOrCreateThumbnailBitmap(context, note.file, pdfExportManager, note.lastModifiedMs)
+        value = thumbnailManager.getOrCreateThumbnailBitmap(context, note.file, pdfExportManager, note.lastModifiedMs)
     }
 
     val cardShape = RoundedCornerShape(16.dp)
 
     var cardInteractionTimestamp by remember { mutableStateOf(0L) }
 
-    val openActionLabel = stringResource(R.string.action_open_note)
-    val pinActionLabel = if (note.isPinned) stringResource(R.string.action_unpin_note) else stringResource(R.string.action_pin_note)
-    val shareExportActionLabel = stringResource(R.string.action_share_export)
-    val exportPdfActionLabel = stringResource(R.string.action_export_pdf)
-    val shareActionLabel = stringResource(R.string.action_share_note)
-    val renameActionLabel = stringResource(R.string.action_rename)
-    val duplicateActionLabel = stringResource(R.string.action_keep_both)
-    val deleteActionLabel = stringResource(R.string.action_delete)
-    val restoreActionLabel = stringResource(R.string.action_restore_note)
-
-    val customActionsList = remember(note, isTrashMode, isSelectionMode) {
-        buildList {
-            add(CustomAccessibilityAction(openActionLabel) { onClick(); true })
-            if (!isSelectionMode) {
-                add(CustomAccessibilityAction(pinActionLabel) { onTogglePin(); true })
-                if (onShareExport != null) {
-                    add(CustomAccessibilityAction(shareExportActionLabel) { onShareExport(); true })
-                } else {
-                    onExportPdf?.let { add(CustomAccessibilityAction(exportPdfActionLabel) { it(); true }) }
-                    onShareXopp?.let { add(CustomAccessibilityAction(shareActionLabel) { it(); true }) }
-                }
-                add(CustomAccessibilityAction(renameActionLabel) { onRename(); true })
-                add(CustomAccessibilityAction(duplicateActionLabel) { onDuplicate(); true })
-                add(CustomAccessibilityAction(deleteActionLabel) { onDelete(); true })
-            }
-            if (isTrashMode && onRestore != null) {
-                add(CustomAccessibilityAction(restoreActionLabel) { onRestore(); true })
-            }
-        }
+    val callbacks = remember(
+        onClick, onLongClick, onTogglePin, onShareExport, onExportPdf,
+        onSharePdf, onShareXopp, onRename, onDuplicate, onDelete, onRestore
+    ) {
+        NoteCardCallbacks(
+            onClick = onClick,
+            onLongClick = onLongClick,
+            onTogglePin = onTogglePin,
+            onShareExport = onShareExport,
+            onExportPdf = onExportPdf,
+            onSharePdf = onSharePdf,
+            onShareXopp = onShareXopp,
+            onRename = onRename,
+            onDuplicate = onDuplicate,
+            onDelete = onDelete,
+            onRestore = onRestore
+        )
     }
+
+    val customActionsList = rememberNoteAccessibilityActions(
+        note = note,
+        isTrashMode = isTrashMode,
+        isSelectionMode = isSelectionMode,
+        callbacks = callbacks
+    )
 
     val a11yNoteDescription = remember(note, isSelected, isSelectionMode) {
         AccessibilityUtils.buildNoteCardA11yDescription(
@@ -234,47 +234,25 @@ fun ExpressiveNoteCard(
                             .padding(8.dp)
                     )
 
-                    // Pinned Badge Overlay (Top Right, when not selecting)
+                    // Pinned Badge Overlay (Top Right, when not selecting)                    // Pinned indicator badge
                     if (note.isPinned && !isSelectionMode) {
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shadowElevation = 3.dp,
+                        PinnedBadge(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .padding(8.dp)
-                                .size(26.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.PushPin,
-                                    contentDescription = "Pinned Note",
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                            }
-                        }
+                                .padding(8.dp),
+                            size = 26.dp
+                        )
                     }
 
                     // Selection Checkbox Badge Overlay
                     if (isSelectionMode) {
-                        Surface(
-                            shape = CircleShape,
-                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                        SelectionCheckboxBadge(
+                            isSelected = isSelected,
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .padding(8.dp)
-                                .size(26.dp)
-                                .border(
-                                    width = if (isSelected) 0.dp else 1.5.dp,
-                                    color = if (isSelected) Color.Transparent else MaterialTheme.colorScheme.outline,
-                                    shape = CircleShape
-                                )
-                        ) {
-                            if (isSelected) {
-                                Icon(Icons.Default.Check, contentDescription = "Selected", tint = Color.White, modifier = Modifier.padding(4.dp))
-                            }
-                        }
+                                .padding(8.dp),
+                            size = 26.dp
+                        )
                     }
                     // Autosave Available Badge (Bottom of Thumbnail, above Info section)
                     if (note.autosaveInfo != null) {
@@ -333,7 +311,7 @@ fun ExpressiveNoteCard(
                                 ) {
                                     Icon(Icons.Default.MoreVert, contentDescription = moreOptionsLabel, modifier = Modifier.size(18.dp))
                                 }
-                                StandardNoteActionDropdown(
+                                NoteActionDropdown(
                                     expanded = showMenu,
                                     isPinned = note.isPinned,
                                     onDismiss = onDismissMenu,
@@ -388,21 +366,10 @@ fun ExpressiveNoteCard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (isSelectionMode) {
-                    Surface(
-                        shape = CircleShape,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                        modifier = Modifier
-                            .size(26.dp)
-                            .border(
-                                width = if (isSelected) 0.dp else 1.5.dp,
-                                color = if (isSelected) Color.Transparent else MaterialTheme.colorScheme.outline,
-                                shape = CircleShape
-                            )
-                    ) {
-                        if (isSelected) {
-                            Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.padding(4.dp))
-                        }
-                    }
+                    SelectionCheckboxBadge(
+                        isSelected = isSelected,
+                        size = 26.dp
+                    )
                 } else {
                     Surface(
                         shape = RoundedCornerShape(10.dp),
@@ -464,7 +431,7 @@ fun ExpressiveNoteCard(
                         ) {
                             Icon(Icons.Default.MoreVert, contentDescription = moreOptionsLabel)
                         }
-                        StandardNoteActionDropdown(
+                        NoteActionDropdown(
                             expanded = showMenu,
                             isPinned = note.isPinned,
                             onDismiss = onDismissMenu,
@@ -492,63 +459,4 @@ fun ExpressiveNoteCard(
     }
 }
 
-@Composable
-fun NoteActionDropdown(
-    expanded: Boolean,
-    isPinned: Boolean = false,
-    onDismiss: () -> Unit,
-    onTogglePin: () -> Unit,
-    onExportPdf: () -> Unit,
-    onSharePdf: () -> Unit,
-    onShareXopp: () -> Unit,
-    onRename: () -> Unit,
-    onDuplicate: () -> Unit,
-    onDelete: () -> Unit
-) {
-    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
-        DropdownMenuItem(
-            text = { Text(if (isPinned) "Unpin from Home" else "Pin to Home") },
-            leadingIcon = {
-                Icon(
-                    imageVector = if (isPinned) Icons.Outlined.PushPin else Icons.Default.PushPin,
-                    contentDescription = null,
-                    tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            onClick = { onDismiss(); onTogglePin() }
-        )
-        HorizontalDivider()
-        DropdownMenuItem(
-            text = { Text("Export to PDF") },
-            leadingIcon = { Icon(Icons.Default.FileDownload, contentDescription = null) },
-            onClick = { onDismiss(); onExportPdf() }
-        )
-        DropdownMenuItem(
-            text = { Text("Share as PDF") },
-            leadingIcon = { Icon(Icons.Default.PictureAsPdf, contentDescription = null) },
-            onClick = { onDismiss(); onSharePdf() }
-        )
-        DropdownMenuItem(
-            text = { Text("Share as Note") },
-            leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
-            onClick = { onDismiss(); onShareXopp() }
-        )
-        HorizontalDivider()
-        DropdownMenuItem(
-            text = { Text("Rename") },
-            leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null) },
-            onClick = { onDismiss(); onRename() }
-        )
-        DropdownMenuItem(
-            text = { Text("Duplicate") },
-            leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
-            onClick = { onDismiss(); onDuplicate() }
-        )
-        HorizontalDivider()
-        DropdownMenuItem(
-            text = { Text("Move to Trash", color = MaterialTheme.colorScheme.error) },
-            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-            onClick = { onDismiss(); onDelete() }
-        )
-    }
-}
+

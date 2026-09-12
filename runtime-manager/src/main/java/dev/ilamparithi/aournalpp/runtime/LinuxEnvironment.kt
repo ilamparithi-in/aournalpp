@@ -22,25 +22,15 @@ class LinuxEnvironment(private val context: Context) {
         const val PREF_KEY_REDUCE_ANIMATIONS = "pref_reduce_animations"
     }
 
-    fun isReduceAnimations(): Boolean {
-        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
-        return prefs.getBoolean(PREF_KEY_REDUCE_ANIMATIONS, false)
-    }
+    val appPreferences = AppPreferences(context)
 
-    fun setReduceAnimations(reduce: Boolean) {
-        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
-        prefs.edit().putBoolean(PREF_KEY_REDUCE_ANIMATIONS, reduce).apply()
-    }
+    fun isReduceAnimations(): Boolean = appPreferences.isReduceAnimations()
 
-    fun isOnboardingCompleted(): Boolean {
-        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
-        return prefs.getBoolean(PREF_KEY_ONBOARDING_COMPLETED, false)
-    }
+    fun setReduceAnimations(reduce: Boolean) = appPreferences.setReduceAnimations(reduce)
 
-    fun setOnboardingCompleted(completed: Boolean) {
-        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
-        prefs.edit().putBoolean(PREF_KEY_ONBOARDING_COMPLETED, completed).apply()
-    }
+    fun isOnboardingCompleted(): Boolean = appPreferences.isOnboardingCompleted()
+
+    fun setOnboardingCompleted(completed: Boolean) = appPreferences.setOnboardingCompleted(completed)
 
     val rootDir: File = context.filesDir
     val usrDir: File = File(rootDir, "usr")
@@ -219,246 +209,11 @@ class LinuxEnvironment(private val context: Context) {
         ensureGtkBookmarks()
     }
 
-    fun generateOpenboxConfig(snapLayoutActive: Boolean = false): String {
-        val fullscreenRules = if (!snapLayoutActive) {
-            """
-    <!-- Fullscreen-marked windows in single window mode (borderless fullscreen) -->
-    <application class="*" title="*Choose*Image*">
-      <decor>no</decor>
-      <maximized>true</maximized>
-      <focus>yes</focus>
-    </application>
-    <application class="*" title="*Choose*image*">
-      <decor>no</decor>
-      <maximized>true</maximized>
-      <focus>yes</focus>
-    </application>
-    <application class="*" title="*choose*image*">
-      <decor>no</decor>
-      <maximized>true</maximized>
-      <focus>yes</focus>
-    </application>
-    <application class="*" title="*Export*">
-      <decor>no</decor>
-      <maximized>true</maximized>
-      <focus>yes</focus>
-    </application>
-    <application class="*" title="*export*">
-      <decor>no</decor>
-      <maximized>true</maximized>
-      <focus>yes</focus>
-    </application>
-    <application class="*" title="*Annotate*">
-      <decor>no</decor>
-      <maximized>true</maximized>
-      <focus>yes</focus>
-    </application>
-    <application class="*" title="*annotate*">
-      <decor>no</decor>
-      <maximized>true</maximized>
-      <focus>yes</focus>
-    </application>
-    <application class="*" title="*Print*">
-      <decor>no</decor>
-      <maximized>true</maximized>
-      <focus>yes</focus>
-    </application>
-    <application class="*" title="*print*">
-      <decor>no</decor>
-      <maximized>true</maximized>
-      <focus>yes</focus>
-    </application>
-            """.trimIndent()
-        } else {
-            """
-    <!-- Fullscreen-marked windows in active snap layouts (movable windows with titlebars enabled) -->
-    <application class="*" title="*Choose*Image*">
-      <decor>yes</decor>
-      <maximized>no</maximized>
-      <focus>yes</focus>
-      <position force="no">
-        <x>center</x>
-        <y>center</y>
-      </position>
-    </application>
-    <application class="*" title="*Choose*image*">
-      <decor>yes</decor>
-      <maximized>no</maximized>
-      <focus>yes</focus>
-      <position force="no">
-        <x>center</x>
-        <y>center</y>
-      </position>
-    </application>
-    <application class="*" title="*choose*image*">
-      <decor>yes</decor>
-      <maximized>no</maximized>
-      <focus>yes</focus>
-      <position force="no">
-        <x>center</x>
-        <y>center</y>
-      </position>
-    </application>
-    <application class="*" title="*Export*">
-      <decor>yes</decor>
-      <maximized>no</maximized>
-      <focus>yes</focus>
-      <position force="no">
-        <x>center</x>
-        <y>center</y>
-      </position>
-    </application>
-    <application class="*" title="*export*">
-      <decor>yes</decor>
-      <maximized>no</maximized>
-      <focus>yes</focus>
-      <position force="no">
-        <x>center</x>
-        <y>center</y>
-      </position>
-    </application>
-    <application class="*" title="*Annotate*">
-      <decor>yes</decor>
-      <maximized>no</maximized>
-      <focus>yes</focus>
-      <position force="no">
-        <x>center</x>
-        <y>center</y>
-      </position>
-    </application>
-    <application class="*" title="*annotate*">
-      <decor>yes</decor>
-      <maximized>no</maximized>
-      <focus>yes</focus>
-      <position force="no">
-        <x>center</x>
-        <y>center</y>
-      </position>
-    </application>
-    <application class="*" title="*Print*">
-      <decor>yes</decor>
-      <maximized>no</maximized>
-      <focus>yes</focus>
-      <position force="no">
-        <x>center</x>
-        <y>center</y>
-      </position>
-    </application>
-    <application class="*" title="*print*">
-      <decor>yes</decor>
-      <maximized>no</maximized>
-      <focus>yes</focus>
-      <position force="no">
-        <x>center</x>
-        <y>center</y>
-      </position>
-    </application>
-            """.trimIndent()
-        }
+    fun generateOpenboxConfig(snapLayoutActive: Boolean = false): String =
+        DesktopConfigGenerator.generateOpenboxConfig(snapLayoutActive)
 
-        return """<?xml version="1.0" encoding="UTF-8"?>
-<openbox_config xmlns="http://openbox.org/3.4/rc">
-  <theme>
-    <name>Clearlooks</name>
-    <titleLayout>NLIMC</titleLayout>
-  </theme>
-  <placement>
-    <policy>smart</policy>
-    <center>yes</center>
-  </placement>
-  <focus>
-    <focusNew>yes</focusNew>
-    <followMouse>no</followMouse>
-    <focusLast>yes</focusLast>
-    <underMouse>no</underMouse>
-  </focus>
-  <resize>
-    <drawContents>yes</drawContents>
-    <popupShow>Never</popupShow>
-  </resize>
-  <keyboard>
-    <keybind key="A-Tab">
-      <action name="NextWindow">
-        <dialog>none</dialog>
-        <finalactions>
-          <action name="Focus"/>
-          <action name="Raise"/>
-        </finalactions>
-      </action>
-    </keybind>
-    <keybind key="A-S-Tab">
-      <action name="PreviousWindow">
-        <dialog>none</dialog>
-        <finalactions>
-          <action name="Focus"/>
-          <action name="Raise"/>
-        </finalactions>
-      </action>
-    </keybind>
-  </keyboard>
-  <applications>
-    <!-- Main application windows: maximized & borderless -->
-    <application class="*" type="normal">
-      <decor>no</decor>
-      <maximized>true</maximized>
-      <focus>yes</focus>
-    </application>
-    <!-- Dialogs & message prompts: centered with titlebar removed, original size -->
-    <application class="*" type="dialog">
-      <decor>no</decor>
-      <maximized>no</maximized>
-      <focus>yes</focus>
-      <position force="no">
-        <x>center</x>
-        <y>center</y>
-      </position>
-    </application>
-    <application class="*" type="splash">
-      <decor>no</decor>
-      <maximized>no</maximized>
-    </application>
-    <!-- Select font: titlebar removed, original size, centered -->
-    <application class="*" title="*Select*Font*">
-      <decor>no</decor>
-      <maximized>no</maximized>
-      <focus>yes</focus>
-      <position force="no">
-        <x>center</x>
-        <y>center</y>
-      </position>
-    </application>
-    <application class="*" title="*Select*font*">
-      <decor>no</decor>
-      <maximized>no</maximized>
-      <focus>yes</focus>
-      <position force="no">
-        <x>center</x>
-        <y>center</y>
-      </position>
-    </application>
-    <!-- Toolbar customization dialog: non-modal, movable with titlebar, centered -->
-    <application class="*" title="*Customize Toolbar*">
-      <decor>yes</decor>
-      <maximized>no</maximized>
-      <focus>yes</focus>
-      <position force="no">
-        <x>center</x>
-        <y>center</y>
-      </position>
-    </application>
-    $fullscreenRules
-  </applications>
-</openbox_config>
-""".trimIndent()
-    }
-
-    fun updateOpenboxSnapMode(snapLayoutActive: Boolean) {
-        if (!openboxConfigDir.exists()) {
-            openboxConfigDir.mkdirs()
-        }
-        val rcFile = File(openboxConfigDir, "rc.xml")
-        rcFile.writeText(generateOpenboxConfig(snapLayoutActive))
-    }
+    fun updateOpenboxSnapMode(snapLayoutActive: Boolean) =
+        DesktopConfigGenerator.updateOpenboxSnapMode(openboxConfigDir, snapLayoutActive)
 
     fun ensureDirectoryTree() {
         val dirs = listOf(
@@ -840,28 +595,8 @@ class LinuxEnvironment(private val context: Context) {
         }
     }
 
-    fun writeGtkBookmarks() {
-        try {
-            val gtk3ConfigDir = File(configDir, "gtk-3.0")
-            if (!gtk3ConfigDir.exists()) {
-                gtk3ConfigDir.mkdirs()
-            }
-
-            val bookmarksFile = File(gtk3ConfigDir, "bookmarks")
-            val storageNotes = sharedDocumentsNotesDir.absolutePath
-            val storageDownloads = sharedDownloadsDir.absolutePath
-
-            val content = buildString {
-                appendLine("file://$storageNotes Notes")
-                appendLine("file://$storageDownloads Downloads")
-            }
-
-            bookmarksFile.writeText(content)
-            Log.i(TAG, "Provisioned GTK bookmarks at ${bookmarksFile.absolutePath}")
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to write GTK bookmarks", e)
-        }
-    }
+    fun writeGtkBookmarks() =
+        DesktopConfigGenerator.writeGtkBookmarks(configDir, sharedDocumentsNotesDir, sharedDownloadsDir)
 
     fun isGtkDarkMode(): Boolean {
         val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
@@ -875,61 +610,11 @@ class LinuxEnvironment(private val context: Context) {
         }
     }
 
-    fun writeGtkSettings() {
-        try {
-            val gtk3ConfigDir = File(configDir, "gtk-3.0")
-            if (!gtk3ConfigDir.exists()) {
-                gtk3ConfigDir.mkdirs()
-            }
+    fun writeGtkSettings() =
+        DesktopConfigGenerator.writeGtkSettings(configDir, isGtkDarkMode()) { ensureGtkBookmarks() }
 
-            val settingsFile = File(gtk3ConfigDir, "settings.ini")
-            val isDark = isGtkDarkMode()
-            val content = buildString {
-                appendLine("[Settings]")
-                appendLine("gtk-theme-name = Adwaita")
-                appendLine("gtk-application-prefer-dark-theme = ${if (isDark) "1" else "0"}")
-                appendLine("gtk-icon-theme-name = Adwaita")
-            }
-
-            settingsFile.writeText(content)
-            Log.i(TAG, "Provisioned GTK settings.ini with isDark=$isDark at ${settingsFile.absolutePath}")
-            ensureGtkBookmarks()
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to write GTK settings.ini", e)
-        }
-    }
-
-    fun ensureGtkBookmarks() {
-        try {
-            val gtk3ConfigDir = File(configDir, "gtk-3.0")
-            if (!gtk3ConfigDir.exists()) {
-                gtk3ConfigDir.mkdirs()
-            }
-            val bookmarksFile = File(gtk3ConfigDir, "bookmarks")
-            val notesDir = getNotesDirectory()
-            val docsDir = File(Environment.getExternalStorageDirectory(), "Documents")
-            val downloadsDir = sharedDownloadsDir
-
-            val lines = mutableListOf<String>()
-            lines.add("file://${notesDir.absolutePath} Notes Home")
-            if (docsDir.exists() && docsDir.absolutePath != notesDir.absolutePath) {
-                lines.add("file://${docsDir.absolutePath} Documents")
-            }
-            if (downloadsDir.exists() && downloadsDir.absolutePath != notesDir.absolutePath) {
-                lines.add("file://${downloadsDir.absolutePath} Downloads")
-            }
-
-            val content = lines.joinToString("\n") + "\n"
-            bookmarksFile.writeText(content)
-
-            // Also mirror to legacy ~/.gtk-bookmarks for older GTK versions
-            val legacyBookmarks = File(homeDir, ".gtk-bookmarks")
-            legacyBookmarks.writeText(content)
-            Log.i(TAG, "Provisioned dynamic GTK bookmarks pointing to Notes Home: ${notesDir.absolutePath}")
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to write GTK bookmarks", e)
-        }
-    }
+    fun ensureGtkBookmarks() =
+        DesktopConfigGenerator.ensureGtkBookmarks(configDir, homeDir, getNotesDirectory(), sharedDownloadsDir)
 
     fun hasPendingAutoloadOverrideNotification(): Boolean {
         val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)

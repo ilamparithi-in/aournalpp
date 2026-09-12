@@ -73,6 +73,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.ilamparithi.aournalpp.model.NoteDocument
 import dev.ilamparithi.aournalpp.model.NoteFileType
+import dev.ilamparithi.aournalpp.ui.hub.NoteActionDropdown
+import dev.ilamparithi.aournalpp.ui.hub.NoteCardCallbacks
+import dev.ilamparithi.aournalpp.ui.hub.PinnedBadge
+import dev.ilamparithi.aournalpp.ui.hub.SelectionCheckboxBadge
+import dev.ilamparithi.aournalpp.ui.hub.rememberNoteAccessibilityActions
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
 import dev.ilamparithi.aournalpp.ui.preview.floatingPreviewLongPress
 import dev.ilamparithi.aournalpp.utils.ThumbnailManager
@@ -121,7 +126,8 @@ fun StandardNoteCard(
     isSelected: Boolean = false,
     isSelectionMode: Boolean = false,
     isTrashMode: Boolean = false,
-    enableFloatingPreview: Boolean = true
+    enableFloatingPreview: Boolean = true,
+    thumbnailManager: dev.ilamparithi.aournalpp.utils.IThumbnailManager = dev.ilamparithi.aournalpp.utils.LocalThumbnailManager.current
 ) {
     val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
@@ -129,12 +135,12 @@ fun StandardNoteCard(
     val onDismissMenu = remember { { showMenu = false } }
 
     val thumbnailImage by produceState<ImageBitmap?>(
-        initialValue = ThumbnailManager.getCachedThumbnail(note.file, note.lastModifiedMs),
+        initialValue = thumbnailManager.getCachedThumbnail(note.file, note.lastModifiedMs),
         key1 = note.lastModifiedMs
     ) {
-        value = ThumbnailManager.getOrCreateThumbnailBitmap(context, note.file, pdfExportManager, note.lastModifiedMs)
+        value = thumbnailManager.getOrCreateThumbnailBitmap(context, note.file, pdfExportManager, note.lastModifiedMs)
     }
-    val thumbnailFile = remember(thumbnailImage) { ThumbnailManager.getCachedThumbnailFile(note.file, note.lastModifiedMs) }
+    val thumbnailFile = remember(thumbnailImage) { thumbnailManager.getCachedThumbnailFile(note.file, note.lastModifiedMs) }
 
     val folderAccentColor = remember(note.folderColorHex) {
         note.folderColorHex?.let {
@@ -145,49 +151,31 @@ fun StandardNoteCard(
     val hasActions = onTogglePin != null || onShareExport != null || onExportPdf != null || onSharePdf != null ||
             onShareXopp != null || onRename != null || onDuplicate != null || onDelete != null
 
-    val openActionLabel = stringResource(dev.ilamparithi.aournalpp.R.string.action_open_note)
-    val pinActionLabel = if (note.isPinned) stringResource(dev.ilamparithi.aournalpp.R.string.action_unpin_note) else stringResource(dev.ilamparithi.aournalpp.R.string.action_pin_note)
-    val shareExportActionLabel = stringResource(dev.ilamparithi.aournalpp.R.string.action_share_export)
-    val exportPdfActionLabel = stringResource(dev.ilamparithi.aournalpp.R.string.action_export_pdf)
-    val shareActionLabel = stringResource(dev.ilamparithi.aournalpp.R.string.action_share_note)
-    val renameActionLabel = stringResource(dev.ilamparithi.aournalpp.R.string.action_rename)
-    val duplicateActionLabel = stringResource(dev.ilamparithi.aournalpp.R.string.action_keep_both)
-    val deleteActionLabel = stringResource(dev.ilamparithi.aournalpp.R.string.action_delete)
-    val restoreActionLabel = stringResource(dev.ilamparithi.aournalpp.R.string.action_restore_note)
-
-    val customActionsList = remember(
-        note, isTrashMode, isSelectionMode,
-        onTogglePin, onShareExport, onExportPdf, onShareXopp, onRename, onDuplicate, onDelete, onRestore
+    val callbacks = remember(
+        onClick, onLongClick, onTogglePin, onShareExport, onExportPdf,
+        onSharePdf, onShareXopp, onRename, onDuplicate, onDelete, onRestore
     ) {
-        buildList {
-            add(CustomAccessibilityAction(openActionLabel) { onClick(); true })
-            if (onTogglePin != null && !isSelectionMode) {
-                add(CustomAccessibilityAction(pinActionLabel) { onTogglePin(); true })
-            }
-            if (onShareExport != null && !isSelectionMode) {
-                add(CustomAccessibilityAction(shareExportActionLabel) { onShareExport(); true })
-            } else {
-                if (onExportPdf != null && !isSelectionMode) {
-                    add(CustomAccessibilityAction(exportPdfActionLabel) { onExportPdf(); true })
-                }
-                if (onShareXopp != null && !isSelectionMode) {
-                    add(CustomAccessibilityAction(shareActionLabel) { onShareXopp(); true })
-                }
-            }
-            if (onRename != null && !isSelectionMode) {
-                add(CustomAccessibilityAction(renameActionLabel) { onRename(); true })
-            }
-            if (onDuplicate != null && !isSelectionMode) {
-                add(CustomAccessibilityAction(duplicateActionLabel) { onDuplicate(); true })
-            }
-            if (onDelete != null && !isSelectionMode) {
-                add(CustomAccessibilityAction(deleteActionLabel) { onDelete(); true })
-            }
-            if (onRestore != null && isTrashMode) {
-                add(CustomAccessibilityAction(restoreActionLabel) { onRestore(); true })
-            }
-        }
+        NoteCardCallbacks(
+            onClick = onClick,
+            onLongClick = onLongClick,
+            onTogglePin = onTogglePin,
+            onShareExport = onShareExport,
+            onExportPdf = onExportPdf,
+            onSharePdf = onSharePdf,
+            onShareXopp = onShareXopp,
+            onRename = onRename,
+            onDuplicate = onDuplicate,
+            onDelete = onDelete,
+            onRestore = onRestore
+        )
     }
+
+    val customActionsList = rememberNoteAccessibilityActions(
+        note = note,
+        isTrashMode = isTrashMode,
+        isSelectionMode = isSelectionMode,
+        callbacks = callbacks
+    )
 
     val a11yDescription = remember(note, isSelected, isSelectionMode) {
         AccessibilityUtils.buildNoteCardA11yDescription(
@@ -287,45 +275,12 @@ fun StandardNoteCard(
         ) {
             // Pinned indicator badge (leveled to the left of the 3-dot button)
             if (note.isPinned && !isSelectionMode) {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    shadowElevation = 3.dp,
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.PushPin,
-                            contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_pin_note),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(15.dp)
-                        )
-                    }
-                }
+                PinnedBadge()
             }
 
             // Selection Checkbox Badge
             if (isSelectionMode) {
-                Surface(
-                    shape = CircleShape,
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                    modifier = Modifier
-                        .size(28.dp)
-                        .border(
-                            width = if (isSelected) 0.dp else 1.5.dp,
-                            color = if (isSelected) Color.Transparent else MaterialTheme.colorScheme.outline,
-                            shape = CircleShape
-                        )
-                ) {
-                    if (isSelected) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_confirm),
-                            tint = Color.White,
-                            modifier = Modifier.padding(5.dp)
-                        )
-                    }
-                }
+                SelectionCheckboxBadge(isSelected = isSelected)
             }
 
             // 3-dot Options Menu Button
@@ -354,7 +309,7 @@ fun StandardNoteCard(
                         }
                     }
 
-                    StandardNoteActionDropdown(
+                    NoteActionDropdown(
                         expanded = showMenu,
                         isPinned = note.isPinned,
                         onDismiss = onDismissMenu,
@@ -500,94 +455,4 @@ fun FloatingDetailsPill(
     }
 }
 
-/**
- * Standard Context Actions Dropdown Menu for Notes.
- */
-@Composable
-fun StandardNoteActionDropdown(
-    expanded: Boolean,
-    isPinned: Boolean = false,
-    onDismiss: () -> Unit,
-    onTogglePin: (() -> Unit)? = null,
-    onShareExport: (() -> Unit)? = null,
-    onExportPdf: (() -> Unit)? = null,
-    onSharePdf: (() -> Unit)? = null,
-    onShareXopp: (() -> Unit)? = null,
-    onRename: (() -> Unit)? = null,
-    onDuplicate: (() -> Unit)? = null,
-    onDelete: (() -> Unit)? = null
-) {
-    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
-        if (onTogglePin != null) {
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        if (isPinned) androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_unpin_note)
-                        else androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_pin_note)
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = if (isPinned) Icons.Outlined.PushPin else Icons.Default.PushPin,
-                        contentDescription = null,
-                        tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
-                onClick = { onDismiss(); onTogglePin() }
-            )
-            HorizontalDivider()
-        }
-        if (onShareExport != null) {
-            DropdownMenuItem(
-                text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_export)) },
-                leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
-                onClick = { onDismiss(); onShareExport() }
-            )
-        } else {
-            if (onExportPdf != null) {
-                DropdownMenuItem(
-                    text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_export_pdf)) },
-                    leadingIcon = { Icon(Icons.Default.FileDownload, contentDescription = null) },
-                    onClick = { onDismiss(); onExportPdf() }
-                )
-            }
-            if (onSharePdf != null) {
-                DropdownMenuItem(
-                    text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share)) },
-                    leadingIcon = { Icon(Icons.Default.PictureAsPdf, contentDescription = null) },
-                    onClick = { onDismiss(); onSharePdf() }
-                )
-            }
-            if (onShareXopp != null) {
-                DropdownMenuItem(
-                    text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_share_note)) },
-                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
-                    onClick = { onDismiss(); onShareXopp() }
-                )
-            }
-        }
-        if (onRename != null) {
-            HorizontalDivider()
-            DropdownMenuItem(
-                text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_rename)) },
-                leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null) },
-                onClick = { onDismiss(); onRename() }
-            )
-        }
-        if (onDuplicate != null) {
-            DropdownMenuItem(
-                text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_keep_both)) },
-                leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
-                onClick = { onDismiss(); onDuplicate() }
-            )
-        }
-        if (onDelete != null) {
-            HorizontalDivider()
-            DropdownMenuItem(
-                text = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_delete), color = MaterialTheme.colorScheme.error) },
-                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                onClick = { onDismiss(); onDelete() }
-            )
-        }
-    }
-}
+

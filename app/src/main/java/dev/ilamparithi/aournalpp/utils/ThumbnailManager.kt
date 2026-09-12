@@ -40,7 +40,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * - Multi-tier memory (LruCache) and WebP disk caching with non-blocking asynchronous size management.
  * - Background prefetching support.
  */
-object ThumbnailManager {
+object ThumbnailManager : IThumbnailManager {
 
     private const val TAG = "ThumbnailManager"
     private const val MAX_CACHE_BYTES = 48L * 1024 * 1024 // 48 MB disk cache
@@ -124,21 +124,21 @@ object ThumbnailManager {
         return "thumb_${cleanName}_${pathHash}_${modTime}.webp"
     }
 
-    fun getCachedThumbnailFile(noteFile: File, lastModifiedMs: Long = 0L): File? =
+    override fun getCachedThumbnailFile(noteFile: File, lastModifiedMs: Long): File? =
         resolved[cacheKeyFor(noteFile, lastModifiedMs)]
 
-    fun getCachedThumbnail(noteFile: File, lastModifiedMs: Long = 0L): ImageBitmap? =
+    override fun getCachedThumbnail(noteFile: File, lastModifiedMs: Long): ImageBitmap? =
         decoded[cacheKeyFor(noteFile, lastModifiedMs)]
 
     /**
      * Resolves the thumbnail and decodes it into memory.
      * Uses in-flight deduplication to avoid redundant parallel jobs for the same note.
      */
-    suspend fun getOrCreateThumbnailBitmap(
+    override suspend fun getOrCreateThumbnailBitmap(
         context: Context,
         noteFile: File,
-        pdfExportManager: PdfExportManager? = null,
-        lastModifiedMs: Long = 0L
+        pdfExportManager: PdfExportManager?,
+        lastModifiedMs: Long
     ): ImageBitmap? = withContext(renderDispatcher) {
         val modTime = if (lastModifiedMs > 0L) lastModifiedMs else 0L
         val cacheKey = cacheKeyFor(noteFile, modTime)
@@ -203,11 +203,11 @@ object ThumbnailManager {
     /**
      * Resolves the thumbnail file on disk.
      */
-    suspend fun getOrCreateThumbnail(
+    override suspend fun getOrCreateThumbnail(
         context: Context,
         noteFile: File,
-        pdfExportManager: PdfExportManager? = null,
-        lastModifiedMs: Long = 0L
+        pdfExportManager: PdfExportManager?,
+        lastModifiedMs: Long
     ): File? = withContext(renderDispatcher) {
         val modTime = if (lastModifiedMs > 0L) lastModifiedMs else 0L
         val cacheKey = cacheKeyFor(noteFile, modTime)
@@ -314,10 +314,10 @@ object ThumbnailManager {
     /**
      * Background prefetching helper: warms up the memory & disk caches for a list of notes.
      */
-    fun prefetchThumbnails(
+    override fun prefetchThumbnails(
         context: Context,
         notes: List<NoteDocument>,
-        pdfExportManager: PdfExportManager,
+        pdfExportManager: PdfExportManager?,
         scope: CoroutineScope
     ) {
         if (notes.isEmpty()) return
