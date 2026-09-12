@@ -90,6 +90,24 @@ class BackupEngine(
 
         fun calculateFileHash(file: File): String =
             ConfigDiffSyncEngine.calculateFileHash(file)
+
+        /**
+         * Resolves [subPath] safely relative to [baseDir], strictly preventing path traversal.
+         * @throws SecurityException if directory traversal sequences attempt to escape [baseDir].
+         */
+        fun resolveSafeChild(baseDir: File, subPath: String): File {
+            val cleanSubPath = subPath.trim().trim('/')
+            if (cleanSubPath.isEmpty()) {
+                throw SecurityException("Empty subpath provided")
+            }
+            val canonicalBase = baseDir.canonicalFile
+            val targetFile = File(baseDir, cleanSubPath)
+            val canonicalTarget = targetFile.canonicalFile
+            if (!canonicalTarget.toPath().startsWith(canonicalBase.toPath())) {
+                throw SecurityException("Path traversal detected: subpath '$subPath' escapes base directory '${baseDir.path}'")
+            }
+            return canonicalTarget
+        }
     }
 
     private val syncLockFile get() = File(context.filesDir, SYNC_LOCK_FILE_NAME)
@@ -447,7 +465,14 @@ class BackupEngine(
                 for (rf in remoteNotes) {
                     if (rf.isDirectory) continue
                     val subPath = rf.remotePath.removePrefix("$remoteRoot/Notes").trim('/')
-                    val destFile = File(notesRoot, subPath)
+                    if (subPath.isEmpty()) continue
+                    val destFile = try {
+                        resolveSafeChild(notesRoot, subPath)
+                    } catch (secEx: SecurityException) {
+                        Log.e(TAG, "Security: Path traversal rejected for remote path: ${rf.remotePath}", secEx)
+                        errors.add("Security violation rejected: ${rf.remotePath}")
+                        continue
+                    }
                     if (seenDownloadRemotePaths.add(rf.remotePath)) {
                         remoteFilesToDownload.add(Triple(rf, rf.remotePath, destFile))
                     }
@@ -460,7 +485,13 @@ class BackupEngine(
                     if (rf.isDirectory) continue
                     val subPath = rf.remotePath.removePrefix("$remoteRoot/.config").trim('/')
                     if (subPath.isEmpty()) continue
-                    val destFile = File(notesConfigDir, subPath)
+                    val destFile = try {
+                        resolveSafeChild(notesConfigDir, subPath)
+                    } catch (secEx: SecurityException) {
+                        Log.e(TAG, "Security: Path traversal rejected for remote path: ${rf.remotePath}", secEx)
+                        errors.add("Security violation rejected: ${rf.remotePath}")
+                        continue
+                    }
                     if (seenDownloadRemotePaths.add(rf.remotePath)) {
                         remoteFilesToDownload.add(Triple(rf, rf.remotePath, destFile))
                         addedRemotePaths.add(rf.remotePath)
@@ -473,7 +504,13 @@ class BackupEngine(
                     if (rf.isDirectory || rf.remotePath in addedRemotePaths) continue
                     val subPath = rf.remotePath.removePrefix("$remoteRoot/.config/xournalpp").trim('/')
                     if (subPath.isEmpty()) continue
-                    val destFile = File(File(notesConfigDir, "xournalpp"), subPath)
+                    val destFile = try {
+                        resolveSafeChild(File(notesConfigDir, "xournalpp"), subPath)
+                    } catch (secEx: SecurityException) {
+                        Log.e(TAG, "Security: Path traversal rejected for remote path: ${rf.remotePath}", secEx)
+                        errors.add("Security violation rejected: ${rf.remotePath}")
+                        continue
+                    }
                     if (seenDownloadRemotePaths.add(rf.remotePath)) {
                         remoteFilesToDownload.add(Triple(rf, rf.remotePath, destFile))
                     }
@@ -489,7 +526,14 @@ class BackupEngine(
                 for (rf in remoteMapped) {
                     if (rf.isDirectory) continue
                     val subPath = if (remoteBase.isNotEmpty()) rf.remotePath.removePrefix(remoteBase).trim('/') else rf.remotePath
-                    val destFile = File(localBase, subPath)
+                    if (subPath.isEmpty()) continue
+                    val destFile = try {
+                        resolveSafeChild(localBase, subPath)
+                    } catch (secEx: SecurityException) {
+                        Log.e(TAG, "Security: Path traversal rejected for custom mapping remote path: ${rf.remotePath}", secEx)
+                        errors.add("Security violation rejected: ${rf.remotePath}")
+                        continue
+                    }
                     if (seenDownloadRemotePaths.add(rf.remotePath)) {
                         remoteFilesToDownload.add(Triple(rf, rf.remotePath, destFile))
                     }
@@ -716,7 +760,9 @@ class BackupEngine(
                 for (rf in remoteNotes) {
                     if (rf.isDirectory) continue
                     val subPath = rf.remotePath.removePrefix("$remoteRoot/Notes").trim('/')
-                    remoteFiles.add(rf to File(notesRoot, subPath))
+                    if (subPath.isEmpty()) continue
+                    val destFile = try { resolveSafeChild(notesRoot, subPath) } catch (_: SecurityException) { continue }
+                    remoteFiles.add(rf to destFile)
                 }
 
                 val remoteConfigs = listRemoteRecursively(provider, "$remoteRoot/.config")
@@ -725,7 +771,8 @@ class BackupEngine(
                     if (rf.isDirectory) continue
                     val subPath = rf.remotePath.removePrefix("$remoteRoot/.config").trim('/')
                     if (subPath.isNotEmpty()) {
-                        remoteFiles.add(rf to File(notesConfigDir, subPath))
+                        val destFile = try { resolveSafeChild(notesConfigDir, subPath) } catch (_: SecurityException) { continue }
+                        remoteFiles.add(rf to destFile)
                         addedRemoteConfigPaths.add(rf.remotePath)
                     }
                 }
@@ -736,7 +783,8 @@ class BackupEngine(
                     if (rf.isDirectory || rf.remotePath in addedRemoteConfigPaths) continue
                     val subPath = rf.remotePath.removePrefix("$remoteRoot/.config/xournalpp").trim('/')
                     if (subPath.isNotEmpty()) {
-                        remoteFiles.add(rf to File(File(notesConfigDir, "xournalpp"), subPath))
+                        val destFile = try { resolveSafeChild(File(notesConfigDir, "xournalpp"), subPath) } catch (_: SecurityException) { continue }
+                        remoteFiles.add(rf to destFile)
                     }
                 }
             }
@@ -756,7 +804,9 @@ class BackupEngine(
                 for (rf in remoteMapped) {
                     if (rf.isDirectory) continue
                     val subPath = if (remoteBase.isNotEmpty()) rf.remotePath.removePrefix(remoteBase).trim('/') else rf.remotePath
-                    remoteFiles.add(rf to File(localBase, subPath))
+                    if (subPath.isEmpty()) continue
+                    val destFile = try { resolveSafeChild(localBase, subPath) } catch (_: SecurityException) { continue }
+                    remoteFiles.add(rf to destFile)
                 }
             }
 
@@ -880,7 +930,8 @@ class BackupEngine(
                     for ((remotePath, isDirectory, sizeBytes, lastModifiedEpochMs, contentHash) in remoteNotes) {
                         if (isDirectory) continue
                         val subPath = remotePath.removePrefix("$remoteRoot/Notes").trim('/')
-                        val destFile = File(notesRoot, subPath)
+                        if (subPath.isEmpty()) continue
+                        val destFile = try { resolveSafeChild(notesRoot, subPath) } catch (_: SecurityException) { continue }
                         val canon = destFile.canonicalPath
                         val displayRel = "Notes/$subPath"
                         if (!relativePathByLocalPath.containsKey(canon)) {
@@ -912,7 +963,7 @@ class BackupEngine(
                         if (isDirectory) continue
                         val subPath = remotePath.removePrefix("$remoteRoot/.config").trim('/')
                         if (subPath.isEmpty()) continue
-                        val destFile = File(File(notesRoot, ".config"), subPath)
+                        val destFile = try { resolveSafeChild(File(notesRoot, ".config"), subPath) } catch (_: SecurityException) { continue }
                         val canon = destFile.canonicalPath
                         val displayRel = ".config/$subPath"
                         if (!relativePathByLocalPath.containsKey(canon)) {
@@ -958,7 +1009,7 @@ class BackupEngine(
                         if (isDirectory || remotePath in addedRemoteConfigPaths) continue
                         val subPath = remotePath.removePrefix("$remoteRoot/.config/xournalpp").trim('/')
                         if (subPath.isEmpty()) continue
-                        val destFile = File(File(notesRoot, ".config/xournalpp"), subPath)
+                        val destFile = try { resolveSafeChild(File(notesRoot, ".config/xournalpp"), subPath) } catch (_: SecurityException) { continue }
                         val canon = destFile.canonicalPath
                         val displayRel = ".config/xournalpp/$subPath"
                         if (!relativePathByLocalPath.containsKey(canon)) {
@@ -1007,7 +1058,8 @@ class BackupEngine(
                     for ((remotePath, isDirectory, sizeBytes, lastModifiedEpochMs, contentHash) in remoteMapped) {
                         if (isDirectory) continue
                         val subPath = if (remoteBase.isNotEmpty()) remotePath.removePrefix(remoteBase).trim('/') else remotePath
-                        val destFile = File(localBase, subPath)
+                        if (subPath.isEmpty()) continue
+                        val destFile = try { resolveSafeChild(localBase, subPath) } catch (_: SecurityException) { continue }
                         val canon = destFile.canonicalPath
                         val displayRel = if (remoteBase.isNotEmpty()) "$remoteBase/$subPath" else subPath
                         if (!relativePathByLocalPath.containsKey(canon)) {

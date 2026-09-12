@@ -84,6 +84,7 @@ object XoppParser {
         }
         try {
             parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
+            parser.setFeature("http://xmlpull.org/v1/doc/features.html#process-docdecl", false)
         } catch (_: Exception) {}
         parser.setInput(stream, "UTF-8")
 

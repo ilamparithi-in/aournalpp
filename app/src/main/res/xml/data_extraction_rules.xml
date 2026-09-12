@@ -1,19 +1,18 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
--->
+<?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <!-- Exclude sensitive encrypted credentials from cloud backup -->
+        <exclude domain="sharedpref" path="secure_cloud_credentials.xml" />
+        <!-- Exclude native linux rootfs, databases, and internal runtime files -->
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <!-- Hardware-backed Keystore keys are non-migratable; exclude encrypted prefs to avoid AEADBadTagException -->
+        <exclude domain="sharedpref" path="secure_cloud_credentials.xml" />
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
     </device-transfer>
-    -->
 </data-extraction-rules>

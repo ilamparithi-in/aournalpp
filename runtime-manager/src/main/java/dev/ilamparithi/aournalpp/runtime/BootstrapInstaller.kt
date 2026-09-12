@@ -118,6 +118,22 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
         const val VERSION_FLAG = "bootstrap_installed.ver"
         const val SAFETY_BUFFER_BYTES = 50L * 1024L * 1024L // 50MB buffer for runtime operations
         private val installMutex = Mutex()
+
+        fun isPathWithinRoot(rootDir: File, file: File): Boolean {
+            val canonicalRoot = rootDir.canonicalFile.toPath()
+            return file.canonicalFile.toPath().startsWith(canonicalRoot)
+        }
+
+        fun isSymlinkTargetWithinRoot(rootDir: File, destParent: File, linkTarget: String): Boolean {
+            val canonicalRoot = rootDir.canonicalFile.toPath()
+            val targetFile = if (File(linkTarget).isAbsolute) {
+                File(linkTarget)
+            } else {
+                File(destParent, linkTarget)
+            }
+            val normalized = targetFile.toPath().normalize()
+            return normalized.startsWith(canonicalRoot) || targetFile.canonicalFile.toPath().startsWith(canonicalRoot)
+        }
         private const val LOCK_FILE_NAME = ".bootstrap_extract.lock"
     }
 
@@ -420,6 +436,10 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
                                     File(env.usrDir, entry.name)
                                 }
 
+                                if (!isPathWithinRoot(env.rootDir, destFile)) {
+                                    throw SecurityException("Tar slip detected for entry '${entry.name}': '${destFile.canonicalPath}' escapes root '${env.rootDir.canonicalPath}'")
+                                }
+
                                 if (entry.isDirectory) {
                                     destFile.mkdirs()
                                 } else if (entry.isSymbolicLink) {
@@ -434,6 +454,12 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
                                         rawTarget.replace("/data/user/0/com.termux/files", env.rootDir.absolutePath)
                                     } else {
                                         rawTarget
+                                    }
+                                    val parentDir = destFile.parentFile ?: env.rootDir
+                                    if (!isSymlinkTargetWithinRoot(env.rootDir, parentDir, linkTarget)) {
+                                        Log.w(TAG, "Security: Skipping symlink ${destFile.name} -> $linkTarget pointing outside sandbox root")
+                                        entry = tarIn.nextEntry
+                                        continue
                                     }
                                     try {
                                         Os.symlink(linkTarget, destFile.absolutePath)

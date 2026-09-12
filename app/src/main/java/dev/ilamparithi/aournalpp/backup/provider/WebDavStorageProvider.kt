@@ -50,11 +50,18 @@ class WebDavStorageProvider(
     private fun buildBaseUrl(): String {
         var url = config.serverUrl.trim()
         if (url.isEmpty()) {
-            val scheme = if (config.port == 443 || config.port == 8443) "https" else "http"
+            val scheme = if (config.port == 80) "http" else "https"
             url = "$scheme://${config.host}:${config.port}"
         }
         if (!url.startsWith("http://") && !url.startsWith("https://")) {
             url = "https://$url"
+        }
+        if (url.startsWith("http://")) {
+            val hostLower = config.host.lowercase().trim()
+            val isLocal = hostLower == "localhost" || hostLower == "127.0.0.1" || hostLower == "10.0.2.2"
+            if (!isLocal) {
+                Log.w(TAG, "Security: Cleartext HTTP is configured for remote host '$hostLower'. Basic authentication credentials and notes will be sent without transit encryption.")
+            }
         }
         if (providerType == StorageProviderType.NEXTCLOUD && !url.contains("/remote.php/dav/files/")) {
             val cleanBase = url.trimEnd('/')
@@ -346,6 +353,9 @@ class WebDavStorageProvider(
         val results = mutableListOf<RemoteFileMetadata>()
         try {
             val parser = Xml.newPullParser()
+            try {
+                parser.setFeature("http://xmlpull.org/v1/doc/features.html#process-docdecl", false)
+            } catch (_: Exception) {}
             parser.setInput(inputStream, "UTF-8")
 
             var eventType = parser.eventType

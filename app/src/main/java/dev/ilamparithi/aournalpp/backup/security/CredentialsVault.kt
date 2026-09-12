@@ -3,6 +3,7 @@
 package dev.ilamparithi.aournalpp.backup.security
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
@@ -56,21 +57,50 @@ class CredentialsVault(context: Context) {
     @Volatile
     private var activeServiceIdLoaded: Boolean = false
 
-    private val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
+    @Volatile
+    private var isHardwareBacked: Boolean = true
 
-    private val securePrefs = try {
-        EncryptedSharedPreferences.create(
-            context,
-            PREFS_FILE,
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
-    } catch (e: Exception) {
-        Log.w(TAG, "Failed to initialize EncryptedSharedPreferences with MasterKey, falling back to standard private prefs", e)
-        context.getSharedPreferences("${PREFS_FILE}_fallback", Context.MODE_PRIVATE)
+    fun isHardwareEncrypted(): Boolean = isHardwareBacked
+
+    private val securePrefs: SharedPreferences = initSecurePrefs(context)
+
+    private fun initSecurePrefs(context: Context): SharedPreferences {
+        fun createEncrypted(): SharedPreferences {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            return EncryptedSharedPreferences.create(
+                context,
+                PREFS_FILE,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        }
+
+        return try {
+            createEncrypted()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to initialize EncryptedSharedPreferences with MasterKey, attempting KeyStore recovery", e)
+            try {
+                // Delete corrupted preferences file
+                context.deleteSharedPreferences(PREFS_FILE)
+                // Delete corrupted master key alias from AndroidKeyStore if present
+                try {
+                    val keyStore = java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+                    if (keyStore.containsAlias(MasterKey.DEFAULT_MASTER_KEY_ALIAS)) {
+                        keyStore.deleteEntry(MasterKey.DEFAULT_MASTER_KEY_ALIAS)
+                    }
+                } catch (ksEx: Exception) {
+                    Log.w(TAG, "Failed to purge corrupted master key alias from AndroidKeyStore", ksEx)
+                }
+                createEncrypted()
+            } catch (recoveryEx: Exception) {
+                Log.e(TAG, "Fatal: Could not initialize EncryptedSharedPreferences after KeyStore reset. Failing closed to in-memory non-persistent storage.", recoveryEx)
+                isHardwareBacked = false
+                InMemorySharedPreferences()
+            }
+        }
     }
 
     @Synchronized
@@ -405,5 +435,60 @@ class CredentialsVault(context: Context) {
             lastSyncStatus = obj.optString("lastSyncStatus", "").ifEmpty { null },
             customMappings = mappings
         )
+    }
+}
+
+/**
+ * Transient in-memory SharedPreferences fallback used only if device KeyStore / EncryptedSharedPreferences
+ * fails catastrophically, guaranteeing that cleartext credentials are NEVER written to disk.
+ */
+internal class InMemorySharedPreferences : SharedPreferences {
+    private val map = java.util.concurrent.ConcurrentHashMap<String, Any>()
+
+    override fun getAll(): Map<String, *> = HashMap(map)
+    override fun getString(key: String, defValue: String?): String? = (map[key] as? String) ?: defValue
+    @Suppress("UNCHECKED_CAST")
+    override fun getStringSet(key: String, defValues: Set<String>?): Set<String>? = (map[key] as? Set<String>) ?: defValues
+    override fun getInt(key: String, defValue: Int): Int = (map[key] as? Int) ?: defValue
+    override fun getLong(key: String, defValue: Long): Long = (map[key] as? Long) ?: defValue
+    override fun getFloat(key: String, defValue: Float): Float = (map[key] as? Float) ?: defValue
+    override fun getBoolean(key: String, defValue: Boolean): Boolean = (map[key] as? Boolean) ?: defValue
+    override fun contains(key: String): Boolean = map.containsKey(key)
+    override fun edit(): SharedPreferences.Editor = EditorImpl()
+    override fun registerOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener?) {}
+    override fun unregisterOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener?) {}
+
+    private inner class EditorImpl : SharedPreferences.Editor {
+        private val modifications = mutableMapOf<String, Any?>()
+        private var clear = false
+
+        override fun putString(key: String, value: String?): SharedPreferences.Editor = apply { modifications[key] = value }
+        override fun putStringSet(key: String, values: Set<String>?): SharedPreferences.Editor = apply { modifications[key] = values?.toSet() }
+        override fun putInt(key: String, value: Int): SharedPreferences.Editor = apply { modifications[key] = value }
+        override fun putLong(key: String, value: Long): SharedPreferences.Editor = apply { modifications[key] = value }
+        override fun putFloat(key: String, value: Float): SharedPreferences.Editor = apply { modifications[key] = value }
+        override fun putBoolean(key: String, value: Boolean): SharedPreferences.Editor = apply { modifications[key] = value }
+        override fun remove(key: String): SharedPreferences.Editor = apply { modifications[key] = this }
+        override fun clear(): SharedPreferences.Editor = apply { clear = true }
+
+        override fun commit(): Boolean {
+            apply()
+            return true
+        }
+
+        override fun apply() {
+            synchronized(this@InMemorySharedPreferences) {
+                if (clear) map.clear()
+                for ((k, v) in modifications) {
+                    if (v === this) {
+                        map.remove(k)
+                    } else if (v != null) {
+                        map[k] = v
+                    } else {
+                        map.remove(k)
+                    }
+                }
+            }
+        }
     }
 }

@@ -235,6 +235,9 @@ class XournalConfigManager(private val env: LinuxEnvironment) {
 
     private fun validateXmlStructure(xmlContent: String) {
         val parser = Xml.newPullParser()
+        try {
+            parser.setFeature("http://xmlpull.org/v1/doc/features.html#process-docdecl", false)
+        } catch (_: Exception) {}
         parser.setInput(StringReader(xmlContent))
         var eventType = parser.eventType
         var hasRoot = false
