@@ -80,12 +80,12 @@ fun OnboardingWelcomePage(
     ) {
         // Hero Graphic
         Box(
-            modifier = Modifier.size(140.dp),
+            modifier = Modifier.size(148.dp),
             contentAlignment = Alignment.Center
         ) {
             Box(
                 modifier = Modifier
-                    .size(132.dp)
+                    .size(140.dp)
                     .clip(SunnyShape(vertices = 8, roundness = 0.3f))
                     .background(
                         Brush.radialGradient(
@@ -97,21 +97,13 @@ fun OnboardingWelcomePage(
                         )
                     )
             )
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Create,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(42.dp)
-                )
-            }
+            Image(
+                painter = androidx.compose.ui.res.painterResource(R.drawable.ic_app_logo),
+                contentDescription = androidx.compose.ui.res.stringResource(R.string.app_name),
+                modifier = Modifier.size(96.dp)
+            )
         }
+
 
         Spacer(modifier = Modifier.height(28.dp))
 

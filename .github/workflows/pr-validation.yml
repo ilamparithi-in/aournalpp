@@ -102,14 +102,16 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Run Unit Tests
-        run: ./gradlew testArm64DebugUnitTest --stacktrace
+        run: ./gradlew testArm64DebugUnitTest :runtime-manager:testDebugUnitTest --stacktrace
 
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: unit-test-results
-          path: app/build/reports/tests/
+          path: |
+            app/build/reports/tests/
+            runtime-manager/build/reports/tests/
           compression-level: 0
           retention-days: 7
 
