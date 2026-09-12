@@ -93,10 +93,7 @@ object WallpaperHelper {
                 }
 
                 if (drawable != null) {
-                    val bmp = drawableToBitmap(drawable, w, h)
-                    if (bmp != null) {
-                        return bmp
-                    }
+                    return drawableToBitmap(drawable, w, h)
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to extract system wallpaper drawable", e)
@@ -106,7 +103,7 @@ object WallpaperHelper {
         return generateThemeBackdrop(context, w, h)
     }
 
-    private fun drawableToBitmap(drawable: Drawable, targetWidth: Int, targetHeight: Int): Bitmap? {
+    private fun drawableToBitmap(drawable: Drawable, targetWidth: Int, targetHeight: Int): Bitmap {
         if (drawable is BitmapDrawable && drawable.bitmap != null) {
             return scaleBitmap(drawable.bitmap, targetWidth, targetHeight)
         }

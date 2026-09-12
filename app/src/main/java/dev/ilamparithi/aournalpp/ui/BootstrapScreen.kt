@@ -71,6 +71,7 @@ import dev.ilamparithi.aournalpp.ui.theme.ScallopShape
 import dev.ilamparithi.aournalpp.ui.theme.SunnyShape
 import dev.ilamparithi.aournalpp.utils.FormatUtils
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 
 import android.content.Context
 import androidx.compose.animation.core.Animatable
@@ -149,7 +150,7 @@ fun BootstrapScreen(
     var tipIndex by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) {
         while (true) {
-            delay(4500L)
+            delay(4500.milliseconds)
             tipIndex = (tipIndex + 1) % TIPS_LIST.size
         }
     }

@@ -9,6 +9,7 @@ import dev.ilamparithi.aournalpp.runtime.InstallProgress
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -179,7 +180,7 @@ class BootstrapViewModel(application: Application) : AndroidViewModel(applicatio
             }
             for (sec in UPDATE_TIMEOUT_SECONDS downTo 1) {
                 _uiState.value = BootstrapState.UpdatePrompt(installedVersion, newVersion, sec, diff)
-                delay(1000L)
+                delay(1.seconds)
             }
             Log.i(TAG, "Update countdown timer expired. Auto-starting update...")
             performInstallOrUpgrade()

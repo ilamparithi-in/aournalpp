@@ -77,14 +77,14 @@ class CustomMappingRepository(
             val servicesObj = root.optJSONObject("services") ?: JSONObject().also { root.put("services", it) }
 
             val array = JSONArray()
-            for (m in mappings) {
+            for ((id, serviceId1, name, localFolderPath, remoteFolderPath, isEnabled) in mappings) {
                 val obj = JSONObject().apply {
-                    put("id", m.id)
-                    put("serviceId", m.serviceId)
-                    put("name", m.name)
-                    put("localFolderPath", m.localFolderPath)
-                    put("remoteFolderPath", m.remoteFolderPath)
-                    put("isEnabled", m.isEnabled)
+                    put("id", id)
+                    put("serviceId", serviceId1)
+                    put("name", name)
+                    put("localFolderPath", localFolderPath)
+                    put("remoteFolderPath", remoteFolderPath)
+                    put("isEnabled", isEnabled)
                 }
                 array.put(obj)
             }
@@ -162,21 +162,21 @@ class CustomMappingRepository(
 
             val root = readJsonRoot()
             val setsArray = JSONArray()
-            for (s in existing) {
+            for ((id, name, description, createdAtEpochMs, items) in existing) {
                 val sObj = JSONObject().apply {
-                    put("id", s.id)
-                    put("name", s.name)
-                    put("description", s.description)
-                    put("createdAtEpochMs", s.createdAtEpochMs)
+                    put("id", id)
+                    put("name", name)
+                    put("description", description)
+                    put("createdAtEpochMs", createdAtEpochMs)
 
                     val itemsArr = JSONArray()
-                    for (item in s.items) {
+                    for ((itemId, itemName, localFolderPath, remoteFolderPath, isEnabled) in items) {
                         val itemObj = JSONObject().apply {
-                            put("id", item.id)
-                            put("name", item.name)
-                            put("localFolderPath", item.localFolderPath)
-                            put("remoteFolderPath", item.remoteFolderPath)
-                            put("isEnabled", item.isEnabled)
+                            put("id", itemId)
+                            put("name", itemName)
+                            put("localFolderPath", localFolderPath)
+                            put("remoteFolderPath", remoteFolderPath)
+                            put("isEnabled", isEnabled)
                         }
                         itemsArr.put(itemObj)
                     }
@@ -197,21 +197,21 @@ class CustomMappingRepository(
             val existing = getAllMappingSets().filterNot { it.id == setId }
             val root = readJsonRoot()
             val setsArray = JSONArray()
-            for (s in existing) {
+            for ((id, name, description, createdAtEpochMs, items) in existing) {
                 val sObj = JSONObject().apply {
-                    put("id", s.id)
-                    put("name", s.name)
-                    put("description", s.description)
-                    put("createdAtEpochMs", s.createdAtEpochMs)
+                    put("id", id)
+                    put("name", name)
+                    put("description", description)
+                    put("createdAtEpochMs", createdAtEpochMs)
 
                     val itemsArr = JSONArray()
-                    for (item in s.items) {
+                    for ((itemId, itemName, localFolderPath, remoteFolderPath, isEnabled) in items) {
                         val itemObj = JSONObject().apply {
-                            put("id", item.id)
-                            put("name", item.name)
-                            put("localFolderPath", item.localFolderPath)
-                            put("remoteFolderPath", item.remoteFolderPath)
-                            put("isEnabled", item.isEnabled)
+                            put("id", itemId)
+                            put("name", itemName)
+                            put("localFolderPath", localFolderPath)
+                            put("remoteFolderPath", remoteFolderPath)
+                            put("isEnabled", isEnabled)
                         }
                         itemsArr.put(itemObj)
                     }
@@ -281,17 +281,17 @@ class CustomMappingRepository(
         val results = mutableMapOf<String, FolderValidationResult>()
         val now = System.currentTimeMillis()
 
-        for (mapping in mappings) {
+        for ((id, _, _, localFolderPath, remoteFolderPath) in mappings) {
             // Local path existence check
             val localExists = try {
-                val f = File(mapping.localFolderPath)
+                val f = File(localFolderPath)
                 f.exists() && f.isDirectory
             } catch (_: Exception) {
                 false
             }
 
             // Remote path existence check with cache (TTL 60s)
-            val cacheKey = "${service.id}:${mapping.remoteFolderPath.trim().trim('/')}"
+            val cacheKey = "${service.id}:${remoteFolderPath.trim().trim('/')}"
             val cached = remoteExistenceCache[cacheKey]
             val remoteExists = if (cached != null && (now - cached.second) < 60_000L) {
                 cached.first
@@ -300,7 +300,7 @@ class CustomMappingRepository(
                     val checkedVal = try {
                         val provider = engine.getStorageProvider(service)
                         try {
-                            val cleanPath = mapping.remoteFolderPath.trim().trim('/')
+                            val cleanPath = remoteFolderPath.trim().trim('/')
                             if (cleanPath.isEmpty()) {
                                 true
                             } else {
@@ -324,8 +324,8 @@ class CustomMappingRepository(
                 }
             }
 
-            results[mapping.id] = FolderValidationResult(
-                mappingId = mapping.id,
+            results[id] = FolderValidationResult(
+                mappingId = id,
                 localExists = localExists,
                 remoteExists = remoteExists,
                 checkedAtEpochMs = now

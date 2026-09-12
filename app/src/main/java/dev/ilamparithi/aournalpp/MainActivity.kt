@@ -50,6 +50,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
@@ -104,6 +105,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -146,7 +150,7 @@ class MainActivity : ComponentActivity() {
                         LaunchedEffect(isOnboardingCompleted) {
                             if (!isOnboardingCompleted) return@LaunchedEffect
                             withContext(Dispatchers.IO) {
-                                delay(850L)
+                                delay(850.milliseconds)
                                 LinuxEnvironment(this@MainActivity).ensureDirectoryTree()
                                 val backupPrefs = BackupPreferences(this@MainActivity)
                                 if (backupPrefs.isCheckRemoteChangesOnLaunchEnabled) {
@@ -167,7 +171,7 @@ class MainActivity : ComponentActivity() {
                             while (isActive) {
                                 val intervalMins = backupPrefs.periodicSyncIntervalMinutes
                                 if (intervalMins > 0) {
-                                    delay(intervalMins * 60 * 1000L)
+                                    delay(intervalMins.minutes)
                                     withContext(Dispatchers.IO) {
                                         try {
                                             val engine = BackupEngine(this@MainActivity)
@@ -177,7 +181,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 } else {
-                                    delay(60_000L)
+                                    delay(60.seconds)
                                 }
                             }
                         }
@@ -453,7 +457,7 @@ fun MainResponsiveAppShell() {
                     activity?.finishAffinity() ?: activity?.finish()
                     break
                 }
-                kotlinx.coroutines.delay(50)
+                delay(50.milliseconds)
             }
         }
     }
@@ -494,42 +498,6 @@ fun MainResponsiveAppShell() {
         }
         context.sendBroadcast(broadcastIntent)
         CanvasActivity.handleBackgroundCloseRequest()
-    }
-
-    @Composable
-    fun RenderTabContent(tab: Int) {
-        when (tab) {
-            AppTab.HOME.id -> HomeScreen(
-                onNavigateToFiles = { onTabSelect(AppTab.FILES.id) },
-                onNavigateToSettings = { onTabSelect(AppTab.SETTINGS.id) },
-                onNavigateToAbout = { onTabSelect(AppTab.ABOUT.id) }
-            )
-            AppTab.FILES.id -> DocumentHubScreen(
-                onNavigateToSettings = { onTabSelect(AppTab.SETTINGS.id) },
-                onNavigateToLicenses = { onTabSelect(AppTab.ABOUT.id) }
-            )
-            AppTab.CLOUD.id -> CloudScreen(
-                onNavigateToSettings = { onTabSelect(AppTab.SETTINGS.id) }
-            )
-            AppTab.SETTINGS.id -> SettingsScreen(onBack = { onTabSelect(AppTab.HOME.id) })
-            AppTab.ABOUT.id -> LicensesScreen(onBack = { onTabSelect(AppTab.HOME.id) })
-            else -> HomeScreen(
-                onNavigateToFiles = { onTabSelect(AppTab.FILES.id) },
-                onNavigateToSettings = { onTabSelect(AppTab.SETTINGS.id) },
-                onNavigateToAbout = { onTabSelect(AppTab.ABOUT.id) }
-            )
-        }
-    }
-
-    @Composable
-    fun TabHost(tabId: Int) {
-        val gen = tabGenerations[tabId] ?: 0
-        val pageKey = "tab_${tabId}_$gen"
-        saveableStateHolder.SaveableStateProvider(key = pageKey) {
-            key(pageKey) {
-                RenderTabContent(tabId)
-            }
-        }
     }
 
     val tabTransitionSpec: androidx.compose.animation.AnimatedContentTransitionScope<Int>.() -> androidx.compose.animation.ContentTransform = {
@@ -587,7 +555,12 @@ fun MainResponsiveAppShell() {
                         transitionSpec = tabTransitionSpec,
                         label = "railTabTransition"
                     ) { tabId ->
-                        TabHost(tabId)
+                        TabHost(
+                            tabId = tabId,
+                            tabGenerations = tabGenerations,
+                            saveableStateHolder = saveableStateHolder,
+                            onTabSelect = onTabSelect
+                        )
                     }
                 }
             }
@@ -630,7 +603,12 @@ fun MainResponsiveAppShell() {
                         transitionSpec = tabTransitionSpec,
                         label = "bottomTabTransition"
                     ) { tabId ->
-                        TabHost(tabId)
+                        TabHost(
+                            tabId = tabId,
+                            tabGenerations = tabGenerations,
+                            saveableStateHolder = saveableStateHolder,
+                            onTabSelect = onTabSelect
+                        )
                     }
                 }
             }
@@ -647,3 +625,48 @@ fun MainResponsiveAppShell() {
         )
     }
 }
+
+@Composable
+private fun TabHost(
+    tabId: Int,
+    tabGenerations: Map<Int, Int>,
+    saveableStateHolder: SaveableStateHolder,
+    onTabSelect: (Int) -> Unit
+) {
+    val gen = tabGenerations[tabId] ?: 0
+    val pageKey = "tab_${tabId}_$gen"
+    saveableStateHolder.SaveableStateProvider(key = pageKey) {
+        key(pageKey) {
+            RenderTabContent(tab = tabId, onTabSelect = onTabSelect)
+        }
+    }
+}
+
+@Composable
+private fun RenderTabContent(
+    tab: Int,
+    onTabSelect: (Int) -> Unit
+) {
+    when (tab) {
+        AppTab.HOME.id -> HomeScreen(
+            onNavigateToFiles = { onTabSelect(AppTab.FILES.id) },
+            onNavigateToSettings = { onTabSelect(AppTab.SETTINGS.id) },
+            onNavigateToAbout = { onTabSelect(AppTab.ABOUT.id) }
+        )
+        AppTab.FILES.id -> DocumentHubScreen(
+            onNavigateToSettings = { onTabSelect(AppTab.SETTINGS.id) },
+            onNavigateToLicenses = { onTabSelect(AppTab.ABOUT.id) }
+        )
+        AppTab.CLOUD.id -> CloudScreen(
+            onNavigateToSettings = { onTabSelect(AppTab.SETTINGS.id) }
+        )
+        AppTab.SETTINGS.id -> SettingsScreen(onBack = { onTabSelect(AppTab.HOME.id) })
+        AppTab.ABOUT.id -> LicensesScreen(onBack = { onTabSelect(AppTab.HOME.id) })
+        else -> HomeScreen(
+            onNavigateToFiles = { onTabSelect(AppTab.FILES.id) },
+            onNavigateToSettings = { onTabSelect(AppTab.SETTINGS.id) },
+            onNavigateToAbout = { onTabSelect(AppTab.ABOUT.id) }
+        )
+    }
+}
+

@@ -519,27 +519,23 @@ object XoppNativeRenderer {
         }
 
         if (pdfFile != null && pdfFile.exists()) {
-            var pfd: ParcelFileDescriptor? = null
-            var renderer: PdfRenderer? = null
-            var page: PdfRenderer.Page? = null
             try {
-                pfd = ParcelFileDescriptor.open(pdfFile, ParcelFileDescriptor.MODE_READ_ONLY)
-                renderer = PdfRenderer(pfd)
-                val pageIndex = (bg.pdfPageNo - 1).coerceIn(0, renderer.pageCount - 1)
-                if (renderer.pageCount > 0) {
-                    page = renderer.openPage(pageIndex)
-                    val pdfBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                    pdfBitmap.eraseColor(Color.WHITE)
-                    page.render(pdfBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                    canvas.drawBitmap(pdfBitmap, 0f, 0f, null)
-                    pdfBitmap.recycle()
+                ParcelFileDescriptor.open(pdfFile, ParcelFileDescriptor.MODE_READ_ONLY)?.use { pfd ->
+                    PdfRenderer(pfd).use { renderer ->
+                        val pageIndex = (bg.pdfPageNo - 1).coerceIn(0, renderer.pageCount - 1)
+                        if (renderer.pageCount > 0) {
+                            renderer.openPage(pageIndex).use { page ->
+                                val pdfBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                                pdfBitmap.eraseColor(Color.WHITE)
+                                page.render(pdfBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                                canvas.drawBitmap(pdfBitmap, 0f, 0f, null)
+                                pdfBitmap.recycle()
+                            }
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 logW("Failed to render PDF background: ${pdfFile.name}", e)
-            } finally {
-                try { page?.close() } catch (_: Exception) {}
-                try { renderer?.close() } catch (_: Exception) {}
-                try { pfd?.close() } catch (_: Exception) {}
             }
         }
     }

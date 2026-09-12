@@ -347,14 +347,14 @@ class CredentialsVault(context: Context) {
         obj.put("lastSyncStatus", s.lastSyncStatus ?: "")
 
         val mappingsArray = JSONArray()
-        for (m in s.customMappings) {
+        for ((id, serviceId, name, localFolderPath, remoteFolderPath, isEnabled) in s.customMappings) {
             val mObj = JSONObject()
-            mObj.put("id", m.id)
-            mObj.put("serviceId", m.serviceId)
-            mObj.put("name", m.name)
-            mObj.put("localFolderPath", m.localFolderPath)
-            mObj.put("remoteFolderPath", m.remoteFolderPath)
-            mObj.put("isEnabled", m.isEnabled)
+            mObj.put("id", id)
+            mObj.put("serviceId", serviceId)
+            mObj.put("name", name)
+            mObj.put("localFolderPath", localFolderPath)
+            mObj.put("remoteFolderPath", remoteFolderPath)
+            mObj.put("isEnabled", isEnabled)
             mappingsArray.put(mObj)
         }
         obj.put("customMappings", mappingsArray)

@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlin.time.Duration.Companion.milliseconds
 import org.json.JSONObject
 import java.io.File
 
@@ -233,7 +234,7 @@ object ActiveSessionTracker {
                     null
                 }
             } else {
-                if (windowCount <= 0 && file.exists()) {
+                if (windowCount <= 0) {
                     file.delete()
                 }
                 null
@@ -271,7 +272,7 @@ object ActiveSessionTracker {
         }
 
         while (isActive) {
-            delay(pollIntervalMs)
+            delay(pollIntervalMs.milliseconds)
             send(getActiveSession(baseDir))
         }
         triggerJob.cancel()

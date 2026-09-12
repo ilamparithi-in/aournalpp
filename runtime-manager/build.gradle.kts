@@ -34,10 +34,11 @@ val usePrebuiltX11 = (providers.gradleProperty("usePrebuiltX11").orNull?.toBoole
 dependencies {
     if (usePrebuiltX11) {
         implementation(files(rootProject.file("libs/x11-core-release.aar")))
-        implementation(libs.androidx.preference.ktx)
     } else {
         implementation(project(":x11-core"))
     }
+    implementation(libs.androidx.preference)
+    implementation(libs.androidx.preference.ktx)
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.commons.compress)

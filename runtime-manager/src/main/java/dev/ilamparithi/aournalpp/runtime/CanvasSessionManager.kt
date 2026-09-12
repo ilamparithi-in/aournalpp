@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.milliseconds
 import java.io.File
 
 class CanvasSessionManager(
@@ -99,12 +100,12 @@ class CanvasSessionManager(
                     }
                 }
 
-                delay(300) // Allow X server startup and connection settle
+                delay(300.milliseconds) // Allow X server startup and connection settle
 
                 // 2. Start Kiosk Window Manager (Openbox / Matchbox)
                 Log.i(TAG, "Starting Kiosk Window Manager...")
                 supervisor.startKioskWindowManager()
-                delay(200) // Allow WM socket initialization
+                delay(200.milliseconds) // Allow WM socket initialization
 
                 // 3. Paint X11 Root Window Wallpaper (System, Custom, or Theme Backdrop)
                 try {
@@ -211,7 +212,11 @@ class CanvasSessionManager(
                             val (nameCode, nameOut) = supervisor.runBinary(
                                 listOf(xdotoolBin.absolutePath, "getwindowname", wid)
                             )
-                            if (nameCode == 0 && (nameOut.contains("Preferences", ignoreCase = true) || nameOut.contains("Settings", ignoreCase = true))) {
+                            if (nameCode == 0 && (nameOut.contains(
+                                    "Preferences",
+                                    ignoreCase = true
+                                ) || nameOut.contains("Settings", ignoreCase = true))
+                            ) {
                                 return true
                             }
                         }
@@ -221,7 +226,7 @@ class CanvasSessionManager(
             }
 
             // Phase 1: Wait for Xournal++ main window, then inject shortcut once
-            delay(500)
+            delay(500.milliseconds)
             var attempts = 0
             val maxAttempts = 10
             var preferencesOpened = false
@@ -247,7 +252,15 @@ class CanvasSessionManager(
                             if (winId != null) {
                                 Log.i(TAG, "Xournal++ window visible. Injecting Ctrl+Comma shortcut...")
                                 supervisor.runBinary(
-                                    listOf(xdotoolBin.absolutePath, "windowactivate", "--sync", winId, "key", "--clearmodifiers", "ctrl+comma")
+                                    listOf(
+                                        xdotoolBin.absolutePath,
+                                        "windowactivate",
+                                        "--sync",
+                                        winId,
+                                        "key",
+                                        "--clearmodifiers",
+                                        "ctrl+comma"
+                                    )
                                 )
                                 shortcutInjected = true
                             }
@@ -256,11 +269,11 @@ class CanvasSessionManager(
                 } catch (e: Exception) {
                     Log.w(TAG, "Exception during preferences shortcut check (attempt $attempts)", e)
                 }
-                delay(400)
+                delay(400.milliseconds)
             }
 
             if (!preferencesOpened) {
-                delay(800)
+                delay(800.milliseconds)
                 preferencesOpened = isPreferencesWindowOpen()
             }
 
@@ -268,14 +281,13 @@ class CanvasSessionManager(
             if (preferencesOpened) {
                 Log.i(TAG, "Monitoring Preferences dialog for OK / Cancel dismissal...")
                 while (isSessionRunning) {
-                    delay(800)
+                    delay(800.milliseconds)
                     if (!isPreferencesWindowOpen()) {
                         Log.i(TAG, "Preferences dialog dismissed by user.")
                         env.checkAndOverrideAutoloadPreference()
                         val currentTitle = supervisor.documentTitle.value
                         val cleanTitle = currentTitle?.removePrefix("*")?.removeSuffix("*")?.trim()
-                        val isDefaultUntitled = cleanTitle == null ||
-                                cleanTitle.isBlank() ||
+                        val isDefaultUntitled = cleanTitle.isNullOrBlank() ||
                                 cleanTitle.equals("New Note", ignoreCase = true) ||
                                 cleanTitle.equals("Unsaved Document", ignoreCase = true) ||
                                 cleanTitle.equals("Untitled", ignoreCase = true)
@@ -283,7 +295,7 @@ class CanvasSessionManager(
                         if (isDefaultUntitled) {
                             Log.i(TAG, "No active note in progress; auto-closing canvas session.")
                             requestCloseSession()
-                            delay(500)
+                            delay(500.milliseconds)
                             if (isSessionRunning) {
                                 supervisor.triggerXournalExit()
                             }
@@ -326,17 +338,23 @@ class CanvasSessionManager(
                                             if (cmd == "FOCUS_IN") {
                                                 withContext(Dispatchers.Main) {
                                                     lorieView.requestFocus()
-                                                    lorieView.setKeyboardVisible(true)
+                                                    lorieView.isKeyboardVisible = true
                                                     (context as? android.app.Activity)?.let { act ->
-                                                        androidx.core.view.WindowCompat.getInsetsController(act.window, act.window.decorView)
+                                                        androidx.core.view.WindowCompat.getInsetsController(
+                                                            act.window,
+                                                            act.window.decorView
+                                                        )
                                                             .show(androidx.core.view.WindowInsetsCompat.Type.ime())
                                                     }
                                                 }
                                             } else if (cmd == "FOCUS_OUT") {
                                                 withContext(Dispatchers.Main) {
-                                                    lorieView.setKeyboardVisible(false)
+                                                    lorieView.isKeyboardVisible = false
                                                     (context as? android.app.Activity)?.let { act ->
-                                                        androidx.core.view.WindowCompat.getInsetsController(act.window, act.window.decorView)
+                                                        androidx.core.view.WindowCompat.getInsetsController(
+                                                            act.window,
+                                                            act.window.decorView
+                                                        )
                                                             .hide(androidx.core.view.WindowInsetsCompat.Type.ime())
                                                     }
                                                 }
@@ -465,7 +483,7 @@ class CanvasSessionManager(
                 val mainWid = windowIds.first()
                 Log.i(TAG, "Activating window $mainWid for shortcut $shortcut...")
                 supervisor.runBinary(listOf(xdotoolBin.absolutePath, "windowactivate", "--sync", mainWid))
-                delay(50)
+                delay(50.milliseconds)
             }
             Log.i(TAG, "Sending shortcut $shortcut via XTEST...")
             supervisor.runBinary(
@@ -516,7 +534,7 @@ class CanvasSessionManager(
                 val targetWid = windowIds.first()
                 Log.i(TAG, "Focusing window $targetWid for sequential close...")
                 supervisor.activateWindow(targetWid)
-                delay(40)
+                delay(40.milliseconds)
 
                 // Inject Ctrl+Q ONCE to the focused window using XTEST (no --window)
                 Log.i(TAG, "Sending Ctrl+Q once to active window $targetWid via XTEST...")
@@ -525,17 +543,15 @@ class CanvasSessionManager(
                 )
 
                 // Wait for the window to either close, or for a save prompt dialog to appear
-                var windowStillOpen = true
                 var userAborted = false
                 var promptNotified = false
                 val pollStart = System.currentTimeMillis()
 
-                while (isSessionRunning && windowStillOpen && !userAborted) {
-                    delay(50)
+                while (isSessionRunning) {
+                    delay(50.milliseconds)
                     val currentWindows = supervisor.getVisibleXournalWindowIds()
                     if (!currentWindows.contains(targetWid)) {
                         Log.i(TAG, "Window $targetWid has closed.")
-                        windowStillOpen = false
                         break
                     }
 
@@ -547,7 +563,7 @@ class CanvasSessionManager(
                                 onPromptBlocking()
                             }
                         }
-                        delay(200)
+                        delay(200.milliseconds)
                     } else if (promptNotified) {
                         // Prompt was open and was dismissed without window closing -> user cancelled exit
                         Log.i(TAG, "Prompt dismissed without closing window. Exit aborted.")
@@ -568,7 +584,7 @@ class CanvasSessionManager(
                     return@launch
                 }
 
-                delay(50)
+                delay(50.milliseconds)
             }
 
             Log.i(TAG, "All windows closed. Finalizing session exit.")
@@ -597,8 +613,12 @@ class CanvasSessionManager(
         File(env.tmpDir, ".X11-unix/X0").delete()
         ActiveSessionTracker.clearActiveSession(context, env)
         try {
-            context.sendBroadcast(android.content.Intent("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED").setPackage(context.packageName))
-        } catch (_: Exception) {}
+            context.sendBroadcast(
+                android.content.Intent("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED")
+                    .setPackage(context.packageName)
+            )
+        } catch (_: Exception) {
+        }
         if (isPreferencesSession) {
             env.clearQuarantinedEmergencySave()
             val emergencyFile = File(env.xournalConfigDir, "emergencysave.xopp")

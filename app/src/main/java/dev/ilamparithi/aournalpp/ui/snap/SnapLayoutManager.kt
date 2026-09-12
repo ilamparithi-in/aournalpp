@@ -3,7 +3,7 @@ package dev.ilamparithi.aournalpp.ui.snap
 import android.content.Context
 import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
 
-class SnapLayoutManager(private val context: Context? = null) {
+class SnapLayoutManager(context: Context? = null) {
 
     private var configs: List<SnapLayoutConfig> = context?.let {
         SnapLayoutConfigFile.loadConfigurations(it)

@@ -11,6 +11,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.milliseconds
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.tukaani.xz.XZInputStream
 import java.io.File
@@ -94,8 +95,8 @@ data class BootstrapDiff(
 }
 
 class InsufficientStorageException(
-    val requiredBytes: Long,
-    val availableBytes: Long
+    requiredBytes: Long,
+    availableBytes: Long
 ) : IOException(
     "Insufficient device storage: requires ${requiredBytes / (1024 * 1024)} MB, but only ${availableBytes / (1024 * 1024)} MB is available."
 )
@@ -348,7 +349,7 @@ class BootstrapInstaller(private val context: Context, private val env: LinuxEnv
         if (crossLock == null) {
             Log.w(TAG, "installOrUpgrade is already being held by another window or process. Waiting for active extraction to complete...")
             while (CrossProcessLock.isLocked(lockFile) || installMutex.isLocked) {
-                delay(200)
+                delay(200.milliseconds)
             }
             return@withContext if (hasValidInstallation()) {
                 Log.i(TAG, "Active extraction in another window/process completed successfully.")

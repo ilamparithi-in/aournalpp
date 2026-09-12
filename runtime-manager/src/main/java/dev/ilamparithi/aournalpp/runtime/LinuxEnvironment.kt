@@ -817,7 +817,7 @@ class LinuxEnvironment(private val context: Context) {
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to check or update symlink target", e)
                 }
-            } else if (homeNotes.exists() && !isSymlink && homeNotes.isDirectory) {
+            } else if (homeNotes.isDirectory) {
                 // Migrate any existing files to shared storage, then replace folder with symlink
                 try {
                     homeNotes.listFiles()?.forEach { file ->
@@ -1024,28 +1024,24 @@ class LinuxEnvironment(private val context: Context) {
                 settingsFile.writeText(initialXml)
                 Log.i(TAG, "Provisioned initial settings.xml with defaultSaveDir=$defaultNotesPath and autoloadMostRecent=false")
             } else {
-                var content = settingsFile.readText()
-                var modified = false
-                if (content.contains("defaultSaveDir")) {
-                    content = content.replace(
+                val originalContent = settingsFile.readText()
+                var content = originalContent
+                content = if (content.contains("defaultSaveDir")) {
+                    content.replace(
                         Regex("<property\\s+name=\"defaultSaveDir\"\\s+value=\"[^\"]*\"/>"),
                         "<property name=\"defaultSaveDir\" value=\"$defaultNotesPath\"/>"
                     )
-                    modified = true
                 } else {
-                    content = content.replace("</settings>", "  <property name=\"defaultSaveDir\" value=\"$defaultNotesPath\"/>\n</settings>")
-                    modified = true
+                    content.replace("</settings>", "  <property name=\"defaultSaveDir\" value=\"$defaultNotesPath\"/>\n</settings>")
                 }
 
-                if (content.contains("defaultOpenDir")) {
-                    content = content.replace(
+                content = if (content.contains("defaultOpenDir")) {
+                    content.replace(
                         Regex("<property\\s+name=\"defaultOpenDir\"\\s+value=\"[^\"]*\"/>"),
                         "<property name=\"defaultOpenDir\" value=\"$defaultNotesPath\"/>"
                     )
-                    modified = true
                 } else {
-                    content = content.replace("</settings>", "  <property name=\"defaultOpenDir\" value=\"$defaultNotesPath\"/>\n</settings>")
-                    modified = true
+                    content.replace("</settings>", "  <property name=\"defaultOpenDir\" value=\"$defaultNotesPath\"/>\n</settings>")
                 }
 
                 val savePathRegex = Regex("""<property\b(?=[^>]*\bname\s*=\s*["']lastSavePath["'])(?=[^>]*\bvalue\s*=\s*["']([^"']*)["'])[^>]*/>""")
@@ -1055,11 +1051,9 @@ class LinuxEnvironment(private val context: Context) {
                     val saveDir = File(currentSavePath)
                     if (!saveDir.exists() || !currentSavePath.startsWith(defaultNotesPath)) {
                         content = content.replace(savePathMatch.value, "<property name=\"lastSavePath\" value=\"$defaultNotesPath\"/>")
-                        modified = true
                     }
                 } else if (content.contains("</settings>")) {
                     content = content.replace("</settings>", "  <property name=\"lastSavePath\" value=\"$defaultNotesPath\"/>\n</settings>")
-                    modified = true
                 }
 
                 val openPathRegex = Regex("""<property\b(?=[^>]*\bname\s*=\s*["']lastOpenPath["'])(?=[^>]*\bvalue\s*=\s*["']([^"']*)["'])[^>]*/>""")
@@ -1069,11 +1063,9 @@ class LinuxEnvironment(private val context: Context) {
                     val openDir = File(currentOpenPath)
                     if (!openDir.exists() || !currentOpenPath.startsWith(defaultNotesPath)) {
                         content = content.replace(openPathMatch.value, "<property name=\"lastOpenPath\" value=\"$defaultNotesPath\"/>")
-                        modified = true
                     }
                 } else if (content.contains("</settings>")) {
                     content = content.replace("</settings>", "  <property name=\"lastOpenPath\" value=\"$defaultNotesPath\"/>\n</settings>")
-                    modified = true
                 }
 
                 val imagePathRegex = Regex("""<property\b(?=[^>]*\bname\s*=\s*["']lastImagePath["'])(?=[^>]*\bvalue\s*=\s*["']([^"']*)["'])[^>]*/>""")
@@ -1083,33 +1075,27 @@ class LinuxEnvironment(private val context: Context) {
                     val imageDir = File(currentImagePath)
                     if (!imageDir.exists() || currentImagePath.contains("/data/data/") || currentImagePath.contains("/data/user/")) {
                         content = content.replace(imagePathMatch.value, "<property name=\"lastImagePath\" value=\"$defaultNotesPath\"/>")
-                        modified = true
                     }
                 } else if (content.contains("</settings>")) {
                     content = content.replace("</settings>", "  <property name=\"lastImagePath\" value=\"$defaultNotesPath\"/>\n</settings>")
-                    modified = true
                 }
 
-                if (content.contains("autosaveTimeout")) {
-                    content = content.replace(
+                content = if (content.contains("autosaveTimeout")) {
+                    content.replace(
                         Regex("<property\\s+name=\"autosaveTimeout\"\\s+value=\"[^\"]*\"/>"),
                         "<property name=\"autosaveTimeout\" value=\"1\"/>"
                     )
-                    modified = true
                 } else {
-                    content = content.replace("</settings>", "  <property name=\"autosaveTimeout\" value=\"1\"/>\n</settings>")
-                    modified = true
+                    content.replace("</settings>", "  <property name=\"autosaveTimeout\" value=\"1\"/>\n</settings>")
                 }
 
-                if (content.contains("autosaveEnabled")) {
-                    content = content.replace(
+                content = if (content.contains("autosaveEnabled")) {
+                    content.replace(
                         Regex("<property\\s+name=\"autosaveEnabled\"\\s+value=\"[^\"]*\"/>"),
                         "<property name=\"autosaveEnabled\" value=\"true\"/>"
                     )
-                    modified = true
                 } else {
-                    content = content.replace("</settings>", "  <property name=\"autosaveEnabled\" value=\"true\"/>\n</settings>")
-                    modified = true
+                    content.replace("</settings>", "  <property name=\"autosaveEnabled\" value=\"true\"/>\n</settings>")
                 }
 
                 var overridden = false
@@ -1125,7 +1111,6 @@ class LinuxEnvironment(private val context: Context) {
                                 currentValue.equals("on", ignoreCase = true)
                         if (isEnabled) {
                             content = content.replace(autoloadMatch.value, "<property name=\"$prop\" value=\"false\"/>")
-                            modified = true
                             overridden = true
                             Log.i(TAG, "Overrode Xournal++ $prop preference from '$currentValue' to 'false' during ensureXournalppSettings.")
                         }
@@ -1134,7 +1119,6 @@ class LinuxEnvironment(private val context: Context) {
 
                 if (!content.contains("autoloadMostRecent") && content.contains("</settings>")) {
                     content = content.replace("</settings>", "  <property name=\"autoloadMostRecent\" value=\"false\"/>\n</settings>")
-                    modified = true
                 }
 
                 // Sync preferredLocale bidirectionally between Xournal++ and Android preferences
@@ -1162,14 +1146,13 @@ class LinuxEnvironment(private val context: Context) {
 
                 if (!content.contains("preferredLocale") && content.contains("</settings>")) {
                     content = content.replace("</settings>", "  <property name=\"preferredLocale\" value=\"$prefLocaleValue\"/>\n</settings>")
-                    modified = true
                 }
 
                 if (overridden) {
                     setPendingAutoloadOverrideNotification(true)
                 }
 
-                if (modified) {
+                if (content != originalContent) {
                     settingsFile.writeText(content)
                     Log.i(TAG, "Updated existing settings.xml with defaultSaveDir=$defaultNotesPath, autosaveTimeout=1, autoloadMostRecent=false, preferredLocale=$prefLocaleValue")
                 }

@@ -147,9 +147,7 @@ class BackupEngine(
         }
 
         // 2. Custom folder mappings scanning
-        val activeMappings = if (serviceConfig.customMappings.isNotEmpty()) {
-            serviceConfig.customMappings
-        } else {
+        val activeMappings = serviceConfig.customMappings.ifEmpty {
             try {
                 dev.ilamparithi.aournalpp.backup.security.CustomMappingRepository(context).getMappingsForService(serviceConfig.id)
             } catch (_: Exception) {
@@ -665,9 +663,7 @@ class BackupEngine(
                 }
             }
 
-            val activeMappings = if (serviceConfig.customMappings.isNotEmpty()) {
-                serviceConfig.customMappings
-            } else {
+            val activeMappings = serviceConfig.customMappings.ifEmpty {
                 try {
                     dev.ilamparithi.aournalpp.backup.security.CustomMappingRepository(context).getMappingsForService(serviceConfig.id)
                 } catch (_: Exception) {
@@ -736,18 +732,18 @@ class BackupEngine(
 
         // 1. Gather all local files from complete backup domains
         val completeFiles = scanner.scanCompleteBackup()
-        for (f in completeFiles) {
-            val canon = f.file.canonicalPath
-            relativePathByLocalPath[canon] = f.relativePath
+        for ((file, _, relativePath, sizeBytes, lastModified, sha256) in completeFiles) {
+            val canon = file.canonicalPath
+            relativePathByLocalPath[canon] = relativePath
             versionsByLocalPath.getOrPut(canon) { mutableListOf() }.add(
                 FileVersionItem(
                     source = FileVersionSource.LOCAL,
-                    fileName = f.file.name,
-                    relativePath = f.relativePath,
-                    localFilePath = f.file.absolutePath,
-                    sizeBytes = f.sizeBytes,
-                    lastModifiedEpochMs = f.lastModified,
-                    contentHash = f.sha256
+                    fileName = file.name,
+                    relativePath = relativePath,
+                    localFilePath = file.absolutePath,
+                    sizeBytes = sizeBytes,
+                    lastModifiedEpochMs = lastModified,
+                    contentHash = sha256
                 )
             )
         }
@@ -756,9 +752,9 @@ class BackupEngine(
         val allMappings = services.flatMap { it.customMappings.filter { m -> m.isEnabled } }
         for (m in allMappings) {
             val mapped = scanner.scanCustomMapping(m)
-            for (f in mapped) {
-                val canon = f.file.canonicalPath
-                val displayRel = if (m.remoteFolderPath.isNotBlank()) "${m.remoteFolderPath.trim('/')}/${f.relativePath}" else f.relativePath
+            for ((file, _, relativePath, sizeBytes, lastModified, sha256) in mapped) {
+                val canon = file.canonicalPath
+                val displayRel = if (m.remoteFolderPath.isNotBlank()) "${m.remoteFolderPath.trim('/')}/$relativePath" else relativePath
                 if (!relativePathByLocalPath.containsKey(canon)) {
                     relativePathByLocalPath[canon] = displayRel
                 }
@@ -766,12 +762,12 @@ class BackupEngine(
                     versionsByLocalPath.getOrPut(canon) { mutableListOf() }.add(
                         FileVersionItem(
                             source = FileVersionSource.LOCAL,
-                            fileName = f.file.name,
+                            fileName = file.name,
                             relativePath = displayRel,
-                            localFilePath = f.file.absolutePath,
-                            sizeBytes = f.sizeBytes,
-                            lastModifiedEpochMs = f.lastModified,
-                            contentHash = f.sha256
+                            localFilePath = file.absolutePath,
+                            sizeBytes = sizeBytes,
+                            lastModifiedEpochMs = lastModified,
+                            contentHash = sha256
                         )
                     )
                 }
@@ -789,9 +785,9 @@ class BackupEngine(
                 if (srv.isCompleteBackupEnabled) {
                     val remoteRoot = getCompleteBackupRemoteRoot(srv)
                     val remoteNotes = listRemoteRecursively(provider, "$remoteRoot/Notes")
-                    for (rf in remoteNotes) {
-                        if (rf.isDirectory) continue
-                        val subPath = rf.remotePath.removePrefix("$remoteRoot/Notes").trim('/')
+                    for ((remotePath, isDirectory, sizeBytes, lastModifiedEpochMs, contentHash) in remoteNotes) {
+                        if (isDirectory) continue
+                        val subPath = remotePath.removePrefix("$remoteRoot/Notes").trim('/')
                         val destFile = File(notesRoot, subPath)
                         val canon = destFile.canonicalPath
                         val displayRel = "Notes/$subPath"
@@ -809,19 +805,19 @@ class BackupEngine(
                             fileName = destFile.name,
                             relativePath = displayRel,
                             localFilePath = destFile.absolutePath,
-                            sizeBytes = rf.sizeBytes,
-                            lastModifiedEpochMs = rf.lastModifiedEpochMs,
-                            contentHash = rf.contentHash,
-                            remotePath = rf.remotePath
+                            sizeBytes = sizeBytes,
+                            lastModifiedEpochMs = lastModifiedEpochMs,
+                            contentHash = contentHash,
+                            remotePath = remotePath
                         )
                         versionsByLocalPath.getOrPut(canon) { mutableListOf() }.add(item)
                     }
 
                     val remoteConfigs = listRemoteRecursively(provider, "$remoteRoot/.config")
                     val addedRemoteConfigPaths = mutableSetOf<String>()
-                    for (rf in remoteConfigs) {
-                        if (rf.isDirectory) continue
-                        val subPath = rf.remotePath.removePrefix("$remoteRoot/.config").trim('/')
+                    for ((remotePath, isDirectory, sizeBytes, lastModifiedEpochMs, contentHash) in remoteConfigs) {
+                        if (isDirectory) continue
+                        val subPath = remotePath.removePrefix("$remoteRoot/.config").trim('/')
                         if (subPath.isEmpty()) continue
                         val destFile = File(File(notesRoot, ".config"), subPath)
                         val canon = destFile.canonicalPath
@@ -840,20 +836,20 @@ class BackupEngine(
                             fileName = destFile.name,
                             relativePath = displayRel,
                             localFilePath = destFile.absolutePath,
-                            sizeBytes = rf.sizeBytes,
-                            lastModifiedEpochMs = rf.lastModifiedEpochMs,
-                            contentHash = rf.contentHash,
-                            remotePath = rf.remotePath
+                            sizeBytes = sizeBytes,
+                            lastModifiedEpochMs = lastModifiedEpochMs,
+                            contentHash = contentHash,
+                            remotePath = remotePath
                         )
                         versionsByLocalPath.getOrPut(canon) { mutableListOf() }.add(item)
-                        addedRemoteConfigPaths.add(rf.remotePath)
+                        addedRemoteConfigPaths.add(remotePath)
                     }
 
                     // Fallback for legacy backups
                     val legacyConfigs = listRemoteRecursively(provider, "$remoteRoot/.config/xournalpp")
-                    for (rf in legacyConfigs) {
-                        if (rf.isDirectory || rf.remotePath in addedRemoteConfigPaths) continue
-                        val subPath = rf.remotePath.removePrefix("$remoteRoot/.config/xournalpp").trim('/')
+                    for ((remotePath, isDirectory, sizeBytes, lastModifiedEpochMs, contentHash) in legacyConfigs) {
+                        if (isDirectory || remotePath in addedRemoteConfigPaths) continue
+                        val subPath = remotePath.removePrefix("$remoteRoot/.config/xournalpp").trim('/')
                         if (subPath.isEmpty()) continue
                         val destFile = File(File(notesRoot, ".config/xournalpp"), subPath)
                         val canon = destFile.canonicalPath
@@ -872,24 +868,24 @@ class BackupEngine(
                             fileName = destFile.name,
                             relativePath = displayRel,
                             localFilePath = destFile.absolutePath,
-                            sizeBytes = rf.sizeBytes,
-                            lastModifiedEpochMs = rf.lastModifiedEpochMs,
-                            contentHash = rf.contentHash,
-                            remotePath = rf.remotePath
+                            sizeBytes = sizeBytes,
+                            lastModifiedEpochMs = lastModifiedEpochMs,
+                            contentHash = contentHash,
+                            remotePath = remotePath
                         )
                         versionsByLocalPath.getOrPut(canon) { mutableListOf() }.add(item)
                     }
                 }
 
                 // 3b. Custom mappings domain (treated as distinct cloud storage endpoints)
-                for (mapping in srv.customMappings) {
-                    if (!mapping.isEnabled) continue
-                    val localBase = File(mapping.localFolderPath)
-                    val remoteBase = mapping.remoteFolderPath.trim().trim('/')
+                for ((mappingId, _, _, localFolderPath, remoteFolderPath, isEnabled) in srv.customMappings) {
+                    if (!isEnabled) continue
+                    val localBase = File(localFolderPath)
+                    val remoteBase = remoteFolderPath.trim().trim('/')
                     val remoteMapped = listRemoteRecursively(provider, remoteBase)
-                    for (rf in remoteMapped) {
-                        if (rf.isDirectory) continue
-                        val subPath = if (remoteBase.isNotEmpty()) rf.remotePath.removePrefix(remoteBase).trim('/') else rf.remotePath
+                    for ((remotePath, isDirectory, sizeBytes, lastModifiedEpochMs, contentHash) in remoteMapped) {
+                        if (isDirectory) continue
+                        val subPath = if (remoteBase.isNotEmpty()) remotePath.removePrefix(remoteBase).trim('/') else remotePath
                         val destFile = File(localBase, subPath)
                         val canon = destFile.canonicalPath
                         val displayRel = if (remoteBase.isNotEmpty()) "$remoteBase/$subPath" else subPath
@@ -901,16 +897,16 @@ class BackupEngine(
                                 serviceId = srv.id,
                                 serviceName = srv.name,
                                 providerType = srv.providerType,
-                                mappingId = mapping.id,
-                                mappingRemotePath = mapping.remoteFolderPath
+                                mappingId = mappingId,
+                                mappingRemotePath = remoteFolderPath
                             ),
                             fileName = destFile.name,
                             relativePath = displayRel,
                             localFilePath = destFile.absolutePath,
-                            sizeBytes = rf.sizeBytes,
-                            lastModifiedEpochMs = rf.lastModifiedEpochMs,
-                            contentHash = rf.contentHash,
-                            remotePath = rf.remotePath
+                            sizeBytes = sizeBytes,
+                            lastModifiedEpochMs = lastModifiedEpochMs,
+                            contentHash = contentHash,
+                            remotePath = remotePath
                         )
                         versionsByLocalPath.getOrPut(canon) { mutableListOf() }.add(item)
                     }
@@ -935,9 +931,8 @@ class BackupEngine(
 
             // Determine if versions genuinely differ:
             var hasConflict = false
-            for (i in 0 until allVersions.size) {
+            for ((i, v1) in allVersions.withIndex()) {
                 for (j in i + 1 until allVersions.size) {
-                    val v1 = allVersions[i]
                     val v2 = allVersions[j]
 
                     val sameHash = v1.contentHash != null && v2.contentHash != null && v1.contentHash.equals(v2.contentHash, ignoreCase = true)
@@ -1000,9 +995,9 @@ class BackupEngine(
         val errors = mutableListOf<String>()
         var hasRestoredConfigs = false
 
-        for (res in resolutions) {
+        for ((_, relativePath, action) in resolutions) {
             try {
-                when (val action = res.action) {
+                when (action) {
                     is ConflictResolutionAction.ChoosePrimary -> {
                         val chosen = action.chosenVersion
                         val localFile = File(chosen.localFilePath)
@@ -1029,7 +1024,7 @@ class BackupEngine(
                                             dao.insertOrUpdate(
                                                 SyncMetadataEntity(
                                                     serviceId = srv.id,
-                                                    relativePath = res.relativePath,
+                                                    relativePath = relativePath,
                                                     scope = if (localFile.absolutePath.startsWith(env.xournalConfigDir.absolutePath)) "config" else "notes",
                                                     localSha256 = chosen.contentHash ?: "",
                                                     remoteHash = chosen.contentHash,
@@ -1077,7 +1072,7 @@ class BackupEngine(
                                             dao.insertOrUpdate(
                                                 SyncMetadataEntity(
                                                     serviceId = srv.id,
-                                                    relativePath = res.relativePath,
+                                                    relativePath = relativePath,
                                                     scope = if (localFile.absolutePath.startsWith(env.xournalConfigDir.absolutePath)) "config" else "notes",
                                                     localSha256 = primary.contentHash ?: "",
                                                     remoteHash = primary.contentHash,
@@ -1119,8 +1114,8 @@ class BackupEngine(
                                         )
                                         if (dlResult.isSuccess) {
                                             filesSavedAlongside++
-                                            val alongsideRel = if (res.relativePath.contains('/')) {
-                                                "${res.relativePath.substringBeforeLast('/')}/${alongsideFile.name}"
+                                            val alongsideRel = if (relativePath.contains('/')) {
+                                                "${relativePath.substringBeforeLast('/')}/${alongsideFile.name}"
                                             } else {
                                                 alongsideFile.name
                                             }
@@ -1176,8 +1171,8 @@ class BackupEngine(
                                         )
                                         if (dlResult.isSuccess) {
                                             filesSavedAlongside++
-                                            val alongsideRel = if (res.relativePath.contains('/')) {
-                                                "${res.relativePath.substringBeforeLast('/')}/${alongsideFile.name}"
+                                            val alongsideRel = if (relativePath.contains('/')) {
+                                                "${relativePath.substringBeforeLast('/')}/${alongsideFile.name}"
                                             } else {
                                                 alongsideFile.name
                                             }
@@ -1208,7 +1203,7 @@ class BackupEngine(
                     }
                 }
             } catch (e: Exception) {
-                errors.add("${res.relativePath}: ${e.message}")
+                errors.add("$relativePath: ${e.message}")
             }
         }
 

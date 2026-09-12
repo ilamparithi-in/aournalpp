@@ -64,6 +64,7 @@ import dev.ilamparithi.aournalpp.ui.cloud.CloudProviderIcon
 import dev.ilamparithi.aournalpp.ui.InteractiveMarqueeText
 import java.io.File
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.launch
 
 @Composable
@@ -81,7 +82,7 @@ fun OnboardingExtractionBottomPill(
     var isReadyDismissed by remember { mutableStateOf(false) }
     LaunchedEffect(state) {
         if (state is BootstrapState.Ready) {
-            delay(10_000L)
+            delay(10.seconds)
             isReadyDismissed = true
         } else {
             isReadyDismissed = false

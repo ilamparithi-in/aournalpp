@@ -179,10 +179,8 @@ class XournalConfigManager(private val env: LinuxEnvironment) {
         detectedType
     }
 
-    fun importConfig(context: Context, sourceUri: Uri): Result<Unit> = runCatching {
-        importConfigFile(context, sourceUri, ConfigFileType.SETTINGS_XML).getOrThrow()
-        Unit
-    }
+    fun importConfig(context: Context, sourceUri: Uri): Result<Unit> =
+        importConfigFile(context, sourceUri, ConfigFileType.SETTINGS_XML).map { }
 
     fun importFullBackupZip(context: Context, sourceUri: Uri): Result<Int> = runCatching {
         env.xournalConfigDir.mkdirs()

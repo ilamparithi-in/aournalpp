@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.launch
 
 private val M3SlideBackEasing = CubicBezierEasing(0.2f, 0.0f, 0.0f, 1.0f)
@@ -107,7 +108,7 @@ fun InteractiveMarqueeText(
                     )
 
                     // 2. Pause at the end for comfortable reading
-                    delay(1500L)
+                    delay(1500.milliseconds)
 
                     // 3. Quick Material 3 easing slide back to starting position
                     animOffset.animateTo(
@@ -115,7 +116,7 @@ fun InteractiveMarqueeText(
                         animationSpec = tween(durationMillis = 420, easing = M3SlideBackEasing)
                     )
 
-                    delay(100L)
+                    delay(100.milliseconds)
                 } finally {
                     isInteracted = false
                 }

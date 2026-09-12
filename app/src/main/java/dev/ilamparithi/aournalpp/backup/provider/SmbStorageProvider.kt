@@ -163,16 +163,14 @@ class SmbStorageProvider(
             }
 
             val totalBytes = localFile.length()
-            val smbFile = diskShare.openFile(
+            diskShare.openFile(
                 smbPath,
                 EnumSet.of(AccessMask.GENERIC_WRITE, AccessMask.GENERIC_READ),
                 EnumSet.of(FileAttributes.FILE_ATTRIBUTE_NORMAL),
                 EnumSet.of(SMB2ShareAccess.FILE_SHARE_READ, SMB2ShareAccess.FILE_SHARE_WRITE),
                 SMB2CreateDisposition.FILE_OVERWRITE_IF,
                 null
-            )
-
-            try {
+            ).use { smbFile ->
                 smbFile.outputStream.use { out ->
                     localFile.inputStream().use { input ->
                         val buffer = ByteArray(16384)
@@ -185,8 +183,6 @@ class SmbStorageProvider(
                         }
                     }
                 }
-            } finally {
-                smbFile.close()
             }
         }
     }
@@ -199,19 +195,17 @@ class SmbStorageProvider(
         runCatching {
             val diskShare = getOrConnectShare()
             val smbPath = normalizePath(remotePath)
-            val smbFile = diskShare.openFile(
+            destinationFile.parentFile?.mkdirs()
+            val tempFile = File(destinationFile.parentFile, "${destinationFile.name}.download.tmp")
+
+            diskShare.openFile(
                 smbPath,
                 EnumSet.of(AccessMask.GENERIC_READ),
                 EnumSet.of(FileAttributes.FILE_ATTRIBUTE_NORMAL),
                 EnumSet.of(SMB2ShareAccess.FILE_SHARE_READ),
                 SMB2CreateDisposition.FILE_OPEN,
                 null
-            )
-
-            destinationFile.parentFile?.mkdirs()
-            val tempFile = File(destinationFile.parentFile, "${destinationFile.name}.download.tmp")
-
-            try {
+            ).use { smbFile ->
                 val totalBytes = smbFile.fileInformation.standardInformation.endOfFile
                 smbFile.inputStream.use { input ->
                     tempFile.outputStream().use { out ->
@@ -225,8 +219,6 @@ class SmbStorageProvider(
                         }
                     }
                 }
-            } finally {
-                smbFile.close()
             }
 
             if (destinationFile.exists()) destinationFile.delete()

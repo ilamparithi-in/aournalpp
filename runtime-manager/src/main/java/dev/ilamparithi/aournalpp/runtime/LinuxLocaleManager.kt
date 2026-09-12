@@ -175,10 +175,10 @@ object LinuxLocaleManager {
 
         // 3. Augment with official Xournal++ catalog
         for ((code, names) in KNOWN_XOURNAL_LOCALES) {
+            val (nativeName, englishName) = names
             val posixTag = "$code.UTF-8"
             if (!seenTags.contains(posixTag)) {
                 seenTags.add(posixTag)
-                val (nativeName, englishName) = names
                 val localeObj = parseLocaleFromCode(code)
                 results.add(
                     LinuxLocaleInfo(

@@ -49,6 +49,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.milliseconds
 import java.io.ByteArrayOutputStream
 import java.io.File
 
@@ -183,7 +184,7 @@ class CanvasActivity : ComponentActivity() {
                         view.setObscuredBottom(imeHeight)
                     }
                     if (!isImeOpen) {
-                        view.setKeyboardVisible(false)
+                        view.isKeyboardVisible = false
                     }
                 }
             }
@@ -364,7 +365,7 @@ class CanvasActivity : ComponentActivity() {
                     )
                 } else {
                     injectCtrlQDirect()
-                    delay(350)
+                    delay(350.milliseconds)
                     if (sessionManager.isModalOrDialogOpen()) {
                         Toast.makeText(this@CanvasActivity, "Save or discard changes to exit", Toast.LENGTH_SHORT).show()
                     }

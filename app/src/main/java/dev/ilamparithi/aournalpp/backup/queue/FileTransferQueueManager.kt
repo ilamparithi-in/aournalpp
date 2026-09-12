@@ -78,7 +78,7 @@ object FileTransferQueueManager {
     fun updateProgress(id: String, transferred: Long, total: Long) {
         val now = System.currentTimeMillis()
         val lastEmit = lastProgressEmitMs[id] ?: 0L
-        val isFinished = total > 0 && transferred >= total
+        val isFinished = total in 1..transferred
 
         // Throttle progress updates to UI state flow at ~10 Hz (every 100ms) per transfer
         // to prevent Compose recomposition storms and Main Looper starvation.
@@ -91,10 +91,11 @@ object FileTransferQueueManager {
         val prev = speedTrackers[id]
         var speed = 0L
         if (prev != null) {
-            val deltaBytes = transferred - prev.first
-            val deltaTimeMs = now - prev.second
+            val (prevTransferred, prevTimeMs) = prev
+            val deltaBytes = transferred - prevTransferred
+            val deltaTimeMs = now - prevTimeMs
             if (deltaTimeMs >= 500) {
-                speed = if (deltaTimeMs > 0) (deltaBytes * 1000L) / deltaTimeMs else 0L
+                speed = (deltaBytes * 1000L) / deltaTimeMs
                 speedTrackers[id] = transferred to now
             }
         } else {
