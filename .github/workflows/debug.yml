@@ -16,6 +16,9 @@ jobs:
   build-debug:
     name: Build Debug APK (${{ matrix.flavor }})
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -27,6 +30,29 @@ jobs:
         with:
           submodules: false
           fetch-depth: 0
+
+      - name: Wait for In-Flight Builder Workflows
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TARGET_COMMIT="$GITHUB_SHA"
+          echo "[*] Checking for active builder workflows on commit $TARGET_COMMIT..."
+
+          # 1. Check for active x11-core build
+          X11_RUN_ID=$(gh run list --workflow "build-x11-core.yml" --commit "$TARGET_COMMIT" \
+            --json databaseId,status -q '.[] | select(.status != "completed") | .databaseId' | head -n 1)
+          if [ -n "$X11_RUN_ID" ]; then
+            echo "[*] Active x11-core build detected (Run ID: $X11_RUN_ID). Waiting for completion..."
+            gh run watch "$X11_RUN_ID" --exit-status
+          fi
+
+          # 2. Check for active bootstrap build
+          BOOTSTRAP_RUN_ID=$(gh run list --workflow "build-bootstrap.yml" --commit "$TARGET_COMMIT" \
+            --json databaseId,status -q '.[] | select(.status != "completed") | .databaseId' | head -n 1)
+          if [ -n "$BOOTSTRAP_RUN_ID" ]; then
+            echo "[*] Active bootstrap build detected (Run ID: $BOOTSTRAP_RUN_ID). Waiting for completion..."
+            gh run watch "$BOOTSTRAP_RUN_ID" --exit-status
+          fi
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
