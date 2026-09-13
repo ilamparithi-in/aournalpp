@@ -145,8 +145,8 @@ You can build Aournal++ from source or install debug builds directly onto your A
 
 Make sure your development machine has the following tools installed:
 - **JDK 17** (e.g. OpenJDK 17)
-- **Android SDK** (Compile SDK `34`, Min SDK `26`)
-- **Android NDK** (`27.0.12077973`)
+- **Android SDK** (Compile SDK `36`, Target SDK `36`, Min SDK `26`)
+- **Android NDK** (`r27d`)
 - **CMake** (`3.22.1+`)
 - **Host Tools**: Python 3, `bison`, `patch`, and `build-essential` (needed for compiling X11 stubs and parsers)
 

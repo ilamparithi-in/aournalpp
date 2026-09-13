@@ -346,7 +346,7 @@ def find_ndk_clang(clang_target: str) -> str:
 
     for sdk in sdk_roots:
         if sdk and os.path.exists(os.path.join(sdk, "ndk")):
-            for ver in ["27.0.12077973", "27.1.12297006", "27.2.12479018", "28.0.13004108", "25.1.8937393", "25.2.9519653", "26.1.10909125"]:
+            for ver in ["27.3.13750724", "27.0.12077973", "27.1.12297006", "27.2.12479018", "28.0.13004108", "25.1.8937393", "25.2.9519653", "26.1.10909125"]:
                 candidates.append(os.path.join(sdk, "ndk", ver))
             try:
                 for entry in sorted(os.listdir(os.path.join(sdk, "ndk")), reverse=True):
