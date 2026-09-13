@@ -224,6 +224,22 @@
     <string name="action_replace_local_with_cloud">Replace Local with Cloud</string>
     <!-- Title of onboarding screen when restoring settings -->
     <string name="title_onboarding_restoring">Restoring Settings</string>
+    <!-- Title of onboarding screen when restoration fails -->
+    <string name="title_onboarding_restoring_failed">Restoration Encountered Errors</string>
+    <!-- Label for restoration details dialog -->
+    <string name="title_onboarding_restoration_details">Restoration Details</string>
+    <!-- Action button to view detailed logs of restoration -->
+    <string name="action_view_restoration_details">View Details</string>
+    <!-- Action button to hide detailed logs of restoration -->
+    <string name="action_hide_restoration_details">Hide Details</string>
+    <!-- Action button to retry restoration -->
+    <string name="action_retry_restoration">Retry Restoration</string>
+    <!-- Action button to skip restoration and continue onboarding -->
+    <string name="action_continue_without_restoring">Continue Without Restoring</string>
+    <!-- Action button to return back to folder selection -->
+    <string name="action_back_to_folder_select">Go Back</string>
+    <!-- Error message when cloud connection test fails. %1$s is the error description -->
+    <string name="error_cloud_connection_failed">Failed to connect to cloud service: %1$s</string>
     <!-- Description when restoring from local folder. %1$s is folder path or name -->
     <string name="desc_onboarding_restoring_folder">Restoring preferences and configurations from %1$s…</string>
     <!-- Description when restoring from cloud service. %1$s is cloud service name -->

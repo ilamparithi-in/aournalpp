@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -73,7 +74,13 @@ import androidx.compose.material.icons.filled.SettingsBackupRestore
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Timer
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedVisibility
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -108,6 +115,19 @@ import dev.ilamparithi.aournalpp.ui.cloud.FolderBrowserMode
 import dev.ilamparithi.aournalpp.ui.cloud.MultiServiceConflictDialog
 import dev.ilamparithi.aournalpp.ui.cloud.ServiceConfigDialog
 import dev.ilamparithi.aournalpp.utils.a11yHeading
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.ui.text.font.FontFamily
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateListOf
+import dev.ilamparithi.aournalpp.ui.ExpressiveHeroSpinner
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -160,6 +180,20 @@ import kotlin.math.hypot
 
 import dev.ilamparithi.aournalpp.ui.onboarding.*
 
+enum class RestoreLogType {
+    INFO,
+    PROGRESS,
+    CONFIG,
+    SUCCESS,
+    ERROR
+}
+
+data class RestoreConsoleLog(
+    val timestamp: String,
+    val message: String,
+    val type: RestoreLogType
+)
+
 @Composable
 fun OnboardingScreen(
     bootstrapState: BootstrapState,
@@ -179,6 +213,25 @@ fun OnboardingScreen(
     var isRestoringSettings by remember { mutableStateOf(false) }
     var restoringStatusText by remember { mutableStateOf("") }
     var isRestorationComplete by remember { mutableStateOf(false) }
+    var isRestorationFailed by remember { mutableStateOf(false) }
+    var isRestorationDetailsExpanded by remember { mutableStateOf(false) }
+    val restorationLogs = remember { mutableStateListOf<RestoreConsoleLog>() }
+    var restorationProgress by remember { mutableFloatStateOf(-1f) }
+    var retryRestorationAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    val logTimeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+
+    fun addRestoreLog(msg: String) {
+        val logType = when {
+            msg.contains("fail", ignoreCase = true) || msg.contains("Error", ignoreCase = true) || msg.contains("rejected", ignoreCase = true) -> RestoreLogType.ERROR
+            msg.contains("success", ignoreCase = true) || msg.contains("applied", ignoreCase = true) || msg.contains("finished", ignoreCase = true) -> RestoreLogType.SUCCESS
+            msg.contains("download", ignoreCase = true) || msg.contains("queued", ignoreCase = true) -> RestoreLogType.PROGRESS
+            msg.contains("config", ignoreCase = true) || msg.contains("settings", ignoreCase = true) || msg.contains("preferences", ignoreCase = true) || msg.contains("theme", ignoreCase = true) -> RestoreLogType.CONFIG
+            else -> RestoreLogType.INFO
+        }
+        restorationLogs.add(RestoreConsoleLog(logTimeFormat.format(Date()), msg, logType))
+        restoringStatusText = msg
+    }
 
     // Live storage and notification permission states with lifecycle resume observer
     var isPermissionGranted by remember { mutableStateOf(checkStoragePermissionGranted(context)) }
@@ -257,6 +310,97 @@ fun OnboardingScreen(
                 )
             )
             onFinish()
+        }
+    }
+
+    fun performLocalRestore(localFolder: File) {
+        isRestoringSettings = true
+        isRestorationFailed = false
+        isRestorationComplete = false
+        isRestorationDetailsExpanded = false
+        restorationLogs.clear()
+        restorationProgress = -1f
+        retryRestorationAction = { performLocalRestore(localFolder) }
+
+        scope.launch {
+            addRestoreLog("Initializing local workspace restoration for '${localFolder.name}'...")
+            delay(300.milliseconds)
+            env.setNotesDirectoryPathOnly(localFolder.absolutePath)
+            val success = NotesHomeConfigManager.restoreSettingsFromNotesHome(localFolder, context, env) { logMsg ->
+                addRestoreLog(logMsg)
+            }
+            if (success) {
+                NotesHomeConfigManager.sync(context, env)
+                addRestoreLog("Local workspace configuration synced successfully.")
+                delay(400.milliseconds)
+                isRestorationComplete = true
+                delay(700.milliseconds)
+                triggerRevealAnimation()
+            } else {
+                isRestorationFailed = true
+                isRestorationDetailsExpanded = true
+                addRestoreLog("Local restoration failed to apply workspace settings.")
+            }
+        }
+    }
+
+    fun performCloudRestore(
+        service: ServiceConfig,
+        remotePath: String,
+        localFolder: File,
+        skipDownload: Boolean,
+        conflictPolicy: ConflictResolutionPolicy
+    ) {
+        isRestoringSettings = true
+        isRestorationFailed = false
+        isRestorationComplete = false
+        isRestorationDetailsExpanded = false
+        restorationLogs.clear()
+        restorationProgress = -1f
+        retryRestorationAction = { performCloudRestore(service, remotePath, localFolder, skipDownload, conflictPolicy) }
+
+        scope.launch {
+            addRestoreLog("Initializing cloud restoration from ${service.name}...")
+            env.setNotesDirectoryPathOnly(localFolder.absolutePath)
+            var restoreSuccess = true
+
+            if (!skipDownload) {
+                val engine = BackupEngine(context, env, CredentialsVault.getInstance(context))
+                val result = engine.performRestore(
+                    serviceConfig = service.copy(remoteBasePath = remotePath),
+                    conflictPolicy = conflictPolicy,
+                    onProgress = { current, total, _ ->
+                        if (total > 0) {
+                            restorationProgress = current.toFloat() / total.toFloat()
+                        }
+                    },
+                    onLog = { logMsg ->
+                        addRestoreLog(logMsg)
+                    }
+                )
+                if (result.filesFailed > 0 || (result.filesRestored == 0 && result.filesSkipped == 0 && result.totalFilesDiscovered > 0)) {
+                    restoreSuccess = false
+                }
+            } else {
+                addRestoreLog("Skipping download phase (using existing local folder).")
+                val localOk = NotesHomeConfigManager.restoreSettingsFromNotesHome(localFolder, context, env) { logMsg ->
+                    addRestoreLog(logMsg)
+                }
+                restoreSuccess = localOk
+            }
+
+            if (restoreSuccess) {
+                NotesHomeConfigManager.sync(context, env)
+                addRestoreLog("Cloud configuration and sync mappings finalized.")
+                delay(400.milliseconds)
+                isRestorationComplete = true
+                delay(700.milliseconds)
+                triggerRevealAnimation()
+            } else {
+                isRestorationFailed = true
+                isRestorationDetailsExpanded = true
+                addRestoreLog("Cloud restoration finished with errors. You can retry, go back, or continue.")
+            }
         }
     }
 
@@ -357,61 +501,246 @@ fun OnboardingScreen(
                         .weight(1f)
                         .fillMaxWidth()
                         .wrapContentWidth(Alignment.CenterHorizontally)
-                        .widthIn(max = 500.dp),
+                        .widthIn(max = 520.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 16.dp),
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
+                        // Hero Icon / Expressive Spinner
                         Box(
                             modifier = Modifier
-                                .size(96.dp)
-                                .onGloballyPositioned { checkCircleCoordinates = it }
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primaryContainer),
+                                .size(84.dp)
+                                .onGloballyPositioned { checkCircleCoordinates = it },
                             contentAlignment = Alignment.Center
                         ) {
-                            if (isRestorationComplete) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(54.dp)
+                            when {
+                                isRestorationComplete -> {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(72.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.primaryContainer),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(48.dp)
+                                        )
+                                    }
+                                }
+                                isRestorationFailed -> {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(72.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.errorContainer),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Warning,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(44.dp)
+                                        )
+                                    }
+                                }
+                                else -> {
+                                    // Regular expressive hero spinner with inner gear counter-rotating briskly
+                                    ExpressiveHeroSpinner(
+                                        size = 80.dp,
+                                        icon = Icons.Default.Settings,
+                                        rotateIconOpposite = true,
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        iconTint = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                }
+                            }
+                        }
+
+                        // Title & Status
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = when {
+                                    isRestorationComplete -> androidx.compose.ui.res.stringResource(R.string.msg_onboarding_restoring_done)
+                                    isRestorationFailed -> androidx.compose.ui.res.stringResource(R.string.title_onboarding_restoring_failed)
+                                    else -> androidx.compose.ui.res.stringResource(R.string.title_onboarding_restoring)
+                                },
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isRestorationFailed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.a11yHeading()
+                            )
+
+                            Text(
+                                text = restoringStatusText,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        // Progress Indicator
+                        if (!isRestorationComplete && !isRestorationFailed) {
+                            if (restorationProgress >= 0f) {
+                                LinearProgressIndicator(
+                                    progress = { restorationProgress },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
                                 )
                             } else {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(54.dp),
-                                    strokeWidth = 4.dp,
-                                    color = MaterialTheme.colorScheme.primary
+                                LinearProgressIndicator(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(24.dp))
+                        // Expandable Restoration Details
+                        if (restorationLogs.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { isRestorationDetailsExpanded = !isRestorationDetailsExpanded }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = if (isRestorationDetailsExpanded) {
+                                        androidx.compose.ui.res.stringResource(R.string.action_hide_restoration_details)
+                                    } else {
+                                        androidx.compose.ui.res.stringResource(R.string.action_view_restoration_details)
+                                    },
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Icon(
+                                    imageVector = if (isRestorationDetailsExpanded) {
+                                        Icons.Default.KeyboardArrowUp
+                                    } else {
+                                        Icons.Default.KeyboardArrowDown
+                                    },
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
 
-                        Text(
-                            text = if (isRestorationComplete) androidx.compose.ui.res.stringResource(R.string.msg_onboarding_restoring_done)
-                                   else androidx.compose.ui.res.stringResource(R.string.title_onboarding_restoring),
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.a11yHeading()
-                        )
+                            AppAnimatedVisibility(
+                                visible = isRestorationDetailsExpanded,
+                                enter = fadeIn() + expandVertically(),
+                                exit = shrinkVertically() + fadeOut()
+                            ) {
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 60.dp, max = 150.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                ) {
+                                    val logListState = rememberLazyListState()
+                                    LaunchedEffect(restorationLogs.size) {
+                                        if (restorationLogs.isNotEmpty()) {
+                                            logListState.animateScrollToItem(restorationLogs.size - 1)
+                                        }
+                                    }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                                    LazyColumn(
+                                        state = logListState,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        items(restorationLogs) { log ->
+                                            Text(
+                                                text = log.message,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = when (log.type) {
+                                                    RestoreLogType.ERROR -> MaterialTheme.colorScheme.error
+                                                    RestoreLogType.SUCCESS -> MaterialTheme.colorScheme.primary
+                                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
-                        Text(
-                            text = restoringStatusText,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth(0.85f)
-                        )
+                        // Recovery actions if failed
+                        if (isRestorationFailed) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            isRestoringSettings = false
+                                            isRestorationFailed = false
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(androidx.compose.ui.res.stringResource(R.string.action_back_to_folder_select))
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            retryRestorationAction?.invoke()
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Refresh,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(androidx.compose.ui.res.stringResource(R.string.action_retry_restoration))
+                                    }
+                                }
+
+                                TextButton(
+                                    onClick = {
+                                        isRestoringSettings = false
+                                        isRestorationFailed = false
+                                        scope.launch { pagerState.animateScrollToPage(3) }
+                                    }
+                                ) {
+                                    Text(
+                                        androidx.compose.ui.res.stringResource(R.string.action_continue_without_restoring),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             } else {
@@ -464,44 +793,10 @@ fun OnboardingScreen(
                                     scope.launch { pagerState.animateScrollToPage(3) }
                                 },
                                 onRestoreLocal = { localFolder ->
-                                    isRestoringSettings = true
-                                    restoringStatusText = context.getString(
-                                        R.string.desc_onboarding_restoring_folder,
-                                        localFolder.name
-                                    )
-                                    scope.launch {
-                                        delay(400.milliseconds)
-                                        env.setNotesDirectoryPathOnly(localFolder.absolutePath)
-                                        NotesHomeConfigManager.restoreSettingsFromNotesHome(localFolder, context, env)
-                                        NotesHomeConfigManager.sync(context, env)
-                                        delay(600.milliseconds)
-                                        isRestorationComplete = true
-                                        delay(500.milliseconds)
-                                        triggerRevealAnimation()
-                                    }
+                                    performLocalRestore(localFolder)
                                 },
                                 onRestoreCloud = { service, remotePath, localFolder, skipDownload, conflictPolicy ->
-                                    isRestoringSettings = true
-                                    restoringStatusText = context.getString(
-                                        R.string.desc_onboarding_restoring_cloud,
-                                        service.name
-                                    )
-                                    scope.launch {
-                                        env.setNotesDirectoryPathOnly(localFolder.absolutePath)
-                                        if (!skipDownload) {
-                                            val engine = BackupEngine(context, env, CredentialsVault.getInstance(context))
-                                            engine.performRestore(
-                                                service.copy(remoteBasePath = remotePath),
-                                                conflictPolicy
-                                            )
-                                        }
-                                        NotesHomeConfigManager.restoreSettingsFromNotesHome(localFolder, context, env)
-                                        NotesHomeConfigManager.sync(context, env)
-                                        delay(600.milliseconds)
-                                        isRestorationComplete = true
-                                        delay(500.milliseconds)
-                                        triggerRevealAnimation()
-                                    }
+                                    performCloudRestore(service, remotePath, localFolder, skipDownload, conflictPolicy)
                                 }
                             )
                             3 -> OnboardingSettingsPage(

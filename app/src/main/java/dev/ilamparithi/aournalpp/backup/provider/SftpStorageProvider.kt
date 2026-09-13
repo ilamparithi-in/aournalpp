@@ -88,10 +88,15 @@ class SftpStorageProvider(
         sshClient = null
     }
 
-    private fun resolveRemotePath(path: String): String {
-        val base = config.remoteBasePath.trim().trimEnd('/')
-        val rel = path.trim().trimStart('/').replace('\\', '/')
-        return if (base.isEmpty()) rel else "$base/$rel"
+    internal fun resolveRemotePath(path: String): String {
+        val base = config.remoteBasePath.trim().trim('/')
+        val cleanPath = path.trim().trim('/').replace('\\', '/')
+        if (base.isEmpty()) return cleanPath
+        if (cleanPath.isEmpty()) return base
+        if (cleanPath == base || cleanPath.startsWith("$base/")) {
+            return cleanPath
+        }
+        return "$base/$cleanPath"
     }
 
     override suspend fun testConnection(): Result<Boolean> = withContext(Dispatchers.IO) {

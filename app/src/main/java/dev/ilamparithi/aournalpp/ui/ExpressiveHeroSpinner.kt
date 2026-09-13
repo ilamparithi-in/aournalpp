@@ -50,16 +50,19 @@ fun ExpressiveHeroSpinner(
     icon: ImageVector = Icons.Default.Sync,
     iconDescription: String? = null,
     containerColor: Color = MaterialTheme.colorScheme.primary,
-    iconTint: Color = MaterialTheme.colorScheme.onPrimary
+    iconTint: Color = MaterialTheme.colorScheme.onPrimary,
+    rotateIconOpposite: Boolean = false
 ) {
     val context = LocalContext.current
     val reduceAnimations = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
 
     val rotation: Float
     val pulseScale: Float
+    val iconRotation: Float
     if (reduceAnimations) {
         rotation = 0f
         pulseScale = 1f
+        iconRotation = 0f
     } else {
         val infiniteTransition = rememberInfiniteTransition(label = "expressiveHeroSpinnerTransition")
         val animatedRotation by infiniteTransition.animateFloat(
@@ -80,8 +83,18 @@ fun ExpressiveHeroSpinner(
             ),
             label = "expressiveSpinnerPulse"
         )
+        val animatedIconRotation by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = -360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 3000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "expressiveSpinnerIconRotation"
+        )
         rotation = animatedRotation
         pulseScale = animatedPulseScale
+        iconRotation = if (rotateIconOpposite) animatedIconRotation else 0f
     }
 
     Box(
@@ -126,7 +139,9 @@ fun ExpressiveHeroSpinner(
             Icon(
                 imageVector = icon,
                 contentDescription = iconDescription,
-                modifier = Modifier.size(size * 0.34f),
+                modifier = Modifier
+                    .size(size * 0.34f)
+                    .rotate(iconRotation),
                 tint = iconTint
             )
         }

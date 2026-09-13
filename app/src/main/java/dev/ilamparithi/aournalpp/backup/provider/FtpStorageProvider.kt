@@ -92,10 +92,15 @@ class FtpStorageProvider(
         ftpClient = null
     }
 
-    private fun resolveRemotePath(path: String): String {
+    internal fun resolveRemotePath(path: String): String {
         val base = config.remoteBasePath.trim().trim('/')
-        val rel = path.trim().trim('/').replace('\\', '/')
-        return if (base.isEmpty()) rel else "$base/$rel"
+        val cleanPath = path.trim().trim('/').replace('\\', '/')
+        if (base.isEmpty()) return cleanPath
+        if (cleanPath.isEmpty()) return base
+        if (cleanPath == base || cleanPath.startsWith("$base/")) {
+            return cleanPath
+        }
+        return "$base/$cleanPath"
     }
 
     override suspend fun testConnection(): Result<Boolean> = withContext(Dispatchers.IO) {

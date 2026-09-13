@@ -100,6 +100,8 @@ fun OnboardingChooseFolderPage(
 
     var detectedConfigConflicts by remember { mutableStateOf<List<FileConflictGroup>>(emptyList()) }
     var rememberedConfigSelections by remember { mutableStateOf<Map<String, Set<FileVersionItem>>>(emptyMap()) }
+    var cloudErrorMessage by remember { mutableStateOf<String?>(null) }
+    var showCloudErrorDialog by remember { mutableStateOf(false) }
 
     fun checkCloudCompleteSync(service: ServiceConfig, remotePath: String) {
         selectedCloudService = service
@@ -108,20 +110,25 @@ fun OnboardingChooseFolderPage(
         scope.launch {
             val result = backupEngine.checkRemoteCompleteSync(service, remotePath)
             isCheckingCloud = false
-            if (result.isSuccess && result.getOrNull() == true) {
-                // Complete sync found in remote folder! Check for config file conflicts
-                val localFolder = File(selectedPath)
-                val conflicts = backupEngine.detectConfigConflicts(service, remotePath, localFolder)
-                if (conflicts.isNotEmpty()) {
-                    detectedConfigConflicts = conflicts
-                    showConflictDialog = true
+            if (result.isSuccess) {
+                if (result.getOrNull() == true) {
+                    // Complete sync found in remote folder! Check for config file conflicts
+                    val localFolder = File(selectedPath)
+                    val conflicts = backupEngine.detectConfigConflicts(service, remotePath, localFolder)
+                    if (conflicts.isNotEmpty()) {
+                        detectedConfigConflicts = conflicts
+                        showConflictDialog = true
+                    } else {
+                        // No conflicts or 0 diff changes: download and restore from cloud
+                        onRestoreCloud(service, remotePath, localFolder, false, ConflictResolutionPolicy.OVERWRITE_LOCAL)
+                    }
                 } else {
-                    // No conflicts or 0 diff changes: download and restore from cloud
-                    onRestoreCloud(service, remotePath, localFolder, false, ConflictResolutionPolicy.OVERWRITE_LOCAL)
+                    // No complete sync found in this remote folder
+                    showNoCompleteSyncDialog = true
                 }
             } else {
-                // No complete sync found in this remote folder
-                showNoCompleteSyncDialog = true
+                cloudErrorMessage = result.exceptionOrNull()?.message ?: context.getString(R.string.error_cloud_connection_failed, "Unknown connection error")
+                showCloudErrorDialog = true
             }
         }
     }
@@ -583,6 +590,44 @@ fun OnboardingChooseFolderPage(
                     ) {
                         Text(androidx.compose.ui.res.stringResource(R.string.action_select_diff_service))
                     }
+                }
+            }
+        )
+    }
+
+    // Dialog 3b: Cloud Check Failure Dialog
+    if (showCloudErrorDialog && selectedCloudService != null) {
+        AlertDialog(
+            onDismissRequest = { showCloudErrorDialog = false },
+            properties = AppDialogDefaults.Properties,
+            title = {
+                Text(
+                    text = androidx.compose.ui.res.stringResource(R.string.title_onboarding_restoring_failed),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.a11yHeading()
+                )
+            },
+            text = {
+                Text(
+                    cloudErrorMessage ?: androidx.compose.ui.res.stringResource(
+                        R.string.error_cloud_connection_failed,
+                        selectedCloudService!!.name
+                    )
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showCloudErrorDialog = false
+                        checkCloudCompleteSync(selectedCloudService!!, currentRemotePath)
+                    }
+                ) {
+                    Text(androidx.compose.ui.res.stringResource(R.string.action_retry_restoration))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCloudErrorDialog = false }) {
+                    Text(androidx.compose.ui.res.stringResource(R.string.action_back_to_folder_select))
                 }
             }
         )

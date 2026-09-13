@@ -51,6 +51,7 @@ import org.json.JSONObject
 import dev.ilamparithi.aournalpp.backup.model.ConfigSyncStatus
 import dev.ilamparithi.aournalpp.backup.model.BackupScope
 import dev.ilamparithi.aournalpp.utils.NetworkUtils
+import dev.ilamparithi.aournalpp.utils.FormatUtils
 import dev.ilamparithi.aournalpp.backup.worker.BackupPreferences
 
 /**
@@ -446,7 +447,8 @@ class BackupEngine(
         conflictPolicy: ConflictResolutionPolicy = ConflictResolutionPolicy.KEEP_NEWER,
         concurrency: Int? = null,
         onProgress: ((current: Int, total: Int, currentFile: String) -> Unit)? = null,
-        clearCompletedQueue: Boolean = true
+        clearCompletedQueue: Boolean = true,
+        onLog: ((String) -> Unit)? = null
     ): RestoreResult = withContext(Dispatchers.IO) {
         if (concurrency != null) {
             FileTransferQueueManager.setConcurrencyWorkers(concurrency)
@@ -477,10 +479,12 @@ class BackupEngine(
         val seenDownloadRemotePaths = mutableSetOf<String>()
 
         try {
+            onLog?.invoke("Connecting to ${serviceConfig.name} (${serviceConfig.providerType.displayName})...")
             val connResult = provider.testConnection()
             if (connResult.isFailure || connResult.getOrNull() == false) {
                 val err = connResult.exceptionOrNull()?.message ?: "Failed to connect to ${serviceConfig.name}"
                 errors.add(err)
+                onLog?.invoke("Connection failed: $err")
                 return@withContext RestoreResult(
                     serviceId = serviceConfig.id,
                     serviceName = serviceConfig.name,
@@ -493,6 +497,7 @@ class BackupEngine(
                     errors = errors
                 )
             }
+            onLog?.invoke("Connected. Discovering remote backups in '${getCompleteBackupRemoteRoot(serviceConfig)}'...")
 
             if (serviceConfig.isCompleteBackupEnabled) {
                 val notesRoot = env.getNotesDirectory()
@@ -500,10 +505,30 @@ class BackupEngine(
                 val remoteRoot = getCompleteBackupRemoteRoot(serviceConfig)
 
                 // 1. List Notes tree
-                val remoteNotes = listRemoteRecursively(provider, "$remoteRoot/Notes")
+                var remoteNotes = listRemoteRecursively(provider, "$remoteRoot/Notes")
+                var notesSubDir = "$remoteRoot/Notes"
+                if (remoteNotes.none { !it.isDirectory }) {
+                    // Check if notes are located directly under remoteRoot
+                    val rootItems = listRemoteRecursively(provider, remoteRoot)
+                    val flatNotes = rootItems.filter { !it.isDirectory && !it.remotePath.contains("/.config") && !it.remotePath.startsWith(".config") }
+                    if (flatNotes.isNotEmpty()) {
+                        remoteNotes = flatNotes
+                        notesSubDir = remoteRoot
+                        onLog?.invoke("Found ${flatNotes.size} note file(s) in backup root directory")
+                    } else {
+                        onLog?.invoke("No note files found in Notes/ directory")
+                    }
+                } else {
+                    onLog?.invoke("Found ${remoteNotes.count { !it.isDirectory }} note file(s) in Notes/")
+                }
+
                 for (rf in remoteNotes) {
                     if (rf.isDirectory) continue
-                    val subPath = rf.remotePath.removePrefix("$remoteRoot/Notes").trim('/')
+                    val subPath = if (notesSubDir == remoteRoot) {
+                        rf.remotePath.removePrefix(remoteRoot).trim('/')
+                    } else {
+                        rf.remotePath.removePrefix("$remoteRoot/Notes").trim('/')
+                    }
                     if (subPath.isEmpty()) continue
                     val destFile = try {
                         resolveSafeChild(notesRoot, subPath)
@@ -519,13 +544,14 @@ class BackupEngine(
                                 remotePath = rf.remotePath,
                                 localFile = destFile,
                                 scope = BackupScope.NOTES.id,
-                                relativePath = "Notes/$subPath"
+                                relativePath = if (notesSubDir == remoteRoot) subPath else "Notes/$subPath"
                             )
                         )
                     }
                 }
 
                 // 2. List .config tree (downloads all files including root configs and xournalpp subfolder)
+                onLog?.invoke("Scanning configuration files in .config/...")
                 val remoteConfigs = listRemoteRecursively(provider, "$remoteRoot/.config")
                 val addedRemotePaths = mutableSetOf<String>()
                 for (rf in remoteConfigs) {
@@ -612,6 +638,7 @@ class BackupEngine(
             }
 
             val totalDiscovered = remoteFilesToDownload.size
+            onLog?.invoke("Discovered $totalDiscovered remote item(s) to evaluate")
 
             // Apply Conflict Policy
             val downloadQueue = mutableListOf<RestoreDownloadItem>()
@@ -654,6 +681,8 @@ class BackupEngine(
                 }
             }
 
+            onLog?.invoke("Queued ${downloadQueue.size} file(s) for download ($skippedCount skipped based on conflict policy)")
+
             val transferItems = downloadQueue.map { restoreItem ->
                 val id = "${serviceConfig.id}_${TransferDirection.DOWNLOAD.name}_${restoreItem.remotePath}"
                 TransferItem(
@@ -688,6 +717,8 @@ class BackupEngine(
 
                 FileTransferQueueManager.markStarted(item.id)
                 val currentProcessed = processedCounter.incrementAndGet()
+                val sizeStr = if (rf.sizeBytes > 0) " (${FormatUtils.formatFileSize(rf.sizeBytes)})" else ""
+                onLog?.invoke("Downloading [$currentProcessed/$totalDiscovered]: ${localFile.name}$sizeStr")
                 onProgress?.invoke(currentProcessed, totalDiscovered, localFile.name)
 
                 val downloadResult = try {
@@ -763,6 +794,7 @@ class BackupEngine(
                     }
                     val errMsg = ex?.message ?: "Download failed"
                     FileTransferQueueManager.markFailed(item.id, errMsg)
+                    onLog?.invoke("Download failed for ${localFile.name}: $errMsg")
                     synchronized(this@BackupEngine) {
                         failedCount++
                         errors.add("${localFile.name}: $errMsg")
@@ -772,11 +804,19 @@ class BackupEngine(
 
             // Sanitize settings and restore internal configurations if .config files were restored
             if (hasRestoredConfigs) {
+                onLog?.invoke("Applying downloaded configuration into app workspace...")
                 try {
-                    NotesHomeConfigManager.restoreSettingsFromNotesHome(env.getNotesDirectory(), context, env)
+                    NotesHomeConfigManager.restoreSettingsFromNotesHome(env.getNotesDirectory(), context, env, onLog)
                 } catch (e: Exception) {
                     Log.w(TAG, "Error restoring settings from Notes Home after download", e)
+                    onLog?.invoke("Warning: Error applying settings: ${e.message}")
                 }
+            }
+
+            if (failedCount == 0 && errors.isEmpty()) {
+                onLog?.invoke("Restoration finished: $restoredCount restored, $skippedCount skipped.")
+            } else {
+                onLog?.invoke("Restoration finished with $failedCount errors ($restoredCount restored, $skippedCount skipped).")
             }
 
         } finally {
@@ -1630,7 +1670,13 @@ class BackupEngine(
             }
 
             val cleanRoot = remotePath.trim().trim('/')
-            val rootList = provider.listFiles(cleanRoot).getOrNull() ?: emptyList()
+            val rootListResult = provider.listFiles(cleanRoot)
+            if (rootListResult.isFailure) {
+                return@withContext Result.failure(
+                    rootListResult.exceptionOrNull() ?: Exception("Failed to access remote directory '$cleanRoot'")
+                )
+            }
+            val rootList = rootListResult.getOrDefault(emptyList())
             if (rootList.isEmpty()) {
                 return@withContext Result.success(false)
             }

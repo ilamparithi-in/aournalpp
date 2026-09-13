@@ -82,10 +82,15 @@ class SmbStorageProvider(
         client = null
     }
 
-    private fun normalizePath(path: String): String {
+    internal fun normalizePath(path: String): String {
         val base = config.remoteBasePath.trim().trim('/', '\\').replace('/', '\\')
-        val rel = path.trim().trim('/', '\\').replace('/', '\\')
-        return if (base.isEmpty()) rel else if (rel.isEmpty()) base else "$base\\$rel"
+        val cleanPath = path.trim().trim('/', '\\').replace('/', '\\')
+        if (base.isEmpty()) return cleanPath
+        if (cleanPath.isEmpty()) return base
+        if (cleanPath.equals(base, ignoreCase = true) || cleanPath.startsWith("$base\\", ignoreCase = true)) {
+            return cleanPath
+        }
+        return "$base\\$cleanPath"
     }
 
     override suspend fun testConnection(): Result<Boolean> = withContext(Dispatchers.IO) {

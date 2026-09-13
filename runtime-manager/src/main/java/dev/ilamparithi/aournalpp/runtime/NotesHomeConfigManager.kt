@@ -106,17 +106,27 @@ object NotesHomeConfigManager {
      * Imports app preferences, Termux-X11 settings, and Xournal++ configuration without overwriting them with blank defaults.
      */
     @Synchronized
-    fun restoreSettingsFromNotesHome(notesHomeDir: File, context: Context, env: LinuxEnvironment): Boolean {
+    fun restoreSettingsFromNotesHome(
+        notesHomeDir: File,
+        context: Context,
+        env: LinuxEnvironment,
+        onLog: ((String) -> Unit)? = null
+    ): Boolean {
         try {
             val configDir = getConfigDirectory(notesHomeDir)
-            if (!isAournalCompatible(notesHomeDir)) return false
+            if (!isAournalCompatible(notesHomeDir)) {
+                onLog?.invoke("Folder ${notesHomeDir.name} is not recognized as an Aournal++ workspace")
+                return false
+            }
 
+            onLog?.invoke("Scanning workspace configuration in ${notesHomeDir.name}/.config...")
             val metaFile = File(context.filesDir, SYNC_METADATA_FILE)
             val meta = loadSyncMetadata(metaFile)
 
             // 1. Force import app settings
             val appSettingsFile = File(configDir, APP_SETTINGS_FILE)
             if (appSettingsFile.exists()) {
+                onLog?.invoke("Importing application preferences (app_settings.json)...")
                 val appPrefs = context.getSharedPreferences(APP_SETTINGS_PREFS_NAME, Context.MODE_PRIVATE)
                 importJsonToSharedPreferences(appSettingsFile, appPrefs)
                 meta["hash_$APP_SETTINGS_FILE"] = getFileHash(appSettingsFile)
@@ -125,6 +135,7 @@ object NotesHomeConfigManager {
             // 2. Force import X11 preferences
             val x11PrefsFile = File(configDir, X11_PREFS_FILE)
             if (x11PrefsFile.exists()) {
+                onLog?.invoke("Configuring display & X11 environment (x11_prefs.json)...")
                 val x11Prefs = getX11Prefs(context)
                 importJsonToSharedPreferences(x11PrefsFile, x11Prefs)
                 meta["hash_$X11_PREFS_FILE"] = getFileHash(x11PrefsFile)
@@ -134,6 +145,7 @@ object NotesHomeConfigManager {
             // 3. Force import sync_mappings.json if present
             val syncMappingsFile = File(configDir, SYNC_MAPPINGS_FILE)
             if (syncMappingsFile.exists()) {
+                onLog?.invoke("Importing cloud synchronization mappings (sync_mappings.json)...")
                 val internalMappingsFile = File(context.filesDir, SYNC_MAPPINGS_FILE)
                 syncMappingsFile.copyTo(internalMappingsFile, overwrite = true)
                 meta["hash_$SYNC_MAPPINGS_FILE"] = getFileHash(syncMappingsFile)
@@ -147,6 +159,7 @@ object NotesHomeConfigManager {
             }
 
             if (extXoppDir.exists() && extXoppDir.isDirectory) {
+                onLog?.invoke("Restoring Xournal++ profile & toolbars (${extXoppDir.name})...")
                 extXoppDir.copyRecursively(internalXoppDir, overwrite = true)
                 extXoppDir.walkTopDown().filter { it.isFile }.forEach { file ->
                     val rel = file.relativeTo(extXoppDir).path
@@ -163,6 +176,7 @@ object NotesHomeConfigManager {
                 else -> null
             }
             if (gtkSource != null) {
+                onLog?.invoke("Applying GTK3 interface theme (settings.ini)...")
                 val intGtkDir = File(env.configDir, "gtk-3.0")
                 if (!intGtkDir.exists()) intGtkDir.mkdirs()
                 val intGtkSettings = File(intGtkDir, "settings.ini")
@@ -171,6 +185,7 @@ object NotesHomeConfigManager {
             }
 
             // Sanitize paths and autoload preferences
+            onLog?.invoke("Finalizing environment and keyboard shortcuts...")
             env.ensureXournalppSettings()
             env.checkAndOverrideAutoloadPreference()
             env.ensureMenuBarShortcuts()
@@ -184,9 +199,11 @@ object NotesHomeConfigManager {
 
             saveSyncMetadata(metaFile, meta)
             Log.i(TAG, "Successfully restored settings from ${notesHomeDir.absolutePath}")
+            onLog?.invoke("Workspace configuration successfully applied.")
             return true
         } catch (e: Exception) {
             Log.w(TAG, "Error restoring settings from ${notesHomeDir.absolutePath}", e)
+            onLog?.invoke("Error applying settings: ${e.message ?: e.toString()}")
             return false
         }
     }
