@@ -9,6 +9,9 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.ui.graphics.graphicsLayer
+import dev.ilamparithi.aournalpp.ui.theme.ExpressiveSprings
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -91,20 +94,36 @@ fun EnvironmentUpdateDialog(
     var showDetails by remember { mutableStateOf(false) }
 
     val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
-    val continuousProgress = remember { Animatable(if (countdownSeconds > 0) countdownSeconds / 10f else 0f) }
-    LaunchedEffect(countdownSeconds > 0, reduceMotion) {
-        if (countdownSeconds > 0) {
-            if (reduceMotion) {
-                continuousProgress.snapTo(countdownSeconds / 10f)
-            } else {
-                continuousProgress.animateTo(
-                    targetValue = 0f,
-                    animationSpec = tween(
-                        durationMillis = countdownSeconds * 1000,
-                        easing = LinearEasing
-                    )
+    val animatedProgress = remember { Animatable(if (countdownSeconds > 0) countdownSeconds / 10f else 0f) }
+    val pulseScale = remember { Animatable(1f) }
+
+    LaunchedEffect(countdownSeconds, reduceMotion) {
+        if (countdownSeconds <= 0) {
+            animatedProgress.snapTo(0f)
+            pulseScale.snapTo(1f)
+        } else if (reduceMotion) {
+            animatedProgress.snapTo(countdownSeconds / 10f)
+            pulseScale.snapTo(1f)
+        } else {
+            val target = (countdownSeconds - 1f) / 10f
+            val currentSecondMark = countdownSeconds / 10f
+            if (animatedProgress.value > currentSecondMark || animatedProgress.value < target) {
+                animatedProgress.snapTo(currentSecondMark)
+            }
+            pulseScale.snapTo(1.24f)
+            launch {
+                pulseScale.animateTo(
+                    targetValue = 1f,
+                    animationSpec = ExpressiveSprings.Bouncy
                 )
             }
+            animatedProgress.animateTo(
+                targetValue = target.coerceAtLeast(0f),
+                animationSpec = tween(
+                    durationMillis = 1000,
+                    easing = LinearEasing
+                )
+            )
         }
     }
 
@@ -333,15 +352,10 @@ fun EnvironmentUpdateDialog(
                         contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator(
-                            progress = { 1f },
-                            modifier = Modifier.size(96.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            strokeWidth = 6.dp
-                        )
-                        CircularProgressIndicator(
-                            progress = { continuousProgress.value },
+                            progress = { animatedProgress.value },
                             modifier = Modifier.size(96.dp),
                             color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
                             strokeWidth = 6.dp
                         )
                         Column(
@@ -352,7 +366,11 @@ fun EnvironmentUpdateDialog(
                                 text = "$countdownSeconds",
                                 style = MaterialTheme.typography.headlineMedium.copy(fontSize = 28.sp),
                                 fontWeight = FontWeight.Black,
-                                color = MaterialTheme.colorScheme.primary
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.graphicsLayer {
+                                    scaleX = pulseScale.value
+                                    scaleY = pulseScale.value
+                                }
                             )
                             Text(
                                 text = androidx.compose.ui.res.stringResource(R.string.update_sec_unit),

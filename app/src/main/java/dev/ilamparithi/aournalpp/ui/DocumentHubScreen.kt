@@ -99,7 +99,6 @@ import dev.ilamparithi.aournalpp.ui.cloud.CustomMappingDialog
 import dev.ilamparithi.aournalpp.ui.dialog.AutosaveResolutionDialog
 import dev.ilamparithi.aournalpp.ui.dialog.EmergencySaveNameDialog
 import dev.ilamparithi.aournalpp.ui.hub.DocumentHubFab
-import dev.ilamparithi.aournalpp.ui.hub.DocumentHubFabScrim
 import dev.ilamparithi.aournalpp.ui.hub.DocumentHubSelectionBar
 import dev.ilamparithi.aournalpp.ui.hub.DocumentHubTopBar
 import dev.ilamparithi.aournalpp.ui.hub.DocumentHubViewModel
@@ -423,8 +422,9 @@ fun DocumentHubScreen(
     val pullRefreshState = rememberPullToRefreshState()
     val currentDisplayNotes = if (isViewingTrash) trashedNotes else notes
 
-    Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             DocumentHubTopBar(
@@ -528,37 +528,6 @@ fun DocumentHubScreen(
                     }
                 }
             )
-        },
-        floatingActionButton = {
-            if (!isViewingTrash && !isSelectionMode) {
-                DocumentHubFab(
-                    isExpanded = isFabExpanded,
-                    onToggleExpanded = { isFabExpanded = !isFabExpanded },
-                    onCreateFolderClick = {
-                        isFabExpanded = false
-                        showNewFolderDialog = true
-                    },
-                    onOpenFileClick = {
-                        isFabExpanded = false
-                        importFileLauncher.launch(arrayOf("*/*", "application/pdf", "application/x-xopp", "application/x-xoj", "application/octet-stream"))
-                    },
-                    onCreateNoteClick = {
-                        isFabExpanded = false
-                        if (!hasPermission) {
-                            showPermissionDialog = true
-                        } else {
-                            newNoteDefaultName = FileNameTemplateEngine.evaluate(
-                                FileNameTemplateEngine.getNewFileTemplate(context),
-                                context
-                            )
-                            scope.launch {
-                                allFoldersForNewNote = withContext(Dispatchers.IO) { repository.getAllFolders() }
-                            }
-                            showNewNoteDialog = true
-                        }
-                    }
-                )
-            }
         }
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
@@ -918,13 +887,41 @@ fun DocumentHubScreen(
                     )
                 }
             }
-
-            // Scrim for Speed Dial
-            DocumentHubFabScrim(
-                isExpanded = isFabExpanded,
-                onDismiss = { isFabExpanded = false }
-            )
         }
+    }
+
+    // Speed Dial FAB
+    if (!isViewingTrash && !isSelectionMode) {
+        DocumentHubFab(
+            isExpanded = isFabExpanded,
+            onToggleExpanded = { isFabExpanded = !isFabExpanded },
+            onCreateFolderClick = {
+                isFabExpanded = false
+                showNewFolderDialog = true
+            },
+            onOpenFileClick = {
+                isFabExpanded = false
+                importFileLauncher.launch(arrayOf("*/*", "application/pdf", "application/x-xopp", "application/x-xoj", "application/octet-stream"))
+            },
+            onCreateNoteClick = {
+                isFabExpanded = false
+                if (!hasPermission) {
+                    showPermissionDialog = true
+                } else {
+                    newNoteDefaultName = FileNameTemplateEngine.evaluate(
+                        FileNameTemplateEngine.getNewFileTemplate(context),
+                        context
+                    )
+                    scope.launch {
+                        allFoldersForNewNote = withContext(Dispatchers.IO) { repository.getAllFolders() }
+                    }
+                    showNewNoteDialog = true
+                }
+            },
+            modifier = Modifier.align(Alignment.BottomEnd)
+        )
+    }
+}
 
         // Dialogs
         if (showPermissionDialog && !hasPermission) {
@@ -1466,4 +1463,3 @@ fun DocumentHubScreen(
             }
         }
     }
-}

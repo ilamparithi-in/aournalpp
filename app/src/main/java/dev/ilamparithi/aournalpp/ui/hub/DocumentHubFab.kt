@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -52,80 +53,91 @@ fun DocumentHubFab(
     val reduceAnimations = LocalMotionPreferences.current.reduceAnimations
     val fabRotation by rememberFabRotation(isExpanded, reduceAnimations)
 
-    val folderItemSpring by animateFloatAsState(
-        targetValue = if (isExpanded) 1f else 0f,
-        animationSpec = spring(dampingRatio = 0.78f, stiffness = 320f),
-        label = "folderItemSpring"
-    )
-    val pdfItemSpring by animateFloatAsState(
-        targetValue = if (isExpanded) 1f else 0f,
-        animationSpec = spring(dampingRatio = 0.78f, stiffness = 340f),
-        label = "pdfItemSpring"
-    )
-    val noteItemSpring by animateFloatAsState(
-        targetValue = if (isExpanded) 1f else 0f,
-        animationSpec = spring(dampingRatio = 0.78f, stiffness = 360f),
-        label = "noteItemSpring"
+    // Animated dimming backdrop scrim
+    DocumentHubFabScrim(
+        isExpanded = isExpanded,
+        onDismiss = onToggleExpanded
     )
 
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+    // Speed Dial Action Items + Main FAB
+    Box(
+        modifier = modifier
+            .padding(24.dp)
     ) {
-        SpeedDialActionItem(
-            progress = folderItemSpring,
-            icon = Icons.Default.CreateNewFolder,
-            label = stringResource(R.string.hub_create_folder),
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-            onClick = onCreateFolderClick
+        val folderItemSpring by animateFloatAsState(
+            targetValue = if (isExpanded) 1f else 0f,
+            animationSpec = spring(dampingRatio = 0.78f, stiffness = 320f),
+            label = "folderItemSpring"
+        )
+        val pdfItemSpring by animateFloatAsState(
+            targetValue = if (isExpanded) 1f else 0f,
+            animationSpec = spring(dampingRatio = 0.78f, stiffness = 340f),
+            label = "pdfItemSpring"
+        )
+        val noteItemSpring by animateFloatAsState(
+            targetValue = if (isExpanded) 1f else 0f,
+            animationSpec = spring(dampingRatio = 0.78f, stiffness = 360f),
+            label = "noteItemSpring"
         )
 
-        SpeedDialActionItem(
-            progress = pdfItemSpring,
-            icon = Icons.Default.FileOpen,
-            label = stringResource(R.string.action_open),
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-            onClick = onOpenFileClick
-        )
-
-        SpeedDialActionItem(
-            progress = noteItemSpring,
-            icon = Icons.Default.Edit,
-            label = stringResource(R.string.hub_create_note),
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            onClick = onCreateNoteClick
-        )
-
-        val fabInteractionSource = remember { MutableInteractionSource() }
-        val isFabPressed by fabInteractionSource.collectIsPressedAsState()
-        val fabPressScale by animateFloatAsState(
-            targetValue = if (isFabPressed) 0.90f else 1f,
-            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-            label = "fabPressScale"
-        )
-
-        FloatingActionButton(
-            onClick = onToggleExpanded,
-            interactionSource = fabInteractionSource,
-            shape = RoundedCornerShape(20.dp),
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 8.dp),
-            modifier = Modifier
-                .size(64.dp)
-                .scale(fabPressScale)
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = stringResource(R.string.cd_expand_doc_actions),
-                modifier = Modifier
-                    .size(32.dp)
-                    .rotate(fabRotation)
+            SpeedDialActionItem(
+                progress = folderItemSpring,
+                icon = Icons.Default.CreateNewFolder,
+                label = stringResource(R.string.hub_create_folder),
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                onClick = onCreateFolderClick
             )
+
+            SpeedDialActionItem(
+                progress = pdfItemSpring,
+                icon = Icons.Default.FileOpen,
+                label = stringResource(R.string.action_open),
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                onClick = onOpenFileClick
+            )
+
+            SpeedDialActionItem(
+                progress = noteItemSpring,
+                icon = Icons.Default.Edit,
+                label = stringResource(R.string.hub_create_note),
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                onClick = onCreateNoteClick
+            )
+
+            val fabInteractionSource = remember { MutableInteractionSource() }
+            val isFabPressed by fabInteractionSource.collectIsPressedAsState()
+            val fabPressScale by animateFloatAsState(
+                targetValue = if (isFabPressed) 0.90f else 1f,
+                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                label = "fabPressScale"
+            )
+
+            FloatingActionButton(
+                onClick = onToggleExpanded,
+                interactionSource = fabInteractionSource,
+                shape = RoundedCornerShape(20.dp),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 8.dp),
+                modifier = Modifier
+                    .size(64.dp)
+                    .scale(fabPressScale)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = stringResource(R.string.cd_expand_doc_actions),
+                    modifier = Modifier
+                        .size(32.dp)
+                        .rotate(fabRotation)
+                )
+            }
         }
     }
 }

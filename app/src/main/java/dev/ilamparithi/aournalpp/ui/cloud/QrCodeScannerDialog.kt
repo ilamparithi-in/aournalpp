@@ -28,8 +28,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemGestures
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -81,6 +88,20 @@ import dev.ilamparithi.aournalpp.utils.a11yHeading
 import dev.ilamparithi.aournalpp.utils.minTouchTarget
 import java.util.concurrent.Executors
 
+import android.view.WindowManager
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import dev.ilamparithi.aournalpp.ui.AppDialogDefaults
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalView
+
 @Composable
 fun QrCodeScannerDialog(
     title: String = "Scan Nextcloud QR Code",
@@ -114,144 +135,211 @@ fun QrCodeScannerDialog(
 
     Dialog(
         onDismissRequest = onDismissRequest,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
     ) {
-        Card(
+        val view = LocalView.current
+        DisposableEffect(view) {
+            AppDialogDefaults.makeDialogFullscreenEdgeToEdge(view)
+            onDispose {}
+        }
+
+        BackHandler(onBack = onDismissRequest)
+
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .height(520.dp),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                .fillMaxSize()
+                .background(Color.Black)
         ) {
-            Column(
+            var cameraInstance by remember { mutableStateOf<Camera?>(null) }
+            var isTorchOn by remember { mutableStateOf(false) }
+
+            // Fullscreen Camera Preview
+            CameraPreviewScanner(
+                onQrCodeDetected = { rawText ->
+                    onQrCodeScanned(rawText)
+                    onDismissRequest()
+                },
+                onCameraBound = { camera -> cameraInstance = camera }
+            )
+
+            // Semi-transparent scrim with transparent cutout hole over viewport
+            val primaryColor = MaterialTheme.colorScheme.primary
+            Canvas(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
             ) {
-                // Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                val frameDimension = minOf(size.width * 0.75f, 290.dp.toPx(), size.height * 0.45f)
+                val left = (size.width - frameDimension) / 2f
+                val top = (size.height - frameDimension) / 2f
+
+                // Translucent dark scrim
+                drawRect(color = Color.Black.copy(alpha = 0.58f))
+
+                // Transparent viewfinder punchout
+                drawRoundRect(
+                    color = Color.Transparent,
+                    topLeft = Offset(left, top),
+                    size = Size(frameDimension, frameDimension),
+                    cornerRadius = CornerRadius(24.dp.toPx()),
+                    blendMode = BlendMode.Clear
+                )
+            }
+
+            // Target Scanning Viewfinder Frame & Animated Laser
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(290.dp)
+                    .border(2.5.dp, primaryColor.copy(alpha = 0.85f), RoundedCornerShape(24.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                // Animated Scanning Line
+                val infiniteTransition = rememberInfiniteTransition(label = "scanLine")
+                val scanProgress by infiniteTransition.animateFloat(
+                    initialValue = 0.05f,
+                    targetValue = 0.95f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = 2000, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "scanProgress"
+                )
+
+                Canvas(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
+                    val y = size.height * scanProgress
+                    drawLine(
+                        color = primaryColor,
+                        start = Offset(0f, y),
+                        end = Offset(size.width, y),
+                        strokeWidth = 3.5f
+                    )
+                }
+            }
+
+            // Floating Top App Bar Overlay
+            val torchTitle = stringResource(R.string.cd_toggle_torch)
+            val stateEnabled = stringResource(R.string.state_enabled)
+            val stateDisabled = stringResource(R.string.state_disabled)
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color.Black.copy(alpha = 0.55f),
+                    contentColor = Color.White
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.QrCodeScanner,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.size(8.dp))
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .weight(1f)
-                            .a11yHeading()
-                    )
                     IconButton(
                         onClick = onDismissRequest,
                         modifier = Modifier.minTouchTarget()
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_cancel))
-                    }
-                }
-
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Camera Scanner Viewport
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(Color.Black),
-                    contentAlignment = Alignment.Center
-                ) {
-                    var cameraInstance by remember { mutableStateOf<Camera?>(null) }
-                    var isTorchOn by remember { mutableStateOf(false) }
-
-                    CameraPreviewScanner(
-                        onQrCodeDetected = { rawText ->
-                            onQrCodeScanned(rawText)
-                            onDismissRequest()
-                        },
-                        onCameraBound = { camera -> cameraInstance = camera }
-                    )
-
-                    // Target Scanning Frame
-                    Box(
-                        modifier = Modifier
-                            .size(220.dp)
-                            .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp))
-                    ) {
-                        // Animated Scanning Line
-                        val infiniteTransition = rememberInfiniteTransition(label = "scanLine")
-                        val scanProgress by infiniteTransition.animateFloat(
-                            initialValue = 0f,
-                            targetValue = 1f,
-                            animationSpec = infiniteRepeatable(
-                                animation = tween(durationMillis = 2000, easing = LinearEasing),
-                                repeatMode = RepeatMode.Restart
-                            ),
-                            label = "scanProgress"
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = stringResource(R.string.action_cancel),
+                            tint = Color.White
                         )
-
-                        val primaryColor = MaterialTheme.colorScheme.primary
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            val y = size.height * scanProgress
-                            drawLine(
-                                color = primaryColor,
-                                start = Offset(0f, y),
-                                end = Offset(size.width, y),
-                                strokeWidth = 3f
-                            )
-                        }
-                    }
-
-                    // Torch Button
-                    val torchTitle = stringResource(R.string.cd_toggle_torch)
-                    val stateEnabled = stringResource(R.string.state_enabled)
-                    val stateDisabled = stringResource(R.string.state_disabled)
-                    Surface(
-                        shape = CircleShape,
-                        color = Color.Black.copy(alpha = 0.6f),
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(12.dp)
-                    ) {
-                        IconButton(
-                            onClick = {
-                                isTorchOn = !isTorchOn
-                                cameraInstance?.cameraControl?.enableTorch(isTorchOn)
-                            },
-                            modifier = Modifier
-                                .minTouchTarget()
-                                .semantics {
-                                    role = Role.Switch
-                                    stateDescription = if (isTorchOn) stateEnabled else stateDisabled
-                                    this.contentDescription = torchTitle
-                                }
-                        ) {
-                            Icon(
-                                imageVector = if (isTorchOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
-                                contentDescription = null,
-                                tint = if (isTorchOn) MaterialTheme.colorScheme.primary else Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color.Black.copy(alpha = 0.55f),
+                    contentColor = Color.White
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.QrCodeScanner,
+                            contentDescription = null,
+                            tint = primaryColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.a11yHeading()
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = CircleShape,
+                    color = Color.Black.copy(alpha = 0.55f),
+                    contentColor = Color.White
+                ) {
+                    IconButton(
+                        onClick = {
+                            isTorchOn = !isTorchOn
+                            cameraInstance?.cameraControl?.enableTorch(isTorchOn)
+                        },
+                        modifier = Modifier
+                            .minTouchTarget()
+                            .semantics {
+                                role = Role.Switch
+                                stateDescription = if (isTorchOn) stateEnabled else stateDisabled
+                                this.contentDescription = torchTitle
+                            }
+                    ) {
+                        Icon(
+                            imageVector = if (isTorchOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
+                            contentDescription = null,
+                            tint = if (isTorchOn) primaryColor else Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+            }
+
+            // Floating Bottom Instruction Card
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = Color.Black.copy(alpha = 0.70f),
+                contentColor = Color.White,
+                tonalElevation = 4.dp,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .windowInsetsPadding(
+                        WindowInsets.navigationBars
+                            .union(WindowInsets.systemGestures)
+                            .only(WindowInsetsSides.Bottom)
+                    )
+                    .padding(horizontal = 24.dp, vertical = 20.dp)
+                    .fillMaxWidth()
+                    .widthIn(max = 480.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.95f),
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = stringResource(R.string.nextcloud_qr_settings_hint),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = primaryColor.copy(alpha = 0.95f),
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         }
     }

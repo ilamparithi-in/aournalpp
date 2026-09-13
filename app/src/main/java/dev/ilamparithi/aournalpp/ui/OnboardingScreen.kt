@@ -105,9 +105,12 @@ import dev.ilamparithi.aournalpp.backup.model.ConfigSyncStatus
 import dev.ilamparithi.aournalpp.backup.model.ConflictResolutionPolicy
 import dev.ilamparithi.aournalpp.backup.model.ServiceConfig
 import dev.ilamparithi.aournalpp.backup.security.CredentialsVault
+import dev.ilamparithi.aournalpp.backup.security.CustomMappingRepository
 import dev.ilamparithi.aournalpp.runtime.NotesHomeConfigManager
 import dev.ilamparithi.aournalpp.backup.model.FileConflictGroup
 import dev.ilamparithi.aournalpp.backup.model.FileVersionItem
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.runtime.mutableIntStateOf
 import dev.ilamparithi.aournalpp.ui.cloud.ConfigDiffActivity
 import dev.ilamparithi.aournalpp.ui.cloud.ConflictDialogMode
 import dev.ilamparithi.aournalpp.ui.cloud.FolderBrowserDialog
@@ -214,6 +217,8 @@ fun OnboardingScreen(
     var restoringStatusText by remember { mutableStateOf("") }
     var isRestorationComplete by remember { mutableStateOf(false) }
     var isRestorationFailed by remember { mutableStateOf(false) }
+    var showPostCloudRestoreReminder by remember { mutableStateOf(false) }
+    var restoredMappingSetsCount by remember { mutableIntStateOf(0) }
     var isRestorationDetailsExpanded by remember { mutableStateOf(false) }
     val restorationLogs = remember { mutableStateListOf<RestoreConsoleLog>() }
     var restorationProgress by remember { mutableFloatStateOf(-1f) }
@@ -317,6 +322,7 @@ fun OnboardingScreen(
         isRestoringSettings = true
         isRestorationFailed = false
         isRestorationComplete = false
+        showPostCloudRestoreReminder = false
         isRestorationDetailsExpanded = false
         restorationLogs.clear()
         restorationProgress = -1f
@@ -354,6 +360,7 @@ fun OnboardingScreen(
         isRestoringSettings = true
         isRestorationFailed = false
         isRestorationComplete = false
+        showPostCloudRestoreReminder = false
         isRestorationDetailsExpanded = false
         restorationLogs.clear()
         restorationProgress = -1f
@@ -392,10 +399,16 @@ fun OnboardingScreen(
             if (restoreSuccess) {
                 NotesHomeConfigManager.sync(context, env)
                 addRestoreLog("Cloud configuration and sync mappings finalized.")
-                delay(400.milliseconds)
+                // Detect whether mapping sets exist in restored workspace
+                val mappingRepo = CustomMappingRepository(baseDir = context.filesDir, notesHomeDir = localFolder)
+                val sets = try {
+                    mappingRepo.getAllMappingSets()
+                } catch (_: Exception) {
+                    emptyList()
+                }
+                restoredMappingSetsCount = sets.size
                 isRestorationComplete = true
-                delay(700.milliseconds)
-                triggerRevealAnimation()
+                showPostCloudRestoreReminder = true
             } else {
                 isRestorationFailed = true
                 isRestorationDetailsExpanded = true
@@ -687,6 +700,80 @@ fun OnboardingScreen(
                                         }
                                     }
                                 }
+                            }
+                        }
+
+                        // Post-cloud-restore Mapping Sets reminder card and "Let me in already!" button
+                        if (showPostCloudRestoreReminder) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalAlignment = Alignment.Top,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Default.Bookmark,
+                                                contentDescription = androidx.compose.ui.res.stringResource(R.string.title_onboarding_restore_mappings_reminder),
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(
+                                            text = androidx.compose.ui.res.stringResource(R.string.title_onboarding_restore_mappings_reminder),
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+
+                                        Text(
+                                            text = if (restoredMappingSetsCount > 0) {
+                                                androidx.compose.ui.res.stringResource(
+                                                    R.string.desc_onboarding_restore_mappings_found,
+                                                    restoredMappingSetsCount
+                                                )
+                                            } else {
+                                                androidx.compose.ui.res.stringResource(
+                                                    R.string.desc_onboarding_restore_mappings_reminder
+                                                )
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                    }
+                                }
+                            }
+
+                            Button(
+                                onClick = { triggerRevealAnimation() },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                )
+                            ) {
+                                Text(
+                                    text = androidx.compose.ui.res.stringResource(R.string.action_let_me_in),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
 

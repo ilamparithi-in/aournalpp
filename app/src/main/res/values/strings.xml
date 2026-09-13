@@ -423,7 +423,13 @@
     <!-- Button to trigger interactive app tour -->
     <string name="action_quick_tour">Quick tour</string>
     <!-- Button to finish onboarding and enter main application -->
-    <string name="action_let_me_in">Let me in!</string>
+    <string name="action_let_me_in">Let me in already!</string>
+    <!-- Title for post-cloud-restore mapping sets reminder -->
+    <string name="title_onboarding_restore_mappings_reminder">Mapping Sets</string>
+    <!-- Contextual message when saved mapping sets are found after cloud restore. %1$d is count -->
+    <string name="desc_onboarding_restore_mappings_found">We found %1$d saved mapping set(s) in your restored configuration. Tap the bookmark icon in Cloud Settings to apply them.</string>
+    <!-- Contextual message when no mapping sets were detected after cloud restore -->
+    <string name="desc_onboarding_restore_mappings_reminder">If you previously configured custom folder mapping sets, you can restore or configure them anytime in Cloud Settings using the bookmark icon.</string>
     <!-- Toast message for future quick tour feature -->
     <string name="msg_quick_tour_future">Quick tour will be available in a future update!</string>
     <!-- Bottom Extraction Pill: Ready status -->
@@ -1017,6 +1023,8 @@
     <string name="dialog_qr_scanner_title">Scan Login QR Code</string>
     <!-- QR scanner dialog hint -->
     <string name="dialog_qr_scanner_hint">Point your camera at the Nextcloud App Password QR code generated on your server.</string>
+    <!-- Nextcloud QR settings path navigation hint -->
+    <string name="nextcloud_qr_settings_hint">Nextcloud: Settings → Security → Devices &amp; credentials</string>
     <!-- Conflict resolution dialog title -->
     <string name="dialog_conflict_title">File Sync Conflict</string>
     <!-- Conflict resolution dialog description. %1$s is file name -->
