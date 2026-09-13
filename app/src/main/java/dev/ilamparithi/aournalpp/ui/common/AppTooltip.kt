@@ -74,6 +74,8 @@ fun AppIconButton(
     tooltip: String,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    shape: Shape = CircleShape,
+    containerModifier: Modifier = Modifier.size(40.dp),
     interactionSource: MutableInteractionSource? = null,
     colors: IconButtonColors = IconButtonDefaults.iconButtonColors(),
     onLongClick: (() -> Unit)? = null,
@@ -124,12 +126,12 @@ fun AppIconButton(
                     onClick = { if (enabled) onClick() },
                     onLongClick = handleLongClick
                 ),
-            shape = CircleShape,
+            shape = shape,
             color = if (enabled) colors.containerColor else colors.disabledContainerColor,
             contentColor = if (enabled) colors.contentColor else colors.disabledContentColor
         ) {
             Box(
-                modifier = Modifier.size(40.dp),
+                modifier = containerModifier,
                 contentAlignment = Alignment.Center
             ) {
                 content()

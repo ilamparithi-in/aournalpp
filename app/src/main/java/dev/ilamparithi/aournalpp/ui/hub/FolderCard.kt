@@ -1,13 +1,18 @@
 package dev.ilamparithi.aournalpp.ui.hub
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudSync
@@ -18,6 +23,7 @@ import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Card
@@ -49,23 +55,31 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.ilamparithi.aournalpp.R
 import dev.ilamparithi.aournalpp.model.FolderItem
+import dev.ilamparithi.aournalpp.ui.InteractiveMarqueeText
 import dev.ilamparithi.aournalpp.ui.common.AppIconButton
 import dev.ilamparithi.aournalpp.utils.AccessibilityUtils
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FolderCard(
     folder: FolderItem,
+    isGridView: Boolean = true,
+    isSelected: Boolean = false,
+    isSelectionMode: Boolean = false,
     onClick: () -> Unit,
+    onLongClick: () -> Unit = {},
     onTogglePin: () -> Unit,
     onToggleExcludeRecents: () -> Unit,
     onRename: () -> Unit,
     onMapToCloud: () -> Unit,
     onCustomize: () -> Unit,
+    onShare: () -> Unit = {},
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -135,152 +149,205 @@ fun FolderCard(
                     }
                 )
             }
-            .clickable { onClick() },
-        shape = RoundedCornerShape(16.dp),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
+        shape = RoundedCornerShape(if (isGridView) 16.dp else 12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = accentColor.copy(alpha = 0.12f)
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .padding(14.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            if (!folder.iconEmoji.isNullOrBlank()) {
-                Text(
-                    text = folder.iconEmoji,
-                    fontSize = 28.sp
-                )
-            } else if (folder.iconType == "emergency" || folder.isEmergencyFolder) {
-                Icon(
-                    imageVector = Icons.Default.Emergency,
-                    contentDescription = null,
-                    tint = accentColor,
-                    modifier = Modifier.size(28.dp)
-                )
+            containerColor = if (isSelectionMode && isSelected) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
             } else {
-                Icon(
-                    imageVector = Icons.Default.Folder,
-                    contentDescription = null,
-                    tint = accentColor,
-                    modifier = Modifier.size(28.dp)
-                )
+                accentColor.copy(alpha = 0.12f)
             }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = folder.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    if (folder.isPinned) {
+        ),
+        border = if (isSelectionMode && isSelected) {
+            BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+        } else {
+            null
+        }
+    ) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(if (isGridView) 14.dp else 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(if (isGridView) 10.dp else 12.dp)
+            ) {
+                Box(
+                    modifier = Modifier.size(if (isGridView) 32.dp else 44.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (!folder.iconEmoji.isNullOrBlank()) {
+                        Text(
+                            text = folder.iconEmoji,
+                            fontSize = if (isGridView) 24.sp else 28.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    } else if (folder.iconType == "emergency" || folder.isEmergencyFolder) {
                         Icon(
-                            imageVector = Icons.Default.PushPin,
+                            imageVector = Icons.Default.Emergency,
                             contentDescription = null,
-                            modifier = Modifier
-                                .padding(start = 4.dp)
-                                .size(14.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = accentColor,
+                            modifier = Modifier.size(if (isGridView) 28.dp else 32.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Folder,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(if (isGridView) 28.dp else 32.dp)
                         )
                     }
                 }
-                Text(
-                    text = pluralStringResource(
-                        R.plurals.hub_folder_notes_count,
-                        folder.itemCount,
-                        folder.itemCount
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
 
-            Box {
-                val moreFolderOptionsLabel = stringResource(R.string.action_details)
-                AppIconButton(
-                    onClick = { showFolderMenu = true },
-                    tooltip = moreFolderOptionsLabel
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = moreFolderOptionsLabel,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        InteractiveMarqueeText(
+                            text = folder.name,
+                            style = if (isGridView) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            externalTrigger = folderInteractionTimestamp,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (folder.isPinned) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(
+                                imageVector = Icons.Default.PushPin,
+                                contentDescription = null,
+                                modifier = Modifier.size(15.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    Text(
+                        text = pluralStringResource(
+                            R.plurals.hub_folder_notes_count,
+                            folder.itemCount,
+                            folder.itemCount
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
-                DropdownMenu(
-                    expanded = showFolderMenu,
-                    onDismissRequest = { showFolderMenu = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text(if (folder.isPinned) "Unpin Folder" else "Pin Folder") },
-                        leadingIcon = {
+                if (isSelectionMode && !isGridView) {
+                    Box(
+                        modifier = Modifier.size(48.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        SelectionCheckboxBadge(
+                            isSelected = isSelected,
+                            size = 26.dp
+                        )
+                    }
+                } else if (!isSelectionMode) {
+                    Box(
+                        modifier = Modifier.size(48.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val moreFolderOptionsLabel = stringResource(R.string.action_details)
+                        AppIconButton(
+                            onClick = { showFolderMenu = true },
+                            tooltip = moreFolderOptionsLabel
+                        ) {
                             Icon(
-                                Icons.Default.PushPin,
-                                contentDescription = null,
-                                tint = if (folder.isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = moreFolderOptionsLabel,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                        },
-                        onClick = {
-                            showFolderMenu = false
-                            onTogglePin()
                         }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(if (folder.isExcludedFromRecents) "Include in Recents" else "Exclude from Recents") },
-                        leadingIcon = {
-                            Icon(
-                                if (folder.isExcludedFromRecents) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                contentDescription = null,
-                                tint = if (folder.isExcludedFromRecents) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        },
-                        onClick = {
-                            showFolderMenu = false
-                            onToggleExcludeRecents()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Rename Folder") },
-                        leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null) },
-                        onClick = {
-                            showFolderMenu = false
-                            onRename()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Map to Cloud...") },
-                        leadingIcon = { Icon(Icons.Default.CloudSync, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                        onClick = {
-                            showFolderMenu = false
-                            onMapToCloud()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Customize Icon & Color") },
-                        leadingIcon = { Icon(Icons.Default.ColorLens, contentDescription = null) },
-                        onClick = {
-                            showFolderMenu = false
-                            onCustomize()
-                        }
-                    )
-                    HorizontalDivider()
-                    DropdownMenuItem(
-                        text = { Text("Delete Folder", color = MaterialTheme.colorScheme.error) },
-                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                        onClick = {
-                            showFolderMenu = false
-                            onDelete()
-                        }
-                    )
+
+                        DropdownMenu(
+                            expanded = showFolderMenu,
+                            onDismissRequest = { showFolderMenu = false }
+                        ) {
+                        DropdownMenuItem(
+                            text = { Text(if (folder.isPinned) "Unpin Folder" else "Pin Folder") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.PushPin,
+                                    contentDescription = null,
+                                    tint = if (folder.isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            onClick = {
+                                showFolderMenu = false
+                                onTogglePin()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (folder.isExcludedFromRecents) "Include in Recents" else "Exclude from Recents") },
+                            leadingIcon = {
+                                Icon(
+                                    if (folder.isExcludedFromRecents) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = null,
+                                    tint = if (folder.isExcludedFromRecents) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            onClick = {
+                                showFolderMenu = false
+                                onToggleExcludeRecents()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Rename Folder") },
+                            leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null) },
+                            onClick = {
+                                showFolderMenu = false
+                                onRename()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Map to Cloud...") },
+                            leadingIcon = { Icon(Icons.Default.CloudSync, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                            onClick = {
+                                showFolderMenu = false
+                                onMapToCloud()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Customize Icon & Color") },
+                            leadingIcon = { Icon(Icons.Default.ColorLens, contentDescription = null) },
+                            onClick = {
+                                showFolderMenu = false
+                                onCustomize()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Share / Export...") },
+                            leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                            onClick = {
+                                showFolderMenu = false
+                                onShare()
+                            }
+                        )
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text("Delete Folder", color = MaterialTheme.colorScheme.error) },
+                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                            onClick = {
+                                showFolderMenu = false
+                                onDelete()
+                            }
+                        )
+                    }
                 }
+            } else if (isGridView) {
+                Spacer(modifier = Modifier.size(24.dp))
             }
         }
+        
+        if (isSelectionMode && isGridView) {
+            SelectionCheckboxBadge(
+                isSelected = isSelected,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp),
+                size = 26.dp
+            )
+        }
     }
+}
 }

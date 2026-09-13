@@ -324,6 +324,27 @@ class DocumentRepository internal constructor(private val context: Context) {
         invalidateAllCaches()
     }
 
+    fun pinFolders(paths: List<String>) {
+        paths.forEach { path ->
+            val file = File(path)
+            folderMetadataManager.setFolderPinned(file, true)
+        }
+        val current = getPinnedFolderPaths().toMutableList()
+        current.removeAll(paths)
+        current.addAll(0, paths)
+        savePinnedFolders(current)
+    }
+
+    fun unpinFolders(paths: List<String>) {
+        paths.forEach { path ->
+            val file = File(path)
+            folderMetadataManager.setFolderPinned(file, false)
+        }
+        val current = getPinnedFolderPaths().toMutableList()
+        current.removeAll(paths)
+        savePinnedFolders(current)
+    }
+
     private fun canonicalOf(file: File): String =
         try { file.canonicalPath } catch (e: Exception) { file.absolutePath }
 
@@ -825,6 +846,104 @@ class DocumentRepository internal constructor(private val context: Context) {
                 }
             }
             movedCount.also { invalidateAllCaches() }
+        }
+    }
+
+    suspend fun moveFoldersToFolder(folders: List<File>, destFolder: File): Result<Int> = withContext(Dispatchers.IO) {
+        runCatching {
+            if (!destFolder.exists()) destFolder.mkdirs()
+            var movedCount = 0
+            val destCanon = canonicalOf(destFolder)
+            
+            for (folder in folders) {
+                if (!folder.exists() || !folder.isDirectory) continue
+                val srcCanon = canonicalOf(folder)
+                
+                // Prevent moving into itself or its subdirectories
+                if (destCanon == srcCanon || destCanon.startsWith("$srcCanon/")) {
+                    continue
+                }
+                
+                var destSubFolder = File(destFolder, folder.name)
+                if (destSubFolder.exists() && destSubFolder.canonicalPath != folder.canonicalPath) {
+                    var counter = 1
+                    while (destSubFolder.exists()) {
+                        destSubFolder = File(destFolder, "${folder.name} $counter")
+                        counter++
+                    }
+                }
+                
+                if (folder.renameTo(destSubFolder)) {
+                    movedCount++
+                    val wasPinned = isFolderPinned(folder.absolutePath)
+                    if (wasPinned) {
+                        val currentPinned = getPinnedFolderPaths().toMutableList()
+                        val index = currentPinned.indexOf(folder.absolutePath)
+                        if (index != -1) {
+                            currentPinned[index] = destSubFolder.absolutePath
+                            savePinnedFolders(currentPinned)
+                        }
+                    }
+                }
+            }
+            movedCount.also { invalidateAllCaches() }
+        }
+    }
+
+    suspend fun copyNotesToFolder(notes: List<NoteDocument>, destFolder: File): Result<Int> = withContext(Dispatchers.IO) {
+        runCatching {
+            if (!destFolder.exists()) destFolder.mkdirs()
+            var copiedCount = 0
+
+            for ((file) in notes) {
+                if (!file.exists()) continue
+                var destFile = File(destFolder, file.name)
+                if (destFile.exists() && destFile.canonicalPath != file.canonicalPath) {
+                    val nameWithoutExt = file.nameWithoutExtension
+                    val ext = file.extension
+                    var counter = 1
+                    while (destFile.exists()) {
+                        destFile = File(destFolder, "${nameWithoutExt}_$counter.$ext")
+                        counter++
+                    }
+                }
+
+                file.copyTo(destFile, overwrite = false)
+                destFile.setLastModified(file.lastModified())
+                copiedCount++
+            }
+            copiedCount.also { invalidateAllCaches() }
+        }
+    }
+
+    suspend fun copyFoldersToFolder(folders: List<File>, destFolder: File): Result<Int> = withContext(Dispatchers.IO) {
+        runCatching {
+            if (!destFolder.exists()) destFolder.mkdirs()
+            var copiedCount = 0
+            val destCanon = canonicalOf(destFolder)
+            
+            for (folder in folders) {
+                if (!folder.exists() || !folder.isDirectory) continue
+                val srcCanon = canonicalOf(folder)
+                
+                // Prevent copying into itself or its subdirectories
+                if (destCanon == srcCanon || destCanon.startsWith("$srcCanon/")) {
+                    continue
+                }
+                
+                var destSubFolder = File(destFolder, folder.name)
+                if (destSubFolder.exists() && destSubFolder.canonicalPath != folder.canonicalPath) {
+                    var counter = 1
+                    while (destSubFolder.exists()) {
+                        destSubFolder = File(destFolder, "${folder.name} $counter")
+                        counter++
+                    }
+                }
+                
+                folder.copyRecursively(destSubFolder, overwrite = false)
+                copiedCount++
+            }
+            copiedCount.also { invalidateAllCaches() }
         }
     }
 
@@ -1410,6 +1529,47 @@ class DocumentRepository internal constructor(private val context: Context) {
         }
         scan(root)
         return found
+    }
+
+    suspend fun getAllNotesInFolders(folders: List<File>, showHidden: Boolean = false): List<NoteDocument> = withContext(Dispatchers.IO) {
+        val allNotes = mutableListOf<NoteDocument>()
+        val cache = ScanCache()
+        
+        fun recurse(dir: File) {
+            val children = dir.listFiles() ?: return
+            for (f in children) {
+                if (f.isDirectory) {
+                    if (f.name != TRASH_DIR_NAME && (!f.name.startsWith(".") || showHidden)) {
+                        recurse(f)
+                    }
+                } else if (f.isFile) {
+                    val isHiddenOrBackup = f.name.startsWith(".") || f.name.endsWith("~") || f.name.contains(".autosave.", ignoreCase = true)
+                    if ((!isHiddenOrBackup || showHidden) && isOpenableFile(f)) {
+                        val meta = if (cache.isRoot(dir)) FolderMetaData() else cache.folderMeta(dir)
+                        allNotes.add(
+                            NoteDocument(
+                                file = f,
+                                title = f.nameWithoutExtension,
+                                path = f.absolutePath,
+                                lastModifiedMs = f.lastModified(),
+                                sizeBytes = f.length(),
+                                lastModifiedFormatted = FormatUtils.formatDateTimeMedium(f.lastModified()),
+                                sizeFormatted = FormatUtils.formatFileSize(f.length()),
+                                autosaveInfo = null,
+                                isHidden = isHiddenOrBackup,
+                                isPinned = cache.pinnedPaths.contains(f.absolutePath),
+                                folder = if (cache.isRoot(dir)) "Notes Home" else dir.name,
+                                folderColorHex = meta.colorHex,
+                                folderIconEmoji = meta.iconEmoji,
+                                folderIconType = meta.iconType
+                            )
+                        )
+                    }
+                }
+            }
+        }
+        folders.forEach { recurse(it) }
+        allNotes.distinctBy { it.path }
     }
 
     private fun buildNoteDocument(file: File, cache: ScanCache): NoteDocument? {

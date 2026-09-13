@@ -2,6 +2,7 @@ package dev.ilamparithi.aournalpp.ui.hub.dialog
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -40,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.ilamparithi.aournalpp.R
@@ -235,7 +237,9 @@ fun MoveToFolderDialog(
                                     .clickable { onMoveToRoot() }
                             ) {
                                 Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Home, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                                    Box(modifier = Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.Home, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                                    }
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Text(stringResource(R.string.hub_root_folder_name), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                                 }
@@ -255,10 +259,12 @@ fun MoveToFolderDialog(
                                     .clickable { onMoveToFolder(folder) }
                             ) {
                                 Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    if (!folder.iconEmoji.isNullOrBlank()) {
-                                        Text(folder.iconEmoji, fontSize = 18.sp)
-                                    } else {
-                                        Icon(Icons.Default.Folder, contentDescription = null, tint = fColor, modifier = Modifier.size(20.dp))
+                                    Box(modifier = Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                                        if (!folder.iconEmoji.isNullOrBlank()) {
+                                            Text(folder.iconEmoji, fontSize = 18.sp, textAlign = TextAlign.Center)
+                                        } else {
+                                            Icon(Icons.Default.Folder, contentDescription = null, tint = fColor, modifier = Modifier.size(20.dp))
+                                        }
                                     }
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Text(folder.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))

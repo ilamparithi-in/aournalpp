@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -197,52 +198,57 @@ fun SaveAsNoteDialog(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 // Folder Leading Icon / Emoji
-                                when {
-                                    isRootSelected -> {
-                                        Icon(
-                                            imageVector = Icons.Default.Home,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                    selectedFolderItem?.iconEmoji?.isNotBlank() == true -> {
-                                        Text(selectedFolderItem.iconEmoji, fontSize = 16.sp)
-                                    }
-                                    selectedFolderItem?.iconType == "emergency" || selectedFolderItem?.isEmergencyFolder == true || selectedFolderItem?.role == "emergency" -> {
-                                        Icon(
-                                            imageVector = Icons.Default.Emergency,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.error,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                    selectedFolderItem?.iconType == "import" || selectedFolderItem?.iconType == "imported" || selectedFolderItem?.role == "import" -> {
-                                        val tintColor = parseHexColor(selectedFolderItem?.colorHex) ?: MaterialTheme.colorScheme.primary
-                                        Icon(
-                                            imageVector = Icons.Default.FileDownload,
-                                            contentDescription = null,
-                                            tint = tintColor,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                    selectedFolderItem?.iconType == "audio" || selectedFolderItem?.role == "audio" -> {
-                                        val tintColor = parseHexColor(selectedFolderItem?.colorHex) ?: MaterialTheme.colorScheme.primary
-                                        Icon(
-                                            imageVector = Icons.Default.AudioFile,
-                                            contentDescription = null,
-                                            tint = tintColor,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                    else -> {
-                                        val tintColor = parseHexColor(selectedFolderItem?.colorHex) ?: MaterialTheme.colorScheme.primary
-                                        Icon(
-                                            imageVector = Icons.Default.Folder,
-                                            contentDescription = null,
-                                            tint = tintColor,
-                                            modifier = Modifier.size(20.dp)
-                                        )
+                                Box(
+                                    modifier = Modifier.size(24.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    when {
+                                        isRootSelected -> {
+                                            Icon(
+                                                imageVector = Icons.Default.Home,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        selectedFolderItem?.iconEmoji?.isNotBlank() == true -> {
+                                            Text(selectedFolderItem.iconEmoji, fontSize = 16.sp, textAlign = TextAlign.Center)
+                                        }
+                                        selectedFolderItem?.iconType == "emergency" || selectedFolderItem?.isEmergencyFolder == true || selectedFolderItem?.role == "emergency" -> {
+                                            Icon(
+                                                imageVector = Icons.Default.Emergency,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        selectedFolderItem?.iconType == "import" || selectedFolderItem?.iconType == "imported" || selectedFolderItem?.role == "import" -> {
+                                            val tintColor = parseHexColor(selectedFolderItem?.colorHex) ?: MaterialTheme.colorScheme.primary
+                                            Icon(
+                                                imageVector = Icons.Default.FileDownload,
+                                                contentDescription = null,
+                                                tint = tintColor,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        selectedFolderItem?.iconType == "audio" || selectedFolderItem?.role == "audio" -> {
+                                            val tintColor = parseHexColor(selectedFolderItem?.colorHex) ?: MaterialTheme.colorScheme.primary
+                                            Icon(
+                                                imageVector = Icons.Default.AudioFile,
+                                                contentDescription = null,
+                                                tint = tintColor,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        else -> {
+                                            val tintColor = parseHexColor(selectedFolderItem?.colorHex) ?: MaterialTheme.colorScheme.primary
+                                            Icon(
+                                                imageVector = Icons.Default.Folder,
+                                                contentDescription = null,
+                                                tint = tintColor,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
                                     }
                                 }
 
@@ -326,40 +332,49 @@ fun SaveAsNoteDialog(
                                         )
                                     },
                                     leadingIcon = {
-                                        when {
-                                            !folder.iconEmoji.isNullOrBlank() -> {
-                                                Text(folder.iconEmoji, fontSize = 16.sp)
-                                            }
-                                            folder.iconType == "emergency" || folder.isEmergencyFolder || folder.role == "emergency" -> {
-                                                Icon(
-                                                    imageVector = Icons.Default.Emergency,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.error
-                                                )
-                                            }
-                                            folder.iconType == "import" || folder.iconType == "imported" || folder.role == "import" -> {
-                                                val folderColor = parseHexColor(folder.colorHex) ?: MaterialTheme.colorScheme.primary
-                                                Icon(
-                                                    imageVector = Icons.Default.FileDownload,
-                                                    contentDescription = null,
-                                                    tint = folderColor
-                                                )
-                                            }
-                                            folder.iconType == "audio" || folder.role == "audio" -> {
-                                                val folderColor = parseHexColor(folder.colorHex) ?: MaterialTheme.colorScheme.primary
-                                                Icon(
-                                                    imageVector = Icons.Default.AudioFile,
-                                                    contentDescription = null,
-                                                    tint = folderColor
-                                                )
-                                            }
-                                            else -> {
-                                                val folderColor = parseHexColor(folder.colorHex) ?: MaterialTheme.colorScheme.onSurfaceVariant
-                                                Icon(
-                                                    imageVector = Icons.Default.Folder,
-                                                    contentDescription = null,
-                                                    tint = folderColor
-                                                )
+                                        Box(
+                                            modifier = Modifier.size(24.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            when {
+                                                !folder.iconEmoji.isNullOrBlank() -> {
+                                                    Text(folder.iconEmoji, fontSize = 16.sp, textAlign = TextAlign.Center)
+                                                }
+                                                folder.iconType == "emergency" || folder.isEmergencyFolder || folder.role == "emergency" -> {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Emergency,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.error,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                                folder.iconType == "import" || folder.iconType == "imported" || folder.role == "import" -> {
+                                                    val folderColor = parseHexColor(folder.colorHex) ?: MaterialTheme.colorScheme.primary
+                                                    Icon(
+                                                        imageVector = Icons.Default.FileDownload,
+                                                        contentDescription = null,
+                                                        tint = folderColor,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                                folder.iconType == "audio" || folder.role == "audio" -> {
+                                                    val folderColor = parseHexColor(folder.colorHex) ?: MaterialTheme.colorScheme.primary
+                                                    Icon(
+                                                        imageVector = Icons.Default.AudioFile,
+                                                        contentDescription = null,
+                                                        tint = folderColor,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                                else -> {
+                                                    val folderColor = parseHexColor(folder.colorHex) ?: MaterialTheme.colorScheme.onSurfaceVariant
+                                                    Icon(
+                                                        imageVector = Icons.Default.Folder,
+                                                        contentDescription = null,
+                                                        tint = folderColor,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
                                             }
                                         }
                                     },

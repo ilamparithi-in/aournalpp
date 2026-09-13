@@ -1,27 +1,30 @@
 package dev.ilamparithi.aournalpp.ui.hub
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Emergency
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import dev.ilamparithi.aournalpp.model.FolderItem
+import dev.ilamparithi.aournalpp.R
 import java.io.File
 
 /**
@@ -30,56 +33,107 @@ import java.io.File
 @Composable
 fun FolderBreadcrumbsBar(
     currentDirectory: File,
-    currentFolderItem: FolderItem?,
-    isEmergencySavesFolder: Boolean,
-    onNavigateToRoot: () -> Unit,
+    rootDirectory: File,
+    onNavigateTo: (File) -> Unit,
+    enabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
+    val relativePath = remember(currentDirectory, rootDirectory) {
+        val rootPath = rootDirectory.absolutePath
+        val currPath = currentDirectory.absolutePath
+        if (currPath.startsWith(rootPath)) {
+            currPath.removePrefix(rootPath).trim('/')
+        } else {
+            ""
+        }
+    }
+
+    val rootFolderName = stringResource(R.string.hub_root_folder_name)
+    val pathSegments = remember(relativePath, rootFolderName) {
+        if (relativePath.isEmpty()) listOf(rootFolderName) else listOf(rootFolderName) + relativePath.split('/').filter { it.isNotEmpty() }
+    }
+
+    val isAtRoot = relativePath.isEmpty()
+
     Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
         modifier = modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Notes",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.clickable { onNavigateToRoot() }
-            )
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = null,
+            IconButton(
+                onClick = {
+                    if (enabled && !isAtRoot) {
+                        val parentFile = currentDirectory.parentFile
+                        if (parentFile != null && parentFile.absolutePath.startsWith(rootDirectory.absolutePath)) {
+                            onNavigateTo(parentFile)
+                        } else {
+                            onNavigateTo(rootDirectory)
+                        }
+                    }
+                },
+                enabled = enabled && !isAtRoot,
                 modifier = Modifier
-                    .size(14.dp)
-                    .padding(horizontal = 2.dp),
-                tint = MaterialTheme.colorScheme.outline
-            )
-            if (!currentFolderItem?.iconEmoji.isNullOrBlank()) {
-                Text(text = currentFolderItem.iconEmoji, fontSize = 13.sp)
-                Spacer(modifier = Modifier.width(4.dp))
-            } else if (currentFolderItem?.iconType == "emergency" || isEmergencySavesFolder) {
+                    .size(32.dp)
+                    .padding(end = 6.dp)
+            ) {
                 Icon(
-                    imageVector = Icons.Default.Emergency,
-                    contentDescription = null,
-                    modifier = Modifier.size(14.dp),
-                    tint = currentFolderItem?.colorHex?.let {
-                        try { Color(android.graphics.Color.parseColor(it)) } catch (e: Exception) { null }
-                    } ?: MaterialTheme.colorScheme.error
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.action_back),
+                    tint = if (enabled && !isAtRoot) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                    modifier = Modifier.size(18.dp)
                 )
-                Spacer(modifier = Modifier.width(4.dp))
             }
-            Text(
-                text = currentDirectory.name,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+
+            pathSegments.forEachIndexed { index, seg ->
+                if (index > 0) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .padding(horizontal = 6.dp)
+                            .size(15.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                val isLast = index == pathSegments.lastIndex
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (isLast) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(enabled = enabled && !isLast) {
+                            if (index == 0) {
+                                onNavigateTo(rootDirectory)
+                            } else {
+                                val targetSegments = pathSegments.subList(1, index + 1)
+                                val targetRelative = targetSegments.joinToString("/")
+                                onNavigateTo(File(rootDirectory, targetRelative))
+                            }
+                        }
+                ) {
+                    Text(
+                        text = seg,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isLast) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else if (!enabled) {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
+                }
+            }
         }
     }
 }

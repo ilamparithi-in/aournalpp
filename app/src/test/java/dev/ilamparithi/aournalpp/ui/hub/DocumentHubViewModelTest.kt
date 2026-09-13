@@ -122,6 +122,18 @@ class DocumentHubViewModelTest {
     }
 
     @Test
+    fun `test setCurrentDirectory is prohibited during selection mode`() {
+        val viewModel = createViewModel()
+        viewModel.setSelectionMode(true)
+
+        val subDir = File(rootDir, "Calculus")
+        viewModel.setCurrentDirectory(subDir)
+
+        // Directory should remain unchanged at rootDir
+        assertEquals(rootDir, viewModel.currentDirectory.value)
+    }
+
+    @Test
     fun `test search query and active state mutators`() {
         val viewModel = createViewModel()
 

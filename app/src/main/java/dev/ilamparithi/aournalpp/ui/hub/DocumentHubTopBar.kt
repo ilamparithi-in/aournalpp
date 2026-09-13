@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.CompareArrows
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudSync
@@ -63,7 +64,9 @@ fun DocumentHubTopBar(
     isSubfolder: Boolean,
     currentFolderItem: FolderItem?,
     currentDisplayNotes: List<NoteDocument>,
+    currentDisplayFolders: List<FolderItem>,
     selectedNotePaths: Set<String>,
+    selectedFolderPaths: Set<String>,
     searchQuery: String,
     isGridView: Boolean,
     showHiddenFiles: Boolean,
@@ -94,10 +97,16 @@ fun DocumentHubTopBar(
         val selectedDocs = currentDisplayNotes.filter { selectedNotePaths.contains(it.path) }
         val pdfCount = selectedDocs.count { it.fileType == NoteFileType.PDF }
         val noteCount = selectedDocs.size - pdfCount
-        val summary = listOfNotNull(
-            pluralStringResource(R.plurals.hub_selected_notes_count, noteCount, noteCount).takeIf { noteCount > 0 },
-            pluralStringResource(R.plurals.hub_selected_pdfs_count, pdfCount, pdfCount).takeIf { pdfCount > 0 }
-        ).joinToString(", ")
+        val folderCount = selectedFolderPaths.size
+        
+        val summaryList = mutableListOf<String>()
+        if (folderCount > 0) summaryList.add(pluralStringResource(R.plurals.hub_selected_folders_count, folderCount, folderCount))
+        if (noteCount > 0) summaryList.add(pluralStringResource(R.plurals.hub_selected_notes_count, noteCount, noteCount))
+        if (pdfCount > 0) summaryList.add(pluralStringResource(R.plurals.hub_selected_pdfs_count, pdfCount, pdfCount))
+        
+        val summary = summaryList.joinToString(", ")
+        
+        val totalSelected = selectedNotePaths.size + selectedFolderPaths.size
 
         TopAppBar(
             title = {
@@ -105,8 +114,8 @@ fun DocumentHubTopBar(
                     Text(
                         text = pluralStringResource(
                             R.plurals.hub_selected_count,
-                            selectedNotePaths.size,
-                            selectedNotePaths.size
+                            totalSelected,
+                            totalSelected
                         ),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
@@ -130,7 +139,7 @@ fun DocumentHubTopBar(
                 }
             },
             actions = {
-                val allSelected = selectedNotePaths.size == currentDisplayNotes.size && currentDisplayNotes.isNotEmpty()
+                val allSelected = (selectedNotePaths.size == currentDisplayNotes.size && selectedFolderPaths.size == currentDisplayFolders.size) && (currentDisplayNotes.isNotEmpty() || currentDisplayFolders.isNotEmpty())
                 val selectAllLabel = if (allSelected) stringResource(R.string.action_deselect_all)
                 else stringResource(R.string.action_select_all)
 
@@ -239,14 +248,14 @@ fun DocumentHubTopBar(
                         Icon(imageVector = Icons.Default.Search, contentDescription = searchLabel)
                     }
 
-                    val viewModeLabel = if (isGridView) stringResource(R.string.home_view_mode_grid)
-                    else stringResource(R.string.home_view_mode_collage)
+                    val viewModeLabel = if (isGridView) stringResource(R.string.hub_view_list)
+                    else stringResource(R.string.hub_view_grid)
                     AppIconButton(
                         onClick = onToggleGridView,
                         tooltip = viewModeLabel
                     ) {
                         Icon(
-                            imageVector = if (isGridView) Icons.Default.ViewAgenda else Icons.Default.GridView,
+                            imageVector = if (isGridView) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
                             contentDescription = viewModeLabel
                         )
                     }
@@ -384,7 +393,7 @@ fun DocumentHubTopBar(
                         )
                         HorizontalDivider()
                     } else {
-                        if (currentDisplayNotes.isNotEmpty()) {
+                        if (currentDisplayNotes.isNotEmpty() || currentDisplayFolders.isNotEmpty()) {
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.hub_menu_select_notes)) },
                                 leadingIcon = { Icon(Icons.Default.SelectAll, contentDescription = null) },

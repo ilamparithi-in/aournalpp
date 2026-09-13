@@ -1,12 +1,12 @@
 package dev.ilamparithi.aournalpp.ui.hub
 
 import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedVisibility
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,14 +34,17 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.ilamparithi.aournalpp.R
+import dev.ilamparithi.aournalpp.model.FolderItem
 import dev.ilamparithi.aournalpp.model.NoteDocument
 import dev.ilamparithi.aournalpp.ui.common.AppIconButton
+import dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences
 
 @Composable
 fun DocumentHubSelectionBar(
     isVisible: Boolean,
     isViewingTrash: Boolean,
     selectedDocs: List<NoteDocument>,
+    selectedFolders: List<FolderItem>,
     onRestoreSelected: () -> Unit,
     onDeletePermanentlySelected: () -> Unit,
     onTogglePinSelected: () -> Unit,
@@ -50,10 +53,20 @@ fun DocumentHubSelectionBar(
     onMoveToTrashSelected: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val reduceAnimations = LocalMotionPreferences.current.reduceAnimations
+    
+    val springSpec = spring<Float>(dampingRatio = 0.82f, stiffness = 380f)
+    
     AppAnimatedVisibility(
-        visible = isVisible && selectedDocs.isNotEmpty(),
-        enter = fadeIn() + scaleIn(),
-        exit = fadeOut() + scaleOut(),
+        visible = isVisible && (selectedDocs.isNotEmpty() || selectedFolders.isNotEmpty()),
+        enter = if (reduceAnimations) fadeIn() else (slideInVertically(
+            initialOffsetY = { it },
+            animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f)
+        ) + fadeIn()),
+        exit = if (reduceAnimations) fadeOut() else (slideOutVertically(
+            targetOffsetY = { it },
+            animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f)
+        ) + fadeOut()),
         modifier = modifier
     ) {
         Surface(
@@ -87,8 +100,9 @@ fun DocumentHubSelectionBar(
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
+                        val totalSelected = selectedDocs.size + selectedFolders.size
                         Text(
-                            text = "${stringResource(R.string.action_restore)} (${selectedDocs.size})",
+                            text = "${stringResource(R.string.action_restore)} ($totalSelected)",
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -115,7 +129,8 @@ fun DocumentHubSelectionBar(
                     }
                 }
             } else {
-                val allSelectedPinned = selectedDocs.isNotEmpty() && selectedDocs.all { it.isPinned }
+                val allSelectedPinned = (selectedDocs.isNotEmpty() || selectedFolders.isNotEmpty()) &&
+                        selectedDocs.all { it.isPinned } && selectedFolders.all { it.isPinned }
 
                 Row(
                     modifier = Modifier
@@ -126,22 +141,16 @@ fun DocumentHubSelectionBar(
                 ) {
                     val pinActionLabel = if (allSelectedPinned) stringResource(R.string.action_unpin)
                     else stringResource(R.string.action_pin)
+                    
                     AppIconButton(
                         onClick = onTogglePinSelected,
                         tooltip = pinActionLabel
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                Icons.Default.PushPin,
-                                contentDescription = pinActionLabel,
-                                tint = if (allSelectedPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = pinActionLabel,
-                                style = MaterialTheme.typography.labelSmall,
-                                maxLines = 1
-                            )
-                        }
+                        Icon(
+                            Icons.Default.PushPin,
+                            contentDescription = pinActionLabel,
+                            tint = if (allSelectedPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
 
                     val moveActionLabel = stringResource(R.string.action_move)
@@ -149,13 +158,11 @@ fun DocumentHubSelectionBar(
                         onClick = onMoveToFolderSelected,
                         tooltip = moveActionLabel
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.DriveFileMove,
-                                contentDescription = moveActionLabel,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
+                        Icon(
+                            Icons.AutoMirrored.Filled.DriveFileMove,
+                            contentDescription = moveActionLabel,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
 
                     val shareExportLabel = stringResource(R.string.action_share_export)
@@ -163,20 +170,18 @@ fun DocumentHubSelectionBar(
                         onClick = onShareExportSelected,
                         tooltip = shareExportLabel
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                Icons.Default.Share,
-                                contentDescription = shareExportLabel
-                            )
-                        }
+                        Icon(
+                            Icons.Default.Share,
+                            contentDescription = shareExportLabel
+                        )
                     }
 
-                    val deleteLabel = stringResource(R.string.action_delete)
-                    AppIconButton(
-                        onClick = onMoveToTrashSelected,
-                        tooltip = deleteLabel
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (selectedFolders.isEmpty()) {
+                        val deleteLabel = stringResource(R.string.action_delete)
+                        AppIconButton(
+                            onClick = onMoveToTrashSelected,
+                            tooltip = deleteLabel
+                        ) {
                             Icon(
                                 Icons.Default.Delete,
                                 contentDescription = deleteLabel,

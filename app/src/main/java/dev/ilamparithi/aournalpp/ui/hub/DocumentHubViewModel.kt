@@ -76,6 +76,12 @@ class DocumentHubViewModel @JvmOverloads constructor(
     private val _lastSelectedNotePath = MutableStateFlow<String?>(null)
     val lastSelectedNotePath: StateFlow<String?> = _lastSelectedNotePath.asStateFlow()
 
+    private val _selectedFolderPaths = MutableStateFlow<Set<String>>(emptySet())
+    val selectedFolderPaths: StateFlow<Set<String>> = _selectedFolderPaths.asStateFlow()
+
+    private val _lastSelectedFolderPath = MutableStateFlow<String?>(null)
+    val lastSelectedFolderPath: StateFlow<String?> = _lastSelectedFolderPath.asStateFlow()
+
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
@@ -95,6 +101,7 @@ class DocumentHubViewModel @JvmOverloads constructor(
     val showAutoloadOverrideDialog: StateFlow<Boolean> = _showAutoloadOverrideDialog.asStateFlow()
 
     fun setCurrentDirectory(directory: File) {
+        if (_isSelectionMode.value) return
         _currentDirectory.value = directory
         val cached = repository.getCachedDirectory(directory, _searchQuery.value, _showHiddenFiles.value)
         _folders.value = cached?.first ?: emptyList()
@@ -118,6 +125,8 @@ class DocumentHubViewModel @JvmOverloads constructor(
         if (!enabled) {
             _selectedNotePaths.value = emptySet()
             _lastSelectedNotePath.value = null
+            _selectedFolderPaths.value = emptySet()
+            _lastSelectedFolderPath.value = null
         }
     }
 
@@ -127,6 +136,14 @@ class DocumentHubViewModel @JvmOverloads constructor(
 
     fun setLastSelectedNotePath(path: String?) {
         _lastSelectedNotePath.value = path
+    }
+
+    fun setSelectedFolderPaths(paths: Set<String>) {
+        _selectedFolderPaths.value = paths
+    }
+
+    fun setLastSelectedFolderPath(path: String?) {
+        _lastSelectedFolderPath.value = path
     }
 
     fun toggleGridView() {

@@ -91,4 +91,20 @@ object SpringSlideTransition {
                 )
         }
     }
+
+    fun <T> folderNavigationTransitionSpec(
+        initialPath: String,
+        targetPath: String,
+        reduceAnimations: Boolean = false
+    ): AnimatedContentTransitionScope<T>.() -> ContentTransform {
+        val initialDepth = if (initialPath.isEmpty()) 0 else initialPath.trim('/').split('/').size
+        val targetDepth = if (targetPath.isEmpty()) 0 else targetPath.trim('/').split('/').size
+        val isForward = when {
+            targetDepth != initialDepth -> targetDepth > initialDepth
+            targetPath.startsWith(initialPath) -> targetPath != initialPath
+            initialPath.startsWith(targetPath) -> false
+            else -> targetPath > initialPath
+        }
+        return createSpec(isForward, reduceAnimations)
+    }
 }

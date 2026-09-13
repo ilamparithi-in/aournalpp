@@ -200,6 +200,8 @@ fun DocumentHubScreen(
     val isSelectionMode by viewModel.isSelectionMode.collectAsState()
     val selectedNotePaths by viewModel.selectedNotePaths.collectAsState()
     val lastSelectedNotePath by viewModel.lastSelectedNotePath.collectAsState()
+    val selectedFolderPaths by viewModel.selectedFolderPaths.collectAsState()
+    val lastSelectedFolderPath by viewModel.lastSelectedFolderPath.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val isPdfConverting by viewModel.isPdfConverting.collectAsState()
     val convertingMessage by viewModel.convertingMessage.collectAsState()
@@ -236,6 +238,7 @@ fun DocumentHubScreen(
     var shareExportNote by remember { mutableStateOf<NoteDocument?>(null) }
     var pendingSingleExport by remember { mutableStateOf<PendingSingleExport?>(null) }
     var showBatchShareExportDialog by remember { mutableStateOf(false) }
+    var batchShareExportNotes by remember { mutableStateOf<List<NoteDocument>>(emptyList()) }
     var pendingBatchExportFormat by remember { mutableStateOf<DocumentRepository.ShareExportFormat?>(null) }
     var pendingBatchExportDocs by remember { mutableStateOf<List<NoteDocument>>(emptyList()) }
 
@@ -434,19 +437,29 @@ fun DocumentHubScreen(
                 isSubfolder = !isRootDirectory,
                 currentFolderItem = currentFolderItem,
                 currentDisplayNotes = currentDisplayNotes,
+                currentDisplayFolders = folders,
                 selectedNotePaths = selectedNotePaths,
+                selectedFolderPaths = selectedFolderPaths,
                 searchQuery = searchQuery,
                 isGridView = isGridView,
                 showHiddenFiles = showHiddenFiles,
                 onSearchQueryChange = { viewModel.setSearchQuery(it) },
                 onCloseSelection = { viewModel.setSelectionMode(false) },
                 onSelectAllToggle = {
-                    val allSelected = selectedNotePaths.size == currentDisplayNotes.size && currentDisplayNotes.isNotEmpty()
-                    viewModel.setSelectedNotePaths(if (allSelected) emptySet() else currentDisplayNotes.map { it.path }.toSet())
+                    val allSelected = (selectedNotePaths.size == currentDisplayNotes.size && selectedFolderPaths.size == folders.size) && (currentDisplayNotes.isNotEmpty() || folders.isNotEmpty())
+                    if (allSelected) {
+                        viewModel.setSelectedNotePaths(emptySet())
+                        viewModel.setSelectedFolderPaths(emptySet())
+                    } else {
+                        viewModel.setSelectedNotePaths(currentDisplayNotes.map { it.path }.toSet())
+                        viewModel.setSelectedFolderPaths(folders.map { it.file.absolutePath }.toSet())
+                    }
                 },
                 onInvertSelection = {
-                    val allPaths = currentDisplayNotes.map { it.path }.toSet()
-                    viewModel.setSelectedNotePaths(allPaths.minus(selectedNotePaths))
+                    val allNotePaths = currentDisplayNotes.map { it.path }.toSet()
+                    val allFolderPaths = folders.map { it.file.absolutePath }.toSet()
+                    viewModel.setSelectedNotePaths(allNotePaths.minus(selectedNotePaths))
+                    viewModel.setSelectedFolderPaths(allFolderPaths.minus(selectedFolderPaths))
                 },
                 onCloseSearch = {
                     viewModel.setSearchActive(false)
@@ -553,10 +566,12 @@ fun DocumentHubScreen(
                     if (!isRootDirectory && !isViewingTrash) {
                         dev.ilamparithi.aournalpp.ui.hub.FolderBreadcrumbsBar(
                             currentDirectory = currentDirectory,
-                            currentFolderItem = currentFolderItem,
-                            isEmergencySavesFolder = repository.isEmergencySavesFolder(currentDirectory),
-                            onNavigateToRoot = {
-                                viewModel.setCurrentDirectory(repository.getRootNotesDirectory())
+                            rootDirectory = repository.getRootNotesDirectory(),
+                            enabled = !isSelectionMode,
+                            onNavigateTo = { targetFolder ->
+                                if (!isSelectionMode) {
+                                    viewModel.setCurrentDirectory(targetFolder)
+                                }
                             }
                         )
                     }
@@ -565,14 +580,9 @@ fun DocumentHubScreen(
                     AnimatedContent(
                         targetState = currentDirectory.canonicalPath to isViewingTrash,
                         transitionSpec = {
-                            val isForward = when {
-                                targetState.second != initialState.second -> targetState.second
-                                targetState.first.startsWith(initialState.first) -> true
-                                initialState.first.startsWith(targetState.first) -> false
-                                else -> targetState.first.length >= initialState.first.length
-                            }
-                            SpringSlideTransition.createSpec<Pair<String, Boolean>>(
-                                isForward = isForward,
+                            dev.ilamparithi.aournalpp.ui.animation.SpringSlideTransition.folderNavigationTransitionSpec<Pair<String, Boolean>>(
+                                initialPath = initialState.first,
+                                targetPath = targetState.first,
                                 reduceAnimations = reduceAnimations
                             )(this)
                         },
@@ -605,7 +615,7 @@ fun DocumentHubScreen(
                         LazyVerticalGrid(
                             state = pageGridState,
                             columns = if (isGridView) GridCells.Adaptive(minSize = 200.dp) else GridCells.Fixed(1),
-                            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 12.dp),
+                            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 100.dp),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                             modifier = Modifier
@@ -627,28 +637,58 @@ fun DocumentHubScreen(
                                 )
                         ) {
                             // Dynamic Recents Carousel
-                            if (isPageRoot && !targetIsTrash && searchQuery.isBlank() && recentNotes.isNotEmpty() && !isSelectionMode) {
+                            if (isPageRoot && !targetIsTrash && searchQuery.isBlank()) {
                                 item(span = { GridItemSpan(maxLineSpan) }, key = "recents_carousel_section") {
-                                    DynamicRecentsCarousel(
-                                        recentNotes = recentNotes,
-                                        pdfExportManager = pdfExportManager,
-                                        onOpenNote = { note ->
-                                            if (note.autosaveInfo != null) pendingAutosaveNote = note
-                                            else handleNoteOpen(note.file)
-                                        },
-                                        onTogglePin = { note ->
-                                            repository.togglePinNote(note.file.absolutePath)
-                                            viewModel.loadContent()
-                                        },
-                                        onShareExport = { note -> shareExportNote = note },
-                                        onDuplicate = { note ->
-                                            scope.launch {
-                                                val result = repository.duplicateNote(note)
-                                                if (result.isSuccess) {
-                                                    val duplicated = result.getOrNull()
-                                                    viewModel.loadContent()
-                                                    showUndoSnackbar("Duplicated note \"${note.title}\"") { duplicated?.delete() }
-                                                } else {
+                                     val reduceAnimations = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
+                                     val springSizeSpec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntSize>(
+                                         dampingRatio = 0.82f,
+                                         stiffness = 380f
+                                     )
+                                     val springOffsetSpec = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(
+                                         dampingRatio = 0.82f,
+                                         stiffness = 380f
+                                     )
+                                     dev.ilamparithi.aournalpp.ui.animation.AppAnimatedVisibility(
+                                         visible = recentNotes.isNotEmpty() && !isSelectionMode,
+                                         enter = if (reduceAnimations) androidx.compose.animation.fadeIn() else (
+                                             androidx.compose.animation.slideInVertically(
+                                                 initialOffsetY = { -it },
+                                                 animationSpec = springOffsetSpec
+                                             ) + androidx.compose.animation.expandVertically(
+                                                 animationSpec = springSizeSpec,
+                                                 expandFrom = androidx.compose.ui.Alignment.Top
+                                             ) + androidx.compose.animation.fadeIn()
+                                         ),
+                                         exit = if (reduceAnimations) androidx.compose.animation.fadeOut() else (
+                                             androidx.compose.animation.slideOutVertically(
+                                                 targetOffsetY = { -it },
+                                                 animationSpec = springOffsetSpec
+                                             ) + androidx.compose.animation.shrinkVertically(
+                                                 animationSpec = springSizeSpec,
+                                                 shrinkTowards = androidx.compose.ui.Alignment.Top
+                                             ) + androidx.compose.animation.fadeOut()
+                                         )
+                                     ) {
+                                        DynamicRecentsCarousel(
+                                            recentNotes = recentNotes,
+                                            pdfExportManager = pdfExportManager,
+                                            onOpenNote = { note ->
+                                                if (note.autosaveInfo != null) pendingAutosaveNote = note
+                                                else handleNoteOpen(note.file)
+                                            },
+                                            onTogglePin = { note ->
+                                                repository.togglePinNote(note.file.absolutePath)
+                                                viewModel.loadContent()
+                                            },
+                                            onShareExport = { note -> shareExportNote = note },
+                                            onDuplicate = { note ->
+                                                scope.launch {
+                                                    val result = repository.duplicateNote(note)
+                                                    if (result.isSuccess) {
+                                                        val duplicated = result.getOrNull()
+                                                        viewModel.loadContent()
+                                                        showUndoSnackbar("Duplicated note \"${note.title}\"") { duplicated?.delete() }
+                                                    } else {
                                                     snackbarHostState.showSnackbar("Failed to duplicate note: ${result.exceptionOrNull()?.message}")
                                                 }
                                             }
@@ -656,12 +696,13 @@ fun DocumentHubScreen(
                                         onDeleteNote = { note -> noteToDelete = note },
                                         onRenameNote = { note -> noteToRename = note }
                                     )
+                                    }
                                 }
                             }
 
-                            // Subfolders
-                            if (displayFolders.isNotEmpty() && !targetIsTrash) {
-                                item(span = { GridItemSpan(maxLineSpan) }) {
+                            // Folders Section
+                            if (displayFolders.isNotEmpty()) {
+                                item(span = { GridItemSpan(maxLineSpan) }, key = "folders_header_section") {
                                     Text(
                                         text = pluralStringResource(R.plurals.hub_section_folders_count, displayFolders.size, displayFolders.size),
                                         style = MaterialTheme.typography.titleSmall,
@@ -672,9 +713,30 @@ fun DocumentHubScreen(
                                 }
 
                                 items(displayFolders, key = { it.file.absolutePath }) { folder ->
+                                    val isSelected = selectedFolderPaths.contains(folder.file.absolutePath)
                                     FolderCard(
                                         folder = folder,
-                                        onClick = { viewModel.setCurrentDirectory(folder.file) },
+                                        isGridView = isGridView,
+                                        isSelectionMode = isSelectionMode,
+                                        isSelected = isSelected,
+                                        onClick = {
+                                            if (isSelectionMode) {
+                                                val newSelection = if (isSelected) selectedFolderPaths - folder.file.absolutePath else selectedFolderPaths + folder.file.absolutePath
+                                                viewModel.setSelectedFolderPaths(newSelection)
+                                            } else {
+                                                viewModel.setCurrentDirectory(folder.file)
+                                            }
+                                        },
+                                        onLongClick = {
+                                            if (!isSelectionMode) {
+                                                viewModel.setSelectionMode(true)
+                                                viewModel.setSelectedFolderPaths(selectedFolderPaths + folder.file.absolutePath)
+                                            } else {
+                                                val newSelection = if (isSelected) selectedFolderPaths - folder.file.absolutePath else selectedFolderPaths + folder.file.absolutePath
+                                                viewModel.setSelectedFolderPaths(newSelection)
+                                            }
+                                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        },
                                         onTogglePin = {
                                             val nowPinned = repository.togglePinFolder(folder)
                                             viewModel.loadContent()
@@ -693,6 +755,19 @@ fun DocumentHubScreen(
                                         onRename = { folderToRename = folder },
                                         onMapToCloud = { folderToMapToCloud = folder },
                                         onCustomize = { folderToEdit = folder },
+                                        onShare = {
+                                            scope.launch {
+                                                val notes = repository.getAllNotesInFolders(listOf(folder.file), showHidden = showHiddenFiles)
+                                                if (notes.isEmpty()) {
+                                                    snackbarHostState.showSnackbar("No notes found in \"${folder.name}\" to share")
+                                                } else if (notes.size == 1) {
+                                                    shareExportNote = notes.first()
+                                                } else {
+                                                    batchShareExportNotes = notes
+                                                    showBatchShareExportDialog = true
+                                                }
+                                            }
+                                        },
                                         onDelete = {
                                             scope.launch {
                                                 val res = repository.moveFolderToTrash(folder.file)
@@ -836,10 +911,11 @@ fun DocumentHubScreen(
                         isVisible = isSelectionMode,
                         isViewingTrash = isViewingTrash,
                         selectedDocs = currentDisplayNotes.filter { selectedNotePaths.contains(it.path) },
+                        selectedFolders = folders.filter { selectedFolderPaths.contains(it.file.absolutePath) },
                         onRestoreSelected = {
                             scope.launch {
-                                val selected = currentDisplayNotes.filter { selectedNotePaths.contains(it.path) }
-                                val count = repository.restoreMultipleFromTrash(selected).getOrDefault(0)
+                                val selectedNotes = currentDisplayNotes.filter { selectedNotePaths.contains(it.path) }
+                                val count = repository.restoreMultipleFromTrash(selectedNotes).getOrDefault(0)
                                 viewModel.setSelectionMode(false)
                                 viewModel.loadContentNow()
                                 snackbarHostState.showSnackbar(
@@ -849,25 +925,50 @@ fun DocumentHubScreen(
                         },
                         onDeletePermanentlySelected = { showBatchDeletePermanentDialog = true },
                         onTogglePinSelected = {
-                            val selected = currentDisplayNotes.filter { selectedNotePaths.contains(it.path) }
-                            val allSelectedPinned = selected.isNotEmpty() && selected.all { it.isPinned }
-                            selected.forEach { doc ->
-                                if (allSelectedPinned) repository.unpinNote(doc.file.absolutePath)
-                                else repository.pinNote(doc.file.absolutePath)
+                            val selectedNotes = currentDisplayNotes.filter { selectedNotePaths.contains(it.path) }
+                            val selectedFolders = folders.filter { selectedFolderPaths.contains(it.file.absolutePath) }
+                            val allSelectedPinned = (selectedNotes.isNotEmpty() || selectedFolders.isNotEmpty()) &&
+                                    selectedNotes.all { it.isPinned } && selectedFolders.all { it.isPinned }
+                            
+                            val folderPaths = selectedFolders.map { it.file.absolutePath }
+                            if (allSelectedPinned) {
+                                selectedNotes.forEach { repository.unpinNote(it.file.absolutePath) }
+                                repository.unpinFolders(folderPaths)
+                            } else {
+                                selectedNotes.forEach { repository.pinNote(it.file.absolutePath) }
+                                repository.pinFolders(folderPaths)
                             }
                             viewModel.loadContent()
-                            showUndoSnackbar(if (allSelectedPinned) "Unpinned selected notes" else "Pinned selected notes") {
-                                selected.forEach { doc ->
-                                    if (allSelectedPinned) repository.pinNote(doc.file.absolutePath)
-                                    else repository.unpinNote(doc.file.absolutePath)
+                            showUndoSnackbar(if (allSelectedPinned) "Unpinned selected items" else "Pinned selected items") {
+                                if (allSelectedPinned) {
+                                    selectedNotes.forEach { repository.pinNote(it.file.absolutePath) }
+                                    repository.pinFolders(folderPaths)
+                                } else {
+                                    selectedNotes.forEach { repository.unpinNote(it.file.absolutePath) }
+                                    repository.unpinFolders(folderPaths)
                                 }
                             }
                         },
                         onMoveToFolderSelected = { showMoveToFolderDialog = true },
                         onShareExportSelected = {
-                            val selected = currentDisplayNotes.filter { selectedNotePaths.contains(it.path) }
-                            if (selected.size == 1) shareExportNote = selected.first()
-                            else if (selected.size > 1) showBatchShareExportDialog = true
+                            val selectedNotes = currentDisplayNotes.filter { selectedNotePaths.contains(it.path) }
+                            val selectedFolders = folders.filter { selectedFolderPaths.contains(it.file.absolutePath) }
+                            scope.launch {
+                                val folderNotes = if (selectedFolders.isNotEmpty()) {
+                                    repository.getAllNotesInFolders(selectedFolders.map { it.file }, showHidden = showHiddenFiles)
+                                } else {
+                                    emptyList()
+                                }
+                                val aggregated = (selectedNotes + folderNotes).distinctBy { it.path }
+                                if (aggregated.isEmpty()) {
+                                    snackbarHostState.showSnackbar("No notes found in the selected folder(s) to share")
+                                } else if (aggregated.size == 1) {
+                                    shareExportNote = aggregated.first()
+                                } else {
+                                    batchShareExportNotes = aggregated
+                                    showBatchShareExportDialog = true
+                                }
+                            }
                         },
                         onMoveToTrashSelected = {
                             scope.launch {
@@ -1033,68 +1134,51 @@ fun DocumentHubScreen(
 
         if (showMoveToFolderDialog) {
             val selectedDocs = currentDisplayNotes.filter { selectedNotePaths.contains(it.path) }
-            val allAvailableFolders by produceState<List<FolderItem>>(emptyList()) { value = repository.getAllFolders() }
+            val selectedFolderItems = folders.filter { selectedFolderPaths.contains(it.file.absolutePath) }
 
-            MoveToFolderDialog(
-                selectedDocs = selectedDocs,
-                availableFolders = allAvailableFolders,
-                onDismiss = { showMoveToFolderDialog = false },
-                onMoveToRoot = {
-                    val rootDir = repository.getRootNotesDirectory()
-                    val origFolders = selectedDocs.map { it.file.name to it.file.parentFile }
+            dev.ilamparithi.aournalpp.ui.cloud.FolderBrowserDialog(
+                mode = dev.ilamparithi.aournalpp.ui.cloud.FolderBrowserMode.LOCAL,
+                title = "Select Destination",
+                rootDirectory = repository.getRootNotesDirectory(),
+                showCopyMoveActions = true,
+                onCopyAction = { destPath ->
+                    val destFolder = File(destPath)
                     scope.launch {
-                        val count = repository.moveNotesToFolder(selectedDocs, rootDir).getOrDefault(0)
+                        val notesCount = repository.copyNotesToFolder(selectedDocs, destFolder).getOrDefault(0)
+                        val foldersCount = repository.copyFoldersToFolder(selectedFolderItems.map { it.file }, destFolder).getOrDefault(0)
                         showMoveToFolderDialog = false
                         viewModel.setSelectionMode(false)
                         viewModel.loadContentNow()
-                        showUndoSnackbar(context.resources.getQuantityString(R.plurals.msg_moved_notes_to_root, count, count)) {
+                        showUndoSnackbar("Copied $notesCount notes and $foldersCount folders to ${destFolder.name}") {}
+                    }
+                },
+                onMoveAction = { destPath ->
+                    val destFolder = File(destPath)
+                    val origFolders = selectedDocs.map { it.file.name to it.file.parentFile }
+                    val origFolderDirs = selectedFolderItems.map { it.file.name to it.file.parentFile }
+                    scope.launch {
+                        val notesCount = repository.moveNotesToFolder(selectedDocs, destFolder).getOrDefault(0)
+                        val foldersCount = repository.moveFoldersToFolder(selectedFolderItems.map { it.file }, destFolder).getOrDefault(0)
+                        showMoveToFolderDialog = false
+                        viewModel.setSelectionMode(false)
+                        viewModel.loadContentNow()
+                        showUndoSnackbar("Moved $notesCount notes and $foldersCount folders to ${destFolder.name}") {
                             for ((name, origDir) in origFolders) {
                                 if (origDir != null) {
-                                    val currentFile = File(rootDir, name)
+                                    val currentFile = File(destFolder, name)
+                                    if (currentFile.exists()) currentFile.renameTo(File(origDir, name))
+                                }
+                            }
+                            for ((name, origDir) in origFolderDirs) {
+                                if (origDir != null) {
+                                    val currentFile = File(destFolder, name)
                                     if (currentFile.exists()) currentFile.renameTo(File(origDir, name))
                                 }
                             }
                         }
                     }
                 },
-                onMoveToFolder = { destFolder ->
-                    val origFolders = selectedDocs.map { it.file.name to it.file.parentFile }
-                    scope.launch {
-                        val count = repository.moveNotesToFolder(selectedDocs, destFolder.file).getOrDefault(0)
-                        showMoveToFolderDialog = false
-                        viewModel.setSelectionMode(false)
-                        viewModel.loadContentNow()
-                        showUndoSnackbar(context.resources.getQuantityString(R.plurals.msg_moved_notes_to_folder, count, count, destFolder.name)) {
-                            for ((name, origDir) in origFolders) {
-                                if (origDir != null) {
-                                    val currentFile = File(destFolder.file, name)
-                                    if (currentFile.exists()) currentFile.renameTo(File(origDir, name))
-                                }
-                            }
-                        }
-                    }
-                },
-                onCreateInlineFolderAndMove = { inlineName, inlineColor ->
-                    val created = repository.createFolder(repository.getRootNotesDirectory(), inlineName, inlineColor)
-                    if (created.isSuccess) {
-                        val dest = created.getOrThrow()
-                        val origFolders = selectedDocs.map { it.file.name to it.file.parentFile }
-                        scope.launch {
-                            val count = repository.moveNotesToFolder(selectedDocs, dest).getOrDefault(0)
-                            showMoveToFolderDialog = false
-                            viewModel.setSelectionMode(false)
-                            viewModel.loadContentNow()
-                            showUndoSnackbar(context.resources.getQuantityString(R.plurals.msg_moved_notes_to_folder, count, count, dest.name)) {
-                                for ((name, origDir) in origFolders) {
-                                    if (origDir != null) {
-                                        val currentFile = File(dest, name)
-                                        if (currentFile.exists()) currentFile.renameTo(File(origDir, name))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                onDismissRequest = { showMoveToFolderDialog = false }
             )
         }
 
@@ -1424,30 +1508,36 @@ fun DocumentHubScreen(
             )
         }
 
-        if (showBatchShareExportDialog && selectedNotePaths.isNotEmpty()) {
-            val batchSelectedDocs = currentDisplayNotes.filter { selectedNotePaths.contains(it.path) }
+        if (showBatchShareExportDialog && batchShareExportNotes.isNotEmpty()) {
+            val batchSelectedDocs = batchShareExportNotes
             if (batchSelectedDocs.size == 1) {
                 showBatchShareExportDialog = false
                 shareExportNote = batchSelectedDocs.first()
             } else if (batchSelectedDocs.size > 1) {
                 BatchShareExportDialog(
                     selectedNotes = batchSelectedDocs,
-                    onDismiss = { showBatchShareExportDialog = false },
+                    onDismiss = {
+                        showBatchShareExportDialog = false
+                        batchShareExportNotes = emptyList()
+                    },
                     onSaveBatch = { format ->
                         showBatchShareExportDialog = false
                         viewModel.setSelectionMode(false)
                         pendingBatchExportFormat = format
                         pendingBatchExportDocs = batchSelectedDocs
+                        batchShareExportNotes = emptyList()
                         batchSaveLauncher.launch(null)
                     },
                     onShareBatch = { format ->
                         showBatchShareExportDialog = false
                         viewModel.setSelectionMode(false)
                         viewModel.setPdfConverting(true, "Preparing ${batchSelectedDocs.size} documents to share...")
+                        val docsToShare = batchSelectedDocs
+                        batchShareExportNotes = emptyList()
                         scope.launch {
                             val result = repository.shareUnifiedDocuments(
                                 context = context,
-                                docs = batchSelectedDocs,
+                                docs = docsToShare,
                                 format = format,
                                 pdfExportManager = pdfExportManager
                             )

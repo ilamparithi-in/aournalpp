@@ -31,9 +31,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -42,6 +46,19 @@ import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.AudioFile
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Emergency
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.sp
+import dev.ilamparithi.aournalpp.data.DocumentRepository
+import dev.ilamparithi.aournalpp.utils.FormatUtils
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -65,6 +82,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -103,7 +121,17 @@ enum class FolderBrowserMode {
 
 data class BrowserFolderItem(
     val name: String,
-    val fullPath: String
+    val fullPath: String,
+    val isDirectory: Boolean = true,
+    val colorHex: String? = null,
+    val iconEmoji: String? = null,
+    val iconType: String? = null,
+    val isEmergencyFolder: Boolean = false,
+    val isPinned: Boolean = false,
+    val fileCount: Int = 0,
+    val sizeFormatted: String? = null,
+    val lastModifiedFormatted: String? = null,
+    val extension: String = ""
 )
 
 private fun decodeUrlSafe(value: String): String {
@@ -123,9 +151,14 @@ fun FolderBrowserDialog(
     initialPath: String = "",
     rootDirectory: File? = null, // Used for LOCAL mode
     serviceConfig: ServiceConfig? = null, // Used for REMOTE mode
-    onFolderSelected: (String) -> Unit,
+    showCopyMoveActions: Boolean = false,
+    onFolderSelected: ((String) -> Unit)? = null,
+    onFileSelected: ((String) -> Unit)? = null,
+    onCopyAction: ((String) -> Unit)? = null,
+    onMoveAction: ((String) -> Unit)? = null,
     onDismissRequest: () -> Unit
 ) {
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val localRoot = remember(rootDirectory) { rootDirectory ?: File("/sdcard") }
 
@@ -145,6 +178,7 @@ fun FolderBrowserDialog(
 
     var currentRelativePath by remember { mutableStateOf(normalizedInitial) }
     var folderItems by remember { mutableStateOf<List<BrowserFolderItem>>(emptyList()) }
+    val folderCache = remember { mutableStateMapOf<String, List<BrowserFolderItem>>() }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
@@ -160,17 +194,57 @@ fun FolderBrowserDialog(
                 if (mode == FolderBrowserMode.LOCAL) {
                     val targetDir = if (relPath.isEmpty()) localRoot else File(localRoot, relPath)
                     if (targetDir.exists() && targetDir.isDirectory) {
-                        val subdirs = withContext(Dispatchers.IO) {
-                            targetDir.listFiles { file -> file.isDirectory && !file.name.startsWith(".") }
-                                ?.sortedBy { it.name.lowercase() }
-                                ?.map {
-                                    val itemRelPath = if (relPath.isEmpty()) it.name else "$relPath/${it.name}"
-                                    BrowserFolderItem(name = it.name, fullPath = itemRelPath)
+                        val repository = DocumentRepository.getInstance(context)
+                        val allEntries = withContext(Dispatchers.IO) {
+                            val rawFiles = targetDir.listFiles { file ->
+                                !file.name.startsWith(".") && !file.name.endsWith(".tmp", true) && !file.name.endsWith(".aoppfolder", true)
+                            } ?: emptyArray()
+
+                            val dirEntries = rawFiles.filter { it.isDirectory }.map { dir ->
+                                val meta = repository.getFolderMeta(dir)
+                                val isEmergency = meta.role == "emergency" || dir.name.equals("Emergency Saves", ignoreCase = true)
+                                val count = dir.listFiles { f ->
+                                    f.isFile && !f.name.startsWith(".") && (f.extension.equals("xopp", true) || f.extension.equals("pdf", true) || f.extension.equals("xoj", true))
+                                }?.size ?: 0
+                                val itemRelPath = if (relPath.isEmpty()) dir.name else "$relPath/${dir.name}"
+                                BrowserFolderItem(
+                                    name = dir.name,
+                                    fullPath = itemRelPath,
+                                    isDirectory = true,
+                                    colorHex = meta.colorHex,
+                                    iconEmoji = meta.iconEmoji,
+                                    iconType = meta.iconType,
+                                    isEmergencyFolder = isEmergency,
+                                    isPinned = meta.isPinned,
+                                    fileCount = count
+                                )
+                            }.sortedWith { a, b ->
+                                when {
+                                    a.isPinned && b.isPinned -> a.name.lowercase().compareTo(b.name.lowercase())
+                                    a.isPinned -> -1
+                                    b.isPinned -> 1
+                                    else -> a.name.lowercase().compareTo(b.name.lowercase())
                                 }
-                                ?: emptyList()
+                            }
+
+                            val fileEntries = rawFiles.filter { it.isFile }.sortedBy { it.name.lowercase() }.map { f ->
+                                val itemRelPath = if (relPath.isEmpty()) f.name else "$relPath/${f.name}"
+                                BrowserFolderItem(
+                                    name = f.name,
+                                    fullPath = itemRelPath,
+                                    isDirectory = false,
+                                    sizeFormatted = FormatUtils.formatFileSize(f.length()),
+                                    lastModifiedFormatted = FormatUtils.formatDateTimeMedium(f.lastModified()),
+                                    extension = f.extension.lowercase()
+                                )
+                            }
+
+                            dirEntries + fileEntries
                         }
-                        folderItems = subdirs
+                        folderCache[relPath] = allEntries
+                        folderItems = allEntries
                     } else {
+                        folderCache[relPath] = emptyList()
                         folderItems = emptyList()
                     }
                 } else {
@@ -183,7 +257,7 @@ fun FolderBrowserDialog(
                         provider.disconnect()
                         if (listResult.isSuccess) {
                             val entries = listResult.getOrNull() ?: emptyList()
-                            folderItems = entries.filter { it.isDirectory }.map {
+                            val mapped = entries.filter { it.isDirectory }.map {
                                 val decodedRemotePath = decodeUrlSafe(it.remotePath)
                                 val rawName = File(decodedRemotePath).name.ifBlank { decodedRemotePath }
                                 val decodedName = decodeUrlSafe(rawName)
@@ -199,6 +273,8 @@ fun FolderBrowserDialog(
                                     fullPath = cleanFullPath
                                 )
                             }.sortedBy { it.name.lowercase() }
+                            folderCache[relPath] = mapped
+                            folderItems = mapped
                         } else {
                             errorMessage = listResult.exceptionOrNull()?.message ?: "Failed to list remote folders"
                         }
@@ -435,12 +511,26 @@ fun FolderBrowserDialog(
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.surface)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                    ) {
-                        if (isLoading && folderItems.isEmpty()) {
+                    val reduceAnimations = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
+                    androidx.compose.animation.AnimatedContent(
+                        targetState = currentRelativePath,
+                        transitionSpec = {
+                            dev.ilamparithi.aournalpp.ui.animation.SpringSlideTransition.folderNavigationTransitionSpec<String>(
+                                initialPath = initialState,
+                                targetPath = targetState,
+                                reduceAnimations = reduceAnimations
+                            )(this)
+                        },
+                        label = "dialogFolderTransition",
+                        modifier = Modifier.fillMaxSize()
+                    ) { animPath ->
+                        val displayItems = folderCache[animPath] ?: if (animPath == currentRelativePath) folderItems else emptyList()
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            if (isLoading && displayItems.isEmpty()) {
                             Column(
                                 modifier = Modifier.align(Alignment.Center),
                                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -453,7 +543,7 @@ fun FolderBrowserDialog(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                        } else if (errorMessage != null) {
+                        } else if (errorMessage != null && animPath == currentRelativePath) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -484,7 +574,7 @@ fun FolderBrowserDialog(
                                     }
                                 }
                             }
-                        } else if (folderItems.isEmpty()) {
+                        } else if (displayItems.isEmpty()) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -542,60 +632,239 @@ fun FolderBrowserDialog(
                                 }
                             }
                         } else {
+                            val directories = remember(displayItems) { displayItems.filter { it.isDirectory } }
+                            val files = remember(displayItems) { displayItems.filter { !it.isDirectory } }
+
                             LazyColumn(
                                 modifier = Modifier.fillMaxSize(),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                            items(folderItems, key = { it.fullPath }) { item ->
-                                Surface(
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                                    tonalElevation = 1.dp,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .clickable { currentRelativePath = item.fullPath }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
+                                if (directories.isNotEmpty()) {
+                                    if (files.isNotEmpty()) {
+                                        item(key = "header_folders") {
+                                            Text(
+                                                text = "Folders (${directories.size})",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+                                            )
+                                        }
+                                    }
+
+                                    items(directories, key = { it.fullPath }) { item ->
+                                        val fColor = item.colorHex?.let {
+                                            try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { null }
+                                        }
                                         Surface(
-                                            shape = CircleShape,
-                                            color = MaterialTheme.colorScheme.primaryContainer,
-                                            modifier = Modifier.size(38.dp)
+                                            shape = RoundedCornerShape(14.dp),
+                                            color = fColor?.copy(alpha = 0.10f) ?: MaterialTheme.colorScheme.surfaceContainerLow,
+                                            tonalElevation = 1.dp,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(14.dp))
+                                                .clickable { currentRelativePath = item.fullPath }
                                         ) {
-                                            Box(contentAlignment = Alignment.Center) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Surface(
+                                                    shape = CircleShape,
+                                                    color = fColor?.copy(alpha = 0.22f) ?: MaterialTheme.colorScheme.primaryContainer,
+                                                    modifier = Modifier.size(38.dp)
+                                                ) {
+                                                    Box(contentAlignment = Alignment.Center) {
+                                                        if (!item.iconEmoji.isNullOrBlank()) {
+                                                            Text(
+                                                                text = item.iconEmoji,
+                                                                fontSize = 20.sp,
+                                                                textAlign = TextAlign.Center
+                                                            )
+                                                        } else if (item.isEmergencyFolder || item.iconType == "emergency") {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Emergency,
+                                                                contentDescription = null,
+                                                                tint = fColor ?: MaterialTheme.colorScheme.error,
+                                                                modifier = Modifier.size(20.dp)
+                                                            )
+                                                        } else if (item.iconType == "import" || item.iconType == "imported") {
+                                                            Icon(
+                                                                imageVector = Icons.Default.FileDownload,
+                                                                contentDescription = null,
+                                                                tint = fColor ?: MaterialTheme.colorScheme.primary,
+                                                                modifier = Modifier.size(20.dp)
+                                                            )
+                                                        } else if (item.iconType == "audio") {
+                                                            Icon(
+                                                                imageVector = Icons.Default.AudioFile,
+                                                                contentDescription = null,
+                                                                tint = fColor ?: MaterialTheme.colorScheme.primary,
+                                                                modifier = Modifier.size(20.dp)
+                                                            )
+                                                        } else {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Folder,
+                                                                contentDescription = null,
+                                                                tint = fColor ?: MaterialTheme.colorScheme.onPrimaryContainer,
+                                                                modifier = Modifier.size(20.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                                Spacer(modifier = Modifier.width(14.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Text(
+                                                            text = item.name,
+                                                            style = MaterialTheme.typography.bodyLarge,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis,
+                                                            modifier = Modifier.weight(1f, fill = false)
+                                                        )
+                                                        if (item.isPinned) {
+                                                            Spacer(modifier = Modifier.width(6.dp))
+                                                            Icon(
+                                                                imageVector = Icons.Default.PushPin,
+                                                                contentDescription = "Pinned",
+                                                                tint = MaterialTheme.colorScheme.primary,
+                                                                modifier = Modifier.size(15.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                    if (item.fileCount > 0) {
+                                                        Text(
+                                                            text = "${item.fileCount} ${if (item.fileCount == 1) "note" else "notes"}",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                }
                                                 Icon(
-                                                    imageVector = Icons.Default.Folder,
+                                                    imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
                                                     contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                    modifier = Modifier.size(20.dp)
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                                                    modifier = Modifier.size(18.dp)
                                                 )
                                             }
                                         }
-                                        Spacer(modifier = Modifier.width(14.dp))
+                                    }
+                                } else if (files.isNotEmpty()) {
+                                    item(key = "no_subfolders_banner") {
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
+                                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.FolderOpen,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                                Text(
+                                                    text = "No subfolders in this directory. You can select this folder as destination or create a new subfolder.",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (files.isNotEmpty()) {
+                                    item(key = "header_files") {
                                         Text(
-                                            text = item.name,
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            fontWeight = FontWeight.SemiBold,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.weight(1f)
+                                            text = "Files in this folder (${files.size})",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(top = if (directories.isNotEmpty()) 10.dp else 4.dp, bottom = 4.dp)
                                         )
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
-                                            modifier = Modifier.size(18.dp)
-                                        )
+                                    }
+
+                                    items(files, key = { it.fullPath }) { fileItem ->
+                                        val fileModifier = if (onFileSelected != null) {
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable { onFileSelected(fileItem.fullPath) }
+                                        } else {
+                                            Modifier.fillMaxWidth()
+                                        }
+
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                                            tonalElevation = 0.dp,
+                                            modifier = fileModifier
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    color = when (fileItem.extension) {
+                                                        "pdf" -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f)
+                                                        "xopp", "xoj" -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                                                        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                                    },
+                                                    modifier = Modifier.size(36.dp)
+                                                ) {
+                                                    Box(contentAlignment = Alignment.Center) {
+                                                        val fileIcon = when (fileItem.extension) {
+                                                            "pdf" -> Icons.Default.PictureAsPdf
+                                                            "xopp" -> Icons.Default.Description
+                                                            "xoj" -> Icons.Default.History
+                                                            "m4a", "mp3", "wav" -> Icons.Default.AudioFile
+                                                            "png", "jpg", "jpeg" -> Icons.Default.Image
+                                                            else -> Icons.AutoMirrored.Filled.InsertDriveFile
+                                                        }
+                                                        val iconTint = when (fileItem.extension) {
+                                                            "pdf" -> MaterialTheme.colorScheme.error
+                                                            "xopp", "xoj" -> MaterialTheme.colorScheme.primary
+                                                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                                        }
+                                                        Icon(
+                                                            imageVector = fileIcon,
+                                                            contentDescription = null,
+                                                            tint = iconTint,
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                    }
+                                                }
+                                                Spacer(modifier = Modifier.width(12.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = fileItem.name,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    val metaDetails = listOfNotNull(fileItem.lastModifiedFormatted, fileItem.sizeFormatted).filter { it.isNotBlank() }
+                                                    if (metaDetails.isNotEmpty()) {
+                                                        Text(
+                                                            text = metaDetails.joinToString(" · "),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-            }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
@@ -643,7 +912,7 @@ fun FolderBrowserDialog(
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             OutlinedButton(
@@ -651,28 +920,57 @@ fun FolderBrowserDialog(
                                     newFolderName = ""
                                     showNewFolderDialog = true
                                 },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
                             ) {
                                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("New Folder")
+                                Text("New Folder", maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
 
-                            Button(
-                                onClick = {
-                                    val selectedResult = if (mode == FolderBrowserMode.LOCAL) {
-                                        if (currentRelativePath.isEmpty()) localRoot.absolutePath else File(localRoot, currentRelativePath).absolutePath
-                                    } else {
-                                        decodeUrlSafe(currentRelativePath)
-                                    }
-                                    onFolderSelected(selectedResult)
-                                    onDismissRequest()
-                                },
-                                modifier = Modifier.weight(1.3f)
-                            ) {
-                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Select Folder")
+                            val selectedResult = if (mode == FolderBrowserMode.LOCAL) {
+                                if (currentRelativePath.isEmpty()) localRoot.absolutePath else File(localRoot, currentRelativePath).absolutePath
+                            } else {
+                                decodeUrlSafe(currentRelativePath)
+                            }
+
+                            if (showCopyMoveActions) {
+                                FilledTonalButton(
+                                    onClick = {
+                                        onCopyAction?.invoke(selectedResult)
+                                        onDismissRequest()
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
+                                ) {
+                                    Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Copy Here", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                Button(
+                                    onClick = {
+                                        onMoveAction?.invoke(selectedResult)
+                                        onDismissRequest()
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
+                                ) {
+                                    Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Move Here", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            } else {
+                                Button(
+                                    onClick = {
+                                        onFolderSelected?.invoke(selectedResult)
+                                        onDismissRequest()
+                                    },
+                                    modifier = Modifier.weight(1.3f)
+                                ) {
+                                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Select Folder")
+                                }
                             }
                         }
                     }
@@ -706,6 +1004,7 @@ fun FolderBrowserDialog(
                                     val parent = if (currentRelativePath.isEmpty()) localRoot else File(localRoot, currentRelativePath)
                                     val newDir = File(parent, cleanName)
                                     newDir.mkdirs()
+                                    folderCache.remove(currentRelativePath)
                                     currentRelativePath = if (currentRelativePath.isEmpty()) cleanName else "$currentRelativePath/$cleanName"
                                 } else if (serviceConfig != null) {
                                     val newRemotePath = if (currentRelativePath.isEmpty()) cleanName else "$currentRelativePath/$cleanName"
@@ -730,4 +1029,5 @@ fun FolderBrowserDialog(
             }
         )
     }
+}
 }

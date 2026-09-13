@@ -505,6 +505,10 @@
         <item quantity="other">%1$d recent</item>
     </plurals>
     <!-- Selection summary notes count. %1$d is count -->
+    <plurals name="hub_selected_folders_count">
+        <item quantity="one">%d Folder</item>
+        <item quantity="other">%d Folders</item>
+    </plurals>
     <plurals name="hub_selected_notes_count">
         <item quantity="one">%1$d note</item>
         <item quantity="other">%1$d notes</item>
@@ -557,7 +561,7 @@
     <!-- Action to clear search query -->
     <string name="hub_search_clear">Clear search</string>
     <!-- Breadcrumb label for root storage folder -->
-    <string name="hub_root_folder_name">Notes</string>
+    <string name="hub_root_folder_name">Notes Home</string>
     <!-- Empty folder state title -->
     <string name="hub_empty_folder">This folder is empty</string>
     <string name="hub_trash_empty_title">Trash is empty</string>

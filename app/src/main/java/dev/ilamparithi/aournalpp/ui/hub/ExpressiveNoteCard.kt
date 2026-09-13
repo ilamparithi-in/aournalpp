@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -81,6 +82,7 @@ import dev.ilamparithi.aournalpp.ui.hub.PinnedBadge
 import dev.ilamparithi.aournalpp.ui.hub.SelectionCheckboxBadge
 import dev.ilamparithi.aournalpp.ui.hub.rememberNoteAccessibilityActions
 import dev.ilamparithi.aournalpp.ui.common.AppIconButton
+
 import dev.ilamparithi.aournalpp.utils.AccessibilityUtils
 import dev.ilamparithi.aournalpp.utils.ThumbnailManager
 
@@ -365,29 +367,22 @@ fun ExpressiveNoteCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (isSelectionMode) {
-                    SelectionCheckboxBadge(
-                        isSelected = isSelected,
-                        size = 26.dp
-                    )
-                } else {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.size(44.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = when (note.fileType) {
-                                    NoteFileType.PDF -> Icons.Default.PictureAsPdf
-                                    NoteFileType.XOJ -> Icons.Default.History
-                                    else -> Icons.Default.Edit
-                                },
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = when (note.fileType) {
+                                NoteFileType.PDF -> Icons.Default.PictureAsPdf
+                                NoteFileType.XOJ -> Icons.Default.History
+                                else -> Icons.Default.Edit
+                            },
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(22.dp)
+                        )
                     }
                 }
 
@@ -422,8 +417,34 @@ fun ExpressiveNoteCard(
                     }
                 }
 
-                if (!isSelectionMode && !isTrashMode) {
-                    Box {
+                if (isSelectionMode) {
+                    Box(
+                        modifier = Modifier.size(48.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        SelectionCheckboxBadge(
+                            isSelected = isSelected,
+                            size = 26.dp
+                        )
+                    }
+                } else if (isTrashMode && onRestore != null) {
+                    Box(
+                        modifier = Modifier.size(48.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val restoreLabel = stringResource(R.string.action_restore)
+                        AppIconButton(
+                            onClick = onRestore,
+                            tooltip = restoreLabel
+                        ) {
+                            Icon(Icons.Default.Restore, contentDescription = restoreLabel, tint = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                } else if (!isTrashMode) {
+                    Box(
+                        modifier = Modifier.size(48.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
                         val moreOptionsLabel = stringResource(R.string.action_details)
                         AppIconButton(
                             onClick = onOpenMenu,
@@ -444,14 +465,6 @@ fun ExpressiveNoteCard(
                             onDuplicate = onDuplicate,
                             onDelete = onDelete
                         )
-                    }
-                } else if (isTrashMode && onRestore != null) {
-                    val restoreLabel = stringResource(R.string.action_restore)
-                    AppIconButton(
-                        onClick = onRestore,
-                        tooltip = restoreLabel
-                    ) {
-                        Icon(Icons.Default.Restore, contentDescription = restoreLabel, tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
