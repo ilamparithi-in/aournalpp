@@ -11,6 +11,7 @@ import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animateDpAsState
@@ -362,12 +363,46 @@ fun FloatingToolbarOverlay(
         safeCurrentTitleWidthDp
     }
 
+    val titleSwitchTracker = remember {
+        object {
+            var lastTime = 0L
+            var lastState: TitleDisplayState? = null
+            var isRapid = false
+        }
+    }
+
+    val cleanDisplayTitle = remember(displayTitle) { displayTitle.removePrefix("*").trim() }
+    val currentTitleState = TitleDisplayState(cleanDisplayTitle, windowIcon, windowIndex, windowId)
+
+    if (titleSwitchTracker.lastState != null && titleSwitchTracker.lastState != currentTitleState) {
+        val currentTime = System.currentTimeMillis()
+        val delta = currentTime - titleSwitchTracker.lastTime
+        titleSwitchTracker.isRapid = titleSwitchTracker.lastTime > 0L && delta < 320L
+        titleSwitchTracker.lastTime = currentTime
+        titleSwitchTracker.lastState = currentTitleState
+    } else if (titleSwitchTracker.lastState == null) {
+        titleSwitchTracker.lastState = currentTitleState
+    }
+
+    val isRapidTitleSwitch = titleSwitchTracker.isRapid
+
+    LaunchedEffect(titleSwitchTracker.lastTime) {
+        if (isRapidTitleSwitch) {
+            delay(320.milliseconds)
+            titleSwitchTracker.isRapid = false
+        }
+    }
+
     val animatedTitleWidthDp by animateDpAsState(
         targetValue = targetTitleWidthDp,
-        animationSpec = AppAnimationSpecs.springDp(
-            dampingRatio = SpringSlideTransition.SLIDE_DAMPING,
-            stiffness = SpringSlideTransition.SLIDE_STIFFNESS
-        ),
+        animationSpec = if (isRapidTitleSwitch) {
+            tween(durationMillis = 180, easing = FastOutSlowInEasing)
+        } else {
+            AppAnimationSpecs.springDp(
+                dampingRatio = SpringSlideTransition.SLIDE_DAMPING,
+                stiffness = SpringSlideTransition.SLIDE_STIFFNESS
+            )
+        },
         label = "ToolbarTitleWidthSpring"
     )
 
@@ -627,24 +662,20 @@ fun FloatingToolbarOverlay(
                             }
 
                             if (showTitle) {
-                                val cleanDisplayTitle = remember(displayTitle) { displayTitle.removePrefix("*").trim() }
                                 val isDirty = displayTitle.startsWith("*")
                                 Box(
                                     modifier = Modifier.width(animatedTitleWidthDp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     AnimatedContent(
-                                        targetState = TitleDisplayState(cleanDisplayTitle, windowIcon, windowIndex, windowId),
+                                        targetState = currentTitleState,
                                         transitionSpec = {
-                                            if (targetState.cleanTitle == initialState.cleanTitle) {
-                                                EnterTransition.None togetherWith ExitTransition.None
-                                            } else {
-                                                val isForward = targetState.index >= initialState.index
-                                                SpringSlideTransition.createSpec<TitleDisplayState>(
-                                                    isForward = isForward,
-                                                    reduceAnimations = reduceMotion
-                                                )(this)
-                                            }
+                                            val isForward = targetState.index >= initialState.index
+                                            SpringSlideTransition.createSpec<TitleDisplayState>(
+                                                isForward = isForward,
+                                                reduceAnimations = reduceMotion,
+                                                isRapid = isRapidTitleSwitch
+                                            )(this)
                                         },
                                         label = "windowTitleSwitchTransition"
                                     ) { targetTitleState ->
@@ -1189,22 +1220,18 @@ fun FloatingToolbarOverlay(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         if (showTitle) {
-                            val cleanDisplayTitle = remember(displayTitle) { displayTitle.removePrefix("*").trim() }
                             val isDirty = displayTitle.startsWith("*")
                             val reduceMotion = LocalMotionPreferences.current.reduceAnimations
                             Box(contentAlignment = Alignment.Center) {
                                 AnimatedContent(
-                                    targetState = TitleDisplayState(cleanDisplayTitle, windowIcon, windowIndex, windowId),
+                                    targetState = currentTitleState,
                                     transitionSpec = {
-                                        if (targetState.cleanTitle == initialState.cleanTitle) {
-                                            EnterTransition.None togetherWith ExitTransition.None
-                                        } else {
-                                            val isForward = targetState.index >= initialState.index
-                                            SpringSlideTransition.createSpec<TitleDisplayState>(
-                                                isForward = isForward,
-                                                reduceAnimations = reduceMotion
-                                            )(this)
-                                        }
+                                        val isForward = targetState.index >= initialState.index
+                                        SpringSlideTransition.createSpec<TitleDisplayState>(
+                                            isForward = isForward,
+                                            reduceAnimations = reduceMotion,
+                                            isRapid = isRapidTitleSwitch
+                                        )(this)
                                     },
                                     label = "collapsedWindowTitleSwitchTransition"
                                 ) { targetTitleState ->

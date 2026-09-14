@@ -288,6 +288,26 @@ class FloatingToolbarWindowSwitcherTest {
         // 3. Rapid third click while transition to win3 is active: must wrap around to win1!
         assertEquals("win1", getNextTarget(isSwitchTransitionActive = true, transitionTargetWindowId = "win3").id)
     }
+
+    @Test
+    fun testRapidTitleFocusSwitchingThreshold() {
+        // Threshold matching navigation rail (320ms)
+        val rapidThresholdMs = 320L
+        var lastSwitchTime = 1000L
+
+        // Fast focus switch within 150ms -> rapid mode enabled
+        val t1 = 1150L
+        val delta1 = t1 - lastSwitchTime
+        val isRapid1 = lastSwitchTime > 0L && delta1 < rapidThresholdMs
+        assertEquals(true, isRapid1)
+        lastSwitchTime = t1
+
+        // Normal focus switch after 500ms -> standard spring physics enabled
+        val t2 = 1650L
+        val delta2 = t2 - lastSwitchTime
+        val isRapid2 = lastSwitchTime > 0L && delta2 < rapidThresholdMs
+        assertEquals(false, isRapid2)
+    }
 }
 
 

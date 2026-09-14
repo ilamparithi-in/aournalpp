@@ -373,6 +373,11 @@ static void evaluate_and_emit_document_title(Display *dpy, Window root, Window a
         if (active_title) free(active_title);
     }
 
+    // Only fallback to scanning window tree on initial startup if NO title was ever established
+    if (last_emitted_title[0] != '\0') {
+        return;
+    }
+
     int best_score = -1;
     char *best_title = NULL;
 
@@ -586,14 +591,25 @@ static void evaluate_and_emit_status(Display *dpy, Window root) {
         }
     }
 
-    if (active_win != None) {
-        XSelectInput(dpy, active_win, PropertyChangeMask | StructureNotifyMask);
-    }
-
     Window main_wins[64];
     Window dialog_wins[64];
     int main_count = 0, dialog_count = 0;
     query_managed_xournal_windows(dpy, root, main_wins, &main_count, dialog_wins, &dialog_count, 64);
+
+    // If active_win is temporarily None mid-transition in Openbox, retain last known active window
+    if (active_win == None && last_selected_active_window != None && main_count > 0) {
+        for (int i = 0; i < main_count; i++) {
+            if (main_wins[i] == last_selected_active_window) {
+                active_win = last_selected_active_window;
+                break;
+            }
+        }
+    }
+
+    if (active_win != None && active_win != last_selected_active_window) {
+        last_selected_active_window = active_win;
+        XSelectInput(dpy, active_win, PropertyChangeMask | StructureNotifyMask);
+    }
 
     char windows_buf[4096];
     int offset = snprintf(windows_buf, sizeof(windows_buf), "WINDOWS:%lu|", (unsigned long)active_win);
@@ -915,8 +931,7 @@ static void handle_ipc_command(Display *dpy, Window root, const char *line) {
         unsigned long wid = strtoul(line + 9, NULL, 0);
         if (wid != 0) {
             activate_window(dpy, root, (Window)wid);
-            XSync(dpy, False);
-            evaluate_and_emit_status(dpy, root);
+            XFlush(dpy);
         }
     } else if (strncmp(line, "CLOSE ", 6) == 0) {
         unsigned long wid = strtoul(line + 6, NULL, 0);

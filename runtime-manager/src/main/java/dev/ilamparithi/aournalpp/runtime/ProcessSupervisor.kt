@@ -59,6 +59,11 @@ class ProcessSupervisor(val env: LinuxEnvironment) {
     private val _openWindows = kotlinx.coroutines.flow.MutableStateFlow<List<X11WindowInfo>>(emptyList())
     val openWindows: kotlinx.coroutines.flow.StateFlow<List<X11WindowInfo>> = _openWindows
 
+    @Volatile
+    private var pendingActivationWindowId: String? = null
+    @Volatile
+    private var pendingActivationTime: Long = 0L
+
     private val xournalProcesses = CopyOnWriteArrayList<Process>()
     private var onXournalExitListener: (() -> Unit)? = null
     private var onSingleProcessExitListener: ((remainingCount: Int) -> Unit)? = null
@@ -242,6 +247,8 @@ class ProcessSupervisor(val env: LinuxEnvironment) {
     }
 
     fun activateWindow(windowId: String): Boolean {
+        pendingActivationWindowId = windowId
+        pendingActivationTime = System.currentTimeMillis()
         val activated = if (sendWatcherCommand("ACTIVATE $windowId")) {
             true
         } else {
@@ -409,7 +416,25 @@ class ProcessSupervisor(val env: LinuxEnvironment) {
                             } else if (line.startsWith("WINDOWS:")) {
                                 val payload = line.removePrefix("WINDOWS:").trim()
                                 val parts = payload.split("|")
-                                val activeId = parts.firstOrNull() ?: ""
+                                val reportedActiveId = parts.firstOrNull() ?: ""
+                                val currentActiveId = _openWindows.value.find { it.isActive }?.id
+                                val isPending = pendingActivationWindowId != null &&
+                                    (System.currentTimeMillis() - pendingActivationTime < 500L)
+                                val effectiveActiveId = if (reportedActiveId.isNotBlank() && reportedActiveId != "0" && reportedActiveId != "None") {
+                                    if (isPending) {
+                                        if (reportedActiveId == pendingActivationWindowId) {
+                                            pendingActivationWindowId = null
+                                            reportedActiveId
+                                        } else {
+                                            pendingActivationWindowId!!
+                                        }
+                                    } else {
+                                        pendingActivationWindowId = null
+                                        reportedActiveId
+                                    }
+                                } else {
+                                    pendingActivationWindowId ?: currentActiveId ?: ""
+                                }
                                 val windowList = mutableListOf<X11WindowInfo>()
                                 for (i in 1 until parts.size) {
                                     val entry = parts[i]
@@ -420,7 +445,7 @@ class ProcessSupervisor(val env: LinuxEnvironment) {
                                         val clean = sanitizeWindowTitle(rawTitle).ifBlank {
                                             rawTitle.replace(APP_SUFFIX_REGEX, "").replace(AUTOSAVED_REGEX, "").trim()
                                         }.ifBlank { "Untitled Note" }
-                                        windowList.add(X11WindowInfo(id = wid, title = clean, isActive = (wid == activeId)))
+                                        windowList.add(X11WindowInfo(id = wid, title = clean, isActive = (wid == effectiveActiveId)))
                                     }
                                 }
                                 val activeWin = windowList.find { it.isActive }
