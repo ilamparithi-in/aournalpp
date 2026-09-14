@@ -1,6 +1,6 @@
 {
   "lock_version": 1,
-  "updated_at": "2026-09-12T03:45:20.581348+00:00",
+  "updated_at": "2026-09-14T18:34:24.574636+00:00",
   "packages": {
     "aarch64": {
       "adwaita-icon-theme": {
@@ -418,15 +418,9 @@
         "repo": "main"
       },
       "libiconv": {
-        "version": "1.18-1",
-        "sha256": "b19e6f348034bb48d2a5590b5cb242769f682c476717374d134d004cc663dc84",
-        "filename": "pool/main/libi/libiconv/libiconv_1.18-1_aarch64.deb",
-        "repo": "main"
-      },
-      "libicu": {
-        "version": "78.3",
-        "sha256": "f536403f65a08fe0df6e7304184e902d54def77d5c3bd5edfd9109d57601d276",
-        "filename": "pool/main/libi/libicu/libicu_78.3_aarch64.deb",
+        "version": "1.19",
+        "sha256": "fe9481b1dc101c6c3552943f25435109fd522aecc615ae49594f9fbee863bb37",
+        "filename": "pool/main/libi/libiconv/libiconv_1.19_aarch64.deb",
         "repo": "main"
       },
       "libid3tag": {
@@ -742,9 +736,9 @@
         "repo": "x11"
       },
       "libxml2": {
-        "version": "2.15.4",
-        "sha256": "cc518f2045db589a0dfc10b0d2c4a18234b80911c8e89ec60bf0eff7bb4db600",
-        "filename": "pool/main/libx/libxml2/libxml2_2.15.4_aarch64.deb",
+        "version": "2.15.4-1",
+        "sha256": "d315861bbcf716cfb088f53cddab9fb6a96430cc66769f79774cc69c2f53bcff",
+        "filename": "pool/main/libx/libxml2/libxml2_2.15.4-1_aarch64.deb",
         "repo": "main"
       },
       "libxrandr": {
@@ -790,9 +784,9 @@
         "repo": "main"
       },
       "mesa": {
-        "version": "26.0.6-3",
-        "sha256": "db2fe551b24ab6f1eba5df0f8557091fb15ea36cd72abfa7f2e0dc9979e40e16",
-        "filename": "pool/main/m/mesa/mesa_26.0.6-3_aarch64.deb",
+        "version": "26.2.2",
+        "sha256": "774ff38fc40bc5c9df38c50d61954674b5f23ba93133592739bd95a9d17af2d5",
+        "filename": "pool/main/m/mesa/mesa_26.2.2_aarch64.deb",
         "repo": "main"
       },
       "ncurses": {
@@ -1452,15 +1446,9 @@
         "repo": "main"
       },
       "libiconv": {
-        "version": "1.18-1",
-        "sha256": "c171356580d85f58d3eedc9c5f49b563d80afb18c92cbbb0382295d539bc0719",
-        "filename": "pool/main/libi/libiconv/libiconv_1.18-1_x86_64.deb",
-        "repo": "main"
-      },
-      "libicu": {
-        "version": "78.3",
-        "sha256": "19fa8c4d828719f465d523983b1e0d833e4130bb22790104638965d97e27fe60",
-        "filename": "pool/main/libi/libicu/libicu_78.3_x86_64.deb",
+        "version": "1.19",
+        "sha256": "880e9f423b448316a4951ffca3ffcd626d79538042b60ce2c3a821b9650c594c",
+        "filename": "pool/main/libi/libiconv/libiconv_1.19_x86_64.deb",
         "repo": "main"
       },
       "libid3tag": {
@@ -1776,9 +1764,9 @@
         "repo": "x11"
       },
       "libxml2": {
-        "version": "2.15.4",
-        "sha256": "694be31ee936772409b16b3bbcf5b27afb0623975eadd025b3f1ec2053d9fa95",
-        "filename": "pool/main/libx/libxml2/libxml2_2.15.4_x86_64.deb",
+        "version": "2.15.4-1",
+        "sha256": "b25b5b18185b4d9f61fc63d2d8ec11fadb5755b42e01c6afef9f5ad2abd6fb78",
+        "filename": "pool/main/libx/libxml2/libxml2_2.15.4-1_x86_64.deb",
         "repo": "main"
       },
       "libxrandr": {
@@ -1824,9 +1812,9 @@
         "repo": "main"
       },
       "mesa": {
-        "version": "26.0.6-3",
-        "sha256": "b9f8c3955ff3b197cd79430d81c4233131e647197a5b7da2b72101257b77542a",
-        "filename": "pool/main/m/mesa/mesa_26.0.6-3_x86_64.deb",
+        "version": "26.2.2",
+        "sha256": "50dfe1b92c8796c8e7655db62cd638b62818027fe2ca886e1ca139fa2453301c",
+        "filename": "pool/main/m/mesa/mesa_26.2.2_x86_64.deb",
         "repo": "main"
       },
       "ncurses": {

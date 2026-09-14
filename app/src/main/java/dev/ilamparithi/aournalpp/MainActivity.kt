@@ -675,9 +675,6 @@ fun MainResponsiveAppShell(
     val allTabs = remember {
         listOf(AppTab.WORKSPACE, AppTab.HOME, AppTab.FILES, AppTab.CLOUD, AppTab.SETTINGS, AppTab.ABOUT)
     }
-    val standardTabs = remember {
-        listOf(AppTab.HOME, AppTab.FILES, AppTab.CLOUD, AppTab.SETTINGS, AppTab.ABOUT)
-    }
 
     val tabTransitionSpec: androidx.compose.animation.AnimatedContentTransitionScope<Int>.() -> androidx.compose.animation.ContentTransform = {
         val fromIndex = allTabs.indexOfFirst { it.id == initialState }
@@ -706,19 +703,15 @@ fun MainResponsiveAppShell(
                         )
                     }
                 ) {
-                    AppAnimatedVisibility(
-                        visible = isSessionRunning,
-                        enter = if (reduceAnimations) fadeIn(tween(120)) else (expandVertically(spring(dampingRatio = 0.82f, stiffness = 380f)) + fadeIn(spring(dampingRatio = 0.9f, stiffness = 400f))),
-                        exit = if (reduceAnimations) fadeOut(tween(100)) else (shrinkVertically(spring(dampingRatio = 0.82f, stiffness = 380f)) + fadeOut(spring(dampingRatio = 0.9f, stiffness = 400f)))
-                    ) {
-                        val tab = AppTab.WORKSPACE
+                    visibleTabs.forEach { tab ->
                         val tabTitle = androidx.compose.ui.res.stringResource(tab.titleRes)
+                        val isWorkspace = tab == AppTab.WORKSPACE
                         val windowCount = isCanvasSessionActive?.openWindowCount ?: 1
                         NavigationRailItem(
                             selected = selectedTab == tab.id,
                             onClick = { onTabSelect(tab.id) },
                             icon = {
-                                if (isSessionRunning) {
+                                if (isWorkspace && isSessionRunning) {
                                     BadgedBox(
                                         badge = {
                                             Badge(
@@ -752,30 +745,7 @@ fun MainResponsiveAppShell(
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
                                     fontWeight = if (selectedTab == tab.id) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSessionRunning && selectedTab != tab.id) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Unspecified
-                                )
-                            }
-                        )
-                    }
-
-                    standardTabs.forEach { tab ->
-                        val tabTitle = androidx.compose.ui.res.stringResource(tab.titleRes)
-                        NavigationRailItem(
-                            selected = selectedTab == tab.id,
-                            onClick = { onTabSelect(tab.id) },
-                            icon = {
-                                Icon(
-                                    imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
-                                    contentDescription = tabTitle
-                                )
-                            },
-                            label = {
-                                Text(
-                                    text = tabTitle,
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    fontWeight = if (selectedTab == tab.id) FontWeight.Bold else FontWeight.Normal
+                                    color = if (isWorkspace && isSessionRunning && selectedTab != tab.id) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Unspecified
                                 )
                             }
                         )
@@ -806,19 +776,15 @@ fun MainResponsiveAppShell(
                     NavigationBar(
                         containerColor = MaterialTheme.colorScheme.surface
                     ) {
-                        AppAnimatedVisibility(
-                            visible = isSessionRunning,
-                            enter = if (reduceAnimations) fadeIn(tween(120)) else (expandHorizontally(spring(dampingRatio = 0.82f, stiffness = 380f)) + fadeIn(spring(dampingRatio = 0.9f, stiffness = 400f))),
-                            exit = if (reduceAnimations) fadeOut(tween(100)) else (shrinkHorizontally(spring(dampingRatio = 0.82f, stiffness = 380f)) + fadeOut(spring(dampingRatio = 0.9f, stiffness = 400f)))
-                        ) {
-                            val tab = AppTab.WORKSPACE
+                        visibleTabs.forEach { tab ->
                             val tabTitle = androidx.compose.ui.res.stringResource(tab.titleRes)
+                            val isWorkspace = tab == AppTab.WORKSPACE
                             val windowCount = isCanvasSessionActive?.openWindowCount ?: 1
                             NavigationBarItem(
                                 selected = selectedTab == tab.id,
                                 onClick = { onTabSelect(tab.id) },
                                 icon = {
-                                    if (isSessionRunning) {
+                                    if (isWorkspace && isSessionRunning) {
                                         BadgedBox(
                                             badge = {
                                                 Badge(
@@ -852,30 +818,7 @@ fun MainResponsiveAppShell(
                                         maxLines = 2,
                                         overflow = TextOverflow.Ellipsis,
                                         fontWeight = if (selectedTab == tab.id) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isSessionRunning && selectedTab != tab.id) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Unspecified
-                                    )
-                                }
-                            )
-                        }
-
-                        standardTabs.forEach { tab ->
-                            val tabTitle = androidx.compose.ui.res.stringResource(tab.titleRes)
-                            NavigationBarItem(
-                                selected = selectedTab == tab.id,
-                                onClick = { onTabSelect(tab.id) },
-                                icon = {
-                                    Icon(
-                                        imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
-                                        contentDescription = tabTitle
-                                    )
-                                },
-                                label = {
-                                    Text(
-                                        text = tabTitle,
-                                        textAlign = TextAlign.Center,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                        fontWeight = if (selectedTab == tab.id) FontWeight.Bold else FontWeight.Normal
+                                        color = if (isWorkspace && isSessionRunning && selectedTab != tab.id) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Unspecified
                                     )
                                 }
                             )
