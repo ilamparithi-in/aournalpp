@@ -34,6 +34,7 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.layout.widthIn
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.ilamparithi.aournalpp.runtime.ActiveNotesTracker
 import dev.ilamparithi.aournalpp.runtime.ActiveSessionTracker
 import dev.ilamparithi.aournalpp.runtime.ActiveSessionInfo
 import androidx.compose.foundation.basicMarquee
@@ -329,6 +330,7 @@ fun HomeScreen(
     var isPdfConverting by remember { mutableStateOf(false) }
     var convertingMessage by remember { mutableStateOf("") }
     var noteForActionDialog by remember { mutableStateOf<File?>(null) }
+    var noteForActiveSessionDialog by remember { mutableStateOf<Pair<File, ActiveNotesTracker.ActiveNoteMatch>?>(null) }
     val localView = LocalView.current
 
     fun handleNoteOpen(file: File) {
@@ -340,6 +342,9 @@ fun HomeScreen(
             repository = repository,
             localView = localView,
             onShowPrompt = { noteForActionDialog = it },
+            onShowActiveNotePrompt = { targetFile, match ->
+                noteForActiveSessionDialog = targetFile to match
+            },
             onConvertingState = { isConverting ->
                 isPdfConverting = isConverting
                 if (isConverting) {
@@ -1138,6 +1143,33 @@ fun HomeScreen(
             },
             onEditInCanvas = {
                 noteForActionDialog = null
+                val activeMatch = ActiveNotesTracker.findActiveNote(context, file)
+                if (activeMatch != null) {
+                    noteForActiveSessionDialog = file to activeMatch
+                } else {
+                    NoteOpenManager.openInCanvas(
+                        context = context,
+                        file = file,
+                        repository = repository,
+                        localView = localView
+                    )
+                }
+            }
+        )
+    }
+
+    // Active Note Already Open Dialog
+    noteForActiveSessionDialog?.let { (file, match) ->
+        ActiveNoteOpenPromptDialog(
+            file = file,
+            activeMatch = match,
+            onDismiss = { noteForActiveSessionDialog = null },
+            onViewExistingWindow = {
+                noteForActiveSessionDialog = null
+                NoteOpenManager.viewExistingWindow(context, match.windowId)
+            },
+            onOpenInNewWindow = {
+                noteForActiveSessionDialog = null
                 NoteOpenManager.openInCanvas(
                     context = context,
                     file = file,

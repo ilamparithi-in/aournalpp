@@ -116,6 +116,7 @@ import dev.ilamparithi.aournalpp.ui.hub.dialog.RenameFolderDialog
 import dev.ilamparithi.aournalpp.ui.hub.dialog.RenameNoteDialog
 import dev.ilamparithi.aournalpp.ui.hub.dialog.StoragePermissionPromptDialog
 import dev.ilamparithi.aournalpp.ui.hub.notesGridDragSelect
+import dev.ilamparithi.aournalpp.runtime.ActiveNotesTracker
 import dev.ilamparithi.aournalpp.utils.ExternalFileHandler
 import dev.ilamparithi.aournalpp.utils.FileNameTemplateEngine
 import dev.ilamparithi.aournalpp.utils.NoteOpenManager
@@ -228,6 +229,7 @@ fun DocumentHubScreen(
     var pendingAutosaveNote by remember { mutableStateOf<NoteDocument?>(null) }
     var pendingSaveAutosaveNote by remember { mutableStateOf<NoteDocument?>(null) }
     var noteForActionDialog by remember { mutableStateOf<File?>(null) }
+    var noteForActiveSessionDialog by remember { mutableStateOf<Pair<File, ActiveNotesTracker.ActiveNoteMatch>?>(null) }
 
     // Export states
     data class PendingSingleExport(
@@ -280,6 +282,9 @@ fun DocumentHubScreen(
             repository = repository,
             localView = localView,
             onShowPrompt = { noteForActionDialog = it },
+            onShowActiveNotePrompt = { targetFile, match ->
+                noteForActiveSessionDialog = targetFile to match
+            },
             onConvertingState = { isConverting ->
                 viewModel.setPdfConverting(
                     isConverting,
@@ -1400,6 +1405,32 @@ fun DocumentHubScreen(
                 },
                 onEditInCanvas = {
                     noteForActionDialog = null
+                    val activeMatch = ActiveNotesTracker.findActiveNote(context, file)
+                    if (activeMatch != null) {
+                        noteForActiveSessionDialog = file to activeMatch
+                    } else {
+                        NoteOpenManager.openInCanvas(
+                            context = context,
+                            file = file,
+                            repository = repository,
+                            localView = localView
+                        )
+                    }
+                }
+            )
+        }
+
+        noteForActiveSessionDialog?.let { (file, match) ->
+            ActiveNoteOpenPromptDialog(
+                file = file,
+                activeMatch = match,
+                onDismiss = { noteForActiveSessionDialog = null },
+                onViewExistingWindow = {
+                    noteForActiveSessionDialog = null
+                    NoteOpenManager.viewExistingWindow(context, match.windowId)
+                },
+                onOpenInNewWindow = {
+                    noteForActiveSessionDialog = null
                     NoteOpenManager.openInCanvas(
                         context = context,
                         file = file,

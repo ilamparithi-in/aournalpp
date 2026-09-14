@@ -774,6 +774,14 @@
     <!-- Toast message when default action is set to Edit in Xournal++ -->
     <string name="msg_default_action_set_edit">Default action set to Edit in Xournal++. You can change this in Settings.</string>
 
+    <!-- Active Note Open Prompt Dialog -->
+    <string name="note_already_open_title">Note Already Open</string>
+    <string name="note_already_open_prompt">\"%1$s\" is already open in your active session. How would you like to proceed?</string>
+    <string name="note_open_view_existing_title">View Existing Window</string>
+    <string name="note_open_view_existing_subtitle">Bring the currently open window into focus</string>
+    <string name="note_open_in_new_window_title">Open in New Window</string>
+    <string name="note_open_in_new_window_subtitle">Open another instance of this note in a new window</string>
+
     <!-- ======================================================================= -->
     <!-- Cloud Backup & Sync Subsystem                                           -->
     <!-- ======================================================================= -->

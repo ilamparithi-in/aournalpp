@@ -106,6 +106,8 @@ import dev.ilamparithi.aournalpp.utils.NoteOpenManager
 import dev.ilamparithi.aournalpp.ui.NoteOpenActionDialog
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
 import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
+import dev.ilamparithi.aournalpp.runtime.ActiveNotesTracker
+import dev.ilamparithi.aournalpp.ui.ActiveNoteOpenPromptDialog
 import dev.ilamparithi.aournalpp.ui.preview.DragActionTarget
 import dev.ilamparithi.aournalpp.ui.preview.FloatingPreviewHost
 import dev.ilamparithi.aournalpp.ui.theme.AournalTheme
@@ -139,6 +141,7 @@ class MainActivity : ComponentActivity() {
 
     private var pendingIntentToProcess: Intent? = null
     private val externalFileToOpen = androidx.compose.runtime.mutableStateOf<File?>(null)
+    private val externalActiveNoteToPrompt = androidx.compose.runtime.mutableStateOf<Pair<File, ActiveNotesTracker.ActiveNoteMatch>?>(null)
     private val pendingTabNavigation = androidx.compose.runtime.mutableStateOf<Int?>(null)
     private val pendingCloudSubpageNavigation = androidx.compose.runtime.mutableStateOf<CloudSubpage?>(null)
 
@@ -250,11 +253,16 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
                                     DragActionTarget.EDIT_CANVAS -> {
-                                        NoteOpenManager.openInCanvas(
-                                            context = this@MainActivity,
-                                            file = note.file,
-                                            repository = repo
-                                        )
+                                        val activeMatch = ActiveNotesTracker.findActiveNote(this@MainActivity, note.file)
+                                        if (activeMatch != null) {
+                                            externalActiveNoteToPrompt.value = note.file to activeMatch
+                                        } else {
+                                            NoteOpenManager.openInCanvas(
+                                                context = this@MainActivity,
+                                                file = note.file,
+                                                repository = repo
+                                            )
+                                        }
                                     }
                                     DragActionTarget.NONE -> {}
                                 }
@@ -320,9 +328,37 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onEditInCanvas = {
                                     externalFileToOpen.value = null
+                                    val activeMatch = ActiveNotesTracker.findActiveNote(this@MainActivity, promptFile)
+                                    if (activeMatch != null) {
+                                        externalActiveNoteToPrompt.value = promptFile to activeMatch
+                                    } else {
+                                        NoteOpenManager.openInCanvas(
+                                            context = this@MainActivity,
+                                            file = promptFile,
+                                            repository = repo
+                                        )
+                                    }
+                                }
+                            )
+                        }
+
+                        val activePrompt = externalActiveNoteToPrompt.value
+                        if (activePrompt != null && isOnboardingCompleted) {
+                            ActiveNoteOpenPromptDialog(
+                                file = activePrompt.first,
+                                activeMatch = activePrompt.second,
+                                onDismiss = { externalActiveNoteToPrompt.value = null },
+                                onViewExistingWindow = {
+                                    val match = activePrompt.second
+                                    externalActiveNoteToPrompt.value = null
+                                    NoteOpenManager.viewExistingWindow(this@MainActivity, match.windowId)
+                                },
+                                onOpenInNewWindow = {
+                                    val targetFile = activePrompt.first
+                                    externalActiveNoteToPrompt.value = null
                                     NoteOpenManager.openInCanvas(
                                         context = this@MainActivity,
-                                        file = promptFile,
+                                        file = targetFile,
                                         repository = repo
                                     )
                                 }
@@ -481,7 +517,10 @@ class MainActivity : ComponentActivity() {
                         pdfExportManager = pdfExportManager,
                         scope = lifecycleScope,
                         repository = repo,
-                        onShowPrompt = { externalFileToOpen.value = it }
+                        onShowPrompt = { externalFileToOpen.value = it },
+                        onShowActiveNotePrompt = { targetFile, match ->
+                            externalActiveNoteToPrompt.value = targetFile to match
+                        }
                     )
                 } else {
                     Log.e(TAG, "Failed to stage external file URI: $uri", result.exceptionOrNull())

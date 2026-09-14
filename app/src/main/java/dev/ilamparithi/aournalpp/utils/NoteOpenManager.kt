@@ -9,6 +9,7 @@ import androidx.core.app.ActivityOptionsCompat
 import androidx.core.content.FileProvider
 import dev.ilamparithi.aournalpp.CanvasActivity
 import dev.ilamparithi.aournalpp.data.DocumentRepository
+import dev.ilamparithi.aournalpp.runtime.ActiveNotesTracker
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
 import kotlinx.coroutines.CoroutineScope
@@ -170,7 +171,47 @@ object NoteOpenManager {
     }
 
     /**
-     * Core dispatcher for any file open event. Evaluates current default action setting:
+     * Brings an existing canvas session window to focus.
+     */
+    fun viewExistingWindow(context: Context, windowId: String?) {
+        val env = LinuxEnvironment(context)
+        val intent = Intent(context, CanvasActivity::class.java).apply {
+            if (!windowId.isNullOrBlank()) {
+                putExtra(CanvasActivity.EXTRA_TARGET_WINDOW_ID, windowId)
+                val previewFile = WindowPreviewManager.getPreviewFile(env.tmpDir, windowId)
+                if (previewFile.exists()) {
+                    putExtra(CanvasActivity.EXTRA_ENTRY_SNAPSHOT_PATH, previewFile.absolutePath)
+                } else {
+                    val compositeFile = WindowPreviewManager.getStageCompositeFile(env.tmpDir)
+                    if (compositeFile.exists()) {
+                        putExtra(CanvasActivity.EXTRA_ENTRY_SNAPSHOT_PATH, compositeFile.absolutePath)
+                    }
+                }
+            } else {
+                val compositeFile = WindowPreviewManager.getStageCompositeFile(env.tmpDir)
+                if (compositeFile.exists()) {
+                    putExtra(CanvasActivity.EXTRA_ENTRY_SNAPSHOT_PATH, compositeFile.absolutePath)
+                }
+            }
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+        }
+        val options = ActivityOptionsCompat.makeCustomAnimation(context, 0, 0).toBundle()
+        context.startActivity(intent, options)
+        val activity = context as? android.app.Activity
+        if (activity != null) {
+            if (android.os.Build.VERSION.SDK_INT >= 34) {
+                activity.overrideActivityTransition(android.app.Activity.OVERRIDE_TRANSITION_OPEN, 0, 0)
+            } else {
+                @Suppress("DEPRECATION")
+                activity.overridePendingTransition(0, 0)
+            }
+        }
+    }
+
+    /**
+     * Core dispatcher for any file open event. Evaluates active session status and default action setting:
+     * - If the note is already open in an active canvas session and [onShowActiveNotePrompt] is supplied,
+     *   dispatches to [onShowActiveNotePrompt] to prompt whether to view existing window or open in new window.
      * - If [NoteOpenAction.EDIT], directly launches CanvasActivity.
      * - If [NoteOpenAction.VIEW], directly launches PDF viewer.
      * - If [NoteOpenAction.ASK], triggers the [onShowPrompt] callback with the target file.
@@ -183,9 +224,18 @@ object NoteOpenManager {
         repository: DocumentRepository? = null,
         localView: View? = null,
         onShowPrompt: (File) -> Unit,
+        onShowActiveNotePrompt: ((File, ActiveNotesTracker.ActiveNoteMatch) -> Unit)? = null,
         onConvertingState: ((Boolean) -> Unit)? = null,
         onError: ((String) -> Unit)? = null
     ) {
+        if (onShowActiveNotePrompt != null) {
+            val activeMatch = ActiveNotesTracker.findActiveNote(context, file)
+            if (activeMatch != null) {
+                onShowActiveNotePrompt(file, activeMatch)
+                return
+            }
+        }
+
         when (getDefaultAction(context)) {
             NoteOpenAction.EDIT -> openInCanvas(context, file, repository, localView)
             NoteOpenAction.VIEW -> openAsPdf(context, file, pdfExportManager, scope, repository, onConvertingState, onError)
