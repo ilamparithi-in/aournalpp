@@ -770,5 +770,23 @@ class SnapLayoutManagerTest {
         assertEquals(SnapLayoutMode.SPLIT_TWO, manager.activeMode)
         assertEquals(mapOf(0 to "win1", 1 to "win2"), manager.slotAssignments)
     }
+
+    @Test
+    fun testOpeningNPlusOneWindowPreservesSplitSlotAssignmentsAndExcludesNewWindow() {
+        manager.setMode(SnapLayoutMode.SPLIT_TWO)
+        manager.assignWindowToSlot(0, "win1")
+        manager.assignWindowToSlot(1, "win2")
+
+        val openWindows = listOf(
+            ProcessSupervisor.X11WindowInfo(id = "win1", title = "Note 1", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win2", title = "Note 2", isActive = false),
+            ProcessSupervisor.X11WindowInfo(id = "win3", title = "Note 3", isActive = true)
+        )
+
+        val assignments = manager.buildSnapAssignments(1000, 1000, openWindows)
+        assertEquals(2, assignments.size)
+        assertEquals(mapOf(0 to "win1", 1 to "win2"), manager.slotAssignments)
+        assertFalse(manager.slotAssignments.containsValue("win3"))
+    }
 }
 

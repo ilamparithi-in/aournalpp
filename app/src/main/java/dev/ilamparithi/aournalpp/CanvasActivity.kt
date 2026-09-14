@@ -132,6 +132,26 @@ class CanvasActivity : ComponentActivity() {
             }
         }
 
+        fun executeCloseWindowFromReceiver(context: Context, targetWindowId: String) {
+            val inst = instance
+            if (inst != null && inst.isSupervisorInitialized() && inst.sessionManager.isSessionRunning) {
+                inst.lifecycleScope.launch(Dispatchers.IO) {
+                    inst.sessionManager.closeSpecificWindow(targetWindowId)
+                    delay(350.milliseconds)
+                    if (inst.sessionManager.isModalOrDialogOpen()) {
+                        inst.runOnUiThread {
+                            val bringToFront = Intent(inst, CanvasActivity::class.java).apply {
+                                putExtra(EXTRA_TARGET_WINDOW_ID, targetWindowId)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                            }
+                            inst.startActivity(bringToFront)
+                            Toast.makeText(inst, "Save or discard changes to exit", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }
+        }
+
         fun notifyPreferenceChanged(key: String) {
             instance?.onPreferenceChanged(key)
         }

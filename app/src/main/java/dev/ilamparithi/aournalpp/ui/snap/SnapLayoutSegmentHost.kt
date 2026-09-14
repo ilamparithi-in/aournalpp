@@ -44,9 +44,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.graphicsLayer
 import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
+import dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences
 import dev.ilamparithi.aournalpp.ui.preview.DreamyStarsBackground
 import dev.ilamparithi.aournalpp.ui.window.WindowGalleryPicker
+
+private val M3MorphEasing = CubicBezierEasing(0.2f, 0.0f, 0.0f, 1.0f)
 
 @Composable
 fun SnapLayoutSegmentHost(
@@ -74,25 +82,55 @@ fun SnapLayoutSegmentHost(
         openWindows.filter { it.id !in allAssignedWindowIds }
     }
 
+    val morphProgress = remember { Animatable(0f) }
+    val reduceMotion = LocalMotionPreferences.current.reduceAnimations
+    LaunchedEffect(Unit) {
+        if (reduceMotion) {
+            morphProgress.snapTo(1f)
+        } else {
+            morphProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 320, easing = M3MorphEasing)
+            )
+        }
+    }
+
+    var isClosing by remember { mutableStateOf(false) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .zIndex(150f)
-            .background(Color.Black.copy(alpha = 0.5f))
+            .background(Color.Black.copy(alpha = (0.5f * morphProgress.value).coerceIn(0f, 0.5f)))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
-            ) { onDismiss() }
+            ) {
+                if (!isClosing) {
+                    isClosing = true
+                    onDismiss()
+                }
+            }
     ) {
         DreamyStarsBackground(
             modifier = Modifier.fillMaxSize(),
             accentColor = MaterialTheme.colorScheme.primary,
-            progress = 1f,
-            alpha = 0.35f,
+            progress = morphProgress.value,
+            alpha = (0.35f * morphProgress.value).coerceIn(0f, 0.35f),
             strength = 0.35f
         )
 
-        for ((slotIndex, x, y, width, height) in geometries) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    val p = morphProgress.value
+                    scaleX = 0.88f + 0.12f * p
+                    scaleY = 0.88f + 0.12f * p
+                    alpha = p.coerceIn(0f, 1f)
+                }
+        ) {
+            for ((slotIndex, x, y, width, height) in geometries) {
             val assignedWinId = assignedSlotMap[slotIndex]
             val assignedWin = openWindows.find { it.id == assignedWinId }
             val isEditingThisSlot = editingSlotIndex == slotIndex
@@ -298,7 +336,9 @@ fun SnapLayoutSegmentHost(
                                 else "Select Note for Slot ${slotIndex + 1}",
                                 onSelectWindow = { win ->
                                     editingSlotIndex = null
-                                    onSelectWindowForSlot(slotIndex, win)
+                                    if (!isClosing) {
+                                        onSelectWindowForSlot(slotIndex, win)
+                                    }
                                 },
                                 onCloseWindow = null
                             )
@@ -322,4 +362,5 @@ fun SnapLayoutSegmentHost(
             }
         }
     }
+}
 }

@@ -27,7 +27,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Card
@@ -81,6 +83,7 @@ fun WorkspaceStageTile(
     tmpDir: File,
     onWindowClick: (ActiveWindowEntry, Rect?, Bitmap?) -> Unit,
     onShareClick: (ActiveWindowEntry) -> Unit,
+    onCloseClick: (ActiveWindowEntry) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val mode = remember(workspaceState.snapMode) {
@@ -131,6 +134,7 @@ fun WorkspaceStageTile(
                                 timestamp = workspaceState.previewTimestamp,
                                 onWindowClick = onWindowClick,
                                 onShareClick = onShareClick,
+                                onCloseClick = onCloseClick,
                                 modifier = Modifier
                                     .weight(ratio)
                                     .fillMaxHeight()
@@ -142,6 +146,7 @@ fun WorkspaceStageTile(
                                 timestamp = workspaceState.previewTimestamp,
                                 onWindowClick = onWindowClick,
                                 onShareClick = onShareClick,
+                                onCloseClick = onCloseClick,
                                 modifier = Modifier
                                     .weight(1f - ratio)
                                     .fillMaxHeight()
@@ -155,6 +160,7 @@ fun WorkspaceStageTile(
                                 timestamp = workspaceState.previewTimestamp,
                                 onWindowClick = onWindowClick,
                                 onShareClick = onShareClick,
+                                onCloseClick = onCloseClick,
                                 modifier = Modifier
                                     .weight(ratio)
                                     .fillMaxWidth()
@@ -166,6 +172,7 @@ fun WorkspaceStageTile(
                                 timestamp = workspaceState.previewTimestamp,
                                 onWindowClick = onWindowClick,
                                 onShareClick = onShareClick,
+                                onCloseClick = onCloseClick,
                                 modifier = Modifier
                                     .weight(1f - ratio)
                                     .fillMaxWidth()
@@ -192,6 +199,7 @@ fun WorkspaceStageTile(
                                 timestamp = workspaceState.previewTimestamp,
                                 onWindowClick = onWindowClick,
                                 onShareClick = onShareClick,
+                                onCloseClick = onCloseClick,
                                 modifier = Modifier.weight(1f).fillMaxHeight()
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -201,6 +209,7 @@ fun WorkspaceStageTile(
                                 timestamp = workspaceState.previewTimestamp,
                                 onWindowClick = onWindowClick,
                                 onShareClick = onShareClick,
+                                onCloseClick = onCloseClick,
                                 modifier = Modifier.weight(1f).fillMaxHeight()
                             )
                         }
@@ -216,6 +225,7 @@ fun WorkspaceStageTile(
                                 timestamp = workspaceState.previewTimestamp,
                                 onWindowClick = onWindowClick,
                                 onShareClick = onShareClick,
+                                onCloseClick = onCloseClick,
                                 modifier = Modifier.weight(1f).fillMaxHeight()
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -225,6 +235,7 @@ fun WorkspaceStageTile(
                                 timestamp = workspaceState.previewTimestamp,
                                 onWindowClick = onWindowClick,
                                 onShareClick = onShareClick,
+                                onCloseClick = onCloseClick,
                                 modifier = Modifier.weight(1f).fillMaxHeight()
                             )
                         }
@@ -245,6 +256,7 @@ fun WorkspaceStageTile(
                                 timestamp = workspaceState.previewTimestamp,
                                 onWindowClick = onWindowClick,
                                 onShareClick = onShareClick,
+                                onCloseClick = onCloseClick,
                                 modifier = Modifier.weight(ratio).fillMaxHeight()
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -255,6 +267,7 @@ fun WorkspaceStageTile(
                                     timestamp = workspaceState.previewTimestamp,
                                     onWindowClick = onWindowClick,
                                     onShareClick = onShareClick,
+                                    onCloseClick = onCloseClick,
                                     modifier = Modifier.weight(1f).fillMaxWidth()
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
@@ -264,6 +277,7 @@ fun WorkspaceStageTile(
                                     timestamp = workspaceState.previewTimestamp,
                                     onWindowClick = onWindowClick,
                                     onShareClick = onShareClick,
+                                    onCloseClick = onCloseClick,
                                     modifier = Modifier.weight(1f).fillMaxWidth()
                                 )
                             }
@@ -276,6 +290,7 @@ fun WorkspaceStageTile(
                                 timestamp = workspaceState.previewTimestamp,
                                 onWindowClick = onWindowClick,
                                 onShareClick = onShareClick,
+                                onCloseClick = onCloseClick,
                                 modifier = Modifier.weight(ratio).fillMaxWidth()
                             )
                             Spacer(modifier = Modifier.height(8.dp))
@@ -286,6 +301,7 @@ fun WorkspaceStageTile(
                                     timestamp = workspaceState.previewTimestamp,
                                     onWindowClick = onWindowClick,
                                     onShareClick = onShareClick,
+                                    onCloseClick = onCloseClick,
                                     modifier = Modifier.weight(1f).fillMaxHeight()
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -295,6 +311,7 @@ fun WorkspaceStageTile(
                                     timestamp = workspaceState.previewTimestamp,
                                     onWindowClick = onWindowClick,
                                     onShareClick = onShareClick,
+                                    onCloseClick = onCloseClick,
                                     modifier = Modifier.weight(1f).fillMaxHeight()
                                 )
                             }
@@ -311,6 +328,7 @@ fun WorkspaceStageTile(
                         timestamp = workspaceState.previewTimestamp,
                         onWindowClick = onWindowClick,
                         onShareClick = onShareClick,
+                        onCloseClick = onCloseClick,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -329,6 +347,7 @@ fun StagePane(
     timestamp: Long,
     onWindowClick: (ActiveWindowEntry, Rect?, Bitmap?) -> Unit,
     onShareClick: (ActiveWindowEntry) -> Unit,
+    onCloseClick: (ActiveWindowEntry) -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (window == null) {
@@ -442,7 +461,7 @@ fun StagePane(
                 }
             }
 
-            // Unified Top Overlay Header: Title, dirty indicator, REC badge, and Share button
+            // Unified Top Overlay Header: Title, dirty indicator, REC badge, Share and Close buttons
             Surface(
                 shape = RoundedCornerShape(10.dp),
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
@@ -454,7 +473,8 @@ fun StagePane(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                        .height(36.dp)
+                        .padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -468,7 +488,10 @@ fun StagePane(
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            softWrap = false,
+                            modifier = Modifier
+                                .weight(1f, fill = false)
+                                .basicMarquee()
                         )
                         if (window.isDirty) {
                             Box(
@@ -484,7 +507,7 @@ fun StagePane(
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         if (window.isAudioRecording) {
                             AudioRecordingWaveformBadge()
@@ -492,13 +515,25 @@ fun StagePane(
 
                         IconButton(
                             onClick = { onShareClick(window) },
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.Share,
                                 contentDescription = stringResource(R.string.action_share_note),
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { onCloseClick(window) },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = stringResource(R.string.action_close),
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }

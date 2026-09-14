@@ -20,6 +20,7 @@ class CanvasCommandReceiver : BroadcastReceiver() {
         const val ACTION_REQUEST_SAVE_WINDOW = "dev.ilamparithi.aournalpp.ACTION_REQUEST_SAVE_WINDOW"
         const val ACTION_SAVE_WINDOW_SUCCESS = "dev.ilamparithi.aournalpp.ACTION_SAVE_WINDOW_SUCCESS"
         const val ACTION_SAVE_WINDOW_UNABLE_TO_SEND = "dev.ilamparithi.aournalpp.ACTION_SAVE_WINDOW_UNABLE_TO_SEND"
+        const val ACTION_REQUEST_CLOSE_WINDOW = "dev.ilamparithi.aournalpp.ACTION_REQUEST_CLOSE_WINDOW"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -36,6 +37,11 @@ class CanvasCommandReceiver : BroadcastReceiver() {
                 val targetWid = intent.getStringExtra("target_window_id") ?: ""
                 Log.i("CanvasCommandReceiver", "Received ACTION_REQUEST_SAVE_WINDOW in :canvas process for wid=$targetWid")
                 CanvasActivity.executeSaveWindowFromReceiver(context, targetWid)
+            }
+            ACTION_REQUEST_CLOSE_WINDOW -> {
+                val targetWid = intent.getStringExtra("target_window_id") ?: ""
+                Log.i("CanvasCommandReceiver", "Received ACTION_REQUEST_CLOSE_WINDOW in :canvas process for wid=$targetWid")
+                CanvasActivity.executeCloseWindowFromReceiver(context, targetWid)
             }
             X11Preferences.ACTION_PREFERENCES_CHANGED -> {
                 val key = intent.getStringExtra("key")

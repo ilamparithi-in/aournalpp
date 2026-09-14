@@ -109,6 +109,8 @@ fun WindowSwitcherGallery(
         }
     }
 
+    var isClosing by remember { mutableStateOf(false) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -117,7 +119,12 @@ fun WindowSwitcherGallery(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
-            ) { onDismiss() },
+            ) {
+                if (!isClosing) {
+                    isClosing = true
+                    onDismiss()
+                }
+            },
         contentAlignment = Alignment.Center
     ) {
         // Dreamy stars background with reduced strength (0.65f)
@@ -147,7 +154,12 @@ fun WindowSwitcherGallery(
                 isCompact = false,
                 isVerticalGrid = true,
                 headerTitle = "Open Notes",
-                onSelectWindow = onSelectWindow,
+                onSelectWindow = { win ->
+                    if (!isClosing) {
+                        isClosing = true
+                        onSelectWindow(win)
+                    }
+                },
                 onCloseWindow = onCloseWindow
             )
         }

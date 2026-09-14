@@ -79,6 +79,7 @@ import dev.ilamparithi.aournalpp.ui.AppDialogDefaults
 import dev.ilamparithi.aournalpp.ui.FloatingToolbarLayout
 import dev.ilamparithi.aournalpp.ui.InteractiveMarqueeText
 import dev.ilamparithi.aournalpp.ui.SafeAreaInsets
+import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedVisibility
 import dev.ilamparithi.aournalpp.ui.animation.SpringSlideTransition
 import dev.ilamparithi.aournalpp.ui.getRotatedSafeAreaInsets
 import dev.ilamparithi.aournalpp.ui.promptWidth
@@ -644,6 +645,28 @@ fun CanvasScreen(
                     val currentH = view?.height ?: 0
 
                     if (activeSnapMode != SnapLayoutMode.SINGLE && activeSnapMode != SnapLayoutMode.UNLOCKED) {
+                        val isSlotWindow = snapLayoutManager.slotAssignments.values.contains(targetWindow.id)
+                        val lorie = activity.activeLorieView
+                        val vpW = lorie?.width?.takeIf { it > 0 } ?: activity.resources.displayMetrics.widthPixels
+                        val vpH = lorie?.height?.takeIf { it > 0 } ?: activity.resources.displayMetrics.heightPixels
+                        if (!isSlotWindow && vpW > 0 && vpH > 0 && activity.isSupervisorInitialized()) {
+                            activity.supervisor.setWindowDecorations(targetWindow.id, false)
+                            activity.supervisor.snapWindowsBatch(listOf(
+                                dev.ilamparithi.aournalpp.runtime.ProcessSupervisor.WindowSnapAssignment(
+                                    windowId = targetWindow.id,
+                                    x = 0,
+                                    y = 0,
+                                    width = vpW,
+                                    height = vpH
+                                )
+                            ))
+                            activity.supervisor.setWindowMaximized(targetWindow.id, true)
+                        } else if (isSlotWindow && vpW > 0 && vpH > 0 && activity.isSupervisorInitialized()) {
+                            val assignments = snapLayoutManager.buildSnapAssignments(vpW, vpH, openWindows)
+                            if (assignments.isNotEmpty()) {
+                                activity.supervisor.snapWindowsBatch(assignments)
+                            }
+                        }
                         activity.lifecycleScope.launch(Dispatchers.IO) {
                             activity.sessionManager.switchToWindow(targetWindow.id)
                         }
@@ -732,17 +755,74 @@ fun CanvasScreen(
                     val id = activeWindow?.id ?: return@LaunchedEffect
                     windowMruList.remove(id)
                     windowMruList.add(0, id)
+
+                    if (activeSnapMode != SnapLayoutMode.SINGLE && activeSnapMode != SnapLayoutMode.UNLOCKED && activity.isSupervisorInitialized()) {
+                        val isSlotWindow = snapLayoutManager.slotAssignments.values.contains(id)
+                        val lorie = activity.activeLorieView
+                        val vpW = lorie?.width?.takeIf { it > 0 } ?: activity.resources.displayMetrics.widthPixels
+                        val vpH = lorie?.height?.takeIf { it > 0 } ?: activity.resources.displayMetrics.heightPixels
+                        if (!isSlotWindow && vpW > 0 && vpH > 0) {
+                            activity.supervisor.setWindowDecorations(id, false)
+                            activity.supervisor.snapWindowsBatch(listOf(
+                                dev.ilamparithi.aournalpp.runtime.ProcessSupervisor.WindowSnapAssignment(
+                                    windowId = id,
+                                    x = 0,
+                                    y = 0,
+                                    width = vpW,
+                                    height = vpH
+                                )
+                            ))
+                            activity.supervisor.setWindowMaximized(id, true)
+                        } else if (isSlotWindow && vpW > 0 && vpH > 0) {
+                            val assignments = snapLayoutManager.buildSnapAssignments(vpW, vpH, openWindows)
+                            if (assignments.isNotEmpty()) {
+                                activity.supervisor.snapWindowsBatch(assignments)
+                            }
+                        }
+                    }
                 }
 
                 // Dynamic window replacement & step-down degradation when a window is closed in snap layouts
                 LaunchedEffect(openWindows) {
                     val currentIds = openWindows.map { it.id }.toSet()
                     val closedIds = previousWindowIds.minus(currentIds)
+                    val newIds = currentIds.minus(previousWindowIds)
+                    val wasNonEmpty = previousWindowIds.isNotEmpty()
                     previousWindowIds = currentIds
                     windowMruList.removeAll { it !in currentIds }
                     for ((id) in openWindows) {
                         if (id !in windowMruList) {
                             windowMruList.add(id)
+                        }
+                    }
+
+                    // Ensure newly opened windows are borderless and opened in fullscreen if in single mode or background/unassigned in split mode
+                    if (newIds.isNotEmpty() && wasNonEmpty && activity.isSupervisorInitialized()) {
+                        val lorie = activity.activeLorieView
+                        val vpW = lorie?.width?.takeIf { it > 0 } ?: activity.resources.displayMetrics.widthPixels
+                        val vpH = lorie?.height?.takeIf { it > 0 } ?: activity.resources.displayMetrics.heightPixels
+                        for (newId in newIds) {
+                            activity.supervisor.setWindowDecorations(newId, false)
+                            if (activeSnapMode == SnapLayoutMode.SINGLE ||
+                                (activeSnapMode != SnapLayoutMode.UNLOCKED && newId !in snapLayoutManager.slotAssignments.values)
+                            ) {
+                                if (vpW > 0 && vpH > 0) {
+                                    activity.supervisor.snapWindowsBatch(listOf(
+                                        dev.ilamparithi.aournalpp.runtime.ProcessSupervisor.WindowSnapAssignment(
+                                            windowId = newId,
+                                            x = 0,
+                                            y = 0,
+                                            width = vpW,
+                                            height = vpH
+                                        )
+                                    ))
+                                }
+                                activity.supervisor.setWindowMaximized(newId, true)
+                            }
+                        }
+                        val latestNewId = newIds.lastOrNull()
+                        if (latestNewId != null) {
+                            activity.supervisor.activateWindow(latestNewId)
                         }
                     }
 
@@ -1133,66 +1213,66 @@ fun CanvasScreen(
                         }
 
                         // Snap Assist Segment Host (In-segment Note Selection Gallery)
-                        if (showSnapAssistHost && snapGeometries.isNotEmpty()) {
-                            Box(
-                                modifier = viewportModifier
-                                    .zIndex(20f)
-                            ) {
-                                SnapLayoutSegmentHost(
-                                    geometries = snapGeometries,
-                                    openWindows = openWindows,
-                                    previewCache = windowPreviewCache,
-                                    assignedSlotMap = snapSlotAssignments,
-                                    activeConfiguringSlot = activeConfiguringSlot,
-                                    onSelectWindowForSlot = { slotIdx, selectedWin ->
-                                        val totalSlots = snapGeometries.size
-                                        val allSlotsAssigned = snapLayoutManager.assignSlotAndAutoFillNthIfExact(
-                                            slotIndex = slotIdx,
-                                            windowId = selectedWin.id,
-                                            totalSlots = totalSlots,
-                                            allOpenWindows = openWindows
-                                        )
-                                        snapSlotAssignments = snapLayoutManager.slotAssignments.toMap()
+                        AppAnimatedVisibility(
+                            visible = showSnapAssistHost && snapGeometries.isNotEmpty(),
+                            enter = EnterTransition.None,
+                            exit = fadeOut(tween(durationMillis = 200, easing = FastOutSlowInEasing)),
+                            modifier = viewportModifier.zIndex(20f)
+                        ) {
+                            SnapLayoutSegmentHost(
+                                geometries = snapGeometries,
+                                openWindows = openWindows,
+                                previewCache = windowPreviewCache,
+                                assignedSlotMap = snapSlotAssignments,
+                                activeConfiguringSlot = activeConfiguringSlot,
+                                onSelectWindowForSlot = { slotIdx, selectedWin ->
+                                    val totalSlots = snapGeometries.size
+                                    val allSlotsAssigned = snapLayoutManager.assignSlotAndAutoFillNthIfExact(
+                                        slotIndex = slotIdx,
+                                        windowId = selectedWin.id,
+                                        totalSlots = totalSlots,
+                                        allOpenWindows = openWindows
+                                    )
+                                    snapSlotAssignments = snapLayoutManager.slotAssignments.toMap()
 
-                                        val vpW = activity.activeLorieView?.width?.takeIf { it > 0 } ?: canvasWidthPx.toInt()
-                                        val vpH = activity.activeLorieView?.height?.takeIf { it > 0 } ?: canvasHeightPx.toInt()
+                                    val vpW = activity.activeLorieView?.width?.takeIf { it > 0 } ?: canvasWidthPx.toInt()
+                                    val vpH = activity.activeLorieView?.height?.takeIf { it > 0 } ?: canvasHeightPx.toInt()
 
-                                        if (allSlotsAssigned) {
-                                            val assignments = snapLayoutManager.buildSnapAssignments(vpW, vpH, openWindows)
-                                            if (assignments.isNotEmpty() && activity.isSupervisorInitialized()) {
-                                                activity.supervisor.snapWindowsBatch(assignments)
-                                                val activeId = openWindows.find { it.isActive }?.id
-                                                val targetToActivate = if (activeId != null && assignments.any { it.windowId == activeId }) {
-                                                    activeId
-                                                } else {
-                                                    assignments.firstOrNull()?.windowId
-                                                }
-                                                if (targetToActivate != null) {
-                                                    activity.supervisor.activateWindow(targetToActivate)
-                                                }
+                                    if (allSlotsAssigned) {
+                                        val assignments = snapLayoutManager.buildSnapAssignments(vpW, vpH, openWindows)
+                                        if (assignments.isNotEmpty() && activity.isSupervisorInitialized()) {
+                                            activity.supervisor.snapWindowsBatch(assignments)
+                                            val activeId = openWindows.find { it.isActive }?.id
+                                            val targetToActivate = if (activeId != null && assignments.any { it.windowId == activeId }) {
+                                                activeId
+                                            } else {
+                                                assignments.firstOrNull()?.windowId
                                             }
-                                            showSnapAssistHost = false
-                                            activeConfiguringSlot = null
-                                            activity.lifecycleScope.launch {
-                                                delay(200.milliseconds)
-                                                captureCurrentWindowPreview { freshBmp ->
-                                                    updateSlotPreviewsFromScreen(freshBmp)
-                                                }
+                                            if (targetToActivate != null) {
+                                                activity.supervisor.activateWindow(targetToActivate)
                                             }
                                         }
-                                    },
-                                    onSlotClicked = { slotIdx ->
-                                        activeConfiguringSlot = slotIdx
-                                    },
-                                    onDismiss = {
                                         showSnapAssistHost = false
                                         activeConfiguringSlot = null
-                                        snapLayoutManager.clearAssignments()
-                                        snapSlotAssignments = emptyMap()
-                                        applySnapLayout(SnapLayoutMode.SINGLE, configureSlotsIfMultiWindow = false)
+                                        activity.lifecycleScope.launch {
+                                            delay(250.milliseconds)
+                                            captureCurrentWindowPreview { freshBmp ->
+                                                updateSlotPreviewsFromScreen(freshBmp)
+                                            }
+                                        }
                                     }
-                                )
-                            }
+                                },
+                                onSlotClicked = { slotIdx ->
+                                    activeConfiguringSlot = slotIdx
+                                },
+                                onDismiss = {
+                                    showSnapAssistHost = false
+                                    activeConfiguringSlot = null
+                                    snapLayoutManager.clearAssignments()
+                                    snapSlotAssignments = emptyMap()
+                                    applySnapLayout(SnapLayoutMode.SINGLE, configureSlotsIfMultiWindow = false)
+                                }
+                            )
                         }
 
                         // Floating Toolbar Overlay with Isolated Recomposition Scope (stays on top of window animations)
@@ -1298,7 +1378,12 @@ fun CanvasScreen(
                         )
 
                         // Window Switcher Gallery Overlay (Long-press on Window Switcher)
-                        if (showWindowSwitcherGallery) {
+                        AppAnimatedVisibility(
+                            visible = showWindowSwitcherGallery,
+                            enter = EnterTransition.None,
+                            exit = fadeOut(tween(durationMillis = 200, easing = FastOutSlowInEasing)),
+                            modifier = Modifier.fillMaxSize().zIndex(200f)
+                        ) {
                             val displayWindows = openWindows.ifEmpty {
                                 activity.sessionManager.queryOpenWindows()
                             }

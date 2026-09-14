@@ -67,6 +67,7 @@ import dev.ilamparithi.aournalpp.data.DocumentRepository
 import dev.ilamparithi.aournalpp.model.NoteDocument
 import dev.ilamparithi.aournalpp.runtime.ActiveSessionTracker
 import dev.ilamparithi.aournalpp.runtime.ActiveWindowEntry
+import dev.ilamparithi.aournalpp.runtime.ActiveWorkspaceState
 import dev.ilamparithi.aournalpp.runtime.ActiveWorkspaceTracker
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
@@ -104,6 +105,13 @@ fun ActiveWorkspacePortalScreen(
 
     val workspaceState by ActiveWorkspaceTracker.workspaceStateFlow(context, env)
         .collectAsStateWithLifecycle(initialValue = null)
+
+    var lastValidState by remember { mutableStateOf<ActiveWorkspaceState?>(null) }
+    LaunchedEffect(workspaceState) {
+        if (workspaceState != null && workspaceState!!.windows.isNotEmpty()) {
+            lastValidState = workspaceState
+        }
+    }
 
     var isClosingSession by remember { mutableStateOf(false) }
     var isSavingForShare by remember { mutableStateOf(false) }
@@ -216,6 +224,14 @@ fun ActiveWorkspacePortalScreen(
             return
         }
         proceedToShare(window)
+    }
+
+    fun handleCloseWindow(window: ActiveWindowEntry) {
+        val intent = Intent(CanvasCommandReceiver.ACTION_REQUEST_CLOSE_WINDOW).apply {
+            setPackage(context.packageName)
+            putExtra("target_window_id", window.id)
+        }
+        context.sendBroadcast(intent)
     }
 
     fun triggerSaveAllAndClose() {
@@ -472,7 +488,11 @@ fun ActiveWorkspacePortalScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            val currentState = workspaceState
+            val currentState = if (workspaceState != null && workspaceState!!.windows.isNotEmpty()) {
+                workspaceState
+            } else {
+                lastValidState
+            }
             if (currentState == null || currentState.windows.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -546,6 +566,7 @@ fun ActiveWorkspacePortalScreen(
                             launchCanvasWindow(win.id, bmp)
                         },
                         onShareClick = { handleShareClick(it) },
+                        onCloseClick = { handleCloseWindow(it) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(stageWeight)
@@ -578,6 +599,7 @@ fun ActiveWorkspacePortalScreen(
                                         launchCanvasWindow(clickedWin.id, bmp)
                                     },
                                     onShareClick = { handleShareClick(it) },
+                                    onCloseClick = { handleCloseWindow(it) },
                                     modifier = Modifier
                                         .width(240.dp)
                                         .fillMaxSize()
