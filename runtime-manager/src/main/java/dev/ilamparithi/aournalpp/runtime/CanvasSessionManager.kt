@@ -389,6 +389,9 @@ class CanvasSessionManager @JvmOverloads constructor(
     val openWindows: kotlinx.coroutines.flow.StateFlow<List<ProcessSupervisor.X11WindowInfo>>
         get() = supervisor.openWindows
 
+    val isModalOrDialogOpenFlow: kotlinx.coroutines.flow.StateFlow<Boolean>
+        get() = supervisor.isModalOrDialogOpen
+
     fun switchToWindow(windowId: String): Boolean {
         if (!isSessionRunning) return false
         val success = supervisor.activateWindow(windowId)

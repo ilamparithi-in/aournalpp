@@ -93,12 +93,15 @@ fun SnapDividerOverlay(
                 label = "handleAlpha_${div.id}"
             )
 
-            val hitThicknessDp = 36.dp
+            val hitThicknessDp = 18.dp
             val hitThicknessPx = with(density) { hitThicknessDp.toPx() }
+            val maxHitLengthDp = 56.dp
+            val divLengthDp = with(density) { div.length.toDp() }
+            val hitLengthDp = minOf(maxHitLengthDp, divLengthDp)
+            val hitLengthPx = with(density) { hitLengthDp.toPx() }
+            val pillLengthDp = minOf(48.dp, hitLengthDp - 6.dp).coerceAtLeast(16.dp)
 
             if (div.orientation == DividerOrientation.VERTICAL) {
-                val handleHeightDp = with(density) { div.length.toDp() }
-
                 Box(
                     modifier = Modifier
                         .offset {
@@ -106,10 +109,11 @@ fun SnapDividerOverlay(
                                 if (isResetAnimating) animRatio.value else if (isDragging) currentLiveRatio else currentDiv.currentRatio
                             val handleX = (effRatio * viewportWidth).roundToInt()
                             val handleLeftPx = handleX - (hitThicknessPx / 2f).toInt()
-                            IntOffset(handleLeftPx, currentDiv.y)
+                            val centerYPx = currentDiv.y + ((currentDiv.length - hitLengthPx) / 2f).toInt()
+                            IntOffset(handleLeftPx, centerYPx)
                         }
                         .width(hitThicknessDp)
-                        .height(handleHeightDp)
+                        .height(hitLengthDp)
                         .hoverable(interactionSource = interactionSource)
                         .pointerInput(div.id, viewportWidth) {
                             detectTapGestures(
@@ -205,7 +209,7 @@ fun SnapDividerOverlay(
                         Box(
                             modifier = Modifier
                                 .width(5.dp)
-                                .height(48.dp)
+                                .height(pillLengthDp)
                                 .alpha(animatedAlpha)
                                 .shadow(4.dp, RoundedCornerShape(3.dp))
                                 .clip(RoundedCornerShape(3.dp))
@@ -214,8 +218,6 @@ fun SnapDividerOverlay(
                     }
                 }
             } else {
-                val handleWidthDp = with(density) { div.length.toDp() }
-
                 Box(
                     modifier = Modifier
                         .offset {
@@ -223,9 +225,10 @@ fun SnapDividerOverlay(
                                 if (isResetAnimating) animRatio.value else if (isDragging) currentLiveRatio else currentDiv.currentRatio
                             val handleY = (effRatio * viewportHeight).roundToInt()
                             val handleTopPx = handleY - (hitThicknessPx / 2f).toInt()
-                            IntOffset(currentDiv.x, handleTopPx)
+                            val centerXPx = currentDiv.x + ((currentDiv.length - hitLengthPx) / 2f).toInt()
+                            IntOffset(centerXPx, handleTopPx)
                         }
-                        .width(handleWidthDp)
+                        .width(hitLengthDp)
                         .height(hitThicknessDp)
                         .hoverable(interactionSource = interactionSource)
                         .pointerInput(div.id, viewportHeight) {
@@ -322,7 +325,7 @@ fun SnapDividerOverlay(
                         Box(
                             modifier = Modifier
                                 .height(5.dp)
-                                .width(48.dp)
+                                .width(pillLengthDp)
                                 .alpha(animatedAlpha)
                                 .shadow(4.dp, RoundedCornerShape(3.dp))
                                 .clip(RoundedCornerShape(3.dp))

@@ -38,6 +38,19 @@ class DesktopConfigGeneratorTest {
     }
 
     @Test
+    fun `test generateOpenboxConfig does not contain Client or Frame mouse binds to protect direct touch gestures`() {
+        val singleConfig = DesktopConfigGenerator.generateOpenboxConfig(snapLayoutActive = false)
+        assertFalse(singleConfig.contains("<context name=\"Client\">"))
+        assertFalse(singleConfig.contains("<context name=\"Frame\">"))
+        assertTrue(singleConfig.contains("<context name=\"Titlebar\">"))
+
+        val snapConfig = DesktopConfigGenerator.generateOpenboxConfig(snapLayoutActive = true)
+        assertFalse(snapConfig.contains("<context name=\"Client\">"))
+        assertFalse(snapConfig.contains("<context name=\"Frame\">"))
+        assertTrue(snapConfig.contains("<context name=\"Titlebar\">"))
+    }
+
+    @Test
     fun `test generateGtkSettings for light and dark modes`() {
         val darkSettings = DesktopConfigGenerator.generateGtkSettings(isDark = true)
         assertTrue(darkSettings.contains("gtk-application-prefer-dark-theme = 1"))

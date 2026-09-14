@@ -19,6 +19,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import android.view.MotionEvent
+import android.widget.FrameLayout
 import kotlinx.coroutines.isActive
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -135,6 +137,7 @@ fun CanvasScreen(
 
                 val liveTitle by activity.sessionManager.documentTitle.collectAsState()
                 val activePromptTitle by activity.sessionManager.activePromptTitle.collectAsState()
+                val isModalOrDialogOpen by activity.sessionManager.isModalOrDialogOpenFlow.collectAsState()
                 val openWindows by activity.sessionManager.openWindows.collectAsState(initial = emptyList())
                 val windowPreviewCache = viewModel.windowPreviewCache
                 var transitionOutgoingBitmap by viewModel.transitionOutgoingBitmap
@@ -942,6 +945,48 @@ fun CanvasScreen(
                             onLorieViewReady = { lorieView ->
                                 activity.activeLorieView = lorieView
                                 activity.setupDragAndDropListener(lorieView)
+                                (lorieView.parent as? FrameLayout)?.let { frameLayout ->
+                                    frameLayout.setOnTouchListener { _, event ->
+                                        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                                            frameLayout.requestUnbufferedDispatch(event)
+                                            val currentMode = snapLayoutManager.activeMode.takeIf { it != SnapLayoutMode.SINGLE }
+                                                ?: viewModel.activeSnapMode.value
+                                            val currentWindows = activity.sessionManager.openWindows.value
+                                            val isTransition = viewModel.isSwitchTransitionActive.value
+                                            val isSnapAssist = viewModel.showSnapAssistHost.value
+                                            val isSwitcher = viewModel.showWindowSwitcherGallery.value
+                                            val isDialog = activity.sessionManager.isModalOrDialogOpenFlow.value
+                                            val isPrompt = activity.sessionManager.activePromptTitle.value != null
+                                            if (currentMode != SnapLayoutMode.SINGLE &&
+                                                currentMode != SnapLayoutMode.UNLOCKED &&
+                                                currentWindows.size > 1 &&
+                                                !isTransition &&
+                                                !isSnapAssist &&
+                                                !isSwitcher &&
+                                                !isDialog &&
+                                                !isPrompt &&
+                                                activity.isSupervisorInitialized()
+                                            ) {
+                                                val vpW = lorieView.width.takeIf { it > 0 } ?: frameLayout.width
+                                                val vpH = lorieView.height.takeIf { it > 0 } ?: frameLayout.height
+                                                if (vpW > 0 && vpH > 0) {
+                                                    val assignments = snapLayoutManager.buildSnapAssignments(vpW, vpH, currentWindows)
+                                                    val hit = assignments.find { a ->
+                                                        event.x >= a.x.toFloat() && event.x < (a.x + a.width).toFloat() &&
+                                                        event.y >= a.y.toFloat() && event.y < (a.y + a.height).toFloat()
+                                                    }
+                                                    val currentActiveId = currentWindows.find { it.isActive }?.id
+                                                    if (hit != null && hit.windowId != currentActiveId) {
+                                                        activity.lifecycleScope.launch(Dispatchers.IO) {
+                                                            activity.sessionManager.switchToWindow(hit.windowId)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        activity.inputHandler?.handleTouchEvent(frameLayout, lorieView, event) ?: false
+                                    }
+                                }
                                 activity.sessionManager.startSession(lorieView, targetPath, openPreferences)
                             },
                             onInputHandlerReady = { handler ->
@@ -1034,7 +1079,15 @@ fun CanvasScreen(
                         }
 
                         // Snap Divider Overlay (Real-time draggable resize handlebars along snap borders)
-                        if (activeSnapMode != SnapLayoutMode.SINGLE && activeSnapMode != SnapLayoutMode.UNLOCKED && !showSnapAssistHost) {
+                        val isOverlayOrDialogBlocking = isModalOrDialogOpen ||
+                            (activePromptTitle != null) ||
+                            showEmergencyForceCloseDialog ||
+                            showImageSourceDialog ||
+                            showWindowSwitcherGallery ||
+                            showSnapAssistHost ||
+                            isSwitchTransitionActive
+
+                        if (activeSnapMode != SnapLayoutMode.SINGLE && activeSnapMode != SnapLayoutMode.UNLOCKED && !isOverlayOrDialogBlocking) {
                             val vpW = activity.activeLorieView?.width?.takeIf { it > 0 } ?: canvasWidthPx.toInt()
                             val vpH = activity.activeLorieView?.height?.takeIf { it > 0 } ?: canvasHeightPx.toInt()
                             Box(

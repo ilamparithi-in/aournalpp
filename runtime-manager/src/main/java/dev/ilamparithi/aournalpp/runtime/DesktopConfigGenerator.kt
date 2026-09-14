@@ -213,26 +213,6 @@ object DesktopConfigGenerator {
         <action name="Move"/>
       </mousebind>
     </context>
-    <context name="Client">
-      <mousebind button="Left" action="Press">
-        <action name="Focus"/>
-        <action name="Raise"/>
-      </mousebind>
-      <mousebind button="Middle" action="Press">
-        <action name="Focus"/>
-        <action name="Raise"/>
-      </mousebind>
-      <mousebind button="Right" action="Press">
-        <action name="Focus"/>
-        <action name="Raise"/>
-      </mousebind>
-    </context>
-    <context name="Frame">
-      <mousebind button="Left" action="Press">
-        <action name="Focus"/>
-        <action name="Raise"/>
-      </mousebind>
-    </context>
   </mouse>
   <applications>
     <!-- Always center small popup dialogs and customize toolbar window -->
