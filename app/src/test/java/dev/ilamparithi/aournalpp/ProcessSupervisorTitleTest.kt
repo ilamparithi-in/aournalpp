@@ -87,4 +87,32 @@ class ProcessSupervisorTitleTest {
         val result3 = ProcessSupervisor.sanitizeWindowTitle("Export_Settings.xopp - Xournal++")
         assertEquals("Export_Settings.xopp", result3)
     }
+
+    @Test
+    fun `cleanNoteTitle strips asterisks and application suffixes cleanly`() {
+        assertEquals("MyNotes.xopp", ProcessSupervisor.cleanNoteTitle("*MyNotes.xopp - Xournal++"))
+        assertEquals("MyNotes.xopp", ProcessSupervisor.cleanNoteTitle("MyNotes.xopp * - Xournal++"))
+        assertEquals("MyNotes.xopp", ProcessSupervisor.cleanNoteTitle("*MyNotes.xopp [autosaved] - Xournal++"))
+        assertEquals("Lecture Note", ProcessSupervisor.cleanNoteTitle("*Lecture Note - Xournal++"))
+    }
+
+    @Test
+    fun `resolveNoteFile locates note files regardless of asterisk or extension variations`() {
+        val tempDir = java.nio.file.Files.createTempDirectory("note_test").toFile()
+        try {
+            val testFile = java.io.File(tempDir, "2026-09-08-Note-14-14.xopp")
+            testFile.writeText("test content")
+
+            val resolvedFromDirtyTitle = ProcessSupervisor.resolveNoteFile(tempDir, "*2026-09-08-Note-14-14.xopp - Xournal++")
+            assertEquals(testFile.absolutePath, resolvedFromDirtyTitle?.absolutePath)
+
+            val resolvedFromCleanTitle = ProcessSupervisor.resolveNoteFile(tempDir, "2026-09-08-Note-14-14.xopp")
+            assertEquals(testFile.absolutePath, resolvedFromCleanTitle?.absolutePath)
+
+            val resolvedFromNoExt = ProcessSupervisor.resolveNoteFile(tempDir, "*2026-09-08-Note-14-14")
+            assertEquals(testFile.absolutePath, resolvedFromNoExt?.absolutePath)
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
 }

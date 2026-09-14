@@ -80,7 +80,7 @@
             android:taskAffinity="dev.ilamparithi.aournalpp.canvas"
             android:launchMode="singleTask"
             android:resizeableActivity="true"
-            android:theme="@style/Theme.Aournal"
+            android:theme="@style/Theme.Aournal.Canvas"
             android:screenOrientation="unspecified"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|fontScale"
             android:windowSoftInputMode="stateHidden|adjustNothing"
@@ -92,6 +92,8 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="dev.ilamparithi.aournalpp.ACTION_REQUEST_BACKGROUND_CLOSE" />
+                <action android:name="dev.ilamparithi.aournalpp.ACTION_REQUEST_PARALLEL_CLOSE" />
+                <action android:name="dev.ilamparithi.aournalpp.ACTION_REQUEST_SAVE_WINDOW" />
                 <action android:name="com.termux.x11.ACTION_PREFERENCES_CHANGED" />
             </intent-filter>
         </receiver>

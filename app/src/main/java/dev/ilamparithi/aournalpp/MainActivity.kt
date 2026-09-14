@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderCopy
@@ -27,15 +28,19 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.FolderCopy
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.ui.res.stringResource
 import dev.ilamparithi.aournalpp.ui.promptWidth
 import dev.ilamparithi.aournalpp.ui.cloud.CloudSubpage
 import dev.ilamparithi.aournalpp.ui.onboarding.checkStoragePermissionGranted
 import dev.ilamparithi.aournalpp.ui.onboarding.launchStoragePermissionSettings
+import dev.ilamparithi.aournalpp.ui.workspace.ActiveWorkspacePortalScreen
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.material.icons.outlined.Gavel
 import androidx.compose.material.icons.outlined.Home
@@ -490,6 +495,7 @@ enum class AppTab(
     val filledIcon: ImageVector,
     val outlinedIcon: ImageVector
 ) {
+    WORKSPACE(R.string.tab_workspace, Icons.Filled.Dashboard, Icons.Outlined.Dashboard),
     HOME(R.string.tab_home, Icons.Filled.Home, Icons.Outlined.Home),
     FILES(R.string.tab_files, Icons.Filled.FolderCopy, Icons.Outlined.FolderCopy),
     CLOUD(R.string.tab_cloud, Icons.Filled.Cloud, Icons.Outlined.Cloud),
@@ -549,6 +555,21 @@ fun MainResponsiveAppShell(
 
     val isCanvasSessionActive by dev.ilamparithi.aournalpp.runtime.ActiveSessionTracker.activeSessionFlow(context)
         .collectAsStateWithLifecycle(initialValue = null)
+    val isSessionRunning = isCanvasSessionActive?.isRunning == true
+
+    val visibleTabs = remember(isSessionRunning) {
+        if (isSessionRunning) {
+            listOf(AppTab.WORKSPACE, AppTab.HOME, AppTab.FILES, AppTab.CLOUD, AppTab.SETTINGS, AppTab.ABOUT)
+        } else {
+            listOf(AppTab.HOME, AppTab.FILES, AppTab.CLOUD, AppTab.SETTINGS, AppTab.ABOUT)
+        }
+    }
+
+    LaunchedEffect(isSessionRunning) {
+        if (!isSessionRunning && selectedTab == AppTab.WORKSPACE.id) {
+            selectedTab = AppTab.HOME.id
+        }
+    }
 
     var isClosingSession by rememberSaveable { mutableStateOf(false) }
 
@@ -605,7 +626,9 @@ fun MainResponsiveAppShell(
     }
 
     val tabTransitionSpec: androidx.compose.animation.AnimatedContentTransitionScope<Int>.() -> androidx.compose.animation.ContentTransform = {
-        val isForward = targetState > initialState
+        val fromIndex = visibleTabs.indexOfFirst { it.id == initialState }
+        val toIndex = visibleTabs.indexOfFirst { it.id == targetState }
+        val isForward = if (fromIndex != -1 && toIndex != -1) toIndex > fromIndex else targetState > initialState
         SpringSlideTransition.createSpec<Int>(
             isForward = isForward,
             reduceAnimations = reduceAnimations,
@@ -629,16 +652,40 @@ fun MainResponsiveAppShell(
                         )
                     }
                 ) {
-                    AppTab.entries.forEach { tab ->
+                    visibleTabs.forEach { tab ->
                         val tabTitle = androidx.compose.ui.res.stringResource(tab.titleRes)
+                        val isWorkspace = tab == AppTab.WORKSPACE
+                        val windowCount = isCanvasSessionActive?.openWindowCount ?: 1
                         NavigationRailItem(
                             selected = selectedTab == tab.id,
                             onClick = { onTabSelect(tab.id) },
                             icon = {
-                                Icon(
-                                    imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
-                                    contentDescription = tabTitle
-                                )
+                                if (isWorkspace && isSessionRunning) {
+                                    BadgedBox(
+                                        badge = {
+                                            Badge(
+                                                containerColor = MaterialTheme.colorScheme.primary,
+                                                contentColor = MaterialTheme.colorScheme.onPrimary
+                                            ) {
+                                                Text(
+                                                    text = if (windowCount > 9) "9+" else windowCount.coerceAtLeast(1).toString(),
+                                                    style = MaterialTheme.typography.labelSmall
+                                                )
+                                            }
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
+                                            contentDescription = tabTitle,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                } else {
+                                    Icon(
+                                        imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
+                                        contentDescription = tabTitle
+                                    )
+                                }
                             },
                             label = {
                                 Text(
@@ -646,7 +693,8 @@ fun MainResponsiveAppShell(
                                     textAlign = TextAlign.Center,
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
-                                    fontWeight = if (selectedTab == tab.id) FontWeight.Bold else FontWeight.Normal
+                                    fontWeight = if (selectedTab == tab.id) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isWorkspace && isSessionRunning && selectedTab != tab.id) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Unspecified
                                 )
                             }
                         )
@@ -677,16 +725,40 @@ fun MainResponsiveAppShell(
                     NavigationBar(
                         containerColor = MaterialTheme.colorScheme.surface
                     ) {
-                        AppTab.entries.forEach { tab ->
+                        visibleTabs.forEach { tab ->
                             val tabTitle = androidx.compose.ui.res.stringResource(tab.titleRes)
+                            val isWorkspace = tab == AppTab.WORKSPACE
+                            val windowCount = isCanvasSessionActive?.openWindowCount ?: 1
                             NavigationBarItem(
                                 selected = selectedTab == tab.id,
                                 onClick = { onTabSelect(tab.id) },
                                 icon = {
-                                    Icon(
-                                        imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
-                                        contentDescription = tabTitle
-                                    )
+                                    if (isWorkspace && isSessionRunning) {
+                                        BadgedBox(
+                                            badge = {
+                                                Badge(
+                                                    containerColor = MaterialTheme.colorScheme.primary,
+                                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                                ) {
+                                                    Text(
+                                                        text = if (windowCount > 9) "9+" else windowCount.coerceAtLeast(1).toString(),
+                                                        style = MaterialTheme.typography.labelSmall
+                                                    )
+                                                }
+                                            }
+                                        ) {
+                                            Icon(
+                                                imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
+                                                contentDescription = tabTitle,
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    } else {
+                                        Icon(
+                                            imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
+                                            contentDescription = tabTitle
+                                        )
+                                    }
                                 },
                                 label = {
                                     Text(
@@ -694,7 +766,8 @@ fun MainResponsiveAppShell(
                                         textAlign = TextAlign.Center,
                                         maxLines = 2,
                                         overflow = TextOverflow.Ellipsis,
-                                        fontWeight = if (selectedTab == tab.id) FontWeight.Bold else FontWeight.Normal
+                                        fontWeight = if (selectedTab == tab.id) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isWorkspace && isSessionRunning && selectedTab != tab.id) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Unspecified
                                     )
                                 }
                             )
@@ -768,6 +841,9 @@ private fun RenderTabContent(
         AppTab.FILES.id -> DocumentHubScreen(
             onNavigateToSettings = { onTabSelect(AppTab.SETTINGS.id) },
             onNavigateToLicenses = { onTabSelect(AppTab.ABOUT.id) }
+        )
+        AppTab.WORKSPACE.id -> ActiveWorkspacePortalScreen(
+            onNavigateHome = { onTabSelect(AppTab.HOME.id) }
         )
         AppTab.CLOUD.id -> CloudScreen(
             initialSubpage = targetCloudSubpage ?: CloudSubpage.OVERVIEW,

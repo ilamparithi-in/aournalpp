@@ -1,8 +1,12 @@
 package dev.ilamparithi.aournalpp
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import androidx.core.graphics.createBitmap
+import dev.ilamparithi.aournalpp.runtime.ActiveWorkspaceTracker
+import dev.ilamparithi.aournalpp.utils.WindowPreviewManager
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
@@ -60,12 +64,72 @@ class CanvasActivity : ComponentActivity() {
         const val EXTRA_OPEN_PREFERENCES = "dev.ilamparithi.aournalpp.extra.OPEN_PREFERENCES"
         const val EXTRA_OPEN_PREFS_ALIAS = "EXTRA_OPEN_PREFERENCES"
         const val EXTRA_TRIGGER_APP_EXIT = "dev.ilamparithi.aournalpp.extra.TRIGGER_APP_EXIT"
+        const val EXTRA_TARGET_WINDOW_ID = "dev.ilamparithi.aournalpp.extra.TARGET_WINDOW_ID"
+        const val EXTRA_ENTRY_SNAPSHOT_PATH = "dev.ilamparithi.aournalpp.extra.ENTRY_SNAPSHOT_PATH"
 
         @Volatile
         private var instance: CanvasActivity? = null
 
         fun handleBackgroundCloseRequest() {
             instance?.requestBackgroundClose()
+        }
+
+        fun executeParallelCloseFromReceiver(context: Context) {
+            val inst = instance
+            if (inst != null) {
+                inst.sessionManager.initiateParallelClose(
+                    onAllClosed = {
+                        inst.sessionManager.stopSession()
+                        inst.runOnUiThread {
+                            inst.sendBroadcast(Intent("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED").setPackage(inst.packageName))
+                            inst.finish()
+                        }
+                    },
+                    onConflictDetected = { noteName, targetWid ->
+                        inst.runOnUiThread {
+                            val bringToFront = Intent(inst, CanvasActivity::class.java).apply {
+                                putExtra(EXTRA_TARGET_WINDOW_ID, targetWid)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                            }
+                            inst.startActivity(bringToFront)
+                        }
+                        val conflictBroadcast = Intent(CanvasCommandReceiver.ACTION_PARALLEL_CLOSE_CONFLICT).apply {
+                            setPackage(inst.packageName)
+                            putExtra("conflicting_note", noteName)
+                            putExtra("target_wid", targetWid)
+                        }
+                        inst.sendBroadcast(conflictBroadcast)
+                    },
+                    onPromptBlocking = {
+                        inst.runOnUiThread {
+                            val bringToFront = Intent(inst, CanvasActivity::class.java).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                            }
+                            inst.startActivity(bringToFront)
+                        }
+                        val blockingBroadcast = Intent(CanvasCommandReceiver.ACTION_PARALLEL_CLOSE_BLOCKING).apply {
+                            setPackage(inst.packageName)
+                        }
+                        inst.sendBroadcast(blockingBroadcast)
+                    }
+                )
+            } else {
+                context.sendBroadcast(Intent("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED").setPackage(context.packageName))
+            }
+        }
+
+        fun executeSaveWindowFromReceiver(context: Context, targetWindowId: String) {
+            val inst = instance
+            if (inst != null && inst.isSupervisorInitialized() && inst.sessionManager.isSessionRunning) {
+                inst.saveWindowForShare(targetWindowId)
+            } else {
+                val failedBroadcast = Intent(CanvasCommandReceiver.ACTION_SAVE_WINDOW_UNABLE_TO_SEND).apply {
+                    setPackage(context.packageName)
+                    putExtra("target_window_id", targetWindowId)
+                    putExtra("reason", "Canvas session not running")
+                }
+                context.sendBroadcast(failedBroadcast)
+            }
         }
 
         fun notifyPreferenceChanged(key: String) {
@@ -84,6 +148,39 @@ class CanvasActivity : ComponentActivity() {
         preferenceUpdateVersionState.intValue++
     }
 
+    override fun onPause() {
+        super.onPause()
+        activeLorieView?.let { view ->
+            if (view.width > 0 && view.height > 0 && view.holder.surface?.isValid == true) {
+                try {
+                    val bmp = createBitmap(view.width, view.height)
+                    PixelCopy.request(view, bmp, { res ->
+                        if (res == PixelCopy.SUCCESS) {
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                val openWins = supervisor.queryOpenWindows()
+                                val activeWin = openWins.firstOrNull { it.isActive } ?: openWins.firstOrNull()
+                                if (activeWin != null) {
+                                    WindowPreviewManager.savePreview(env.tmpDir, activeWin.id, bmp)
+                                }
+                                for (win in openWins) {
+                                    if (openWins.size == 1) {
+                                        WindowPreviewManager.savePreview(env.tmpDir, win.id, bmp)
+                                    }
+                                }
+                                WindowPreviewManager.saveStageComposite(env.tmpDir, bmp)
+                                ActiveWorkspaceTracker.getWorkspaceState(env.tmpDir)?.let { state ->
+                                    ActiveWorkspaceTracker.setWorkspaceState(env.tmpDir, state.copy(previewTimestamp = System.currentTimeMillis()))
+                                }
+                            }
+                        }
+                    }, Handler(Looper.getMainLooper()))
+                } catch (e: Exception) {
+                    Log.w("CanvasActivity", "Failed to capture preview in onPause", e)
+                }
+            }
+        }
+    }
+
     internal lateinit var env: LinuxEnvironment
     internal lateinit var supervisor: ProcessSupervisor
     fun isSupervisorInitialized(): Boolean = ::supervisor.isInitialized
@@ -95,6 +192,7 @@ class CanvasActivity : ComponentActivity() {
 
     internal val showEmergencyForceCloseDialogState = mutableStateOf(false)
     internal val isKeyboardOpenState = mutableStateOf(false)
+    internal val entrySnapshotPathState = mutableStateOf<String?>(null)
     private val backPressTimestamps = mutableListOf<Long>()
 
     private var cameraTempFile: File? = null
@@ -124,6 +222,14 @@ class CanvasActivity : ComponentActivity() {
         instance = this
         bindMainProcessBridge()
         enableEdgeToEdge()
+
+        if (Build.VERSION.SDK_INT >= 34) {
+            overrideActivityTransition(Activity.OVERRIDE_TRANSITION_OPEN, 0, 0)
+            overrideActivityTransition(Activity.OVERRIDE_TRANSITION_CLOSE, 0, 0)
+        } else {
+            @Suppress("DEPRECATION")
+            overridePendingTransition(0, 0)
+        }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -201,6 +307,14 @@ class CanvasActivity : ComponentActivity() {
             supervisor = supervisor,
             scope = lifecycleScope
         )
+        sessionManager.shortcutInjector = { shortcut ->
+            when (shortcut) {
+                "ctrl+q" -> injectCtrlQDirect()
+                "ctrl+s" -> injectKeyboardShortcut(KeyEvent.KEYCODE_S, "ctrl+s")
+                "ctrl+v" -> injectKeyboardShortcut(KeyEvent.KEYCODE_V, "ctrl+v")
+                "ctrl+comma" -> injectKeyboardShortcut(KeyEvent.KEYCODE_COMMA, "ctrl+comma")
+            }
+        }
 
         // Automatically finish session and return to MainActivity when Xournal++ terminates
         sessionManager.setOnProcessExitListener {
@@ -243,6 +357,8 @@ class CanvasActivity : ComponentActivity() {
         if (intent.getBooleanExtra(EXTRA_TRIGGER_APP_EXIT, false)) {
             handleExitRequest()
         }
+
+        entrySnapshotPathState.value = intent.getStringExtra(EXTRA_ENTRY_SNAPSHOT_PATH)
 
         setContent {
             AournalTheme {
@@ -345,7 +461,7 @@ class CanvasActivity : ComponentActivity() {
                     X11Preferences.CLOSE_BEHAVIOR_FOREGROUND
                 )
                 if (behavior == X11Preferences.CLOSE_BEHAVIOR_ALL_SEQUENTIAL) {
-                    sessionManager.initiateFocusAwareSequentialClose(
+                    sessionManager.initiateParallelClose(
                         onAllClosed = {
                             runOnUiThread {
                                 sessionManager.stopSession()
@@ -356,15 +472,22 @@ class CanvasActivity : ComponentActivity() {
                                 finish()
                             }
                         },
-                        onAborted = {
-                            Toast.makeText(this@CanvasActivity, "Exit cancelled", Toast.LENGTH_SHORT).show()
+                        onConflictDetected = { noteName, targetWid ->
+                            Toast.makeText(this@CanvasActivity, getString(R.string.toast_conflict_detected, noteName), Toast.LENGTH_LONG).show()
+                            supervisor.activateWindow(targetWid)
                         },
                         onPromptBlocking = {
                             Toast.makeText(this@CanvasActivity, "Save or discard changes to exit", Toast.LENGTH_SHORT).show()
                         }
                     )
                 } else {
-                    injectCtrlQDirect()
+                    val openWins = supervisor.queryOpenWindows()
+                    val activeWin = openWins.find { it.isActive } ?: openWins.firstOrNull()
+                    if (activeWin != null) {
+                        supervisor.closeWindow(activeWin.id)
+                    } else {
+                        injectKeyboardShortcut(KeyEvent.KEYCODE_W, "ctrl+w")
+                    }
                     delay(350.milliseconds)
                     if (sessionManager.isModalOrDialogOpen()) {
                         Toast.makeText(this@CanvasActivity, "Save or discard changes to exit", Toast.LENGTH_SHORT).show()
@@ -393,6 +516,192 @@ class CanvasActivity : ComponentActivity() {
 
     internal fun injectCtrlQDirect() {
         injectKeyboardShortcut(KeyEvent.KEYCODE_Q, "ctrl+q")
+    }
+
+    fun saveWindowForShare(targetWindowId: String) {
+        val lorie = activeLorieView
+        if (lorie == null || !sessionManager.isSessionRunning) {
+            Log.w("CanvasActivity", "Cannot save window: lorieView is null or session not running")
+            dispatchSaveUnableToSend(targetWindowId, "Canvas session unavailable")
+            return
+        }
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            // 1. Remember the currently active window before attempting to save
+            val currentWins = supervisor.queryOpenWindows()
+            val originalActiveWindow = currentWins.find { it.isActive } ?: currentWins.firstOrNull()
+            val originalActiveWid = originalActiveWindow?.id
+
+            // 2. Locate target window
+            var targetWin = currentWins.find { it.id == targetWindowId }
+            if (targetWin == null) {
+                delay(100.milliseconds)
+                targetWin = supervisor.queryOpenWindows().find { it.id == targetWindowId }
+            }
+            if (targetWin == null) {
+                Log.w("CanvasActivity", "Target window $targetWindowId not found")
+                dispatchSaveUnableToSend(targetWindowId, "Window not found")
+                return@launch
+            }
+
+            // If it's an unnamed new note, it will pop up a GTK "Save As" file chooser dialog
+            val cleanTitle = ProcessSupervisor.cleanNoteTitle(targetWin.title)
+            val cleanNoExt = cleanTitle.removeSuffix(".xopp").removeSuffix(".pdf").removeSuffix(".xoj").trim()
+            if (cleanTitle.isBlank() || cleanNoExt.equals("New Note", ignoreCase = true) ||
+                cleanNoExt.equals("Unsaved Document", ignoreCase = true) ||
+                cleanNoExt.equals("Untitled", ignoreCase = true)) {
+                Log.i("CanvasActivity", "Window $targetWindowId is an unsaved new note; requires manual save")
+                dispatchSaveUnableToSend(targetWindowId, "New note requires saving location")
+                return@launch
+            }
+
+            // Check if any modal dialog is already open on the screen
+            val existingDialogs = supervisor.getVisibleXournalDialogWindowIds()
+            if (existingDialogs.isNotEmpty()) {
+                Log.i("CanvasActivity", "Dialog already blocking on screen")
+                dispatchSaveUnableToSend(targetWindowId, "Dialog is blocking")
+                return@launch
+            }
+
+            // 3. Temporarily focus the target window to receive input
+            val activated = supervisor.activateWindow(targetWindowId)
+            if (!activated) {
+                Log.w("CanvasActivity", "Failed to activate window $targetWindowId for save")
+                dispatchSaveUnableToSend(targetWindowId, "Failed to focus window")
+                return@launch
+            }
+
+            delay(100.milliseconds)
+
+            val state = ActiveWorkspaceTracker.getWorkspaceState(env.tmpDir)
+            val entry = state?.windows?.find { it.id == targetWindowId }
+            val entryPath = entry?.filePath
+            var targetFile: File? = if (!entryPath.isNullOrBlank() && File(entryPath).exists()) {
+                File(entryPath)
+            } else {
+                ProcessSupervisor.resolveNoteFile(env.getNotesDirectory(), targetWin.title)
+            }
+            val prevModTime = targetFile?.lastModified() ?: 0L
+            val prevLength = targetFile?.length() ?: 0L
+
+            // 4. Inject Ctrl+S using the floating toolbar pattern (direct LorieView input)
+            try {
+                withContext(Dispatchers.Main) {
+                    lorie.requestFocus()
+                    lorie.sendKeyEvent(0, KeyEvent.KEYCODE_CTRL_LEFT, true)
+                }
+                delay(40.milliseconds)
+                withContext(Dispatchers.Main) {
+                    lorie.sendKeyEvent(0, KeyEvent.KEYCODE_S, true)
+                    lorie.sendKeyEvent(0, KeyEvent.KEYCODE_S, false)
+                }
+                delay(40.milliseconds)
+            } finally {
+                withContext(Dispatchers.Main) {
+                    lorie.sendKeyEvent(0, KeyEvent.KEYCODE_CTRL_LEFT, false)
+                }
+            }
+
+            // 5. Poll up to 2.5 seconds (in 80ms intervals) to verify save completion or dialog popup
+            var saveConfirmed = false
+            var dialogBlocked = false
+            for (attempt in 1..30) {
+                delay(80.milliseconds)
+
+                val dialogsAfter = supervisor.getVisibleXournalDialogWindowIds()
+                if (dialogsAfter.isNotEmpty()) {
+                    Log.w("CanvasActivity", "Dialog popped up after saving window $targetWindowId: $dialogsAfter")
+                    dialogBlocked = true
+                    break
+                }
+
+                if (targetFile == null || !targetFile.exists()) {
+                    targetFile = ProcessSupervisor.resolveNoteFile(env.getNotesDirectory(), targetWin.title)
+                }
+
+                val currentModTime = targetFile?.lastModified() ?: 0L
+                val currentLength = targetFile?.length() ?: 0L
+                val fileUpdated = targetFile != null && targetFile.exists() &&
+                        (currentModTime > prevModTime || (prevModTime == 0L && currentLength > 0L))
+
+                if (fileUpdated) {
+                    saveConfirmed = true
+                    break
+                }
+
+                val directTitle = supervisor.getWindowName(targetWindowId, forceRefresh = true)
+                val isTitleClean = directTitle.isNotBlank() && !directTitle.startsWith("*") && !directTitle.contains("*")
+                if (isTitleClean) {
+                    saveConfirmed = true
+                    break
+                }
+            }
+
+            if (dialogBlocked) {
+                dispatchSaveUnableToSend(targetWindowId, "Confirmation dialog requires user attention")
+                return@launch
+            }
+
+            if (!saveConfirmed) {
+                Log.w("CanvasActivity", "Window $targetWindowId is still dirty after save attempt")
+                dispatchSaveUnableToSend(targetWindowId, "Save could not be verified")
+                return@launch
+            }
+
+            // 6. Restore original active window configuration if it differed
+            if (originalActiveWid != null && originalActiveWid != targetWindowId) {
+                Log.i("CanvasActivity", "Restoring original active window configuration: $originalActiveWid")
+                supervisor.activateWindow(originalActiveWid)
+                delay(50.milliseconds)
+            }
+
+            // 7. Update ActiveWorkspaceTracker state
+            val finalResolvedPath = targetFile?.absolutePath ?: entry?.filePath
+            ActiveWorkspaceTracker.getWorkspaceState(env.tmpDir)?.let { curState ->
+                val updatedWins = curState.windows.map { w ->
+                    if (w.id == targetWindowId) {
+                        w.copy(
+                            isDirty = false,
+                            filePath = finalResolvedPath ?: w.filePath,
+                            cleanTitle = cleanTitle.ifBlank { w.cleanTitle }
+                        )
+                    } else w
+                }
+                ActiveWorkspaceTracker.setWorkspaceState(
+                    env.tmpDir,
+                    curState.copy(windows = updatedWins, previewTimestamp = System.currentTimeMillis())
+                )
+            }
+
+            // 8. Dispatch success broadcast
+            dispatchSaveSuccess(targetWindowId, originalActiveWid, finalResolvedPath)
+        }
+    }
+
+    private fun dispatchSaveUnableToSend(targetWid: String, reason: String) {
+        runOnUiThread {
+            val bringToFront = Intent(this, CanvasActivity::class.java).apply {
+                putExtra(EXTRA_TARGET_WINDOW_ID, targetWid)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            }
+            startActivity(bringToFront)
+        }
+        val failedBroadcast = Intent(CanvasCommandReceiver.ACTION_SAVE_WINDOW_UNABLE_TO_SEND).apply {
+            setPackage(packageName)
+            putExtra("target_window_id", targetWid)
+            putExtra("reason", reason)
+        }
+        sendBroadcast(failedBroadcast)
+    }
+
+    private fun dispatchSaveSuccess(targetWid: String, originalFocusWid: String?, filePath: String?) {
+        val successBroadcast = Intent(CanvasCommandReceiver.ACTION_SAVE_WINDOW_SUCCESS).apply {
+            setPackage(packageName)
+            putExtra("target_window_id", targetWid)
+            if (originalFocusWid != null) putExtra("original_focus_wid", originalFocusWid)
+            if (!filePath.isNullOrBlank()) putExtra("file_path", filePath)
+        }
+        sendBroadcast(successBroadcast)
     }
 
     internal fun setupDragAndDropListener(view: LorieView) {
@@ -670,7 +979,37 @@ class CanvasActivity : ComponentActivity() {
             lifecycleScope.launch(Dispatchers.IO) {
                 DocumentRepository.getInstance(this@CanvasActivity).recordNoteOpened(targetPath)
             }
+            activeLorieView?.let { view ->
+                if (view.width > 0 && view.height > 0 && view.holder.surface?.isValid == true) {
+                    try {
+                        val bmp = createBitmap(view.width, view.height)
+                        PixelCopy.request(view, bmp, { res ->
+                            if (res == PixelCopy.SUCCESS) {
+                                lifecycleScope.launch(Dispatchers.IO) {
+                                    val currentWins = supervisor.queryOpenWindows()
+                                    val activeWin = currentWins.firstOrNull { it.isActive } ?: currentWins.firstOrNull()
+                                    if (activeWin != null) {
+                                        WindowPreviewManager.savePreview(env.tmpDir, activeWin.id, bmp)
+                                    }
+                                }
+                            }
+                        }, Handler(Looper.getMainLooper()))
+                    } catch (_: Exception) {}
+                }
+            }
             sessionManager.openNoteInNewWindow(targetPath)
+        }
+
+        val targetWindowId = intent.getStringExtra(EXTRA_TARGET_WINDOW_ID)
+        if (!targetWindowId.isNullOrBlank()) {
+            lifecycleScope.launch(Dispatchers.IO) {
+                supervisor.activateWindow(targetWindowId)
+            }
+        }
+
+        val newSnapshot = intent.getStringExtra(EXTRA_ENTRY_SNAPSHOT_PATH)
+        if (!newSnapshot.isNullOrBlank()) {
+            entrySnapshotPathState.value = newSnapshot
         }
     }
 

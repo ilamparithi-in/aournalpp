@@ -245,6 +245,13 @@ fun TemporarySaveCard(
     }
 }
 
+internal data class TitleDisplayState(
+    val cleanTitle: String,
+    val icon: ImageVector,
+    val index: Int,
+    val windowId: String = ""
+)
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FloatingToolbarOverlay(
@@ -259,6 +266,7 @@ fun FloatingToolbarOverlay(
     displayTitle: String,
     windowIcon: ImageVector,
     windowIndex: Int = 0,
+    windowId: String = "",
     startCollapsed: Boolean,
     pinButtonMode: Boolean,
     autoCollapseTimeoutMs: Int,
@@ -626,17 +634,21 @@ fun FloatingToolbarOverlay(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     AnimatedContent(
-                                        targetState = Triple(cleanDisplayTitle, windowIcon, windowIndex),
+                                        targetState = TitleDisplayState(cleanDisplayTitle, windowIcon, windowIndex, windowId),
                                         transitionSpec = {
-                                            val isForward = targetState.third >= initialState.third
-                                            SpringSlideTransition.createSpec<Triple<String, ImageVector, Int>>(
-                                                isForward = isForward,
-                                                reduceAnimations = reduceMotion
-                                            )(this)
+                                            if (targetState.cleanTitle == initialState.cleanTitle) {
+                                                EnterTransition.None togetherWith ExitTransition.None
+                                            } else {
+                                                val isForward = targetState.index >= initialState.index
+                                                SpringSlideTransition.createSpec<TitleDisplayState>(
+                                                    isForward = isForward,
+                                                    reduceAnimations = reduceMotion
+                                                )(this)
+                                            }
                                         },
                                         label = "windowTitleSwitchTransition"
-                                    ) { (currentCleanTitle, currentIcon, _) ->
-                                        val titleText = if (isDirty) "*$currentCleanTitle" else currentCleanTitle
+                                    ) { targetTitleState ->
+                                        val titleText = if (isDirty) "*${targetTitleState.cleanTitle}" else targetTitleState.cleanTitle
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.Center,
@@ -645,7 +657,7 @@ fun FloatingToolbarOverlay(
                                                 .padding(horizontal = 4.dp)
                                         ) {
                                             Icon(
-                                                imageVector = currentIcon,
+                                                imageVector = targetTitleState.icon,
                                                 contentDescription = null,
                                                 modifier = Modifier.size(18.dp),
                                                 tint = MaterialTheme.colorScheme.primary
@@ -1182,23 +1194,27 @@ fun FloatingToolbarOverlay(
                             val reduceMotion = LocalMotionPreferences.current.reduceAnimations
                             Box(contentAlignment = Alignment.Center) {
                                 AnimatedContent(
-                                    targetState = Triple(cleanDisplayTitle, windowIcon, windowIndex),
+                                    targetState = TitleDisplayState(cleanDisplayTitle, windowIcon, windowIndex, windowId),
                                     transitionSpec = {
-                                        val isForward = targetState.third >= initialState.third
-                                        SpringSlideTransition.createSpec<Triple<String, ImageVector, Int>>(
-                                            isForward = isForward,
-                                            reduceAnimations = reduceMotion
-                                        )(this)
+                                        if (targetState.cleanTitle == initialState.cleanTitle) {
+                                            EnterTransition.None togetherWith ExitTransition.None
+                                        } else {
+                                            val isForward = targetState.index >= initialState.index
+                                            SpringSlideTransition.createSpec<TitleDisplayState>(
+                                                isForward = isForward,
+                                                reduceAnimations = reduceMotion
+                                            )(this)
+                                        }
                                     },
                                     label = "collapsedWindowTitleSwitchTransition"
-                                ) { (currentCleanTitle, currentIcon, _) ->
-                                    val titleText = if (isDirty) "*$currentCleanTitle" else currentCleanTitle
+                                ) { targetTitleState ->
+                                    val titleText = if (isDirty) "*${targetTitleState.cleanTitle}" else targetTitleState.cleanTitle
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         Icon(
-                                            imageVector = currentIcon,
+                                            imageVector = targetTitleState.icon,
                                             contentDescription = null,
                                             modifier = Modifier.size(16.dp),
                                             tint = MaterialTheme.colorScheme.primary

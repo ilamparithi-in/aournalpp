@@ -459,14 +459,17 @@ fun HomeScreen(
                 addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
             }
         }
-        val options = ActivityOptionsCompat.makeClipRevealAnimation(
-            localView,
-            localView.width / 2,
-            localView.height / 2,
-            localView.width / 4,
-            localView.height / 4
-        ).toBundle()
+        val options = ActivityOptionsCompat.makeCustomAnimation(context, 0, 0).toBundle()
         context.startActivity(intent, options)
+        val activity = context as? android.app.Activity
+        if (activity != null) {
+            if (android.os.Build.VERSION.SDK_INT >= 34) {
+                activity.overrideActivityTransition(android.app.Activity.OVERRIDE_TRANSITION_OPEN, 0, 0)
+            } else {
+                @Suppress("DEPRECATION")
+                activity.overridePendingTransition(0, 0)
+            }
+        }
     }
 
     // Dynamic greeting
@@ -503,16 +506,6 @@ fun HomeScreen(
                     isWideOrLandscape = isWideOrLandscape,
                     isScrolled = isScrolled,
                     funSubhero = funSubhero,
-                    activeSession = activeSession,
-                    onReturnToActiveSession = {
-                        val intent = Intent(context, CanvasActivity::class.java).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            if (context is android.app.Activity && context.isInMultiWindowMode) {
-                                addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
-                            }
-                        }
-                        context.startActivity(intent)
-                    },
                     onSyncFinished = { message ->
                         scope.launch { snackbarHostState.showSnackbar(message) }
                     }

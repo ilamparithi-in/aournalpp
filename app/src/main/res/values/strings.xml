@@ -68,12 +68,32 @@
     <string name="tab_home">Home</string>
     <!-- Primary bottom/rail navigation tab: File manager and note browser -->
     <string name="tab_files">Files</string>
+    <!-- Dynamic bottom/rail navigation tab: Active workspace session return portal -->
+    <string name="tab_workspace">Session</string>
     <!-- Primary bottom/rail navigation tab: Cloud backup and sync subsystem -->
     <string name="tab_cloud">Cloud</string>
     <!-- Primary bottom/rail navigation tab: Application and runtime settings -->
     <string name="tab_settings">Settings</string>
     <!-- Primary bottom/rail navigation tab: Open source licenses and credits -->
     <string name="tab_about">About</string>
+
+    <!-- Active Workspace Return Portal Strings -->
+    <string name="workspace_active_session_title">Active Session</string>
+    <string name="action_save_and_close_session">Save All &amp; Close</string>
+    <string name="action_quick_export_pdf">Quick Export PDF</string>
+    <string name="toast_save_before_export">Please save \"%1$s\" before exporting</string>
+    <string name="dialog_save_before_sharing_title">Save before sharing?</string>
+    <string name="dialog_save_before_sharing_message">Do you want to save changes to \"%1$s\" before sharing?</string>
+    <string name="toast_save_unable_to_send">Unable to save note automatically. Please save in canvas.</string>
+    <string name="action_yes">Yes</string>
+    <string name="action_no">No</string>
+    <string name="toast_conflict_detected">Conflict in \"%1$s\". Opening canvas to resolve.</string>
+    <string name="toast_dialog_blocking">Action needed: please confirm open dialog in canvas.</string>
+    <string name="toast_all_saved_closed">All notes saved and closed</string>
+    <string name="stashed_windows">Background Notes</string>
+    <string name="active_session_empty">No active notes open</string>
+    <string name="action_return_to_canvas">Return to Canvas</string>
+    <string name="badge_recording_audio">REC</string>
 
     <!-- ======================================================================= -->
     <!-- Bootstrap Screen (Linux Runtime Extraction & First Run)                -->

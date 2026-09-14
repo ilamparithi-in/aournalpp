@@ -14,6 +14,12 @@ class CanvasCommandReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION_REQUEST_BACKGROUND_CLOSE = "dev.ilamparithi.aournalpp.ACTION_REQUEST_BACKGROUND_CLOSE"
+        const val ACTION_REQUEST_PARALLEL_CLOSE = "dev.ilamparithi.aournalpp.ACTION_REQUEST_PARALLEL_CLOSE"
+        const val ACTION_PARALLEL_CLOSE_CONFLICT = "dev.ilamparithi.aournalpp.ACTION_PARALLEL_CLOSE_CONFLICT"
+        const val ACTION_PARALLEL_CLOSE_BLOCKING = "dev.ilamparithi.aournalpp.ACTION_PARALLEL_CLOSE_BLOCKING"
+        const val ACTION_REQUEST_SAVE_WINDOW = "dev.ilamparithi.aournalpp.ACTION_REQUEST_SAVE_WINDOW"
+        const val ACTION_SAVE_WINDOW_SUCCESS = "dev.ilamparithi.aournalpp.ACTION_SAVE_WINDOW_SUCCESS"
+        const val ACTION_SAVE_WINDOW_UNABLE_TO_SEND = "dev.ilamparithi.aournalpp.ACTION_SAVE_WINDOW_UNABLE_TO_SEND"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -21,6 +27,15 @@ class CanvasCommandReceiver : BroadcastReceiver() {
             ACTION_REQUEST_BACKGROUND_CLOSE -> {
                 Log.i("CanvasCommandReceiver", "Received ACTION_REQUEST_BACKGROUND_CLOSE in :canvas process")
                 CanvasActivity.handleBackgroundCloseRequest()
+            }
+            ACTION_REQUEST_PARALLEL_CLOSE -> {
+                Log.i("CanvasCommandReceiver", "Received ACTION_REQUEST_PARALLEL_CLOSE in :canvas process")
+                CanvasActivity.executeParallelCloseFromReceiver(context)
+            }
+            ACTION_REQUEST_SAVE_WINDOW -> {
+                val targetWid = intent.getStringExtra("target_window_id") ?: ""
+                Log.i("CanvasCommandReceiver", "Received ACTION_REQUEST_SAVE_WINDOW in :canvas process for wid=$targetWid")
+                CanvasActivity.executeSaveWindowFromReceiver(context, targetWid)
             }
             X11Preferences.ACTION_PREFERENCES_CHANGED -> {
                 val key = intent.getStringExtra("key")

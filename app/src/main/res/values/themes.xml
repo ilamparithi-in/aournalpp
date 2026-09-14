@@ -14,4 +14,18 @@
         <!-- Customize your theme here. -->
     </style>
     <style name="Theme.Aournal" parent="Theme.Aournalpp" />
+
+    <style name="Theme.Aournal.Canvas" parent="Theme.Aournal">
+        <item name="android:windowAnimationStyle">@style/NoActivityAnimation</item>
+        <item name="android:windowDisablePreview">true</item>
+    </style>
+
+    <style name="NoActivityAnimation">
+        <item name="android:activityOpenEnterAnimation">@anim/no_anim</item>
+        <item name="android:activityOpenExitAnimation">@anim/no_anim</item>
+        <item name="android:activityCloseEnterAnimation">@anim/no_anim</item>
+        <item name="android:activityCloseExitAnimation">@anim/no_anim</item>
+        <item name="android:windowEnterAnimation">@anim/no_anim</item>
+        <item name="android:windowExitAnimation">@anim/no_anim</item>
+    </style>
 </resources>

@@ -85,23 +85,26 @@ object NoteOpenManager {
 
         val intent = Intent(context, CanvasActivity::class.java).apply {
             putExtra(CanvasActivity.EXTRA_NOTE_PATH, targetFile.absolutePath)
+            val thumbFile = ThumbnailManager.getCachedThumbnailFile(targetFile)
+            if (thumbFile != null && thumbFile.exists()) {
+                putExtra(CanvasActivity.EXTRA_ENTRY_SNAPSHOT_PATH, thumbFile.absolutePath)
+            }
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             if (context is android.app.Activity && context.isInMultiWindowMode) {
                 addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
             }
         }
 
-        if (localView != null && localView.width > 0 && localView.height > 0) {
-            val options = ActivityOptionsCompat.makeClipRevealAnimation(
-                localView,
-                localView.width / 2,
-                localView.height / 2,
-                localView.width / 4,
-                localView.height / 4
-            ).toBundle()
-            context.startActivity(intent, options)
-        } else {
-            context.startActivity(intent)
+        val options = ActivityOptionsCompat.makeCustomAnimation(context, 0, 0).toBundle()
+        context.startActivity(intent, options)
+        val activity = context as? android.app.Activity
+        if (activity != null) {
+            if (android.os.Build.VERSION.SDK_INT >= 34) {
+                activity.overrideActivityTransition(android.app.Activity.OVERRIDE_TRANSITION_OPEN, 0, 0)
+            } else {
+                @Suppress("DEPRECATION")
+                activity.overridePendingTransition(0, 0)
+            }
         }
     }
 

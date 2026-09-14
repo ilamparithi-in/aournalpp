@@ -6,6 +6,7 @@ import android.system.Os
 import android.util.Log
 import com.termux.x11.CmdEntryPoint
 import com.termux.x11.LorieView
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -14,17 +15,19 @@ import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.milliseconds
 import java.io.File
 
-class CanvasSessionManager(
+class CanvasSessionManager @JvmOverloads constructor(
     private val context: Context,
     private val env: LinuxEnvironment,
     private val supervisor: ProcessSupervisor,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val mainDispatcher: CoroutineDispatcher = Dispatchers.Main
 ) {
     companion object {
         private const val TAG = "CanvasSessionManager"
     }
 
-    private var isSessionRunning = false
+    var isSessionRunning = false
     private var isPreferencesSession = false
     private var cmdEntryPoint: CmdEntryPoint? = null
 
@@ -447,8 +450,15 @@ class CanvasSessionManager(
         }
     }
 
+    var shortcutInjector: ((String) -> Unit)? = null
+
     fun injectShortcut(shortcut: String) {
         if (!isSessionRunning) return
+        val injector = shortcutInjector
+        if (injector != null) {
+            injector(shortcut)
+            return
+        }
         scope.launch(Dispatchers.IO) {
             val xdotoolBin = env.resolveExecutable("xdotool")
             if (!xdotoolBin.exists() || !xdotoolBin.canExecute()) {
@@ -501,6 +511,106 @@ class CanvasSessionManager(
                 val newCount = supervisor.getActiveXournalCount()
                 ActiveSessionTracker.updateWindowCount(context, env, newCount)
                 ActiveSessionTracker.updateTitle(context, env, File(filePath).name)
+            }
+        }
+    }
+
+
+
+    /**
+     * Attempts to close all open X11 windows in parallel.
+     * If conflicting windows targeting the same file are detected, parallel close aborts immediately
+     * and dispatches [onConflictDetected].
+     * If a GTK "Save changes" confirmation appears, it automatically confirms the save.
+     * If a blocking file chooser ("Save As") appears or cannot be auto-confirmed, dispatches [onPromptBlocking].
+     */
+    fun initiateParallelClose(
+        onAllClosed: () -> Unit,
+        onConflictDetected: (fileName: String, targetWindowId: String) -> Unit,
+        onPromptBlocking: () -> Unit = {}
+    ) {
+        if (!isSessionRunning) {
+            onAllClosed()
+            return
+        }
+
+        scope.launch(ioDispatcher) {
+            Log.i(TAG, "Starting parallel close evaluation...")
+            // 1. Conflict Check across open windows
+            val workspaceState = ActiveWorkspaceTracker.getWorkspaceState(env.tmpDir)
+            if (workspaceState != null) {
+                val windowsWithFiles = workspaceState.windows.filter { !it.filePath.isNullOrBlank() }
+                val duplicatePath = windowsWithFiles
+                    .groupBy { it.filePath }
+                    .filter { it.value.size > 1 }
+                    .entries.firstOrNull()
+
+                if (duplicatePath != null) {
+                    val conflictingName = File(duplicatePath.key ?: "").name
+                    val targetWid = duplicatePath.value.first().id
+                    Log.w(TAG, "Conflict detected: Multiple windows open for $conflictingName")
+                    withContext(mainDispatcher) {
+                        onConflictDetected(conflictingName, targetWid)
+                    }
+                    return@launch
+                }
+            }
+
+            val windowIds = supervisor.getVisibleXournalWindowIds()
+            if (windowIds.isEmpty()) {
+                Log.i(TAG, "No visible Xournal++ windows to close.")
+                withContext(mainDispatcher) {
+                    onAllClosed()
+                }
+                return@launch
+            }
+
+            Log.i(TAG, "Dispatching parallel close signals to ${windowIds.size} windows: $windowIds")
+            for (wid in windowIds) {
+                supervisor.closeWindow(wid)
+            }
+
+            // Monitor parallel closing and handle any save confirmation dialogs automatically
+            val pollStart = System.currentTimeMillis()
+
+            while (isSessionRunning && supervisor.isXournalRunning()) {
+                delay(50.milliseconds)
+                val remainingWindows = supervisor.getVisibleXournalWindowIds()
+                if (remainingWindows.isEmpty()) {
+                    Log.i(TAG, "All windows successfully closed in parallel.")
+                    break
+                }
+
+                val dialogs = supervisor.getVisibleXournalDialogWindowIds()
+                if (dialogs.isNotEmpty()) {
+                    var handledAny = false
+                    for (diagWid in dialogs) {
+                        if (supervisor.confirmSaveDialog(diagWid)) {
+                            handledAny = true
+                            delay(120.milliseconds)
+                        }
+                    }
+                    if (!handledAny) {
+                        Log.i(TAG, "Unconfirmed dialog detected during parallel close. Requesting user input.")
+                        withContext(mainDispatcher) {
+                            onPromptBlocking()
+                        }
+                        return@launch
+                    }
+                }
+
+                if (System.currentTimeMillis() - pollStart > 3000) {
+                    Log.w(TAG, "Parallel close timeout reached. Remaining: $remainingWindows")
+                    withContext(mainDispatcher) {
+                        onPromptBlocking()
+                    }
+                    return@launch
+                }
+            }
+
+            Log.i(TAG, "Parallel close completed. Finalizing session exit.")
+            withContext(mainDispatcher) {
+                onAllClosed()
             }
         }
     }
@@ -612,6 +722,7 @@ class CanvasSessionManager(
         File(env.tmpDir, ".X0-lock").delete()
         File(env.tmpDir, ".X11-unix/X0").delete()
         ActiveSessionTracker.clearActiveSession(context, env)
+        ActiveWorkspaceTracker.clearWorkspaceState(context, env)
         try {
             context.sendBroadcast(
                 android.content.Intent("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED")

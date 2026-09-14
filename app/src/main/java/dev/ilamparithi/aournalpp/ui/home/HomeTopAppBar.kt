@@ -39,8 +39,6 @@ fun HomeTopAppBar(
     isWideOrLandscape: Boolean,
     isScrolled: Boolean,
     funSubhero: String,
-    activeSession: ActiveSessionInfo?,
-    onReturnToActiveSession: () -> Unit,
     onSyncFinished: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -92,19 +90,6 @@ fun HomeTopAppBar(
             }
         },
         actions = {
-            AppAnimatedVisibility(
-                visible = activeSession?.isRunning == true,
-                enter = fadeIn() + slideInHorizontally { it / 2 },
-                exit = fadeOut() + slideOutHorizontally { it / 2 }
-            ) {
-                activeSession?.let { session ->
-                    HomeActiveSessionBanner(
-                        sessionInfo = session,
-                        onClick = onReturnToActiveSession
-                    )
-                }
-            }
-
             QuickSyncButton(
                 onSyncFinished = onSyncFinished
             )

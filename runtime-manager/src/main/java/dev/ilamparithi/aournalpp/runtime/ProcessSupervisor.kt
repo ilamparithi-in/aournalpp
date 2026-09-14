@@ -283,6 +283,73 @@ class ProcessSupervisor(val env: LinuxEnvironment) {
         return false
     }
 
+    fun getWindowName(windowId: String, forceRefresh: Boolean = false): String {
+        if (!forceRefresh) {
+            val current = _openWindows.value.find { it.id == windowId }
+            if (current != null) return current.title
+        }
+        val xdotoolBin = env.resolveExecutable("xdotool")
+        if (xdotoolBin.exists() && xdotoolBin.canExecute()) {
+            val (code, out) = runBinary(listOf(xdotoolBin.absolutePath, "getwindowname", windowId))
+            if (code == 0 && out.isNotBlank()) {
+                val raw = out.trim()
+                val clean = sanitizeWindowTitle(raw)
+                val curWins = _openWindows.value
+                if (curWins.any { it.id == windowId }) {
+                    _openWindows.value = curWins.map { if (it.id == windowId) it.copy(title = clean) else it }
+                }
+                return raw
+            }
+        }
+        return _openWindows.value.find { it.id == windowId }?.title ?: ""
+    }
+
+    /**
+     * Automatically confirms a GTK "Save changes" confirmation dialog by activating
+     * the dialog window and injecting the default save shortcuts (Alt+S and Return).
+     * Returns true if the dialog is a confirmation dialog and was acted upon.
+     */
+    fun confirmSaveDialog(dialogWid: String): Boolean {
+        val xdotoolBin = env.resolveExecutable("xdotool")
+        if (!xdotoolBin.exists() || !xdotoolBin.canExecute()) return false
+
+        val title = getWindowName(dialogWid).lowercase()
+        // If it's a file chooser ("Save As" / "Save File"), we cannot auto-confirm without a path
+        if (title.startsWith("save file") || title.startsWith("save as") || title.startsWith("choose folder")) {
+            return false
+        }
+
+        Log.i("ProcessSupervisor", "Auto-confirming save dialog $dialogWid ('$title')...")
+        runBinary(listOf(xdotoolBin.absolutePath, "windowactivate", "--sync", dialogWid))
+        runBinary(listOf(xdotoolBin.absolutePath, "key", "--window", dialogWid, "--clearmodifiers", "alt+s"))
+        runBinary(listOf(xdotoolBin.absolutePath, "key", "--window", dialogWid, "--clearmodifiers", "Return"))
+        return true
+    }
+
+    /**
+     * Checks if audio recording is currently active by inspecting recently written
+     * audio files in the audio directory or temporary runtime directory.
+     */
+    fun isAudioRecordingActive(): Boolean {
+        val audioDir = env.getAudioDirectory()
+        val now = System.currentTimeMillis()
+        if (audioDir.exists() && audioDir.isDirectory) {
+            val recordingFile = audioDir.listFiles()?.find { file ->
+                (file.name.endsWith(".wav") || file.name.endsWith(".ogg") || file.name.endsWith(".tmp")) &&
+                        (now - file.lastModified() < 4000)
+            }
+            if (recordingFile != null) return true
+        }
+        val tmpDir = env.tmpDir
+        if (tmpDir.exists() && tmpDir.isDirectory) {
+            val recordingTmp = tmpDir.listFiles()?.find { file ->
+                file.name.contains("audio", ignoreCase = true) && (now - file.lastModified() < 4000)
+            }
+            if (recordingTmp != null) return true
+        }
+        return false
+    }
+
     fun queryOpenWindows(): List<X11WindowInfo> {
         val current = _openWindows.value
         if (current.isNotEmpty()) return current
@@ -326,11 +393,8 @@ class ProcessSupervisor(val env: LinuxEnvironment) {
                                 if (clean.isNotBlank() && clean != "Xournal++") {
                                     _documentTitle.value = clean
                                     val currentWins = _openWindows.value
-                                    if (currentWins.isNotEmpty()) {
-                                        val updated = currentWins.map { win ->
-                                            if (win.isActive) win.copy(title = clean) else win
-                                        }
-                                        _openWindows.value = updated
+                                    if (currentWins.size == 1) {
+                                        _openWindows.value = listOf(currentWins[0].copy(title = clean))
                                     }
                                 }
                             } else if (line.startsWith("DIALOGS:")) {
@@ -359,15 +423,13 @@ class ProcessSupervisor(val env: LinuxEnvironment) {
                                         windowList.add(X11WindowInfo(id = wid, title = clean, isActive = (wid == activeId)))
                                     }
                                 }
-                                _openWindows.value = windowList
-                                if (windowList.isNotEmpty()) {
-                                    val activeWin = windowList.find { it.isActive }
-                                    if (activeWin != null && activeWin.title.isNotBlank() && activeWin.title != "Xournal++") {
-                                        _documentTitle.value = activeWin.title
-                                    }
-                                } else {
+                                val activeWin = windowList.find { it.isActive }
+                                if (activeWin != null && activeWin.title.isNotBlank() && activeWin.title != "Xournal++") {
+                                    _documentTitle.value = activeWin.title
+                                } else if (windowList.isEmpty()) {
                                     _documentTitle.value = null
                                 }
+                                _openWindows.value = windowList
                             }
                             line = reader.readLine()
                         }
@@ -555,6 +617,40 @@ class ProcessSupervisor(val env: LinuxEnvironment) {
             }
 
             return if (isDirty) "*$baseName" else baseName
+        }
+
+        fun cleanNoteTitle(title: String): String {
+            return title.replace(APP_SUFFIX_REGEX, "")
+                .replace(AUTOSAVED_REGEX, "")
+                .removePrefix("*")
+                .removeSuffix("*")
+                .trim()
+        }
+
+        fun resolveNoteFile(notesDir: java.io.File, title: String): java.io.File? {
+            val clean = cleanNoteTitle(title)
+            if (clean.isBlank() || isIgnoredTitle(clean) ||
+                clean.equals("New Note", ignoreCase = true) ||
+                clean.equals("Unsaved Document", ignoreCase = true) ||
+                clean.equals("Untitled", ignoreCase = true)
+            ) {
+                return null
+            }
+            val cleanNoExt = clean.removeSuffix(".xopp").removeSuffix(".pdf").removeSuffix(".xoj").trim()
+            val candidates = listOf(
+                java.io.File(notesDir, clean),
+                java.io.File(notesDir, "$cleanNoExt.xopp"),
+                java.io.File(notesDir, "$cleanNoExt.pdf"),
+                java.io.File(notesDir, "$cleanNoExt.xoj")
+            )
+            for (cand in candidates) {
+                if (cand.exists() && cand.isFile) return cand
+            }
+            return notesDir.walkTopDown().firstOrNull {
+                it.isFile && (it.name.equals(clean, ignoreCase = true) ||
+                        it.name.equals("$cleanNoExt.xopp", ignoreCase = true) ||
+                        it.nameWithoutExtension.equals(cleanNoExt, ignoreCase = true))
+            }
         }
     }
 

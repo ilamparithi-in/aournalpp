@@ -590,12 +590,34 @@ static void evaluate_and_emit_status(Display *dpy, Window root) {
         XSelectInput(dpy, active_win, PropertyChangeMask | StructureNotifyMask);
     }
 
-    evaluate_and_emit_document_title(dpy, root, active_win);
-
     Window main_wins[64];
     Window dialog_wins[64];
     int main_count = 0, dialog_count = 0;
     query_managed_xournal_windows(dpy, root, main_wins, &main_count, dialog_wins, &dialog_count, 64);
+
+    char windows_buf[4096];
+    int offset = snprintf(windows_buf, sizeof(windows_buf), "WINDOWS:%lu|", (unsigned long)active_win);
+    for (int i = 0; i < main_count; i++) {
+        char *title = get_window_title(dpy, main_wins[i]);
+        const char *clean_title = title ? title : "Untitled";
+        int written = snprintf(windows_buf + offset, sizeof(windows_buf) - offset,
+                               "%lu:%s%s", (unsigned long)main_wins[i], clean_title,
+                               (i < main_count - 1) ? "|" : "");
+        if (title) free(title);
+        if (written > 0 && offset + written < (int)sizeof(windows_buf)) {
+            offset += written;
+        } else {
+            break;
+        }
+    }
+
+    if (strcmp(windows_buf, last_emitted_windows_buffer) != 0) {
+        snprintf(last_emitted_windows_buffer, sizeof(last_emitted_windows_buffer), "%s", windows_buf);
+        printf("%s\n", windows_buf);
+        fflush(stdout);
+    }
+
+    evaluate_and_emit_document_title(dpy, root, active_win);
 
     if (dialog_count != last_emitted_dialog_count) {
         last_emitted_dialog_count = dialog_count;
@@ -643,28 +665,6 @@ static void evaluate_and_emit_status(Display *dpy, Window root) {
     if (strcmp(current_prompt, last_emitted_prompt) != 0) {
         snprintf(last_emitted_prompt, sizeof(last_emitted_prompt), "%s", current_prompt);
         printf("PROMPT:%s\n", current_prompt);
-        fflush(stdout);
-    }
-
-    char windows_buf[4096];
-    int offset = snprintf(windows_buf, sizeof(windows_buf), "WINDOWS:%lu|", (unsigned long)active_win);
-    for (int i = 0; i < main_count; i++) {
-        char *title = get_window_title(dpy, main_wins[i]);
-        const char *clean_title = title ? title : "Untitled";
-        int written = snprintf(windows_buf + offset, sizeof(windows_buf) - offset,
-                               "%lu:%s%s", (unsigned long)main_wins[i], clean_title,
-                               (i < main_count - 1) ? "|" : "");
-        if (title) free(title);
-        if (written > 0 && offset + written < (int)sizeof(windows_buf)) {
-            offset += written;
-        } else {
-            break;
-        }
-    }
-
-    if (strcmp(windows_buf, last_emitted_windows_buffer) != 0) {
-        snprintf(last_emitted_windows_buffer, sizeof(last_emitted_windows_buffer), "%s", windows_buf);
-        printf("%s\n", windows_buf);
         fflush(stdout);
     }
 }
@@ -765,8 +765,7 @@ static void activate_window(Display *dpy, Window root, Window target) {
         ev.xclient.type = ClientMessage;
         ev.xclient.window = target;
         ev.xclient.message_type = net_active;
-        ev.xclient.format = 32;
-        ev.xclient.data.l[0] = 1;
+        ev.xclient.data.l[0] = 2; // Source = Pager (window switcher/taskbar) to bypass focus-stealing suppression
         ev.xclient.data.l[1] = CurrentTime;
         XSendEvent(dpy, root, False, SubstructureRedirectMask | SubstructureNotifyMask, &ev);
     }
@@ -916,7 +915,8 @@ static void handle_ipc_command(Display *dpy, Window root, const char *line) {
         unsigned long wid = strtoul(line + 9, NULL, 0);
         if (wid != 0) {
             activate_window(dpy, root, (Window)wid);
-            XFlush(dpy);
+            XSync(dpy, False);
+            evaluate_and_emit_status(dpy, root);
         }
     } else if (strncmp(line, "CLOSE ", 6) == 0) {
         unsigned long wid = strtoul(line + 6, NULL, 0);

@@ -17,7 +17,9 @@ import androidx.core.content.edit
 import androidx.core.graphics.createBitmap
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.isActive
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -83,7 +85,12 @@ import dev.ilamparithi.aournalpp.ui.snap.*
 import dev.ilamparithi.aournalpp.ui.theme.ExpressiveSprings
 import dev.ilamparithi.aournalpp.ui.window.WindowSwitchTransitionOverlay
 import dev.ilamparithi.aournalpp.ui.window.WindowSwitcherGallery
+import dev.ilamparithi.aournalpp.runtime.ActiveSessionTracker
+import dev.ilamparithi.aournalpp.runtime.ActiveWindowEntry
+import dev.ilamparithi.aournalpp.runtime.ActiveWorkspaceState
+import dev.ilamparithi.aournalpp.runtime.ActiveWorkspaceTracker
 import dev.ilamparithi.aournalpp.utils.FormatUtils
+import dev.ilamparithi.aournalpp.utils.WindowPreviewManager
 import dev.ilamparithi.aournalpp.utils.WindowPreviewUtils
 import dev.ilamparithi.aournalpp.utils.WindowTitleHelper
 import dev.ilamparithi.aournalpp.x11.X11Viewport
@@ -136,6 +143,28 @@ fun CanvasScreen(
                 var isTransitionForward by viewModel.isTransitionForward
                 var isSwitchTransitionActive by viewModel.isSwitchTransitionActive
                 var transitionSequence by viewModel.transitionSequence
+
+                val entrySnapshotPath by activity.entrySnapshotPathState
+                var entrySnapshotBitmap by remember(entrySnapshotPath) {
+                    mutableStateOf(
+                        if (!entrySnapshotPath.isNullOrBlank()) {
+                            val f = File(entrySnapshotPath!!)
+                            if (f.exists()) android.graphics.BitmapFactory.decodeFile(f.absolutePath) else null
+                        } else null
+                    )
+                }
+                val entrySnapshotAlpha = remember { Animatable(1f) }
+
+                LaunchedEffect(Unit) {
+                    entrySnapshotAlpha.snapTo(1f)
+                    delay(120.milliseconds)
+                    entrySnapshotAlpha.animateTo(
+                        targetValue = 0f,
+                        animationSpec = ExpressiveSprings.FastSpatial
+                    )
+                    entrySnapshotBitmap = null
+                    activity.entrySnapshotPathState.value = null
+                }
 
                 DisposableEffect(Unit) {
                     onDispose {
@@ -409,6 +438,9 @@ fun CanvasScreen(
                 fun captureCurrentWindowPreview(onCaptured: ((Bitmap) -> Unit)? = null) {
                     val view = activity.activeLorieView ?: return
                     if (view.width <= 0 || view.height <= 0) return
+                    val surface = view.holder.surface
+                    if (surface == null || !surface.isValid) return
+                    if (!activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
                     try {
                         val bitmap = createBitmap(view.width, view.height)
                         PixelCopy.request(view, bitmap, { result ->
@@ -421,13 +453,76 @@ fun CanvasScreen(
                     }
                 }
 
+                fun syncWorkspaceState(previewTimestamp: Long = System.currentTimeMillis()) {
+                    val session = ActiveSessionTracker.getActiveSession(activity.env.tmpDir) ?: return
+                    val wins = openWindows.ifEmpty { activity.sessionManager.queryOpenWindows() }
+                    val isAudioRecording = if (activity.isSupervisorInitialized()) activity.supervisor.isAudioRecordingActive() else false
+
+                    val winEntries = wins.map { win ->
+                        val rawTitle = win.title
+                        val clean = ProcessSupervisor.sanitizeWindowTitle(rawTitle)
+                        val isDirty = rawTitle.startsWith("*") || rawTitle.contains("*") || clean.startsWith("*")
+                        val cleanNoAsterisk = ProcessSupervisor.cleanNoteTitle(rawTitle)
+                        val resolvedFile = ProcessSupervisor.resolveNoteFile(activity.env.getNotesDirectory(), rawTitle)
+                        val matchedPath = when {
+                            resolvedFile != null -> resolvedFile.absolutePath
+                            targetPath != null && (File(targetPath).name.equals(cleanNoAsterisk, ignoreCase = true) ||
+                                    File(targetPath).nameWithoutExtension.equals(cleanNoAsterisk, ignoreCase = true)) -> targetPath
+                            cleanNoAsterisk == "New Note" || cleanNoAsterisk == "Unsaved Document" || cleanNoAsterisk == "Untitled" -> null
+                            else -> targetPath
+                        }
+
+                        ActiveWindowEntry(
+                            id = win.id,
+                            title = rawTitle,
+                            cleanTitle = cleanNoAsterisk.ifBlank { "New Note" },
+                            filePath = matchedPath,
+                            isActive = win.isActive,
+                            isDirty = isDirty,
+                            hasConflict = false,
+                            isAudioRecording = isAudioRecording && win.isActive
+                        )
+                    }
+
+                    val filesGrouped = winEntries.filter { !it.filePath.isNullOrBlank() }.groupBy { it.filePath }
+                    val conflictingPaths = filesGrouped.filter { it.value.size > 1 }.keys
+
+                    val finalEntries = winEntries.map { entry ->
+                        if (entry.filePath in conflictingPaths) {
+                            entry.copy(hasConflict = true)
+                        } else {
+                            entry
+                        }
+                    }
+
+                    val state = ActiveWorkspaceState(
+                        sessionInfo = session,
+                        windows = finalEntries,
+                        snapMode = activeSnapMode.id,
+                        slotAssignments = snapLayoutManager.slotAssignments.toMap(),
+                        dividerRatios = snapLayoutManager.dividerRatios.toMap(),
+                        previewTimestamp = previewTimestamp
+                    )
+
+                    ActiveWorkspaceTracker.setWorkspaceState(activity.env.tmpDir, state)
+                }
+
                 fun updateSlotPreviewsFromScreen(bmp: Bitmap) {
+                    val tmpDir = activity.env.tmpDir
                     if (activeSnapMode == SnapLayoutMode.SINGLE || activeSnapMode == SnapLayoutMode.UNLOCKED || snapGeometries.isEmpty()) {
                         val activeWin = openWindows.find { it.isActive }
                         if (activeWin != null) {
                             windowPreviewCache[activeWin.id] = bmp
+                            activity.lifecycleScope.launch(Dispatchers.IO) {
+                                WindowPreviewManager.savePreview(tmpDir, activeWin.id, bmp)
+                                WindowPreviewManager.saveStageComposite(tmpDir, bmp)
+                                syncWorkspaceState()
+                            }
                         }
                     } else {
+                        activity.lifecycleScope.launch(Dispatchers.IO) {
+                            WindowPreviewManager.saveStageComposite(tmpDir, bmp)
+                        }
                         for ((slotIndex, x, y, width, height) in snapGeometries) {
                             val winId = snapLayoutManager.slotAssignments[slotIndex]
                             if (winId != null) {
@@ -439,11 +534,17 @@ fun CanvasScreen(
                                     try {
                                         val cropped = Bitmap.createBitmap(bmp, cropX, cropY, cropW, cropH)
                                         windowPreviewCache[winId] = cropped
+                                        activity.lifecycleScope.launch(Dispatchers.IO) {
+                                            WindowPreviewManager.savePreview(tmpDir, winId, cropped)
+                                        }
                                     } catch (e: Exception) {
                                         Log.w("CanvasActivity", "Failed to crop slot thumbnail", e)
                                     }
                                 }
                             }
+                        }
+                        activity.lifecycleScope.launch(Dispatchers.IO) {
+                            syncWorkspaceState()
                         }
                     }
                 }
@@ -566,6 +667,9 @@ fun CanvasScreen(
                     fun startSwitchWithBitmap(currentBmp: Bitmap?) {
                         if (activeWin != null && currentBmp != null) {
                             windowPreviewCache[activeWin.id] = currentBmp
+                            activity.lifecycleScope.launch(Dispatchers.IO) {
+                                WindowPreviewManager.savePreview(activity.env.tmpDir, activeWin.id, currentBmp)
+                            }
                         }
                         transitionOutgoingBitmap = currentBmp ?: activeWin?.let { windowPreviewCache[it.id] }
                         transitionIncomingBitmap = windowPreviewCache[targetWindow.id]
@@ -580,6 +684,9 @@ fun CanvasScreen(
                         captureCurrentWindowPreview { freshBmp ->
                             if (activeWin != null) {
                                 windowPreviewCache[activeWin.id] = freshBmp
+                                activity.lifecycleScope.launch(Dispatchers.IO) {
+                                    WindowPreviewManager.savePreview(activity.env.tmpDir, activeWin.id, freshBmp)
+                                }
                             }
                         }
                     } else {
@@ -701,6 +808,9 @@ fun CanvasScreen(
                             snapSlotAssignments = snapLayoutManager.slotAssignments.toMap()
                         }
                     }
+                    activity.lifecycleScope.launch(Dispatchers.IO) {
+                        syncWorkspaceState()
+                    }
                 }
 
                 val wallpaperBitmap = remember {
@@ -746,20 +856,21 @@ fun CanvasScreen(
                             }
                         }
 
-                        // Debounced window resize & preview synchronization
-                        // Ensures active and background window previews match new window size without thrashing during active divider drag
-                        LaunchedEffect(canvasWidthPx, canvasHeightPx, activeWindow?.id, isSwitchTransitionActive) {
-                            val activeId = activeWindow?.id
-                            if (activeId != null && !isSwitchTransitionActive && !showSnapAssistHost && !showWindowSwitcherGallery && canvasWidthPx > 0 && canvasHeightPx > 0) {
-                                delay(300.milliseconds)
+                        // Periodic live window snapshot synchronization to guarantee fresh portal previews on disk
+                        LaunchedEffect(Unit) {
+                            while (isActive) {
+                                delay(5000.milliseconds)
+                                if (!activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                                    continue
+                                }
                                 val view = activity.activeLorieView
-                                if (view != null && view.width > 0 && view.height > 0) {
+                                if (view != null && view.width > 0 && view.height > 0 && !isSwitchTransitionActive && !showSnapAssistHost) {
                                     captureCurrentWindowPreview { freshBmp ->
-                                        if (activeSnapMode == SnapLayoutMode.SINGLE || activeSnapMode == SnapLayoutMode.UNLOCKED || snapGeometries.isEmpty()) {
+                                        val activeId = activeWindow?.id ?: openWindows.firstOrNull()?.id
+                                        if (activeId != null) {
                                             windowPreviewCache[activeId] = freshBmp
-                                        } else {
-                                            updateSlotPreviewsFromScreen(freshBmp)
                                         }
+                                        updateSlotPreviewsFromScreen(freshBmp)
                                     }
                                 }
                             }
@@ -855,6 +966,25 @@ fun CanvasScreen(
                             }
                         )
 
+                        // Seamless Entry Cover Overlay (eliminates X11 black frame / surface flicker on all launches)
+                        if (entrySnapshotAlpha.value > 0f) {
+                            Box(
+                                modifier = viewportModifier
+                                    .zIndex(12f)
+                                    .graphicsLayer { alpha = entrySnapshotAlpha.value }
+                                    .background(MaterialTheme.colorScheme.background)
+                            ) {
+                                if (entrySnapshotBitmap != null) {
+                                    Image(
+                                        bitmap = entrySnapshotBitmap!!.asImageBitmap(),
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                            }
+                        }
+
                         // Experimental Spring Slide Window Switch Transition Overlay (directly over viewport)
                         if (isSwitchTransitionActive && transitionTargetWindow != null) {
                             val targetWin = transitionTargetWindow!!
@@ -890,6 +1020,11 @@ fun CanvasScreen(
                                                 delay(150.milliseconds)
                                                 captureCurrentWindowPreview { bmp ->
                                                     windowPreviewCache[targetWin.id] = bmp
+                                                    activity.lifecycleScope.launch(Dispatchers.IO) {
+                                                        WindowPreviewManager.savePreview(activity.env.tmpDir, targetWin.id, bmp)
+                                                        WindowPreviewManager.saveStageComposite(activity.env.tmpDir, bmp)
+                                                        syncWorkspaceState()
+                                                    }
                                                 }
                                             }
                                         }
@@ -1020,6 +1155,7 @@ fun CanvasScreen(
                             displayTitle = displayTitle,
                             windowIcon = windowIcon,
                             windowIndex = activeWindowIndex,
+                            windowId = currentDisplayWindow?.id ?: "",
                             startCollapsed = startCollapsed,
                             pinButtonMode = pinButtonMode,
                             autoCollapseTimeoutMs = autoCollapseTimeoutMs,

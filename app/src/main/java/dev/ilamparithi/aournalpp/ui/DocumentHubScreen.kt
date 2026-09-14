@@ -1429,7 +1429,17 @@ fun DocumentHubScreen(
                             addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
                         }
                     }
-                    context.startActivity(intent)
+                    val options = androidx.core.app.ActivityOptionsCompat.makeCustomAnimation(context, 0, 0).toBundle()
+                    context.startActivity(intent, options)
+                    val activity = context as? android.app.Activity
+                    if (activity != null) {
+                        if (android.os.Build.VERSION.SDK_INT >= 34) {
+                            activity.overrideActivityTransition(android.app.Activity.OVERRIDE_TRANSITION_OPEN, 0, 0)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            activity.overridePendingTransition(0, 0)
+                        }
+                    }
                 },
                 onSave = { name, targetFolder ->
                     showNewNoteDialog = false
