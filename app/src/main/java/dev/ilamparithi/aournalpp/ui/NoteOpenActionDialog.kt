@@ -200,6 +200,7 @@ fun NoteOpenActionDialog(
                 )
 
                 val isPdf = remember(file) { NoteOpenManager.isPdf(file) }
+                val defaultAction = remember(file) { NoteOpenManager.getDefaultAction(context, file) }
 
                 // Option 1: View as PDF
                 ActionOptionCard(
@@ -208,6 +209,7 @@ fun NoteOpenActionDialog(
                     iconTint = MaterialTheme.colorScheme.onErrorContainer,
                     title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_view_pdf_title),
                     subtitle = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_view_pdf_subtitle),
+                    isDefault = defaultAction == NoteOpenAction.VIEW,
                     onClick = {
                         if (dontAskAgain) {
                             NoteOpenManager.setDefaultAction(context, file, NoteOpenAction.VIEW)
@@ -234,6 +236,7 @@ fun NoteOpenActionDialog(
                     iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
                     title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_edit_canvas_title),
                     subtitle = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_edit_canvas_subtitle),
+                    isDefault = defaultAction == NoteOpenAction.EDIT,
                     onClick = {
                         if (dontAskAgain) {
                             NoteOpenManager.setDefaultAction(context, file, NoteOpenAction.EDIT)
@@ -255,13 +258,13 @@ fun NoteOpenActionDialog(
 
                 Spacer(modifier = Modifier.height(2.dp))
 
-                // "Don't ask again" checkbox row
+                // "Set as default" checkbox row
                 val stateSelected = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.state_selected)
                 val stateNotSelected = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.state_not_selected)
-                val dontAskAgainLabel = if (isPdf) {
-                    androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_dont_ask_again_pdf)
+                val setAsDefaultLabel = if (isPdf) {
+                    androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_set_as_default_pdf)
                 } else {
-                    androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_dont_ask_again_xopp)
+                    androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_set_as_default_xopp)
                 }
                 Row(
                     modifier = Modifier
@@ -285,7 +288,7 @@ fun NoteOpenActionDialog(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = dontAskAgainLabel,
+                        text = setAsDefaultLabel,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface
@@ -316,15 +319,20 @@ private fun ActionOptionCard(
     iconTint: Color,
     title: String,
     subtitle: String,
+    isDefault: Boolean = false,
     onClick: () -> Unit
 ) {
     Card(
         onClick = onClick,
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
+            containerColor = if (isDefault) MaterialTheme.colorScheme.surfaceContainerHighest else MaterialTheme.colorScheme.surfaceContainer
         ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        border = if (isDefault) {
+            BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+        } else {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+        },
         modifier = Modifier
             .fillMaxWidth()
             .semantics(mergeDescendants = true) {
@@ -359,12 +367,32 @@ private fun ActionOptionCard(
             Spacer(modifier = Modifier.width(14.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (isDefault) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+                        ) {
+                            Text(
+                                text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_default_badge),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
@@ -377,7 +405,7 @@ private fun ActionOptionCard(
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.outline,
+                tint = if (isDefault) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                 modifier = Modifier.size(18.dp)
             )
         }

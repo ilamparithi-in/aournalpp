@@ -54,6 +54,8 @@
     <string name="action_refresh">Refresh</string>
     <!-- Action to open a document or folder -->
     <string name="action_open">Open</string>
+    <string name="action_open_as">Open as…</string>
+    <string name="action_duplicate">Duplicate</string>
     <!-- Action to browse filesystem or remote directories -->
     <string name="action_browse">Browse</string>
     <!-- Action to go back -->
@@ -768,9 +770,14 @@
     <!-- Option subtitle for editing note in Xournal++ canvas -->
     <string name="note_open_edit_canvas_subtitle">Launch full canvas editor to write, draw, and modify</string>
     <!-- Checkbox label to set selected action as default -->
-    <string name="note_open_dont_ask_again">Don\'t ask again (set as default)</string>
-    <string name="note_open_dont_ask_again_xopp">Don\'t ask again for XOPP/XOJ notes</string>
-    <string name="note_open_dont_ask_again_pdf">Don\'t ask again for PDF files</string>
+    <string name="note_open_dont_ask_again">Set as default</string>
+    <string name="note_open_dont_ask_again_xopp">Set as default for XOPP/XOJ notes</string>
+    <string name="note_open_dont_ask_again_pdf">Set as default for PDF files</string>
+    <string name="note_open_set_as_default">Set as default</string>
+    <string name="note_open_set_as_default_xopp">Set as default for XOPP/XOJ notes</string>
+    <string name="note_open_set_as_default_pdf">Set as default for PDF files</string>
+    <!-- Default action badge label -->
+    <string name="note_open_default_badge">Default</string>
     <!-- Toast message when default action is set to View as PDF -->
     <string name="msg_default_action_set_view">Default action set to View as PDF. You can change this in Settings.</string>
     <string name="msg_default_action_set_view_xopp">Default action for XOPP/XOJ notes set to View as PDF. You can change this in Settings.</string>

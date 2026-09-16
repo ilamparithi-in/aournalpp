@@ -97,6 +97,7 @@ fun ExpressiveNoteCard(
     pdfExportManager: PdfExportManager,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    onOpenAs: (() -> Unit)? = null,
     onTogglePin: () -> Unit,
     onShareExport: (() -> Unit)? = null,
     onExportPdf: (() -> Unit)? = null,
@@ -125,12 +126,13 @@ fun ExpressiveNoteCard(
     var cardInteractionTimestamp by remember { mutableStateOf(0L) }
 
     val callbacks = remember(
-        onClick, onLongClick, onTogglePin, onShareExport, onExportPdf,
+        onClick, onLongClick, onOpenAs, onTogglePin, onShareExport, onExportPdf,
         onSharePdf, onShareXopp, onRename, onDuplicate, onDelete, onRestore
     ) {
         NoteCardCallbacks(
             onClick = onClick,
             onLongClick = onLongClick,
+            onOpenAs = onOpenAs,
             onTogglePin = onTogglePin,
             onShareExport = onShareExport,
             onExportPdf = onExportPdf,
@@ -317,6 +319,7 @@ fun ExpressiveNoteCard(
                                     expanded = showMenu,
                                     isPinned = note.isPinned,
                                     onDismiss = onDismissMenu,
+                                    onOpenAs = onOpenAs,
                                     onTogglePin = onTogglePin,
                                     onShareExport = onShareExport,
                                     onExportPdf = onExportPdf,
@@ -456,6 +459,7 @@ fun ExpressiveNoteCard(
                             expanded = showMenu,
                             isPinned = note.isPinned,
                             onDismiss = onDismissMenu,
+                            onOpenAs = onOpenAs,
                             onTogglePin = onTogglePin,
                             onShareExport = onShareExport,
                             onExportPdf = onExportPdf,

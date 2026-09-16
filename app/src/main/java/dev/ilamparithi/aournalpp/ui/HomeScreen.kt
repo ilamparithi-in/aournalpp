@@ -433,6 +433,10 @@ fun HomeScreen(
         }
     }
 
+    val onOpenAs: (NoteDocument) -> Unit = { note ->
+        noteForActionDialog = note.file
+    }
+
     val onShareExport: (NoteDocument) -> Unit = { note ->
         shareExportNote = note
     }
@@ -805,6 +809,7 @@ fun HomeScreen(
                                 },
                                 onNewNoteClick = { promptNewNote() },
                                 refreshSeed = refreshSeed,
+                                onOpenAs = onOpenAs,
                                 onTogglePin = onTogglePin,
                                 onShareExport = onShareExport,
                                 onRename = onRename,
@@ -822,6 +827,7 @@ fun HomeScreen(
                                         openNote(note.file)
                                     }
                                 },
+                                onOpenAs = onOpenAs,
                                 onTogglePin = onTogglePin,
                                 onShareExport = onShareExport,
                                 onRename = onRename,
@@ -1551,6 +1557,7 @@ private fun NormalHomeGalleryView(
     notes: List<NoteDocument>,
     pdfExportManager: PdfExportManager,
     onNoteClick: (NoteDocument) -> Unit,
+    onOpenAs: ((NoteDocument) -> Unit)? = null,
     onTogglePin: ((NoteDocument) -> Unit)? = null,
     onShareExport: ((NoteDocument) -> Unit)? = null,
     onExportPdf: ((NoteDocument) -> Unit)? = null,
@@ -1606,6 +1613,7 @@ private fun NormalHomeGalleryView(
                                     shape = RoundedCornerShape(18.dp),
                                     pdfExportManager = pdfExportManager,
                                     onClick = { onNoteClick(note) },
+                                    onOpenAs = onOpenAs?.let { { it(note) } },
                                     onTogglePin = onTogglePin?.let { { it(note) } },
                                     onShareExport = onShareExport?.let { { it(note) } },
                                     onExportPdf = onExportPdf?.let { { it(note) } },
@@ -1654,6 +1662,7 @@ private fun NormalHomeGalleryView(
                                     shape = RoundedCornerShape(16.dp),
                                     pdfExportManager = pdfExportManager,
                                     onClick = { onNoteClick(note) },
+                                    onOpenAs = onOpenAs?.let { { it(note) } },
                                     onTogglePin = onTogglePin?.let { { it(note) } },
                                     onShareExport = onShareExport?.let { { it(note) } },
                                     onExportPdf = onExportPdf?.let { { it(note) } },

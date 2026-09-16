@@ -48,6 +48,7 @@ fun DynamicRecentsCarousel(
     onExportPdf: ((NoteDocument) -> Unit)? = null,
     onSharePdf: ((NoteDocument) -> Unit)? = null,
     onShareXopp: ((NoteDocument) -> Unit)? = null,
+    onOpenAsNote: ((NoteDocument) -> Unit)? = null,
     onDuplicate: ((NoteDocument) -> Unit)? = null,
     onDeleteNote: (NoteDocument) -> Unit,
     onRenameNote: (NoteDocument) -> Unit
@@ -109,6 +110,7 @@ fun DynamicRecentsCarousel(
                 shape = MaterialTheme.shapes.extraLarge,
                 pdfExportManager = pdfExportManager,
                 onClick = { onOpenNote(note) },
+                onOpenAs = onOpenAsNote?.let { { it(note) } },
                 onTogglePin = { onTogglePin(note) },
                 onShareExport = onShareExport?.let { { it(note) } },
                 onExportPdf = onExportPdf?.let { { it(note) } },

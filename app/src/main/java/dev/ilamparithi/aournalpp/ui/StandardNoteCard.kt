@@ -113,6 +113,7 @@ fun StandardNoteCard(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     // Context Action Handlers
+    onOpenAs: (() -> Unit)? = null,
     onTogglePin: (() -> Unit)? = null,
     onShareExport: (() -> Unit)? = null,
     onExportPdf: (() -> Unit)? = null,
@@ -148,16 +149,17 @@ fun StandardNoteCard(
         }
     } ?: MaterialTheme.colorScheme.primary
 
-    val hasActions = onTogglePin != null || onShareExport != null || onExportPdf != null || onSharePdf != null ||
+    val hasActions = onOpenAs != null || onTogglePin != null || onShareExport != null || onExportPdf != null || onSharePdf != null ||
             onShareXopp != null || onRename != null || onDuplicate != null || onDelete != null
 
     val callbacks = remember(
-        onClick, onLongClick, onTogglePin, onShareExport, onExportPdf,
+        onClick, onLongClick, onOpenAs, onTogglePin, onShareExport, onExportPdf,
         onSharePdf, onShareXopp, onRename, onDuplicate, onDelete, onRestore
     ) {
         NoteCardCallbacks(
             onClick = onClick,
             onLongClick = onLongClick,
+            onOpenAs = onOpenAs,
             onTogglePin = onTogglePin,
             onShareExport = onShareExport,
             onExportPdf = onExportPdf,
@@ -313,6 +315,7 @@ fun StandardNoteCard(
                         expanded = showMenu,
                         isPinned = note.isPinned,
                         onDismiss = onDismissMenu,
+                        onOpenAs = onOpenAs,
                         onTogglePin = onTogglePin,
                         onShareExport = onShareExport,
                         onExportPdf = onExportPdf,

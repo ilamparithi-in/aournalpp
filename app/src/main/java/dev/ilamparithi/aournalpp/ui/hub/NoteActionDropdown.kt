@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Share
@@ -27,6 +28,7 @@ fun NoteActionDropdown(
     expanded: Boolean,
     isPinned: Boolean = false,
     onDismiss: () -> Unit,
+    onOpenAs: (() -> Unit)? = null,
     onTogglePin: (() -> Unit)? = null,
     onShareExport: (() -> Unit)? = null,
     onExportPdf: (() -> Unit)? = null,
@@ -37,6 +39,20 @@ fun NoteActionDropdown(
     onDelete: (() -> Unit)? = null
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        if (onOpenAs != null) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.action_open_as)) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.FileOpen,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                onClick = { onDismiss(); onOpenAs() }
+            )
+            HorizontalDivider()
+        }
         if (onTogglePin != null) {
             DropdownMenuItem(
                 text = {
@@ -95,7 +111,7 @@ fun NoteActionDropdown(
         }
         if (onDuplicate != null) {
             DropdownMenuItem(
-                text = { Text(stringResource(R.string.action_keep_both)) },
+                text = { Text(stringResource(R.string.action_duplicate)) },
                 leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
                 onClick = { onDismiss(); onDuplicate() }
             )
@@ -119,6 +135,7 @@ fun StandardNoteActionDropdown(
     expanded: Boolean,
     isPinned: Boolean = false,
     onDismiss: () -> Unit,
+    onOpenAs: (() -> Unit)? = null,
     onTogglePin: (() -> Unit)? = null,
     onShareExport: (() -> Unit)? = null,
     onExportPdf: (() -> Unit)? = null,
@@ -131,6 +148,7 @@ fun StandardNoteActionDropdown(
     expanded = expanded,
     isPinned = isPinned,
     onDismiss = onDismiss,
+    onOpenAs = onOpenAs,
     onTogglePin = onTogglePin,
     onShareExport = onShareExport,
     onExportPdf = onExportPdf,

@@ -681,6 +681,9 @@ fun DocumentHubScreen(
                                                 if (note.autosaveInfo != null) pendingAutosaveNote = note
                                                 else handleNoteOpen(note.file)
                                             },
+                                            onOpenAsNote = { note ->
+                                                noteForActionDialog = note.file
+                                            },
                                             onTogglePin = { note ->
                                                 repository.togglePinNote(note.file.absolutePath)
                                                 viewModel.loadContent()
@@ -845,6 +848,9 @@ fun DocumentHubScreen(
                                             }
                                             viewModel.setLastSelectedNotePath(note.path)
                                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        },
+                                        onOpenAs = {
+                                            noteForActionDialog = note.file
                                         },
                                         onTogglePin = {
                                             repository.togglePinNote(note.file.absolutePath)
