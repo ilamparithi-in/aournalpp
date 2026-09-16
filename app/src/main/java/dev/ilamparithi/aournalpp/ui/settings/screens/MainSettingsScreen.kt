@@ -461,12 +461,12 @@ fun MainSettingsScreen(
                 }
             }
 
-            // 2. Default Note Action (View / Edit / Ask every time)
-            var defaultActionPref by remember {
-                mutableStateOf(
-                    prefs.getString(NoteOpenManager.PREF_KEY_DEFAULT_OPEN_ACTION, NoteOpenAction.ASK.value)
-                        ?: NoteOpenAction.ASK.value
-                )
+            // 2. Default Note Action (Split for XOPP/XOJ and PDF)
+            var xoppActionPref by remember {
+                mutableStateOf(NoteOpenManager.getDefaultAction(context, isPdf = false).value)
+            }
+            var pdfActionPref by remember {
+                mutableStateOf(NoteOpenManager.getDefaultAction(context, isPdf = true).value)
             }
 
             Text(
@@ -483,42 +483,83 @@ fun MainSettingsScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
                 )
             ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        text = "Action when opening any note or file:",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     val defaultActionOptions = listOf(
                         NoteOpenAction.ASK to "Ask every time",
                         NoteOpenAction.EDIT to "Edit (Canvas)",
                         NoteOpenAction.VIEW to "View (PDF)"
                     )
 
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        defaultActionOptions.forEachIndexed { index, (action, label) ->
-                            SegmentedButton(
-                                selected = defaultActionPref == action.value,
-                                onClick = {
-                                    defaultActionPref = action.value
-                                    prefs.edit().putString(NoteOpenManager.PREF_KEY_DEFAULT_OPEN_ACTION, action.value).apply()
-                                },
-                                shape = SegmentedButtonDefaults.itemShape(index, defaultActionOptions.size),
-                                label = { Text(label, style = MaterialTheme.typography.bodySmall, maxLines = 1) }
-                            )
+                    // 1. XOPP & XOJ Notes
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "When opening XOPP / XOJ notes:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                            defaultActionOptions.forEachIndexed { index, (action, label) ->
+                                SegmentedButton(
+                                    selected = xoppActionPref == action.value,
+                                    onClick = {
+                                        xoppActionPref = action.value
+                                        NoteOpenManager.setDefaultAction(context, isPdf = false, action)
+                                    },
+                                    shape = SegmentedButtonDefaults.itemShape(index, defaultActionOptions.size),
+                                    label = { Text(label, style = MaterialTheme.typography.bodySmall, maxLines = 1) }
+                                )
+                            }
                         }
+
+                        Text(
+                            text = when (xoppActionPref) {
+                                NoteOpenAction.EDIT.value -> "XOPP and XOJ notes will immediately open in the Xournal++ canvas editor."
+                                NoteOpenAction.VIEW.value -> "XOPP and XOJ notes will be converted to PDF and opened in your external viewer."
+                                else -> "A prompt will ask whether to View as PDF or Edit in Xournal++ every time you open a XOPP or XOJ note."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
 
-                    Text(
-                        text = when (defaultActionPref) {
-                            NoteOpenAction.EDIT.value -> "Notes will immediately open in the Xournal++ canvas editor for fast note-taking."
-                            NoteOpenAction.VIEW.value -> "Notes will be converted and opened in your external/system PDF viewer."
-                            else -> "A prompt will ask whether to View as PDF or Edit in Xournal++ every time you open a note."
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                        thickness = 1.dp
                     )
+
+                    // 2. PDF Files
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "When opening PDF files:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                            defaultActionOptions.forEachIndexed { index, (action, label) ->
+                                SegmentedButton(
+                                    selected = pdfActionPref == action.value,
+                                    onClick = {
+                                        pdfActionPref = action.value
+                                        NoteOpenManager.setDefaultAction(context, isPdf = true, action)
+                                    },
+                                    shape = SegmentedButtonDefaults.itemShape(index, defaultActionOptions.size),
+                                    label = { Text(label, style = MaterialTheme.typography.bodySmall, maxLines = 1) }
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = when (pdfActionPref) {
+                                NoteOpenAction.EDIT.value -> "PDF files will immediately open in the Xournal++ canvas editor for annotation."
+                                NoteOpenAction.VIEW.value -> "PDF files will immediately open in your external/system PDF viewer."
+                                else -> "A prompt will ask whether to View as PDF or Edit in Xournal++ every time you open a PDF file."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 

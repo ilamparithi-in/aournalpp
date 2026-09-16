@@ -37,17 +37,49 @@ enum class NoteOpenAction(val value: String, val displayName: String) {
  */
 object NoteOpenManager {
 
+    const val PREF_KEY_DEFAULT_OPEN_ACTION_XOPP = "pref_default_open_action_xopp"
+    const val PREF_KEY_DEFAULT_OPEN_ACTION_PDF = "pref_default_open_action_pdf"
     const val PREF_KEY_DEFAULT_OPEN_ACTION = "pref_default_open_action"
 
-    fun getDefaultAction(context: Context): NoteOpenAction {
+    fun isPdf(file: File): Boolean = file.extension.equals("pdf", ignoreCase = true)
+    fun isPdf(fileName: String): Boolean = fileName.endsWith(".pdf", ignoreCase = true)
+
+    fun getDefaultAction(context: Context, isPdf: Boolean): NoteOpenAction {
         val prefs = dev.ilamparithi.aournalpp.data.AppPreferences.getGeneral(context)
-        val raw = prefs.getString(PREF_KEY_DEFAULT_OPEN_ACTION, NoteOpenAction.ASK.value)
-        return NoteOpenAction.fromValue(raw)
+        return if (isPdf) {
+            val raw = prefs.getString(PREF_KEY_DEFAULT_OPEN_ACTION_PDF, null)
+            if (raw != null) {
+                NoteOpenAction.fromValue(raw)
+            } else {
+                NoteOpenAction.ASK
+            }
+        } else {
+            val raw = prefs.getString(PREF_KEY_DEFAULT_OPEN_ACTION_XOPP, null)
+                ?: prefs.getString(PREF_KEY_DEFAULT_OPEN_ACTION, NoteOpenAction.ASK.value)
+            NoteOpenAction.fromValue(raw)
+        }
+    }
+
+    fun getDefaultAction(context: Context, file: File): NoteOpenAction {
+        return getDefaultAction(context, isPdf(file))
+    }
+
+    fun getDefaultAction(context: Context): NoteOpenAction {
+        return getDefaultAction(context, isPdf = false)
+    }
+
+    fun setDefaultAction(context: Context, isPdf: Boolean, action: NoteOpenAction) {
+        val prefs = dev.ilamparithi.aournalpp.data.AppPreferences.getGeneral(context)
+        val key = if (isPdf) PREF_KEY_DEFAULT_OPEN_ACTION_PDF else PREF_KEY_DEFAULT_OPEN_ACTION_XOPP
+        prefs.edit().putString(key, action.value).apply()
+    }
+
+    fun setDefaultAction(context: Context, file: File, action: NoteOpenAction) {
+        setDefaultAction(context, isPdf(file), action)
     }
 
     fun setDefaultAction(context: Context, action: NoteOpenAction) {
-        val prefs = dev.ilamparithi.aournalpp.data.AppPreferences.getGeneral(context)
-        prefs.edit().putString(PREF_KEY_DEFAULT_OPEN_ACTION, action.value).apply()
+        setDefaultAction(context, isPdf = false, action)
     }
 
     /**
@@ -236,7 +268,7 @@ object NoteOpenManager {
             }
         }
 
-        when (getDefaultAction(context)) {
+        when (getDefaultAction(context, file)) {
             NoteOpenAction.EDIT -> openInCanvas(context, file, repository, localView)
             NoteOpenAction.VIEW -> openAsPdf(context, file, pdfExportManager, scope, repository, onConvertingState, onError)
             NoteOpenAction.ASK -> onShowPrompt(file)

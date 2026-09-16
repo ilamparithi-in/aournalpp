@@ -199,6 +199,8 @@ fun NoteOpenActionDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
+                val isPdf = remember(file) { NoteOpenManager.isPdf(file) }
+
                 // Option 1: View as PDF
                 ActionOptionCard(
                     icon = Icons.Default.PictureAsPdf,
@@ -208,10 +210,15 @@ fun NoteOpenActionDialog(
                     subtitle = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_view_pdf_subtitle),
                     onClick = {
                         if (dontAskAgain) {
-                            NoteOpenManager.setDefaultAction(context, NoteOpenAction.VIEW)
+                            NoteOpenManager.setDefaultAction(context, file, NoteOpenAction.VIEW)
+                            val toastMsg = if (isPdf) {
+                                context.getString(dev.ilamparithi.aournalpp.R.string.msg_default_action_set_view_pdf)
+                            } else {
+                                context.getString(dev.ilamparithi.aournalpp.R.string.msg_default_action_set_view_xopp)
+                            }
                             Toast.makeText(
                                 context,
-                                context.getString(dev.ilamparithi.aournalpp.R.string.msg_default_action_set_view),
+                                toastMsg,
                                 Toast.LENGTH_LONG
                             ).show()
                         }
@@ -229,10 +236,15 @@ fun NoteOpenActionDialog(
                     subtitle = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_edit_canvas_subtitle),
                     onClick = {
                         if (dontAskAgain) {
-                            NoteOpenManager.setDefaultAction(context, NoteOpenAction.EDIT)
+                            NoteOpenManager.setDefaultAction(context, file, NoteOpenAction.EDIT)
+                            val toastMsg = if (isPdf) {
+                                context.getString(dev.ilamparithi.aournalpp.R.string.msg_default_action_set_edit_pdf)
+                            } else {
+                                context.getString(dev.ilamparithi.aournalpp.R.string.msg_default_action_set_edit_xopp)
+                            }
                             Toast.makeText(
                                 context,
-                                context.getString(dev.ilamparithi.aournalpp.R.string.msg_default_action_set_edit),
+                                toastMsg,
                                 Toast.LENGTH_LONG
                             ).show()
                         }
@@ -246,6 +258,11 @@ fun NoteOpenActionDialog(
                 // "Don't ask again" checkbox row
                 val stateSelected = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.state_selected)
                 val stateNotSelected = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.state_not_selected)
+                val dontAskAgainLabel = if (isPdf) {
+                    androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_dont_ask_again_pdf)
+                } else {
+                    androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_dont_ask_again_xopp)
+                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -268,7 +285,7 @@ fun NoteOpenActionDialog(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_dont_ask_again),
+                        text = dontAskAgainLabel,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface

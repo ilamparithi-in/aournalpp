@@ -769,10 +769,16 @@
     <string name="note_open_edit_canvas_subtitle">Launch full canvas editor to write, draw, and modify</string>
     <!-- Checkbox label to set selected action as default -->
     <string name="note_open_dont_ask_again">Don\'t ask again (set as default)</string>
+    <string name="note_open_dont_ask_again_xopp">Don\'t ask again for XOPP/XOJ notes</string>
+    <string name="note_open_dont_ask_again_pdf">Don\'t ask again for PDF files</string>
     <!-- Toast message when default action is set to View as PDF -->
     <string name="msg_default_action_set_view">Default action set to View as PDF. You can change this in Settings.</string>
+    <string name="msg_default_action_set_view_xopp">Default action for XOPP/XOJ notes set to View as PDF. You can change this in Settings.</string>
+    <string name="msg_default_action_set_view_pdf">Default action for PDF files set to View as PDF. You can change this in Settings.</string>
     <!-- Toast message when default action is set to Edit in Xournal++ -->
     <string name="msg_default_action_set_edit">Default action set to Edit in Xournal++. You can change this in Settings.</string>
+    <string name="msg_default_action_set_edit_xopp">Default action for XOPP/XOJ notes set to Edit in Xournal++. You can change this in Settings.</string>
+    <string name="msg_default_action_set_edit_pdf">Default action for PDF files set to Edit in Xournal++. You can change this in Settings.</string>
 
     <!-- Active Note Open Prompt Dialog -->
     <string name="note_already_open_title">Note Already Open</string>
