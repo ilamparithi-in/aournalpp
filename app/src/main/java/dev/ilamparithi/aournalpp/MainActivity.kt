@@ -83,10 +83,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
+import dev.ilamparithi.aournalpp.utils.FileTypeDetector
 import dev.ilamparithi.aournalpp.ui.BootstrapScreen
 import dev.ilamparithi.aournalpp.ui.BootstrapState
 import dev.ilamparithi.aournalpp.ui.BootstrapViewModel
@@ -140,7 +142,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private var pendingIntentToProcess: Intent? = null
-    private val externalFileToOpen = androidx.compose.runtime.mutableStateOf<File?>(null)
+    private val externalFileToOpen = androidx.compose.runtime.mutableStateOf<Pair<File, Boolean>?>(null)
     private val externalActiveNoteToPrompt = androidx.compose.runtime.mutableStateOf<Pair<File, ActiveNotesTracker.ActiveNoteMatch>?>(null)
     private val pendingTabNavigation = androidx.compose.runtime.mutableStateOf<Int?>(null)
     private val pendingCloudSubpageNavigation = androidx.compose.runtime.mutableStateOf<CloudSubpage?>(null)
@@ -311,10 +313,12 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        val promptFile = externalFileToOpen.value
-                        if (promptFile != null && isOnboardingCompleted) {
+                        val promptInfo = externalFileToOpen.value
+                        if (promptInfo != null && isOnboardingCompleted) {
+                            val (promptFile, isImport) = promptInfo
                             NoteOpenActionDialog(
                                 file = promptFile,
+                                isImport = isImport,
                                 onDismiss = { externalFileToOpen.value = null },
                                 onViewAsPdf = {
                                     externalFileToOpen.value = null
@@ -504,20 +508,72 @@ class MainActivity : ComponentActivity() {
             try {
                 Log.i(TAG, "Handling external file intent: $uri (action=$action)")
                 val env = LinuxEnvironment(this@MainActivity)
-                val result = ExternalFileHandler.stageExternalUri(this@MainActivity, uri, env)
-                if (result.isSuccess) {
-                    val file = result.getOrThrow()
+                val repo = DocumentRepository.getInstance(this@MainActivity)
+                val rootNotesDir = repo.getRootNotesDirectory()
+
+                // 1. Origin check: If file is already inside notes home, open in-place!
+                val existingNote = ExternalFileHandler.resolveIfInNotesDirectory(this@MainActivity, uri, rootNotesDir)
+                if (existingNote != null) {
+                    Log.i(TAG, "URI belongs to existing note in notes directory: ${existingNote.absolutePath}. Opening in-place.")
                     val supervisor = ProcessSupervisor(env)
                     val pdfExportManager = PdfExportManager(env, supervisor)
-                    val repo = DocumentRepository.getInstance(this@MainActivity)
-
                     NoteOpenManager.handleFileOpen(
                         context = this@MainActivity,
-                        file = file,
+                        file = existingNote,
                         pdfExportManager = pdfExportManager,
                         scope = lifecycleScope,
                         repository = repo,
-                        onShowPrompt = { externalFileToOpen.value = it },
+                        onShowPrompt = { externalFileToOpen.value = it to false },
+                        onShowActiveNotePrompt = { targetFile, match ->
+                            externalActiveNoteToPrompt.value = targetFile to match
+                        }
+                    )
+                    return@launch
+                }
+
+                // 2. External file: stage to temporary cache
+                val result = ExternalFileHandler.stageExternalUri(this@MainActivity, uri, env)
+                if (result.isSuccess) {
+                    val stagedFile = result.getOrThrow()
+
+                    // 3. Inspect file type via magic bytes
+                    val detection = FileTypeDetector.detect(stagedFile)
+                    if (!detection.isSupportedNote) {
+                        Log.i(TAG, "Unsupported file type '${detection.detectedMimeType}' for $uri. Redirecting to external app.")
+                        stagedFile.delete()
+
+                        Toast.makeText(
+                            this@MainActivity,
+                            getString(R.string.unsupported_file_redirecting, detection.detectedMimeType),
+                            Toast.LENGTH_SHORT
+                        ).show()
+
+                        val redirected = FileTypeDetector.redirectIntent(
+                            context = this@MainActivity,
+                            uri = uri,
+                            detectedMimeType = detection.detectedMimeType
+                        )
+                        if (!redirected) {
+                            Toast.makeText(
+                                this@MainActivity,
+                                getString(R.string.unsupported_file_no_app, detection.detectedMimeType),
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                        return@launch
+                    }
+
+                    // 4. Supported note format: proceed with normal open flow
+                    val supervisor = ProcessSupervisor(env)
+                    val pdfExportManager = PdfExportManager(env, supervisor)
+
+                    NoteOpenManager.handleFileOpen(
+                        context = this@MainActivity,
+                        file = stagedFile,
+                        pdfExportManager = pdfExportManager,
+                        scope = lifecycleScope,
+                        repository = repo,
+                        onShowPrompt = { externalFileToOpen.value = it to true },
                         onShowActiveNotePrompt = { targetFile, match ->
                             externalActiveNoteToPrompt.value = targetFile to match
                         }

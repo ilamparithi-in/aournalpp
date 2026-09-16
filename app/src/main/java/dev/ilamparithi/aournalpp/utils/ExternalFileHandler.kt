@@ -57,6 +57,127 @@ object ExternalFileHandler {
     }
 
     /**
+     * Resolves whether the given URI corresponds to a file already within the user's notes directory.
+     * If so, returns the existing [File] so it can be opened directly without re-importing or staging.
+     */
+    fun resolveIfInNotesDirectory(context: Context, uri: Uri, rootNotesDir: File): File? {
+        val rootPath = rootNotesDir.canonicalPath
+
+        // 1. Direct file:// URI
+        if (uri.scheme == "file") {
+            val path = uri.path ?: return null
+            val file = File(path)
+            if (file.exists()) {
+                val canonical = file.canonicalPath
+                if (canonical.startsWith(rootPath)) return file
+            }
+        }
+
+        // 2. Content URI from our own FileProvider
+        if (uri.scheme == "content" && uri.authority == "${context.packageName}.fileprovider") {
+            val path = uri.path
+            if (path != null) {
+                val internalPrefix = "/internal_notes"
+                val externalPrefix = "/external_documents"
+                val file = when {
+                    path.startsWith(internalPrefix) -> {
+                        val rel = path.removePrefix(internalPrefix).trimStart('/')
+                        File(rootNotesDir, rel)
+                    }
+                    path.startsWith(externalPrefix) -> {
+                        val rel = path.removePrefix(externalPrefix).trimStart('/')
+                        File(rootNotesDir, rel)
+                    }
+                    else -> null
+                }
+                if (file != null && file.exists() && file.canonicalPath.startsWith(rootPath)) {
+                    return file
+                }
+            }
+        }
+
+        // 3. Storage Access Framework (SAF) / DocumentsProvider (e.g. com.android.externalstorage.documents)
+        if (uri.scheme == "content") {
+            try {
+                val authority = uri.authority.orEmpty()
+                if (authority.contains("externalstorage")) {
+                    val docId = try {
+                        android.provider.DocumentsContract.getDocumentId(uri)
+                    } catch (_: Exception) {
+                        uri.lastPathSegment
+                    }
+                    if (docId != null && docId.startsWith("primary:")) {
+                        val relPath = docId.removePrefix("primary:")
+                        val file = File(android.os.Environment.getExternalStorageDirectory(), relPath)
+                        if (file.exists() && file.canonicalPath.startsWith(rootPath)) {
+                            return file
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to resolve SAF document id for $uri", e)
+            }
+
+            // 4. MediaStore queries (DATA column)
+            try {
+                val projection = arrayOf(android.provider.MediaStore.MediaColumns.DATA)
+                context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val dataIdx = cursor.getColumnIndex(android.provider.MediaStore.MediaColumns.DATA)
+                        if (dataIdx != -1) {
+                            val dataPath = cursor.getString(dataIdx)
+                            if (!dataPath.isNullOrEmpty()) {
+                                val file = File(dataPath)
+                                if (file.exists() && file.canonicalPath.startsWith(rootPath)) {
+                                    return file
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+
+            // 5. Decoded URI path matching (third-party file manager providers containing filesystem path)
+            try {
+                val decoded = java.net.URLDecoder.decode(uri.toString(), "UTF-8")
+                val idx = decoded.indexOf(rootNotesDir.absolutePath)
+                if (idx != -1) {
+                    val pathPart = decoded.substring(idx)
+                    val file = File(pathPart)
+                    if (file.exists() && file.canonicalPath.startsWith(rootPath)) {
+                        return file
+                    }
+                }
+            } catch (_: Exception) {}
+
+            // 6. Content matching fallback for opaque file manager URIs (Google Files, Solid Explorer, etc.)
+            try {
+                val displayName = getDisplayName(context, uri)
+                val fileSize = getFileSize(context, uri)
+                if (!displayName.isNullOrBlank() && rootNotesDir.exists()) {
+                    val candidates = rootNotesDir.walkTopDown()
+                        .filter { it.isFile && it.name.equals(displayName, ignoreCase = true) }
+                        .toList()
+
+                    for (candidate in candidates) {
+                        if (fileSize > 0L && candidate.length() != fileSize) {
+                            continue
+                        }
+                        if (isContentIdenticalPrefix(context, uri, candidate)) {
+                            Log.i(TAG, "Opaque URI $uri matched note in notes dir: ${candidate.absolutePath}")
+                            return candidate
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed content matching for URI $uri", e)
+            }
+        }
+
+        return null
+    }
+
+    /**
      * Copies a file (e.g. from temporary staging or URI) into the user's official Imported directory
      * when editing in Xournal++. Reuses/overwrites if same name exists rather than generating timestamp clones.
      */
@@ -170,5 +291,51 @@ object ExternalFileHandler {
         }
 
         return null
+    }
+
+    private fun getFileSize(context: Context, uri: Uri): Long {
+        if (uri.scheme == "file") {
+            val path = uri.path ?: return 0L
+            val f = File(path)
+            if (f.exists()) return f.length()
+        }
+        if (uri.scheme == "content") {
+            try {
+                context.contentResolver.query(
+                    uri,
+                    arrayOf(OpenableColumns.SIZE),
+                    null,
+                    null,
+                    null
+                )?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+                        if (sizeIndex != -1 && !cursor.isNull(sizeIndex)) {
+                            return cursor.getLong(sizeIndex)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to resolve file size from ContentResolver", e)
+            }
+        }
+        return 0L
+    }
+
+    private fun isContentIdenticalPrefix(context: Context, uri: Uri, candidate: File): Boolean {
+        return try {
+            val bufUri = ByteArray(1024)
+            val bufFile = ByteArray(1024)
+            val readUri = context.contentResolver.openInputStream(uri)?.use { it.read(bufUri) } ?: -1
+            val readFile = candidate.inputStream().use { it.read(bufFile) }
+            if (readUri > 0 && readUri == readFile) {
+                bufUri.sliceArray(0 until readUri).contentEquals(bufFile.sliceArray(0 until readFile))
+            } else {
+                readUri == readFile
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not compare content prefix for $candidate", e)
+            false
+        }
     }
 }

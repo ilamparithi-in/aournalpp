@@ -38,26 +38,61 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- External file open handler -->
+            <!-- External file open handler: Specific note MIME types -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <action android:name="android.intent.action.EDIT" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:scheme="content" />
-                <data android:scheme="file" />
-                <data android:host="*" />
-                <data android:mimeType="*/*" />
-                <data android:pathPattern=".*\\.xopp" />
-                <data android:pathPattern=".*\\.pdf" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <action android:name="android.intent.action.EDIT" />
-                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="content" />
                 <data android:scheme="file" />
                 <data android:mimeType="application/x-xopp" />
+                <data android:mimeType="application/x-xoj" />
+                <data android:mimeType="application/x-xojpp" />
                 <data android:mimeType="application/pdf" />
+            </intent-filter>
+
+            <!-- External file open handler: URI scheme + extension (without MIME type) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.EDIT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:pathPattern=".*\\.xopp" />
+                <data android:pathPattern=".*\\.xoj" />
+                <data android:pathPattern=".*\\.pdf" />
+                <data android:pathSuffix=".xopp" />
+                <data android:pathSuffix=".xoj" />
+                <data android:pathSuffix=".pdf" />
+            </intent-filter>
+
+            <!-- External file open handler: URI scheme + extension (with wildcard */* MIME type) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.EDIT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.xopp" />
+                <data android:pathPattern=".*\\.xoj" />
+                <data android:pathPattern=".*\\.pdf" />
+                <data android:pathSuffix=".xopp" />
+                <data android:pathSuffix=".xoj" />
+                <data android:pathSuffix=".pdf" />
+            </intent-filter>
+
+            <!-- External file open handler: Generic binary MIME type fallback (sniffed by FileTypeDetector) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.EDIT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/octet-stream" />
             </intent-filter>
 
             <intent-filter>

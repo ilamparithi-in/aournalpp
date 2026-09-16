@@ -366,13 +366,17 @@ fun DocumentHubScreen(
     ) { uri ->
         if (uri != null) {
             scope.launch {
-                val result = ExternalFileHandler.importUriToDirectory(context, uri, currentDirectory)
+                val rootNotesDir = repository.getRootNotesDirectory()
+                val existingNote = ExternalFileHandler.resolveIfInNotesDirectory(context, uri, rootNotesDir)
+                if (existingNote != null) {
+                    handleNoteOpen(existingNote)
+                    return@launch
+                }
+
+                val result = ExternalFileHandler.stageExternalUri(context, uri, repository.getLinuxEnvironment())
                 if (result.isSuccess) {
-                    val imported = result.getOrThrow()
-                    viewModel.loadContentNow()
-                    val folderName = if (currentDirectory.canonicalPath == repository.getRootNotesDirectory().canonicalPath) "Notes" else currentDirectory.name
-                    snackbarHostState.showSnackbar("Imported \"${imported.name}\" to $folderName")
-                    handleNoteOpen(imported)
+                    val staged = result.getOrThrow()
+                    handleNoteOpen(staged)
                 } else {
                     snackbarHostState.showSnackbar("Failed to import file: ${result.exceptionOrNull()?.message}")
                 }

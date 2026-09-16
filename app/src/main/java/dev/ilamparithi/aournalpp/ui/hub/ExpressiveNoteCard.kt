@@ -83,8 +83,11 @@ import dev.ilamparithi.aournalpp.ui.hub.SelectionCheckboxBadge
 import dev.ilamparithi.aournalpp.ui.hub.rememberNoteAccessibilityActions
 import dev.ilamparithi.aournalpp.ui.common.AppIconButton
 
+import androidx.compose.ui.graphics.asImageBitmap
 import dev.ilamparithi.aournalpp.utils.AccessibilityUtils
 import dev.ilamparithi.aournalpp.utils.ThumbnailManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -119,6 +122,23 @@ fun ExpressiveNoteCard(
         key1 = note.lastModifiedMs
     ) {
         value = thumbnailManager.getOrCreateThumbnailBitmap(context, note.file, pdfExportManager, note.lastModifiedMs)
+    }
+
+    val listThumbnailImage by produceState<ImageBitmap?>(
+        initialValue = null,
+        key1 = note.lastModifiedMs,
+        key2 = isGridView
+    ) {
+        if (!isGridView && (note.fileType == NoteFileType.XOPP || note.fileType == NoteFileType.XOJ)) {
+            val embedded = withContext(Dispatchers.IO) {
+                ThumbnailManager.extractEmbeddedXoppPreview(note.file)?.asImageBitmap()
+            }
+            if (embedded != null) {
+                value = embedded
+                return@produceState
+            }
+        }
+        value = null
     }
 
     val cardShape = RoundedCornerShape(16.dp)
@@ -370,22 +390,33 @@ fun ExpressiveNoteCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                val listDisplayImage = listThumbnailImage ?: thumbnailImage
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer,
+                    color = if (listDisplayImage != null) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    else MaterialTheme.colorScheme.primaryContainer,
                     modifier = Modifier.size(44.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = when (note.fileType) {
-                                NoteFileType.PDF -> Icons.Default.PictureAsPdf
-                                NoteFileType.XOJ -> Icons.Default.History
-                                else -> Icons.Default.Edit
-                            },
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(22.dp)
-                        )
+                        if (listDisplayImage != null) {
+                            Image(
+                                bitmap = listDisplayImage,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Icon(
+                                imageVector = when (note.fileType) {
+                                    NoteFileType.PDF -> Icons.Default.PictureAsPdf
+                                    NoteFileType.XOJ -> Icons.Default.History
+                                    else -> Icons.Default.Edit
+                                },
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     }
                 }
 
@@ -397,6 +428,12 @@ fun ExpressiveNoteCard(
                             fontWeight = FontWeight.Bold,
                             externalTrigger = cardInteractionTimestamp,
                             modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        FileTypePill(
+                            fileType = note.fileType,
+                            cornerRadius = 4.dp,
+                            fontSize = 9f
                         )
                         if (note.isPinned) {
                             Spacer(modifier = Modifier.width(6.dp))

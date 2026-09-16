@@ -367,6 +367,13 @@ fun HomeScreen(
     ) { uri: Uri? ->
         if (uri != null) {
             scope.launch {
+                val rootNotesDir = repository.getRootNotesDirectory()
+                val existingNote = ExternalFileHandler.resolveIfInNotesDirectory(context, uri, rootNotesDir)
+                if (existingNote != null) {
+                    handleNoteOpen(existingNote)
+                    return@launch
+                }
+
                 val staged = ExternalFileHandler.stageExternalUri(context, uri, repository.getLinuxEnvironment())
                 if (staged.isSuccess) {
                     val file = staged.getOrThrow()

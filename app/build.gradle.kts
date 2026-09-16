@@ -272,6 +272,9 @@ dependencies {
     implementation(libs.camera.view)
     implementation(libs.zxing.core)
 
+    // File Type & Magic Detection
+    implementation(libs.simplemagic)
+
     testImplementation(libs.junit)
     testImplementation("org.json:json:20240303")
     testImplementation(libs.kotlinx.coroutines.test)

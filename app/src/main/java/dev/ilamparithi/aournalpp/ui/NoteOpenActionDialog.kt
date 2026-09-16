@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material3.AlertDialog
@@ -69,6 +70,7 @@ import dev.ilamparithi.aournalpp.utils.minTouchTarget
 @Composable
 fun NoteOpenActionDialog(
     file: File,
+    isImport: Boolean = false,
     onDismiss: () -> Unit,
     onViewAsPdf: () -> Unit,
     onEditInCanvas: () -> Unit
@@ -95,7 +97,7 @@ fun NoteOpenActionDialog(
         icon = {
             Surface(
                 shape = RoundedCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
+                color = if (isImport) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.primaryContainer,
                 modifier = Modifier.size(48.dp)
             ) {
                 Row(
@@ -104,9 +106,9 @@ fun NoteOpenActionDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.FileOpen,
+                        imageVector = if (isImport) Icons.Default.FileDownload else Icons.Default.FileOpen,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        tint = if (isImport) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -114,7 +116,10 @@ fun NoteOpenActionDialog(
         },
         title = {
             Text(
-                text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_title),
+                text = androidx.compose.ui.res.stringResource(
+                    if (isImport) dev.ilamparithi.aournalpp.R.string.note_import_title
+                    else dev.ilamparithi.aournalpp.R.string.note_open_title
+                ),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -193,6 +198,41 @@ fun NoteOpenActionDialog(
                     }
                 }
 
+                if (isImport) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.tertiary
+                            ) {
+                                Text(
+                                    text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_import_pill),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onTertiary,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                            Text(
+                                text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_import_banner_notice),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
+                    }
+                }
+
                 Text(
                     text = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_prompt),
                     style = MaterialTheme.typography.bodySmall,
@@ -235,7 +275,10 @@ fun NoteOpenActionDialog(
                     iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
                     iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
                     title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_edit_canvas_title),
-                    subtitle = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.note_open_edit_canvas_subtitle),
+                    subtitle = androidx.compose.ui.res.stringResource(
+                        if (isImport) dev.ilamparithi.aournalpp.R.string.note_import_edit_canvas_subtitle
+                        else dev.ilamparithi.aournalpp.R.string.note_open_edit_canvas_subtitle
+                    ),
                     isDefault = defaultAction == NoteOpenAction.EDIT,
                     onClick = {
                         if (dontAskAgain) {

@@ -1,13 +1,16 @@
 package dev.ilamparithi.aournalpp.utils
 
 import android.content.ActivityNotFoundException
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.view.View
 import android.widget.Toast
 import androidx.core.app.ActivityOptionsCompat
 import androidx.core.content.FileProvider
 import dev.ilamparithi.aournalpp.CanvasActivity
+import dev.ilamparithi.aournalpp.MainActivity
 import dev.ilamparithi.aournalpp.data.DocumentRepository
 import dev.ilamparithi.aournalpp.runtime.ActiveNotesTracker
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
@@ -187,6 +190,12 @@ object NoteOpenManager {
 
                 val chooser = Intent.createChooser(viewIntent, "View Note as PDF").apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        putExtra(
+                            Intent.EXTRA_EXCLUDE_COMPONENTS,
+                            arrayOf(ComponentName(context, MainActivity::class.java))
+                        )
+                    }
                 }
                 context.startActivity(chooser)
             } catch (e: ActivityNotFoundException) {

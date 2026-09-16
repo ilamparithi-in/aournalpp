@@ -759,6 +759,10 @@
     <!-- ======================================================================= -->
     <!-- Title of the note opening action prompt dialog -->
     <string name="note_open_title">Open Note</string>
+    <string name="note_import_title">Import &amp; Open Note</string>
+    <string name="note_import_banner_notice">This external file will be imported into the "Imported" folder.</string>
+    <string name="note_import_pill">Importing</string>
+    <string name="note_import_edit_canvas_subtitle">Import into Notes and open editor to write, draw, and modify</string>
     <!-- Prompt asking user how to open the note -->
     <string name="note_open_prompt">Choose how to open this note:</string>
     <!-- Option title for viewing note as PDF -->
@@ -1079,7 +1083,7 @@
     <!-- Action to keep remote cloud copy -->
     <string name="action_keep_remote">Keep Cloud Version</string>
     <!-- Action to keep both copies by renaming local -->
-    <string name="action_keep_both">Keep Both (Duplicate)</string>
+    <string name="action_keep_both">Duplicate</string>
 
     <!-- ======================================================================= -->
     <!-- Settings & Customization                                                -->
@@ -1431,4 +1435,9 @@
     <string name="action_restore_cloud">Restore</string>
     <string name="label_cloud_pending_deletion">Marked for deletion</string>
     <string name="desc_cloud_pending_deletion">Will be permanently deleted when the app is restarted</string>
+
+    <!-- Intent Redirection & File Handling -->
+    <string name="open_with">Open with</string>
+    <string name="unsupported_file_redirecting">Unsupported file type (%1$s). Redirecting…</string>
+    <string name="unsupported_file_no_app">No app found to open this file (%1$s).</string>
 </resources>

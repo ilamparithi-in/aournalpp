@@ -6,9 +6,9 @@ import java.util.Date
 import kotlin.math.abs
 
 enum class NoteFileType(val extension: String, val displayName: String, val a11yLabel: String) {
-    XOPP("xopp", ".xopp", "Xournal++ note"),
-    XOJ("xoj", ".xoj", "Legacy XOJ note"),
-    PDF("pdf", ".pdf", "PDF document")
+    XOPP("xopp", "XOPP", "Xournal++ note"),
+    XOJ("xoj", "XOJ", "Legacy XOJ note"),
+    PDF("pdf", "PDF", "PDF document")
 }
 
 /**
