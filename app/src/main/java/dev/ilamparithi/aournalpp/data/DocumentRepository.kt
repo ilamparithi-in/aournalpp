@@ -1328,7 +1328,8 @@ class DocumentRepository internal constructor(private val context: Context) {
      */
     suspend fun createBlankNote(
         name: String,
-        targetFolder: File = getRootNotesDirectory()
+        targetFolder: File = getRootNotesDirectory(),
+        customTemplate: PageTemplate? = null
     ): Result<File> = withContext(Dispatchers.IO) {
         try {
             if (!targetFolder.exists()) targetFolder.mkdirs()
@@ -1349,17 +1350,15 @@ class DocumentRepository internal constructor(private val context: Context) {
                 counter++
             }
 
-            // Write minimal valid Xournal++ v4 document (gzip-compressed XML)
-            val xml = """
-                <?xml version="1.0" standalone="no"?>
-                <xournal creator="Xournal++ 1.2.x" fileversion="4">
-                  <title>Xournal++ document - see https://github.com/xournalpp/xournalpp</title>
-                  <page width="595.27559100" height="841.88976400">
-                    <background type="solid" color="#ffffff" style="plain"/>
-                    <layer/>
-                  </page>
-                </xournal>
-            """.trimIndent()
+            // Load page template defaults from Xournal++ settings.xml or use customTemplate / defaults
+            val template = customTemplate ?: try {
+                val settingsFile = File(env.xournalConfigDir, "settings.xml")
+                PageTemplate.parseFromSettingsFile(settingsFile)
+            } catch (_: Exception) {
+                PageTemplate()
+            }
+
+            val xml = template.buildXml()
 
             GZIPOutputStream(FileOutputStream(candidate)).use { gzip ->
                 gzip.write(xml.toByteArray(Charsets.UTF_8))

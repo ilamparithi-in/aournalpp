@@ -52,6 +52,12 @@ class DocumentRepositoryTest {
         assertTrue(noteFile.exists())
         assertEquals("Lecture Notes.xopp", noteFile.name)
         assertTrue(noteFile.length() > 0)
+
+        // Verify content inside gzip
+        val xml = java.util.zip.GZIPInputStream(noteFile.inputStream()).bufferedReader().readText()
+        assertTrue(xml.contains("""<xournal creator="Xournal++ 1.2.x" fileversion="4">"""))
+        assertTrue(xml.contains("""style="lined""""))
+        assertTrue(xml.contains("""color="#ffffffff""""))
     }
 
     @Test
