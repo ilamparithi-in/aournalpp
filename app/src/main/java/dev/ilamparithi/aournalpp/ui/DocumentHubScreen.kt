@@ -110,7 +110,6 @@ import dev.ilamparithi.aournalpp.ui.hub.dialog.BatchDeletePermanentDialog
 import dev.ilamparithi.aournalpp.ui.hub.dialog.DeleteNoteDialog
 import dev.ilamparithi.aournalpp.ui.hub.dialog.EditFolderAppearanceDialog
 import dev.ilamparithi.aournalpp.ui.hub.dialog.EmptyTrashConfirmDialog
-import dev.ilamparithi.aournalpp.ui.hub.dialog.EmergencyRecoveryDialog
 import dev.ilamparithi.aournalpp.ui.hub.dialog.MoveToFolderDialog
 import dev.ilamparithi.aournalpp.ui.hub.dialog.RenameFolderDialog
 import dev.ilamparithi.aournalpp.ui.hub.dialog.RenameNoteDialog
@@ -223,9 +222,6 @@ fun DocumentHubScreen(
     var showEmptyTrashConfirmDialog by remember { mutableStateOf(false) }
     var showBatchDeletePermanentDialog by remember { mutableStateOf(false) }
     var folderToMapToCloud by remember { mutableStateOf<FolderItem?>(null) }
-    var showEmergencySaveNameDialog by remember { mutableStateOf(false) }
-    var emergencySaveNameInput by remember { mutableStateOf("") }
-    var emergencySaveTargetFolder by remember { mutableStateOf(repository.getRootNotesDirectory()) }
     var pendingAutosaveNote by remember { mutableStateOf<NoteDocument?>(null) }
     var pendingSaveAutosaveNote by remember { mutableStateOf<NoteDocument?>(null) }
     var noteForActionDialog by remember { mutableStateOf<File?>(null) }
@@ -1282,52 +1278,8 @@ fun DocumentHubScreen(
             )
         }
 
-        if (showEmergencyDialog && quarantinedEmergencySave != null) {
-            val file = quarantinedEmergencySave!!
-            EmergencyRecoveryDialog(
-                emergencyFile = file,
-                onDismiss = { viewModel.dismissEmergencyDialog() },
-                onOpenNow = {
-                    viewModel.dismissEmergencyDialog()
-                    val staged = repository.openEmergencyRecoverySession(file)
-                    viewModel.clearQuarantinedEmergencySave()
-                    viewModel.loadContent()
-                    handleNoteOpen(staged)
-                },
-                onSaveAsNote = {
-                    viewModel.dismissEmergencyDialog()
-                    emergencySaveNameInput = "Recovered_Note_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date(file.lastModified()))
-                    emergencySaveTargetFolder = currentDirectory
-                    showEmergencySaveNameDialog = true
-                },
-                onDiscard = {
-                    viewModel.dismissEmergencyDialog()
-                    repository.discardEmergencyRecovery()
-                    viewModel.clearQuarantinedEmergencySave()
-                    viewModel.loadContent()
-                }
-            )
-        }
-
         if (showAutoloadOverrideDialog) {
             AutoloadOverrideDialog(onDismiss = { viewModel.dismissAutoloadOverrideDialog() })
-        }
-
-        if (showEmergencySaveNameDialog && quarantinedEmergencySave != null) {
-            EmergencySaveNameDialog(
-                file = quarantinedEmergencySave!!,
-                initialName = emergencySaveNameInput,
-                initialFolder = emergencySaveTargetFolder,
-                repository = repository,
-                onDismiss = { showEmergencySaveNameDialog = false },
-                onSaveSuccess = { savedFile ->
-                    showEmergencySaveNameDialog = false
-                    viewModel.clearQuarantinedEmergencySave()
-                    viewModel.loadContent()
-                    scope.launch { snackbarHostState.showSnackbar("Saved recovered note as \"${savedFile.name}\"") }
-                },
-                onFolderCreated = { viewModel.loadContent() }
-            )
         }
 
         pendingAutosaveNote?.let { note ->

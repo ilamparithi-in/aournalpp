@@ -96,8 +96,8 @@ fun KeyboardSettingsScreen(onBack: () -> Unit) {
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
                     SettingsSwitchListItem(
-                        headline = "Triple-Back Emergency Force Close",
-                        supporting = "Pressing Back 3 times rapidly inside Canvas brings up a force-close dialog if X11 becomes unresponsive.",
+                        headline = "Triple-Tap Close Force Close",
+                        supporting = "Tapping the Close button on the floating toolbar or Save All & Close 3 times rapidly brings up a force-close dialog if X11 becomes unresponsive.",
                         checked = tripleBackForceClose,
                         onCheckedChange = {
                             tripleBackForceClose = it

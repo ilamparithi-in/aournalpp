@@ -49,6 +49,7 @@ import dev.ilamparithi.aournalpp.ui.cloud.CloudSubpage
 import dev.ilamparithi.aournalpp.ui.onboarding.checkStoragePermissionGranted
 import dev.ilamparithi.aournalpp.ui.onboarding.launchStoragePermissionSettings
 import dev.ilamparithi.aournalpp.ui.workspace.ActiveWorkspacePortalScreen
+import dev.ilamparithi.aournalpp.backup.engine.ConflictPersistenceManager
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.material.icons.outlined.Gavel
 import androidx.compose.material.icons.outlined.Home
@@ -114,6 +115,11 @@ import dev.ilamparithi.aournalpp.ui.preview.DragActionTarget
 import dev.ilamparithi.aournalpp.ui.preview.FloatingPreviewHost
 import dev.ilamparithi.aournalpp.ui.theme.AournalTheme
 import dev.ilamparithi.aournalpp.ui.theme.ExpressiveSprings
+import dev.ilamparithi.aournalpp.ui.hub.dialog.EmergencyRecoveryDialog
+import dev.ilamparithi.aournalpp.ui.dialog.EmergencySaveNameDialog
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.io.File
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Spring
@@ -141,11 +147,97 @@ class MainActivity : ComponentActivity() {
         private const val TAG = "MainActivity"
     }
 
+    sealed class DeferredNoteOpen {
+        data class NoteFile(val file: File, val isImport: Boolean = false) : DeferredNoteOpen()
+        data class ExternalIntent(val intent: Intent) : DeferredNoteOpen()
+    }
+
     private var pendingIntentToProcess: Intent? = null
     private val externalFileToOpen = androidx.compose.runtime.mutableStateOf<Pair<File, Boolean>?>(null)
     private val externalActiveNoteToPrompt = androidx.compose.runtime.mutableStateOf<Pair<File, ActiveNotesTracker.ActiveNoteMatch>?>(null)
     private val pendingTabNavigation = androidx.compose.runtime.mutableStateOf<Int?>(null)
     private val pendingCloudSubpageNavigation = androidx.compose.runtime.mutableStateOf<CloudSubpage?>(null)
+
+    val quarantinedEmergencySave = androidx.compose.runtime.mutableStateOf<File?>(null)
+    val showEmergencyRecoveryDialog = androidx.compose.runtime.mutableStateOf(false)
+    val showEmergencySaveNameDialog = androidx.compose.runtime.mutableStateOf(false)
+    var emergencySaveNameInput by androidx.compose.runtime.mutableStateOf("")
+    var emergencySaveTargetFolder by androidx.compose.runtime.mutableStateOf<File?>(null)
+    private val pendingDeferredNoteOpen = androidx.compose.runtime.mutableStateOf<DeferredNoteOpen?>(null)
+    private var isRecoveredSessionRunning = false
+
+    fun checkEmergencySave() {
+        val env = LinuxEnvironment(this)
+        val file = env.checkAndQuarantineEmergencySave()
+        if (file != null && file.exists() && file.length() > 0) {
+            quarantinedEmergencySave.value = file
+        } else {
+            quarantinedEmergencySave.value = null
+            showEmergencyRecoveryDialog.value = false
+            showEmergencySaveNameDialog.value = false
+        }
+    }
+
+    fun hasPendingEmergencySave(): Boolean {
+        checkEmergencySave()
+        return quarantinedEmergencySave.value != null
+    }
+
+    fun deferNoteOpenForEmergencySave(file: File, isImport: Boolean = false) {
+        pendingDeferredNoteOpen.value = DeferredNoteOpen.NoteFile(file, isImport)
+        showEmergencyRecoveryDialog.value = true
+    }
+
+    fun onEmergencySaveResolved() {
+        quarantinedEmergencySave.value = null
+        showEmergencyRecoveryDialog.value = false
+        showEmergencySaveNameDialog.value = false
+        replayDeferredNoteOpen()
+    }
+
+    fun replayDeferredNoteOpen() {
+        val pending = pendingDeferredNoteOpen.value ?: return
+        pendingDeferredNoteOpen.value = null
+        when (pending) {
+            is DeferredNoteOpen.NoteFile -> {
+                val action = NoteOpenManager.getDefaultAction(this, pending.file)
+                if (action == NoteOpenAction.ASK || pending.isImport) {
+                    externalFileToOpen.value = pending.file to pending.isImport
+                } else if (action == NoteOpenAction.VIEW) {
+                    val env = LinuxEnvironment(this)
+                    val supervisor = ProcessSupervisor(env)
+                    val pdfExportManager = PdfExportManager(env, supervisor)
+                    NoteOpenManager.openAsPdf(
+                        context = this,
+                        file = pending.file,
+                        pdfExportManager = pdfExportManager,
+                        scope = lifecycleScope,
+                        repository = DocumentRepository.getInstance(this)
+                    )
+                } else {
+                    NoteOpenManager.openInCanvas(
+                        context = this,
+                        file = pending.file,
+                        repository = DocumentRepository.getInstance(this)
+                    )
+                }
+            }
+            is DeferredNoteOpen.ExternalIntent -> {
+                handleExternalIntent(pending.intent)
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        checkEmergencySave()
+        if (isRecoveredSessionRunning) {
+            if (!dev.ilamparithi.aournalpp.runtime.ActiveSessionTracker.isSessionActive(this)) {
+                isRecoveredSessionRunning = false
+                replayDeferredNoteOpen()
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -209,6 +301,10 @@ class MainActivity : ComponentActivity() {
                                     if (remoteChanges.isNotEmpty()) {
                                         val serviceNames = remoteChanges.keys.joinToString(", ")
                                         Log.i("MainActivity", "Remote changes detected in cloud service(s): $serviceNames")
+                                        val conflicts = engine.detectMultiServiceConflicts()
+                                        if (conflicts.isNotEmpty()) {
+                                            ConflictPersistenceManager.getInstance(this@MainActivity).addConflicts(conflicts)
+                                        }
                                     }
                                 }
                             }
@@ -226,7 +322,15 @@ class MainActivity : ComponentActivity() {
                                         withContext(Dispatchers.IO) {
                                             try {
                                                 val engine = BackupEngine(this@MainActivity)
-                                                engine.performMultiServiceBackup()
+                                                val results = engine.performMultiServiceBackup()
+                                                val allConflicts = results.flatMap { it.detectedConflicts }
+                                                if (allConflicts.isNotEmpty()) {
+                                                    ConflictPersistenceManager.getInstance(this@MainActivity).addConflicts(allConflicts)
+                                                }
+                                                val allErrors = results.flatMap { it.errors }
+                                                if (allErrors.isNotEmpty()) {
+                                                    Log.w("MainActivity", "In-app periodic sync had errors: ${allErrors.joinToString("; ")}")
+                                                }
                                             } catch (e: Exception) {
                                                 Log.w("MainActivity", "In-app periodic sync failed", e)
                                             }
@@ -241,6 +345,31 @@ class MainActivity : ComponentActivity() {
                         val supervisor = remember { ProcessSupervisor(env) }
                         val pdfExportManager = remember { PdfExportManager(env, supervisor) }
                         val repo = remember { DocumentRepository.getInstance(this@MainActivity) }
+
+                        DisposableEffect(Unit) {
+                            val receiver = object : android.content.BroadcastReceiver() {
+                                override fun onReceive(c: Context?, intent: android.content.Intent?) {
+                                    if (intent?.action == "dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED") {
+                                        if (isRecoveredSessionRunning) {
+                                            isRecoveredSessionRunning = false
+                                            replayDeferredNoteOpen()
+                                        }
+                                    }
+                                }
+                            }
+                            val filter = android.content.IntentFilter("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED")
+                            androidx.core.content.ContextCompat.registerReceiver(
+                                this@MainActivity,
+                                receiver,
+                                filter,
+                                androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
+                            )
+                            onDispose {
+                                try {
+                                    unregisterReceiver(receiver)
+                                } catch (_: Exception) {}
+                            }
+                        }
 
                         FloatingPreviewHost(
                             onTriggerAction = { note, action ->
@@ -366,6 +495,49 @@ class MainActivity : ComponentActivity() {
                                         repository = repo
                                     )
                                 }
+                            )
+                        }
+
+                        val emergencyFile = quarantinedEmergencySave.value
+                        if (showEmergencyRecoveryDialog.value && emergencyFile != null && isOnboardingCompleted) {
+                            EmergencyRecoveryDialog(
+                                emergencyFile = emergencyFile,
+                                onDismiss = {
+                                    showEmergencyRecoveryDialog.value = false
+                                },
+                                onOpenNow = {
+                                    showEmergencyRecoveryDialog.value = false
+                                    val staged = repo.openEmergencyRecoverySession(emergencyFile)
+                                    quarantinedEmergencySave.value = null
+                                    isRecoveredSessionRunning = true
+                                    NoteOpenManager.openInCanvas(this@MainActivity, staged, repo)
+                                },
+                                onSaveAsNote = {
+                                    showEmergencyRecoveryDialog.value = false
+                                    val defaultName = "Recovered_Note_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date(emergencyFile.lastModified()))
+                                    emergencySaveNameInput = defaultName
+                                    emergencySaveTargetFolder = repo.getRootNotesDirectory()
+                                    showEmergencySaveNameDialog.value = true
+                                },
+                                onDiscard = {
+                                    repo.discardEmergencyRecovery()
+                                    onEmergencySaveResolved()
+                                }
+                            )
+                        }
+
+                        if (showEmergencySaveNameDialog.value && emergencyFile != null && isOnboardingCompleted) {
+                            EmergencySaveNameDialog(
+                                file = emergencyFile,
+                                initialName = emergencySaveNameInput,
+                                initialFolder = emergencySaveTargetFolder ?: repo.getRootNotesDirectory(),
+                                repository = repo,
+                                onDismiss = { showEmergencySaveNameDialog.value = false },
+                                onSaveSuccess = { savedFile ->
+                                    onEmergencySaveResolved()
+                                    android.widget.Toast.makeText(this@MainActivity, "Saved recovered note as \"${savedFile.name}\"", android.widget.Toast.LENGTH_SHORT).show()
+                                },
+                                onFolderCreated = {}
                             )
                         }
                     }
@@ -503,6 +675,12 @@ class MainActivity : ComponentActivity() {
         }
 
         if (action != Intent.ACTION_VIEW && action != Intent.ACTION_EDIT) return
+
+        if (quarantinedEmergencySave.value != null) {
+            pendingDeferredNoteOpen.value = DeferredNoteOpen.ExternalIntent(intent)
+            showEmergencyRecoveryDialog.value = true
+            return
+        }
 
         lifecycleScope.launch {
             try {
@@ -642,6 +820,10 @@ fun MainResponsiveAppShell(
             isRapidSwitch = lastTabSwitchTime > 0L && delta < 320L
             lastTabSwitchTime = currentTime
             selectedTab = tabId
+            val mainActivity = context as? MainActivity
+            if (tabId == AppTab.FILES.id && mainActivity?.quarantinedEmergencySave?.value != null) {
+                mainActivity.showEmergencyRecoveryDialog.value = true
+            }
         }
 
         if (isDoubleTap) {
@@ -762,6 +944,12 @@ fun MainResponsiveAppShell(
                     visibleTabs.forEach { tab ->
                         val tabTitle = androidx.compose.ui.res.stringResource(tab.titleRes)
                         val isWorkspace = tab == AppTab.WORKSPACE
+                        val isFiles = tab == AppTab.FILES
+                        val isCloud = tab == AppTab.CLOUD
+                        val mainActivity = context as? MainActivity
+                        val showFilesRedDot = isFiles && mainActivity?.quarantinedEmergencySave?.value != null
+                        val unresolvedConflicts by ConflictPersistenceManager.getInstance(context).unresolvedConflicts.collectAsStateWithLifecycle()
+                        val showCloudRedDot = isCloud && unresolvedConflicts.isNotEmpty()
                         val windowCount = isCanvasSessionActive?.openWindowCount ?: 1
                         NavigationRailItem(
                             selected = selectedTab == tab.id,
@@ -785,6 +973,36 @@ fun MainResponsiveAppShell(
                                             imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
                                             contentDescription = tabTitle,
                                             tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                } else if (showFilesRedDot) {
+                                    BadgedBox(
+                                        badge = {
+                                            Badge(
+                                                containerColor = MaterialTheme.colorScheme.error,
+                                                contentColor = MaterialTheme.colorScheme.onError
+                                            )
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
+                                            contentDescription = tabTitle,
+                                            tint = if (selectedTab == tab.id) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                } else if (showCloudRedDot) {
+                                    BadgedBox(
+                                        badge = {
+                                            Badge(
+                                                containerColor = MaterialTheme.colorScheme.error,
+                                                contentColor = MaterialTheme.colorScheme.onError
+                                            )
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
+                                            contentDescription = tabTitle,
+                                            tint = if (selectedTab == tab.id) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                                         )
                                     }
                                 } else {
@@ -835,6 +1053,12 @@ fun MainResponsiveAppShell(
                         visibleTabs.forEach { tab ->
                             val tabTitle = androidx.compose.ui.res.stringResource(tab.titleRes)
                             val isWorkspace = tab == AppTab.WORKSPACE
+                            val isFiles = tab == AppTab.FILES
+                            val isCloud = tab == AppTab.CLOUD
+                            val mainActivity = context as? MainActivity
+                            val showFilesRedDot = isFiles && mainActivity?.quarantinedEmergencySave?.value != null
+                            val unresolvedConflicts by ConflictPersistenceManager.getInstance(context).unresolvedConflicts.collectAsStateWithLifecycle()
+                            val showCloudRedDot = isCloud && unresolvedConflicts.isNotEmpty()
                             val windowCount = isCanvasSessionActive?.openWindowCount ?: 1
                             NavigationBarItem(
                                 selected = selectedTab == tab.id,
@@ -858,6 +1082,36 @@ fun MainResponsiveAppShell(
                                                 imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
                                                 contentDescription = tabTitle,
                                                 tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    } else if (showFilesRedDot) {
+                                        BadgedBox(
+                                            badge = {
+                                                Badge(
+                                                    containerColor = MaterialTheme.colorScheme.error,
+                                                    contentColor = MaterialTheme.colorScheme.onError
+                                                )
+                                            }
+                                        ) {
+                                            Icon(
+                                                imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
+                                                contentDescription = tabTitle,
+                                                tint = if (selectedTab == tab.id) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                                            )
+                                        }
+                                    } else if (showCloudRedDot) {
+                                        BadgedBox(
+                                            badge = {
+                                                Badge(
+                                                    containerColor = MaterialTheme.colorScheme.error,
+                                                    contentColor = MaterialTheme.colorScheme.onError
+                                                )
+                                            }
+                                        ) {
+                                            Icon(
+                                                imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
+                                                contentDescription = tabTitle,
+                                                tint = if (selectedTab == tab.id) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                                             )
                                         }
                                     } else {

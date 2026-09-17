@@ -18,5 +18,6 @@ data class SyncMetadataEntity(
     val remoteHash: String?,
     val localLastModified: Long,
     val sizeBytes: Long,
-    val lastSyncedAt: Long
+    val lastSyncedAt: Long,
+    val deviceId: String = ""
 )

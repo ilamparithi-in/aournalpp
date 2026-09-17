@@ -19,6 +19,8 @@ import dev.ilamparithi.aournalpp.backup.model.ServiceConfig
 import dev.ilamparithi.aournalpp.backup.model.TransferDirection
 import dev.ilamparithi.aournalpp.backup.model.TransferItem
 import dev.ilamparithi.aournalpp.backup.model.TransferStatus
+import dev.ilamparithi.aournalpp.backup.model.DeviceInfo
+import dev.ilamparithi.aournalpp.backup.model.DeviceIdentity
 import dev.ilamparithi.aournalpp.backup.provider.CloudStorageProvider
 import dev.ilamparithi.aournalpp.backup.provider.StorageProviderFactory
 import dev.ilamparithi.aournalpp.backup.queue.FileTransferQueueManager
@@ -157,9 +159,26 @@ class BackupEngine(
         onProgress: ((current: Int, total: Int, currentFile: String) -> Unit)? = null,
         clearCompletedQueue: Boolean = true
     ): BackupResult = withContext(Dispatchers.IO) {
+        val serviceLockFile = File(context.filesDir, ".cloud_sync_${serviceConfig.id}.lock")
+        val serviceLock = CrossProcessLock.tryAcquire(serviceLockFile)
+        if (serviceLock == null) {
+            Log.w(TAG, "Service ${serviceConfig.name} (${serviceConfig.id}) is already syncing. Skipping re-entrant sync.")
+            return@withContext BackupResult(
+                serviceId = serviceConfig.id,
+                serviceName = serviceConfig.name,
+                totalFilesScanned = 0,
+                filesUploaded = 0,
+                filesSkipped = 0,
+                filesFailed = 0,
+                totalBytesTransferred = 0L,
+                durationMs = 0L,
+                errors = listOf("Sync already in progress for ${serviceConfig.name}")
+            )
+        }
         val prefs = BackupPreferences(context)
         val netCheck = NetworkUtils.checkSyncNetworkPreconditions(context, wifiOnly = prefs.isWifiOnlyEnabled)
         if (!netCheck.canSync) {
+            serviceLock.release()
             Log.w(TAG, "Network preconditions not met for ${serviceConfig.name}: ${netCheck.errorMessage}")
             return@withContext BackupResult(
                 serviceId = serviceConfig.id,
@@ -173,38 +192,44 @@ class BackupEngine(
                 errors = listOf(netCheck.errorMessage ?: "Device offline")
             )
         }
-        if (concurrency != null) {
-            FileTransferQueueManager.setConcurrencyWorkers(concurrency)
-        }
-        if (clearCompletedQueue) {
-            FileTransferQueueManager.clearCompleted()
-        }
-        val startTime = System.currentTimeMillis()
-        val exclusionFilter = vault.getExclusionFilter()
-        val scanner = BackupScanner(env, exclusionFilter)
-        val dao = db.syncMetadataDao()
+            if (concurrency != null) {
+                FileTransferQueueManager.setConcurrencyWorkers(concurrency)
+            }
+            if (clearCompletedQueue) {
+                FileTransferQueueManager.clearCompleted()
+            }
+            val startTime = System.currentTimeMillis()
+            val exclusionFilter = vault.getExclusionFilter()
+            val scanner = BackupScanner(env, exclusionFilter)
+            val dao = db.syncMetadataDao()
 
-        // Batch-retrieve all existing metadata for this service upfront
-        val allMetadata = dao.getAllForService(serviceConfig.id)
-        val existingMetaMap = allMetadata.associateBy { "${it.scope}:${it.relativePath}" }
+            // Batch-retrieve all existing metadata for this service upfront
+            val allMetadata = dao.getAllForService(serviceConfig.id)
+            val existingMetaMap = allMetadata.associateBy { "${it.scope}:${it.relativePath}" }
 
-        val filesToSync = mutableListOf<Pair<ScannedLocalFile, String>>() // (ScannedFile, remoteDestinationPath)
-        val seenRemotePaths = mutableSetOf<String>()
+            val filesToSync = mutableListOf<Pair<ScannedLocalFile, String>>() // (ScannedFile, remoteDestinationPath)
+            val seenRemotePaths = mutableSetOf<String>()
+            val deviceId = DeviceIdentity.getDeviceId(context)
 
-        // 1. Complete Backup domain scanning
-        if (serviceConfig.isCompleteBackupEnabled) {
-            val completeCache = allMetadata
-                .filter { it.scope == BackupScope.NOTES.id || it.scope == BackupScope.CONFIG.id }
-                .associateBy { it.relativePath }
-            val completeFiles = scanner.scanCompleteBackup(completeCache)
-            val remoteRoot = getCompleteBackupRemoteRoot(serviceConfig)
-            for (f in completeFiles) {
-                val remotePath = "$remoteRoot/${f.relativePath}"
-                if (seenRemotePaths.add(remotePath)) {
-                    filesToSync.add(f to remotePath)
+            // 1. Complete Backup domain scanning
+            if (serviceConfig.isCompleteBackupEnabled) {
+                val completeCache = allMetadata
+                    .filter { it.scope == BackupScope.NOTES.id || it.scope == BackupScope.CONFIG.id }
+                    .associateBy { it.relativePath }
+                val completeFiles = scanner.scanCompleteBackup(completeCache)
+                val remoteRoot = getCompleteBackupRemoteRoot(serviceConfig)
+                for (f in completeFiles) {
+                    val isConfig = f.scope == BackupScope.CONFIG.id || isConfigFile(f.relativePath) || f.relativePath.startsWith(".config/")
+                    val remotePath = if (isConfig) {
+                        "$remoteRoot/.devices/$deviceId/${f.relativePath}"
+                    } else {
+                        "$remoteRoot/${f.relativePath}"
+                    }
+                    if (seenRemotePaths.add(remotePath)) {
+                        filesToSync.add(f to remotePath)
+                    }
                 }
             }
-        }
 
         // 2. Custom folder mappings scanning
         val activeMappings = serviceConfig.customMappings.ifEmpty {
@@ -236,6 +261,7 @@ class BackupEngine(
         var failedCount = 0
         var totalBytesTransferred = 0L
         val errors = mutableListOf<String>()
+        val detectedConflicts = mutableListOf<FileConflictGroup>()
 
         val provider = getStorageProvider(serviceConfig)
 
@@ -269,15 +295,32 @@ class BackupEngine(
                 )
             }
 
-            // Differential comparison via in-memory metadata lookup
+            // Differential comparison via in-memory metadata lookup and pre-backup remote inspection
             val uploadQueue = mutableListOf<Pair<ScannedLocalFile, String>>()
             val cacheDir = File(context.cacheDir, "config_diff_cache").apply { if (!exists()) mkdirs() }
+            val remoteRoot = getCompleteBackupRemoteRoot(serviceConfig)
 
+            // Migrate legacy remote .config/ to .devices/{deviceId}/.config/ on first sync
+            if (serviceConfig.isCompleteBackupEnabled) {
+                migrateLegacyRemoteConfigIfNeeded(provider, remoteRoot, deviceId)
+                // Upload current device_info.json alongside device config
+                try {
+                    val devInfo = DeviceIdentity.getDeviceInfo(context)
+                    val tempInfoFile = File(cacheDir, "device_info.json").apply {
+                        writeText(devInfo.toJson().toString(2))
+                    }
+                    provider.createDirectory("$remoteRoot/.devices/$deviceId")
+                    provider.uploadFile(tempInfoFile, "$remoteRoot/.devices/$deviceId/device_info.json") { _, _ -> }
+                    tempInfoFile.delete()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to upload device_info.json: ${e.message}")
+                }
+            }
+
+            // Partition files: skip files whose local hash matches previous sync record
+            val candidateUploads = mutableListOf<Pair<ScannedLocalFile, String>>()
             for ((scanned, remotePath) in filesToSync) {
                 val record = existingMetaMap["${scanned.scope}:${scanned.relativePath}"]
-                val isConfig = isConfigFile(scanned.relativePath)
-
-                // 1. Content hash matches previous sync record: 0 diff changes -> skip
                 if (record != null && record.localSha256 == scanned.sha256) {
                     skippedCount++
                     if (scanned.lastModified != record.localLastModified) {
@@ -285,9 +328,29 @@ class BackupEngine(
                     }
                     continue
                 }
+                candidateUploads.add(scanned to remotePath)
+            }
 
-                // 2. For config files (x11_prefs, settings, app_settings), check diff against remote instead of accessed/modified date
+            // Batch fetch remote metadata for candidate upload directories
+            val remoteMetaByPath = mutableMapOf<String, RemoteFileMetadata>()
+            val candidateDirs = candidateUploads.map { it.second.substringBeforeLast('/') }.distinct()
+            for (dir in candidateDirs) {
+                val entries = provider.listFiles(dir).getOrNull() ?: emptyList()
+                for (entry in entries) {
+                    if (!entry.isDirectory) {
+                        remoteMetaByPath[entry.remotePath] = entry
+                    }
+                }
+            }
+
+            // Conflict detection & upload queueing
+            for ((scanned, remotePath) in candidateUploads) {
+                val record = existingMetaMap["${scanned.scope}:${scanned.relativePath}"]
+                val isConfig = isConfigFile(scanned.relativePath)
+                val remoteMeta = remoteMetaByPath[remotePath]
+
                 if (isConfig) {
+                    // Config file diff handling
                     val tempRemoteFile = File(cacheDir, "remote_${serviceConfig.id}_${scanned.file.name}")
                     val downloadRes = try {
                         provider.downloadFile(remotePath, tempRemoteFile) { _, _ -> }
@@ -305,20 +368,130 @@ class BackupEngine(
                                     relativePath = scanned.relativePath,
                                     scope = scanned.scope,
                                     localSha256 = scanned.sha256,
-                                    remoteHash = null,
+                                    remoteHash = scanned.sha256,
                                     localLastModified = scanned.lastModified,
                                     sizeBytes = scanned.sizeBytes,
-                                    lastSyncedAt = System.currentTimeMillis()
+                                    lastSyncedAt = System.currentTimeMillis(),
+                                    deviceId = deviceId
                                 )
                             )
                             tempRemoteFile.delete()
                             continue
+                        } else if (record != null && remoteMeta != null && remoteMeta.lastModifiedEpochMs > record.lastSyncedAt + 2000L) {
+                            // Both local and remote configs changed since last sync -> flag conflict
+                            val conflict = FileConflictGroup(
+                                id = "config_${serviceConfig.id}_${scanned.file.name}",
+                                relativePath = scanned.relativePath,
+                                localVersion = FileVersionItem(
+                                    source = FileVersionSource.LOCAL,
+                                    fileName = scanned.file.name,
+                                    relativePath = scanned.relativePath,
+                                    localFilePath = scanned.file.absolutePath,
+                                    sizeBytes = scanned.sizeBytes,
+                                    lastModifiedEpochMs = scanned.lastModified,
+                                    contentHash = scanned.sha256,
+                                    remotePath = null
+                                ),
+                                remoteVersions = listOf(
+                                    FileVersionItem(
+                                        source = FileVersionSource.REMOTE(
+                                            serviceId = serviceConfig.id,
+                                            serviceName = serviceConfig.name,
+                                            providerType = serviceConfig.providerType
+                                        ),
+                                        fileName = scanned.file.name,
+                                        relativePath = scanned.relativePath,
+                                        localFilePath = tempRemoteFile.absolutePath,
+                                        sizeBytes = tempRemoteFile.length(),
+                                        lastModifiedEpochMs = remoteMeta.lastModifiedEpochMs,
+                                        contentHash = calculateFileHash(tempRemoteFile),
+                                        remotePath = remotePath
+                                    )
+                                ),
+                                description = "Config file modified on remote ${serviceConfig.name}",
+                                localFilePath = scanned.file.absolutePath,
+                                remoteFilePath = tempRemoteFile.absolutePath
+                            )
+                            detectedConflicts.add(conflict)
+                            skippedCount++
+                            continue
                         }
                     }
                     tempRemoteFile.delete()
-                }
+                    uploadQueue.add(scanned to remotePath)
+                } else {
+                    // Note and other non-config files
+                    if (remoteMeta != null) {
+                        val sameHash = remoteMeta.contentHash != null && remoteMeta.contentHash.equals(scanned.sha256, ignoreCase = true)
+                        val sameSizeAndMtime = remoteMeta.sizeBytes == scanned.sizeBytes && kotlin.math.abs(remoteMeta.lastModifiedEpochMs - scanned.lastModified) <= 2000L
+                        if (sameHash || sameSizeAndMtime) {
+                            // Remote file is already identical to local file -> skip upload
+                            skippedCount++
+                            dao.insertOrUpdate(
+                                SyncMetadataEntity(
+                                    serviceId = serviceConfig.id,
+                                    relativePath = scanned.relativePath,
+                                    scope = scanned.scope,
+                                    localSha256 = scanned.sha256,
+                                    remoteHash = remoteMeta.contentHash ?: scanned.sha256,
+                                    localLastModified = scanned.lastModified,
+                                    sizeBytes = scanned.sizeBytes,
+                                    lastSyncedAt = System.currentTimeMillis(),
+                                    deviceId = deviceId
+                                )
+                            )
+                            continue
+                        }
 
-                uploadQueue.add(scanned to remotePath)
+                        // Remote exists and has different content
+                        val remoteModifiedSinceSync = record != null && remoteMeta.lastModifiedEpochMs > (record.lastSyncedAt + 2000L)
+                        val remoteNewerThanLocal = remoteMeta.lastModifiedEpochMs > (scanned.lastModified + 2000L)
+                        val isFirstSyncCollision = record == null
+
+                        if (remoteModifiedSinceSync || remoteNewerThanLocal || isFirstSyncCollision) {
+                            Log.w(TAG, "Note conflict detected for ${scanned.relativePath} on ${serviceConfig.name} (remote MTime: ${remoteMeta.lastModifiedEpochMs}, local MTime: ${scanned.lastModified}, lastSync: ${record?.lastSyncedAt})")
+                            val conflict = FileConflictGroup(
+                                id = "conflict_${serviceConfig.id}_${scanned.relativePath.replace('/', '_')}",
+                                relativePath = scanned.relativePath,
+                                localVersion = FileVersionItem(
+                                    source = FileVersionSource.LOCAL,
+                                    fileName = scanned.file.name,
+                                    relativePath = scanned.relativePath,
+                                    localFilePath = scanned.file.absolutePath,
+                                    sizeBytes = scanned.sizeBytes,
+                                    lastModifiedEpochMs = scanned.lastModified,
+                                    contentHash = scanned.sha256,
+                                    remotePath = null
+                                ),
+                                remoteVersions = listOf(
+                                    FileVersionItem(
+                                        source = FileVersionSource.REMOTE(
+                                            serviceId = serviceConfig.id,
+                                            serviceName = serviceConfig.name,
+                                            providerType = serviceConfig.providerType
+                                        ),
+                                        fileName = scanned.file.name,
+                                        relativePath = scanned.relativePath,
+                                        localFilePath = "",
+                                        sizeBytes = remoteMeta.sizeBytes,
+                                        lastModifiedEpochMs = remoteMeta.lastModifiedEpochMs,
+                                        contentHash = remoteMeta.contentHash,
+                                        remotePath = remotePath
+                                    )
+                                ),
+                                description = "Note was modified in the cloud on ${serviceConfig.name}",
+                                localFilePath = scanned.file.absolutePath,
+                                remoteFilePath = remotePath
+                            )
+                            detectedConflicts.add(conflict)
+                            skippedCount++
+                            continue // Hold conflicting note file for resolution!
+                        }
+                    }
+
+                    // No conflict detected: safe to upload
+                    uploadQueue.add(scanned to remotePath)
+                }
             }
 
             // Enqueue all active upload items with deterministic IDs
@@ -395,10 +568,11 @@ class BackupEngine(
                             relativePath = scanned.relativePath,
                             scope = scanned.scope,
                             localSha256 = scanned.sha256,
-                            remoteHash = null,
+                            remoteHash = scanned.sha256,
                             localLastModified = scanned.lastModified,
                             sizeBytes = scanned.sizeBytes,
-                            lastSyncedAt = System.currentTimeMillis()
+                            lastSyncedAt = System.currentTimeMillis(),
+                            deviceId = deviceId
                         )
                     )
                 } else {
@@ -416,9 +590,20 @@ class BackupEngine(
             }
         } finally {
             provider.disconnect()
+            serviceLock.release()
         }
 
-        val resultStatus = if (failedCount == 0 && errors.isEmpty()) "Success" else "Completed with $failedCount errors"
+        if (detectedConflicts.isNotEmpty()) {
+            ConflictPersistenceManager.getInstance(context).addConflicts(detectedConflicts)
+        }
+
+        val resultStatus = if (failedCount == 0 && errors.isEmpty() && detectedConflicts.isEmpty()) {
+            "Success"
+        } else if (detectedConflicts.isNotEmpty()) {
+            "Conflicts detected (${detectedConflicts.size})"
+        } else {
+            "Completed with $failedCount errors"
+        }
         vault.saveService(
             serviceConfig.copy(
                 lastSyncedAtEpochMs = System.currentTimeMillis(),
@@ -435,7 +620,8 @@ class BackupEngine(
             filesFailed = failedCount,
             totalBytesTransferred = totalBytesTransferred,
             durationMs = System.currentTimeMillis() - startTime,
-            errors = errors
+            errors = errors,
+            detectedConflicts = detectedConflicts
         )
     }
 
@@ -550,13 +736,22 @@ class BackupEngine(
                     }
                 }
 
-                // 2. List .config tree (downloads all files including root configs and xournalpp subfolder)
-                onLog?.invoke("Scanning configuration files in .config/...")
-                val remoteConfigs = listRemoteRecursively(provider, "$remoteRoot/.config")
+                // 2. List .config tree (per-device namespace first, fallback to legacy)
+                val deviceId = DeviceIdentity.getDeviceId(context)
+                onLog?.invoke("Scanning configuration files in .devices/$deviceId/.config/...")
+                var remoteConfigs = listRemoteRecursively(provider, "$remoteRoot/.devices/$deviceId/.config")
+                var configBasePrefix = "$remoteRoot/.devices/$deviceId/.config"
+                if (remoteConfigs.none { !it.isDirectory }) {
+                    val legacyConfigs = listRemoteRecursively(provider, "$remoteRoot/.config")
+                    if (legacyConfigs.any { !it.isDirectory }) {
+                        remoteConfigs = legacyConfigs
+                        configBasePrefix = "$remoteRoot/.config"
+                    }
+                }
                 val addedRemotePaths = mutableSetOf<String>()
                 for (rf in remoteConfigs) {
                     if (rf.isDirectory) continue
-                    val subPath = rf.remotePath.removePrefix("$remoteRoot/.config").trim('/')
+                    val subPath = rf.remotePath.removePrefix(configBasePrefix).trim('/')
                     if (subPath.isEmpty()) continue
                     val destFile = try {
                         resolveSafeChild(notesConfigDir, subPath)
@@ -576,32 +771,6 @@ class BackupEngine(
                             )
                         )
                         addedRemotePaths.add(rf.remotePath)
-                    }
-                }
-
-                // Fallback for legacy backups where only $remoteRoot/.config/xournalpp was backed up
-                val legacyConfigs = listRemoteRecursively(provider, "$remoteRoot/.config/xournalpp")
-                for (rf in legacyConfigs) {
-                    if (rf.isDirectory || rf.remotePath in addedRemotePaths) continue
-                    val subPath = rf.remotePath.removePrefix("$remoteRoot/.config/xournalpp").trim('/')
-                    if (subPath.isEmpty()) continue
-                    val destFile = try {
-                        resolveSafeChild(File(notesConfigDir, "xournalpp"), subPath)
-                    } catch (secEx: SecurityException) {
-                        Log.e(TAG, "Security: Path traversal rejected for remote path: ${rf.remotePath}", secEx)
-                        errors.add("Security violation rejected: ${rf.remotePath}")
-                        continue
-                    }
-                    if (seenDownloadRemotePaths.add(rf.remotePath)) {
-                        remoteFilesToDownload.add(
-                            RestoreDownloadItem(
-                                remoteFile = rf,
-                                remotePath = rf.remotePath,
-                                localFile = destFile,
-                                scope = BackupScope.CONFIG.id,
-                                relativePath = ".config/xournalpp/$subPath"
-                            )
-                        )
                     }
                 }
             }
@@ -638,21 +807,27 @@ class BackupEngine(
             }
 
             val totalDiscovered = remoteFilesToDownload.size
-            onLog?.invoke("Discovered $totalDiscovered remote item(s) to evaluate")
+            onLog?.invoke("Comparing $totalDiscovered remote file(s) with local storage...")
 
             // Apply Conflict Policy
             val downloadQueue = mutableListOf<RestoreDownloadItem>()
             for (restoreItem in remoteFilesToDownload) {
                 val localFile = restoreItem.localFile
                 val rf = restoreItem.remoteFile
+
                 if (!localFile.exists()) {
+                    // File does not exist locally -> Always download
                     downloadQueue.add(restoreItem)
                 } else {
+                    // Collision exists: Apply resolution policy
                     when (conflictPolicy) {
                         ConflictResolutionPolicy.OVERWRITE_LOCAL -> {
                             downloadQueue.add(restoreItem)
                         }
                         ConflictResolutionPolicy.SKIP_CONFLICTS -> {
+                            skippedCount++
+                        }
+                        ConflictResolutionPolicy.ASK_USER -> {
                             skippedCount++
                         }
                         ConflictResolutionPolicy.KEEP_NEWER -> {
@@ -693,7 +868,7 @@ class BackupEngine(
                     remotePath = restoreItem.remotePath,
                     fileName = restoreItem.localFile.name,
                     direction = TransferDirection.DOWNLOAD,
-                    totalBytes = if (restoreItem.localFile.exists()) restoreItem.localFile.length() else 0L,
+                    totalBytes = if (restoreItem.remoteFile.sizeBytes > 0L) restoreItem.remoteFile.sizeBytes else (if (restoreItem.localFile.exists()) restoreItem.localFile.length() else 0L),
                     status = TransferStatus.QUEUED,
                     scope = restoreItem.scope,
                     relativePath = restoreItem.relativePath
@@ -776,7 +951,8 @@ class BackupEngine(
                             remoteHash = rf.contentHash ?: sha256,
                             localLastModified = finalLocalModified,
                             sizeBytes = localFile.length(),
-                            lastSyncedAt = System.currentTimeMillis()
+                            lastSyncedAt = System.currentTimeMillis(),
+                            deviceId = DeviceIdentity.getDeviceId(context)
                         )
                     )
 
@@ -860,41 +1036,49 @@ class BackupEngine(
         try {
             FileTransferQueueManager.clearCompleted()
             val services = vault.getActiveConfiguredServices().filter { it.isEnabled }
-            val results = mutableListOf<BackupResult>()
-            for (service in services) {
-                try {
-                    val result = performBackupInternal(service, concurrency, onProgress, clearCompletedQueue = false)
-                    results.add(result)
-                } catch (e: Exception) {
-                    if (e is CancellationException) throw e
-                    Log.e(TAG, "Sync failed for service ${service.name} (${service.id})", e)
-                    val isTransient = NetworkUtils.isTransientNetworkException(e) ||
-                            NetworkUtils.isTransientNetworkErrorMessage(e.message)
-                    if (!isTransient) {
-                        vault.saveService(
-                            service.copy(
-                                lastSyncStatus = "Failed: ${e.message ?: "Unknown error"}"
+            if (services.isEmpty()) return emptyList()
+
+            return coroutineScope {
+                services.map { service ->
+                    async(Dispatchers.IO) {
+                        try {
+                            performBackupInternal(
+                                serviceConfig = service,
+                                concurrency = concurrency,
+                                onProgress = { current, total, currentFile ->
+                                    onProgress?.invoke(current, total, "[${service.name}] $currentFile")
+                                },
+                                clearCompletedQueue = false
                             )
-                        )
-                    } else {
-                        Log.w(TAG, "Transient network failure during sync for ${service.name}: ${e.message}. Preserving lastSyncStatus.")
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                            Log.e(TAG, "Sync failed for service ${service.name} (${service.id})", e)
+                            val isTransient = NetworkUtils.isTransientNetworkException(e) ||
+                                    NetworkUtils.isTransientNetworkErrorMessage(e.message)
+                            if (!isTransient) {
+                                vault.saveService(
+                                    service.copy(
+                                        lastSyncStatus = "Failed: ${e.message ?: "Unknown error"}"
+                                    )
+                                )
+                            } else {
+                                Log.w(TAG, "Transient network failure during sync for ${service.name}: ${e.message}. Preserving lastSyncStatus.")
+                            }
+                            BackupResult(
+                                serviceId = service.id,
+                                serviceName = service.name,
+                                totalFilesScanned = 0,
+                                filesUploaded = 0,
+                                filesSkipped = 0,
+                                filesFailed = 1,
+                                totalBytesTransferred = 0L,
+                                durationMs = 0L,
+                                errors = listOf(e.message ?: "Unknown error")
+                            )
+                        }
                     }
-                    results.add(
-                        BackupResult(
-                            serviceId = service.id,
-                            serviceName = service.name,
-                            totalFilesScanned = 0,
-                            filesUploaded = 0,
-                            filesSkipped = 0,
-                            filesFailed = 1,
-                            totalBytesTransferred = 0L,
-                            durationMs = 0L,
-                            errors = listOf(e.message ?: "Unknown error")
-                        )
-                    )
-                }
+                }.awaitAll()
             }
-            return results
         } finally {
             lock.release()
         }
@@ -1012,14 +1196,15 @@ class BackupEngine(
             return@withContext emptyMap()
         }
         val services = vault.getActiveConfiguredServices().filter { it.isEnabled }
-        val results = mutableMapOf<String, List<dev.ilamparithi.aournalpp.backup.model.RemoteFileMetadata>>()
-        for (service in services) {
-            val changes = checkForRemoteChanges(service)
-            if (changes.isNotEmpty()) {
-                results[service.name] = changes
-            }
+        if (services.isEmpty()) return@withContext emptyMap()
+        coroutineScope {
+            services.map { service ->
+                async {
+                    val changes = checkForRemoteChanges(service)
+                    if (changes.isNotEmpty()) service.name to changes else null
+                }
+            }.awaitAll().filterNotNull().toMap()
         }
-        results
     }
 
     /**
@@ -1634,6 +1819,36 @@ class BackupEngine(
         return File(env.getNotesDirectory(), clean)
     }
 
+    private suspend fun migrateLegacyRemoteConfigIfNeeded(
+        provider: CloudStorageProvider,
+        remoteRoot: String,
+        deviceId: String
+    ) {
+        try {
+            val legacyConfigs = listRemoteRecursively(provider, "$remoteRoot/.config")
+            if (legacyConfigs.none { !it.isDirectory }) return
+            val targetDir = "$remoteRoot/.devices/$deviceId/.config"
+            provider.createDirectory(targetDir)
+            val cacheDir = File(context.cacheDir, "migration_cache").apply { if (!exists()) mkdirs() }
+            for ((remotePath, isDirectory) in legacyConfigs) {
+                if (isDirectory) continue
+                val subPath = remotePath.removePrefix("$remoteRoot/.config").trim('/')
+                if (subPath.isEmpty()) continue
+                val tempFile = File(cacheDir, "mig_$subPath".replace('/', '_'))
+                val dl = provider.downloadFile(remotePath, tempFile) { _, _ -> }
+                if (dl.isSuccess && tempFile.exists()) {
+                    val destRemotePath = "$targetDir/$subPath"
+                    provider.uploadFile(tempFile, destRemotePath) { _, _ -> }
+                    tempFile.delete()
+                    provider.deleteFile(remotePath)
+                }
+            }
+            Log.i(TAG, "Successfully migrated legacy remote .config to $targetDir")
+        } catch (e: Exception) {
+            Log.w(TAG, "Legacy remote config migration skipped or failed: ${e.message}")
+        }
+    }
+
     private suspend fun listRemoteRecursively(
         provider: dev.ilamparithi.aournalpp.backup.provider.CloudStorageProvider,
         remoteDirectory: String
@@ -1819,9 +2034,18 @@ class BackupEngine(
                 else if (altLocalFile != null && altLocalFile.exists() && altLocalFile.length() > 0L) altLocalFile
                 else null
 
-                val remoteFilePath = "$cleanRoot/$relPath"
+                val deviceId = DeviceIdentity.getDeviceId(context)
+                val deviceRemotePath = "$cleanRoot/.devices/$deviceId/$relPath"
+                val legacyRemotePath = "$cleanRoot/$relPath"
                 val tempRemoteFile = File(cacheDir, "remote_${serviceConfig.id}_$fileName")
-                val downloadRes = provider.downloadFile(remoteFilePath, tempRemoteFile) { _, _ -> }
+                
+                var remoteFilePath = deviceRemotePath
+                var downloadRes = provider.downloadFile(deviceRemotePath, tempRemoteFile) { _, _ -> }
+                if (downloadRes.isFailure || !tempRemoteFile.exists() || tempRemoteFile.length() == 0L) {
+                    // Fallback to legacy path
+                    remoteFilePath = legacyRemotePath
+                    downloadRes = provider.downloadFile(legacyRemotePath, tempRemoteFile) { _, _ -> }
+                }
 
                 val remoteExists = downloadRes.isSuccess && tempRemoteFile.exists() && tempRemoteFile.length() > 0L
 
@@ -1834,6 +2058,11 @@ class BackupEngine(
                         if (!hasContentChanges(activeLocal, tempRemoteFile)) {
                             continue
                         }
+
+                        val parentDir = remoteFilePath.substringBeforeLast('/')
+                        val remoteListing = provider.listFiles(parentDir).getOrNull() ?: emptyList()
+                        val remoteMeta = remoteListing.firstOrNull { it.remotePath == remoteFilePath || it.remotePath.endsWith("/$fileName") }
+                        val actualRemoteTimestamp = remoteMeta?.lastModifiedEpochMs ?: tempRemoteFile.lastModified()
 
                         val localVersion = FileVersionItem(
                             source = FileVersionSource.LOCAL,
@@ -1852,7 +2081,7 @@ class BackupEngine(
                             ),
                             fileName = fileName,
                             relativePath = relPath,
-                            lastModifiedEpochMs = System.currentTimeMillis(), // remote timestamp
+                            lastModifiedEpochMs = actualRemoteTimestamp,
                             sizeBytes = tempRemoteFile.length(),
                             contentHash = remoteHash,
                             localFilePath = tempRemoteFile.absolutePath,

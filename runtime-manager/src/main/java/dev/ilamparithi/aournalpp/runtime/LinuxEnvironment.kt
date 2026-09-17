@@ -505,6 +505,7 @@ class LinuxEnvironment(private val context: Context) {
         return prefs.getBoolean("pref_intelligent_emergency_recovery", true)
     }
 
+    @Synchronized
     fun checkAndQuarantineEmergencySave(): File? {
         if (!isEmergencyRecoveryEnabled()) {
             // Subsystem disabled: do not quarantine or delete; leave for native X11 Xournal++ dialog
@@ -586,6 +587,7 @@ class LinuxEnvironment(private val context: Context) {
         }
     }
 
+    @Synchronized
     fun getQuarantinedEmergencySave(): File? {
         if (!isEmergencyRecoveryEnabled()) {
             val file = File(quarantineRecoveryDir, "quarantined_emergencysave.xopp")
@@ -609,6 +611,7 @@ class LinuxEnvironment(private val context: Context) {
         return null
     }
 
+    @Synchronized
     fun clearQuarantinedEmergencySave() {
         try {
             val file = File(quarantineRecoveryDir, "quarantined_emergencysave.xopp")
@@ -622,6 +625,10 @@ class LinuxEnvironment(private val context: Context) {
         } catch (e: Exception) {
             Log.w(TAG, "Failed to clear quarantined emergency save", e)
         }
+    }
+
+    fun hasPendingEmergencySave(): Boolean {
+        return checkAndQuarantineEmergencySave() != null
     }
 
     fun setupStorageSymlinks() {

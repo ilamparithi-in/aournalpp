@@ -82,10 +82,12 @@ import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
 import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
 import dev.ilamparithi.aournalpp.ui.SingleShareExportDialog
+import dev.ilamparithi.aournalpp.ui.canvas.CanvasEmergencyForceCloseDialog
 import dev.ilamparithi.aournalpp.ui.snap.SnapLayoutMode
 import dev.ilamparithi.aournalpp.utils.WindowPreviewManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 import java.io.File
 
 private data class PendingSingleExport(
@@ -127,6 +129,8 @@ fun ActiveWorkspacePortalScreen(
     var isSavingForShare by remember { mutableStateOf(false) }
     var savePromptWindow by remember { mutableStateOf<ActiveWindowEntry?>(null) }
     var pendingShareWindow by remember { mutableStateOf<ActiveWindowEntry?>(null) }
+    var showEmergencyForceCloseDialog by remember { mutableStateOf(false) }
+    val saveAllCloseTapTimestamps = remember { mutableListOf<Long>() }
 
     // Share Export Dialog state
     var shareExportNote by remember { mutableStateOf<NoteDocument?>(null) }
@@ -245,6 +249,19 @@ fun ActiveWorkspacePortalScreen(
     }
 
     fun triggerSaveAllAndClose() {
+        val now = System.currentTimeMillis()
+        saveAllCloseTapTimestamps.add(now)
+        saveAllCloseTapTimestamps.removeAll { now - it > 2000 }
+
+        val prefs = dev.ilamparithi.aournalpp.data.AppPreferences.getGeneral(context)
+        val tripleTapEnabled = prefs.getBoolean("pref_triple_back_force_close", true)
+
+        if (tripleTapEnabled && saveAllCloseTapTimestamps.size >= 3) {
+            saveAllCloseTapTimestamps.clear()
+            showEmergencyForceCloseDialog = true
+            return
+        }
+
         if (isClosingSession) return
         isClosingSession = true
 
@@ -304,10 +321,10 @@ fun ActiveWorkspacePortalScreen(
                             workspaceState?.windows?.firstOrNull { it.id == targetWid } ?: pending
                         }
                         if (winToShare != null) {
-                            if (!resolvedFilePath.isNullOrBlank()) {
-                                winToShare = winToShare.copy(filePath = resolvedFilePath, isDirty = false)
+                            winToShare = if (!resolvedFilePath.isNullOrBlank()) {
+                                winToShare.copy(filePath = resolvedFilePath, isDirty = false)
                             } else {
-                                winToShare = winToShare.copy(isDirty = false)
+                                winToShare.copy(isDirty = false)
                             }
                             proceedToShare(winToShare)
                         }
@@ -349,7 +366,7 @@ fun ActiveWorkspacePortalScreen(
     // Safety timeout in case :canvas process is closed or unresponsive during save
     LaunchedEffect(isSavingForShare) {
         if (isSavingForShare) {
-            delay(5000)
+            delay(5000.milliseconds)
             if (isSavingForShare) {
                 isSavingForShare = false
                 val pending = pendingShareWindow
@@ -369,7 +386,7 @@ fun ActiveWorkspacePortalScreen(
     // Safety timeout in case :canvas process is closed or unresponsive during parallel close
     LaunchedEffect(isClosingSession) {
         if (isClosingSession) {
-            delay(8000)
+            delay(8000.milliseconds)
             if (isClosingSession) {
                 isClosingSession = false
                 if (!ActiveSessionTracker.isSessionActive(context)) {
@@ -680,9 +697,8 @@ fun ActiveWorkspacePortalScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        val target = win
                         savePromptWindow = null
-                        requestSaveAndShare(target)
+                        requestSaveAndShare(win)
                     }
                 ) {
                     Text(stringResource(R.string.action_yes))
@@ -691,13 +707,29 @@ fun ActiveWorkspacePortalScreen(
             dismissButton = {
                 TextButton(
                     onClick = {
-                        val target = win
                         savePromptWindow = null
-                        proceedToShare(target)
+                        proceedToShare(win)
                     }
                 ) {
                     Text(stringResource(R.string.action_no))
                 }
+            }
+        )
+    }
+
+    if (showEmergencyForceCloseDialog) {
+        CanvasEmergencyForceCloseDialog(
+            onConfirmForceClose = {
+                showEmergencyForceCloseDialog = false
+                isClosingSession = false
+                val intent = Intent(CanvasCommandReceiver.ACTION_REQUEST_FORCE_CLOSE).apply {
+                    setPackage(context.packageName)
+                }
+                context.sendBroadcast(intent)
+                onNavigateHome()
+            },
+            onCancel = {
+                showEmergencyForceCloseDialog = false
             }
         )
     }

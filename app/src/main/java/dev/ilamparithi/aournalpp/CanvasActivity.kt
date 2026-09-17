@@ -3,6 +3,7 @@ package dev.ilamparithi.aournalpp
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import dev.ilamparithi.aournalpp.R
 import android.graphics.Bitmap
 import androidx.core.graphics.createBitmap
 import dev.ilamparithi.aournalpp.runtime.ActiveWorkspaceTracker
@@ -152,6 +153,23 @@ class CanvasActivity : ComponentActivity() {
             }
         }
 
+        fun executeForceCloseFromReceiver(context: Context) {
+            val inst = instance
+            if (inst != null) {
+                inst.sessionManager.stopSession()
+                inst.runOnUiThread {
+                    try {
+                        inst.sendBroadcast(Intent("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED").setPackage(inst.packageName))
+                    } catch (_: Exception) {}
+                    inst.finish()
+                }
+            } else {
+                try {
+                    context.sendBroadcast(Intent("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED").setPackage(context.packageName))
+                } catch (_: Exception) {}
+            }
+        }
+
         fun notifyPreferenceChanged(key: String) {
             instance?.onPreferenceChanged(key)
         }
@@ -182,9 +200,9 @@ class CanvasActivity : ComponentActivity() {
                                 if (activeWin != null) {
                                     WindowPreviewManager.savePreview(env.tmpDir, activeWin.id, bmp)
                                 }
-                                for (win in openWins) {
+                                for ((winId) in openWins) {
                                     if (openWins.size == 1) {
-                                        WindowPreviewManager.savePreview(env.tmpDir, win.id, bmp)
+                                        WindowPreviewManager.savePreview(env.tmpDir, winId, bmp)
                                     }
                                 }
                                 WindowPreviewManager.saveStageComposite(env.tmpDir, bmp)
@@ -213,7 +231,7 @@ class CanvasActivity : ComponentActivity() {
     internal val showEmergencyForceCloseDialogState = mutableStateOf(false)
     internal val isKeyboardOpenState = mutableStateOf(false)
     internal val entrySnapshotPathState = mutableStateOf<String?>(null)
-    private val backPressTimestamps = mutableListOf<Long>()
+    private val closePressTimestamps = mutableListOf<Long>()
 
     private var cameraTempFile: File? = null
     private val cameraLauncher = registerForActivityResult(ActivityResultContracts.TakePicture()) { success ->
@@ -320,6 +338,7 @@ class CanvasActivity : ComponentActivity() {
         com.termux.x11.MainActivity.setPrefs(com.termux.x11.Prefs(this))
 
         env = LinuxEnvironment(this)
+        env.checkAndQuarantineEmergencySave()
         supervisor = ProcessSupervisor(env)
         sessionManager = CanvasSessionManager(
             context = this,
@@ -394,7 +413,7 @@ class CanvasActivity : ComponentActivity() {
 
     internal fun navigateBackToHome() {
         val homeIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+            flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
         }
         startActivity(homeIntent)
     }
@@ -445,19 +464,6 @@ class CanvasActivity : ComponentActivity() {
             return
         }
 
-        val now = System.currentTimeMillis()
-        backPressTimestamps.add(now)
-        backPressTimestamps.removeAll { now - it > 2000 }
-
-        val prefs = dev.ilamparithi.aournalpp.data.AppPreferences.getGeneral(this)
-        val tripleBackEnabled = prefs.getBoolean("pref_triple_back_force_close", true)
-
-        if (tripleBackEnabled && backPressTimestamps.size >= 3) {
-            backPressTimestamps.clear()
-            showEmergencyForceCloseDialogState.value = true
-            return
-        }
-
         lifecycleScope.launch {
             if (sessionManager.isModalOrDialogOpen()) {
                 sessionManager.dismissTopDialogOrModal()
@@ -467,9 +473,24 @@ class CanvasActivity : ComponentActivity() {
         }
     }
 
-
-
     internal fun handleCloseWindow() {
+        if (showEmergencyForceCloseDialogState.value) {
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        closePressTimestamps.add(now)
+        closePressTimestamps.removeAll { now - it > 2000 }
+
+        val prefs = dev.ilamparithi.aournalpp.data.AppPreferences.getGeneral(this)
+        val tripleTapEnabled = prefs.getBoolean("pref_triple_back_force_close", true)
+
+        if (tripleTapEnabled && closePressTimestamps.size >= 3) {
+            closePressTimestamps.clear()
+            showEmergencyForceCloseDialogState.value = true
+            return
+        }
+
         lifecycleScope.launch {
             if (sessionManager.isModalOrDialogOpen()) {
                 sessionManager.dismissTopDialogOrModal()

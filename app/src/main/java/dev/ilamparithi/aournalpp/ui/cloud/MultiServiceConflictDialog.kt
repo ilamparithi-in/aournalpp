@@ -113,7 +113,7 @@ fun MultiServiceConflictDialog(
         val map = mutableStateMapOf<String, Set<FileVersionItem>>()
         for (group in conflictGroups) {
             val initial = initialSelections?.get(group.id)
-            if (initial != null && initial.isNotEmpty()) {
+            if (!initial.isNullOrEmpty()) {
                 map[group.id] = initial
             } else {
                 // Default selection: newest version checked as Primary Copy (or Cloud version for config)
@@ -272,9 +272,8 @@ fun MultiServiceConflictDialog(
                         FilterChip(
                             selected = false,
                             onClick = {
-                                for (group in conflictGroups) {
-                                    val local = group.localVersion
-                                    selectedVersionsMap[group.id] = if (local != null) setOf(local) else emptySet()
+                                for ((id, _, local) in conflictGroups) {
+                                    selectedVersionsMap[id] = if (local != null) setOf(local) else emptySet()
                                 }
                             },
                             label = { Text(stringResource(R.string.action_select_all_local)) },

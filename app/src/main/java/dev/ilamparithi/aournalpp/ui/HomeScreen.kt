@@ -3,7 +3,7 @@ package dev.ilamparithi.aournalpp.ui
 import dev.ilamparithi.aournalpp.ui.dialog.AutosaveResolutionDialog
 import dev.ilamparithi.aournalpp.ui.home.HomeTopAppBar
 import dev.ilamparithi.aournalpp.ui.home.HomeFloatingActionMenu
-import dev.ilamparithi.aournalpp.ui.home.HomeActiveSessionBanner
+import dev.ilamparithi.aournalpp.MainActivity
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
@@ -223,13 +223,6 @@ fun HomeScreen(
     var refreshSeed by remember { mutableLongStateOf(0L) }
     val pullRefreshState = rememberPullToRefreshState()
 
-    // Emergency recovery state
-    var quarantinedEmergencySave by remember { mutableStateOf<File?>(null) }
-    var showEmergencyDialog by remember { mutableStateOf(false) }
-    var showEmergencySaveNameDialog by remember { mutableStateOf(false) }
-    var emergencySaveNameInput by remember { mutableStateOf("") }
-    var emergencySaveTargetFolder by remember { mutableStateOf(repository.getRootNotesDirectory()) }
-
     // Autosave on-open resolution state
     var pendingAutosaveNote by remember { mutableStateOf<NoteDocument?>(null) }
     var pendingSaveAutosaveNote by remember { mutableStateOf<NoteDocument?>(null) }
@@ -267,10 +260,8 @@ fun HomeScreen(
 
         val emergencyFile = withContext(Dispatchers.IO) { env.checkAndQuarantineEmergencySave() }
         if (emergencyFile != null && emergencyFile.exists() && emergencyFile.length() > 0) {
-            if (quarantinedEmergencySave == null && !showEmergencySaveNameDialog) {
-                quarantinedEmergencySave = emergencyFile
-                showEmergencyDialog = true
-            }
+            val mainActivity = context as? MainActivity
+            mainActivity?.quarantinedEmergencySave?.value = emergencyFile
         }
 
         val autoloadOverridden = withContext(Dispatchers.IO) { env.checkAndOverrideAutoloadPreference() }
@@ -894,50 +885,6 @@ fun HomeScreen(
         )
     }
 
-    // Emergency Recovery Launch Dialog
-    if (showEmergencyDialog && quarantinedEmergencySave != null) {
-        val file = quarantinedEmergencySave!!
-        val dateStr = FormatUtils.formatDateTimeMedium(file.lastModified())
-
-        AlertDialog(
-            onDismissRequest = { showEmergencyDialog = false },
-            properties = AppDialogDefaults.Properties,
-            modifier = Modifier.promptWidth(),
-            icon = { Icon(Icons.Default.Restore, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp)) },
-            title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.emergency_dialog_title), fontWeight = FontWeight.Bold) },
-            text = {
-                Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.emergency_dialog_desc, dateStr))
-            },
-            confirmButton = {
-                Button(onClick = {
-                    showEmergencyDialog = false
-                    val staged = repository.openEmergencyRecoverySession(file)
-                    quarantinedEmergencySave = null
-                    loadHomeData()
-                    openNote(staged)
-                }) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_open_now)) }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(onClick = {
-                        showEmergencyDialog = false
-                        val defaultName = "Recovered_Note_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date(file.lastModified()))
-                        emergencySaveNameInput = defaultName
-                        emergencySaveTargetFolder = repository.getRootNotesDirectory()
-                        showEmergencySaveNameDialog = true
-                    }) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_save_as_note)) }
-                    TextButton(onClick = {
-                        showEmergencyDialog = false
-                        repository.discardEmergencyRecovery()
-                        quarantinedEmergencySave = null
-                        loadHomeData()
-                    }) { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_discard), color = MaterialTheme.colorScheme.error) }
-                }
-            }
-        )
-    }
-
-
     // New Note Dialog
     if (showNewNoteDialog) {
         SaveAsNoteDialog(
@@ -1036,26 +983,6 @@ fun HomeScreen(
                     Text("Understood")
                 }
             }
-        )
-    }
-
-    // Save Emergency Recovery Name Dialog
-    if (showEmergencySaveNameDialog && quarantinedEmergencySave != null) {
-        dev.ilamparithi.aournalpp.ui.dialog.EmergencySaveNameDialog(
-            file = quarantinedEmergencySave!!,
-            initialName = emergencySaveNameInput,
-            initialFolder = emergencySaveTargetFolder,
-            repository = repository,
-            onDismiss = { showEmergencySaveNameDialog = false },
-            onSaveSuccess = { savedFile ->
-                showEmergencySaveNameDialog = false
-                quarantinedEmergencySave = null
-                loadHomeData()
-                scope.launch {
-                    snackbarHostState.showSnackbar("Saved recovered note as \"${savedFile.name}\"")
-                }
-            },
-            onFolderCreated = { loadHomeData() }
         )
     }
 

@@ -35,6 +35,7 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -373,7 +374,7 @@ fun StagePane(
     LaunchedEffect(window.id, timestamp) {
         var bmp = WindowPreviewManager.loadPreview(tmpDir, window.id, timestamp)
         if (bmp == null) {
-            delay(150)
+            delay(150.milliseconds)
             bmp = WindowPreviewManager.loadPreview(tmpDir, window.id, timestamp)
         }
         // Fallback to note document thumbnail if no live window capture exists yet

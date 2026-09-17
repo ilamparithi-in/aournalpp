@@ -207,7 +207,11 @@ object FileTransferQueueManager {
         _items.update { list ->
             list.map {
                 if (it.id == id && (it.status == TransferStatus.IN_PROGRESS || it.status == TransferStatus.QUEUED || it.status == TransferStatus.PAUSED)) {
-                    it.copy(status = TransferStatus.CANCELLED, speedBytesPerSec = 0L)
+                    it.copy(
+                        status = TransferStatus.CANCELLED,
+                        speedBytesPerSec = 0L,
+                        completedAtEpochMs = System.currentTimeMillis()
+                    )
                 } else it
             }
         }

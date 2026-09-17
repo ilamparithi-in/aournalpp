@@ -32,6 +32,7 @@ data class TransferItem(
     val speedBytesPerSec: Long = 0L,
     val status: TransferStatus = TransferStatus.QUEUED,
     val errorMessage: String? = null,
+    val queuedAtEpochMs: Long = System.currentTimeMillis(),
     val startedAtEpochMs: Long = 0L,
     val completedAtEpochMs: Long = 0L,
     val scope: String? = null,

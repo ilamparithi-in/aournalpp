@@ -1,5 +1,8 @@
 package dev.ilamparithi.aournalpp.ui.cloud
 
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -192,6 +195,34 @@ fun TransferItemCard(item: TransferItem) {
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    val timestamps = buildList {
+                        if (item.queuedAtEpochMs > 0) {
+                            add("Queued: ${formatTransferTimestamp(item.queuedAtEpochMs)}")
+                        }
+                        if (item.startedAtEpochMs > 0) {
+                            add("Started: ${formatTransferTimestamp(item.startedAtEpochMs)}")
+                        }
+                        if (item.completedAtEpochMs > 0) {
+                            val label = when (item.status) {
+                                TransferStatus.COMPLETED -> "Completed"
+                                TransferStatus.FAILED -> "Failed"
+                                TransferStatus.CANCELLED -> "Cancelled"
+                                TransferStatus.SKIPPED -> "Skipped"
+                                else -> "Finished"
+                            }
+                            add("$label: ${formatTransferTimestamp(item.completedAtEpochMs)}")
+                        }
+                    }
+                    if (timestamps.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = timestamps.joinToString(" • "),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.width(8.dp))
@@ -304,3 +335,10 @@ fun TransferItemCard(item: TransferItem) {
 fun formatBytes(bytes: Long): String {
     return FormatUtils.formatFileSize(bytes)
 }
+
+private fun formatTransferTimestamp(epochMs: Long): String {
+    if (epochMs <= 0) return "--:--:--"
+    val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+    return sdf.format(Date(epochMs))
+}
+

@@ -21,10 +21,15 @@ class CanvasCommandReceiver : BroadcastReceiver() {
         const val ACTION_SAVE_WINDOW_SUCCESS = "dev.ilamparithi.aournalpp.ACTION_SAVE_WINDOW_SUCCESS"
         const val ACTION_SAVE_WINDOW_UNABLE_TO_SEND = "dev.ilamparithi.aournalpp.ACTION_SAVE_WINDOW_UNABLE_TO_SEND"
         const val ACTION_REQUEST_CLOSE_WINDOW = "dev.ilamparithi.aournalpp.ACTION_REQUEST_CLOSE_WINDOW"
+        const val ACTION_REQUEST_FORCE_CLOSE = "dev.ilamparithi.aournalpp.ACTION_REQUEST_FORCE_CLOSE"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
+            ACTION_REQUEST_FORCE_CLOSE -> {
+                Log.i("CanvasCommandReceiver", "Received ACTION_REQUEST_FORCE_CLOSE in :canvas process")
+                CanvasActivity.executeForceCloseFromReceiver(context)
+            }
             ACTION_REQUEST_BACKGROUND_CLOSE -> {
                 Log.i("CanvasCommandReceiver", "Received ACTION_REQUEST_BACKGROUND_CLOSE in :canvas process")
                 CanvasActivity.handleBackgroundCloseRequest()

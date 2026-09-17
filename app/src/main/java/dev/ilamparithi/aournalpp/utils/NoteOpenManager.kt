@@ -85,6 +85,15 @@ object NoteOpenManager {
         setDefaultAction(context, isPdf = false, action)
     }
 
+    fun findMainActivity(context: Context): MainActivity? {
+        var ctx = context
+        while (ctx is android.content.ContextWrapper) {
+            if (ctx is MainActivity) return ctx
+            ctx = ctx.baseContext
+        }
+        return null
+    }
+
     /**
      * Directly launches the native Xournal++ canvas editor for the given note file.
      */
@@ -94,6 +103,14 @@ object NoteOpenManager {
         repository: DocumentRepository? = null,
         localView: View? = null
     ) {
+        val mainActivity = findMainActivity(context)
+        if (mainActivity != null) {
+            mainActivity.checkEmergencySave()
+            if (mainActivity.hasPendingEmergencySave()) {
+                mainActivity.deferNoteOpenForEmergencySave(file)
+                return
+            }
+        }
         val targetFile = if (file.absolutePath.contains("/cache/staged_imports/")) {
             val env = repository?.getLinuxEnvironment() ?: LinuxEnvironment(context)
             try {
@@ -125,7 +142,7 @@ object NoteOpenManager {
             if (thumbFile != null && thumbFile.exists()) {
                 putExtra(CanvasActivity.EXTRA_ENTRY_SNAPSHOT_PATH, thumbFile.absolutePath)
             }
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             if (context is android.app.Activity && context.isInMultiWindowMode) {
                 addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
             }
@@ -269,6 +286,15 @@ object NoteOpenManager {
         onConvertingState: ((Boolean) -> Unit)? = null,
         onError: ((String) -> Unit)? = null
     ) {
+        val mainActivity = findMainActivity(context)
+        if (mainActivity != null) {
+            mainActivity.checkEmergencySave()
+            if (mainActivity.hasPendingEmergencySave()) {
+                mainActivity.deferNoteOpenForEmergencySave(file)
+                return
+            }
+        }
+
         if (onShowActiveNotePrompt != null) {
             val activeMatch = ActiveNotesTracker.findActiveNote(context, file)
             if (activeMatch != null) {

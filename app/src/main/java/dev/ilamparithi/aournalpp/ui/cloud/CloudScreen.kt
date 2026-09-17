@@ -3,6 +3,7 @@ package dev.ilamparithi.aournalpp.ui.cloud
 import android.widget.TimePicker
 import androidx.compose.ui.res.stringResource
 import dev.ilamparithi.aournalpp.R
+import dev.ilamparithi.aournalpp.backup.engine.ConflictPersistenceManager
 import androidx.compose.animation.AnimatedContent
 import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedVisibility
 import androidx.compose.animation.slideInHorizontally
@@ -208,6 +209,7 @@ enum class CloudSubpage {
     MAPPING_SETS
 }
 
+@Suppress("FunctionName")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CloudScreen(
@@ -306,9 +308,13 @@ fun CloudScreen(
     val isGlobalSyncRunning = isSyncRunningByManager || isLocalSyncRunning
 
     // Multi-service Conflict States
+    val conflictManager = remember { ConflictPersistenceManager.getInstance(context) }
+    val persistedConflicts by conflictManager.unresolvedConflicts.collectAsStateWithLifecycle()
     var detectedConflicts by remember { mutableStateOf<List<FileConflictGroup>>(emptyList()) }
     var showConflictDialog by remember { mutableStateOf(false) }
     var isCheckingConflicts by remember { mutableStateOf(false) }
+
+    val activeConflicts = detectedConflicts.ifEmpty { persistedConflicts }
 
     val queueItems by FileTransferQueueManager.items.collectAsStateWithLifecycle()
     val activeTransfers = queueItems.filter { it.status == TransferStatus.IN_PROGRESS || it.status == TransferStatus.QUEUED }
@@ -548,6 +554,7 @@ fun CloudScreen(
                                     try {
                                         val conflicts = engine.detectMultiServiceConflicts()
                                         detectedConflicts = conflicts
+                                        conflictManager.saveConflicts(conflicts)
                                         if (conflicts.isNotEmpty()) {
                                             showConflictDialog = true
                                         } else {
@@ -621,12 +628,15 @@ fun CloudScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
 
-            if (detectedConflicts.isNotEmpty()) {
+            if (activeConflicts.isNotEmpty()) {
                 item {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { showConflictDialog = true },
+                            .clickable {
+                                detectedConflicts = activeConflicts
+                                showConflictDialog = true
+                            },
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
                     ) {
@@ -643,7 +653,7 @@ fun CloudScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = pluralStringResource(R.plurals.cloud_conflicts_detected, detectedConflicts.size, detectedConflicts.size),
+                                    text = pluralStringResource(R.plurals.cloud_conflicts_detected, activeConflicts.size, activeConflicts.size),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onErrorContainer
@@ -655,7 +665,10 @@ fun CloudScreen(
                                 )
                             }
                             Button(
-                                onClick = { showConflictDialog = true },
+                                onClick = {
+                                    detectedConflicts = activeConflicts
+                                    showConflictDialog = true
+                                },
                                 shape = RoundedCornerShape(10.dp)
                             ) {
                                 Text(stringResource(R.string.cloud_conflicts_button))
@@ -1116,14 +1129,16 @@ fun CloudScreen(
         )
     }
 
-    if (showConflictDialog && detectedConflicts.isNotEmpty()) {
+    val dialogConflicts = detectedConflicts.ifEmpty { persistedConflicts }
+    if (showConflictDialog && dialogConflicts.isNotEmpty()) {
         MultiServiceConflictDialog(
-            conflictGroups = detectedConflicts,
+            conflictGroups = dialogConflicts,
             engine = engine,
             onDismissRequest = { showConflictDialog = false },
             onResolutionComplete = { report ->
                 showConflictDialog = false
                 detectedConflicts = emptyList()
+                conflictManager.clearConflicts()
                 refreshState()
                 coroutineScope.launch {
                     snackbarHostState.showSnackbar(

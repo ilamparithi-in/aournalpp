@@ -86,7 +86,7 @@ class BackupWorker(
                             concurrency = prefs.concurrencyWorkers,
                             onProgress = { current, total, currentFile ->
                                 val notification = buildNotification(
-                                    "Backing up ($current/$total): $currentFile",
+                                    "Syncing ${service.name} ($current/$total): $currentFile",
                                     current,
                                     total,
                                     false
@@ -115,21 +115,43 @@ class BackupWorker(
             } catch (e: Exception) {
                 Log.e(TAG, "Error executing background backup", e)
                 val openQueueIntent = createOpenQueuePendingIntent()
+                val retryPendingIntent = createRetryPendingIntent(targetServiceId)
+                val isTransient = dev.ilamparithi.aournalpp.utils.NetworkUtils.isTransientNetworkException(e) ||
+                        dev.ilamparithi.aournalpp.utils.NetworkUtils.isTransientNetworkErrorMessage(e.message)
                 val errNotification = NotificationCompat.Builder(appContext, CHANNEL_ID)
                     .setSmallIcon(R.mipmap.ic_launcher)
-                    .setContentTitle("Cloud Backup Failed")
+                    .setContentTitle("Cloud Backup Interrupted")
                     .setContentText(e.message ?: "An unexpected error occurred")
                     .setContentIntent(openQueueIntent)
+                    .addAction(
+                        android.R.drawable.ic_menu_rotate,
+                        "Retry",
+                        retryPendingIntent
+                    )
                     .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                     .setAutoCancel(true)
                     .build()
                 notificationManager.notify(ERROR_NOTIFICATION_ID, errNotification)
-                return Result.failure()
+                return if (isTransient || runAttemptCount < 3) Result.retry() else Result.failure()
             }
 
             val totalUploaded = results.sumOf { it.filesUploaded }
             val totalFailed = results.sumOf { it.filesFailed }
             val openQueueIntent = createOpenQueuePendingIntent()
+            val allConflicts = results.flatMap { it.detectedConflicts }
+
+            if (allConflicts.isNotEmpty()) {
+                dev.ilamparithi.aournalpp.backup.engine.ConflictPersistenceManager.getInstance(appContext).addConflicts(allConflicts)
+                val conflictNotification = NotificationCompat.Builder(appContext, CHANNEL_ID)
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setContentTitle("Cloud Conflicts Detected")
+                    .setContentText("${allConflicts.size} note(s) or settings modified in cloud outside this app")
+                    .setContentIntent(openQueueIntent)
+                    .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                    .setAutoCancel(true)
+                    .build()
+                notificationManager.notify(ERROR_NOTIFICATION_ID + 1, conflictNotification)
+            }
 
             if (totalFailed > 0) {
                 val allErrors = results.flatMap { it.errors }
@@ -158,6 +180,11 @@ class BackupWorker(
                     .setContentText(summary)
                     .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
                     .setContentIntent(openQueueIntent)
+                    .addAction(
+                        android.R.drawable.ic_menu_rotate,
+                        "Retry",
+                        createRetryPendingIntent(targetServiceId)
+                    )
                     .addAction(
                         android.R.drawable.ic_menu_view,
                         appContext.getString(R.string.notification_action_view_queue),
@@ -195,6 +222,18 @@ class BackupWorker(
         } finally {
             FileTransferQueueManager.setSyncActive(false)
         }
+    }
+
+    private fun createRetryPendingIntent(targetServiceId: String?): PendingIntent {
+        val retryIntent = Intent(appContext, BackupRetryReceiver::class.java).apply {
+            if (targetServiceId != null) {
+                putExtra(KEY_TARGET_SERVICE_ID, targetServiceId)
+            }
+        }
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or (
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+        )
+        return PendingIntent.getBroadcast(appContext, 2001, retryIntent, flags)
     }
 
     private fun createOpenQueuePendingIntent(): PendingIntent {

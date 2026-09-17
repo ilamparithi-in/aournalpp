@@ -75,6 +75,11 @@ enum class ConflictResolutionPolicy(val id: String, val displayName: String, val
         id = "skip_conflicts",
         displayName = "Skip Conflicts",
         description = "Do not overwrite existing local files; only download missing files"
+    ),
+    ASK_USER(
+        id = "ask_user",
+        displayName = "Ask User (Conflict Resolution)",
+        description = "Hold conflicting files and prompt user to choose versions"
     );
 
     companion object {
@@ -230,7 +235,8 @@ data class BackupResult(
     val filesFailed: Int,
     val totalBytesTransferred: Long,
     val durationMs: Long,
-    val errors: List<String> = emptyList()
+    val errors: List<String> = emptyList(),
+    val detectedConflicts: List<FileConflictGroup> = emptyList()
 ) {
     val isSuccess: Boolean get() = filesFailed == 0 && errors.isEmpty()
 }

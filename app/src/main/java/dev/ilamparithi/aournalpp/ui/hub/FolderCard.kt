@@ -334,7 +334,7 @@ fun FolderCard(
                         )
                     }
                 }
-            } else if (isGridView) {
+            } else {
                 Spacer(modifier = Modifier.size(24.dp))
             }
         }

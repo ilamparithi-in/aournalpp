@@ -1,6 +1,7 @@
 package dev.ilamparithi.aournalpp.backup.worker
 
 import android.content.Context
+import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
@@ -51,6 +52,7 @@ object BackupScheduler {
 
         val periodicRequest = PeriodicWorkRequestBuilder<BackupWorker>(intervalMinutes, TimeUnit.MINUTES)
             .setConstraints(constraints)
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .addTag(BackupWorker.TAG)
             .build()
 
@@ -88,6 +90,7 @@ object BackupScheduler {
         val periodicRequest = PeriodicWorkRequestBuilder<BackupWorker>(24, TimeUnit.HOURS)
             .setInitialDelay(initialDelayMs, TimeUnit.MILLISECONDS)
             .setConstraints(constraints)
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .addTag(BackupWorker.TAG)
             .build()
 
@@ -120,6 +123,7 @@ object BackupScheduler {
         val request = OneTimeWorkRequestBuilder<BackupWorker>()
             .setConstraints(constraints)
             .setInputData(inputData)
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .addTag(BackupWorker.TAG)
             .build()
@@ -141,6 +145,7 @@ object BackupScheduler {
 
         val request = OneTimeWorkRequestBuilder<BackupWorker>()
             .setConstraints(constraints)
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .addTag(BackupWorker.TAG)
             .build()
 

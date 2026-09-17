@@ -112,7 +112,6 @@
             android:name=".CanvasActivity"
             android:exported="false"
             android:process=":canvas"
-            android:taskAffinity="dev.ilamparithi.aournalpp.canvas"
             android:launchMode="singleTask"
             android:resizeableActivity="true"
             android:theme="@style/Theme.Aournal.Canvas"
@@ -129,9 +128,15 @@
                 <action android:name="dev.ilamparithi.aournalpp.ACTION_REQUEST_BACKGROUND_CLOSE" />
                 <action android:name="dev.ilamparithi.aournalpp.ACTION_REQUEST_PARALLEL_CLOSE" />
                 <action android:name="dev.ilamparithi.aournalpp.ACTION_REQUEST_SAVE_WINDOW" />
+                <action android:name="dev.ilamparithi.aournalpp.ACTION_REQUEST_CLOSE_WINDOW" />
+                <action android:name="dev.ilamparithi.aournalpp.ACTION_REQUEST_FORCE_CLOSE" />
                 <action android:name="com.termux.x11.ACTION_PREFERENCES_CHANGED" />
             </intent-filter>
         </receiver>
+
+        <receiver
+            android:name=".backup.worker.BackupRetryReceiver"
+            android:exported="false" />
 
         <activity
             android:name=".SettingsActivity"
