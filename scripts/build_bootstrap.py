@@ -504,6 +504,7 @@ def main():
     parser.add_argument("--jnilibs-dir", default=None, help="Output directory for packaged native library executables (lib*.so)")
     parser.add_argument("--lockfile", default=None, help="Path to bootstrap.lock.json lockfile")
     parser.add_argument("--update-lock", action="store_true", help="Resolve latest dependencies from upstream repos and update lockfile")
+    parser.add_argument("--compile-shims", action="store_true", help="Compile native shims and helpers directly into jnilibs-dir without building the full bootstrap archive")
     args = parser.parse_args()
 
     arch_key = args.arch.lower().strip()
@@ -511,7 +512,7 @@ def main():
         print(f"[!] Error: Unsupported architecture '{args.arch}'. Supported: {list(ARCH_MAPPINGS.keys())}")
         sys.exit(1)
 
-    if not args.output and not args.update_lock:
+    if not args.output and not args.update_lock and not args.compile_shims:
         print(f"[!] Error: Destination path --output is required when building bootstrap archive.")
         sys.exit(1)
 
@@ -531,6 +532,45 @@ def main():
         "main": "https://archive.termux.dev/apt/termux-main/",
         "x11": "https://archive.termux.dev/apt/termux-x11/"
     }
+
+    if args.compile_shims:
+        if not args.jnilibs_dir:
+            print("[!] Error: --jnilibs-dir is required when using --compile-shims")
+            sys.exit(1)
+        ndk_clang = find_ndk_clang(clang_target)
+        if not ndk_clang:
+            print(f"[!] Error: NDK Clang compiler '{clang_target}' not found.")
+            sys.exit(1)
+        print(f"[*] Found NDK Clang: {ndk_clang}")
+        target_abi_dir = os.path.join(args.jnilibs_dir, abi_name)
+        os.makedirs(target_abi_dir, exist_ok=True)
+        page_size_flags = "-Wl,-z,max-page-size=16384"
+
+        # 1. Compile xopp-shim.c
+        shim_c = os.path.join(scripts_dir, "xopp-shim.c")
+        if os.path.exists(shim_c):
+            dest_shim = os.path.join(target_abi_dir, "libxopp_shim.so")
+            print(f"[*] Compiling {shim_c} -> {dest_shim} (16KB aligned)...")
+            cmd = f"{ndk_clang} -shared -fPIC {page_size_flags} -Wl,-soname,libxopp_shim.so -o '{dest_shim}' '{shim_c}' -ldl"
+            ret = os.system(cmd)
+            if ret != 0 or not os.path.exists(dest_shim):
+                print(f"[!] Error compiling {shim_c}")
+                sys.exit(1)
+            os.chmod(dest_shim, 0o755)
+            print(f"[✔] Built native shim: {dest_shim}")
+
+        # 2. Compile portaudio_stub.c
+        stub_c = os.path.join(scripts_dir, "portaudio_stub.c")
+        if os.path.exists(stub_c):
+            dest_pa = os.path.join(target_abi_dir, "libportaudio.so")
+            print(f"[*] Compiling {stub_c} -> {dest_pa} (16KB aligned)...")
+            cmd = f"{ndk_clang} -shared -fPIC {page_size_flags} -Wl,-soname,libportaudio.so.2 -o '{dest_pa}' '{stub_c}'"
+            ret = os.system(cmd)
+            if ret == 0 and os.path.exists(dest_pa):
+                os.chmod(dest_pa, 0o755)
+                print(f"[✔] Built portaudio stub: {dest_pa}")
+
+        return
 
     if args.update_lock:
         print(f"==================================================")

@@ -826,6 +826,8 @@
     <string name="cloud_services_active_summary">%1$d of %2$d services active • Last sync: %3$s</string>
     <!-- Button to open conflicts dialog -->
     <string name="cloud_conflicts_button">Conflicts</string>
+    <string name="title_cloud_conflicts">Cloud Sync Conflicts</string>
+    <string name="action_more_options">More options</string>
     <!-- Button to open transfer queue subpage -->
     <string name="cloud_queue_button">Queue</string>
     <!-- Tooltip description for mapping sets button in Cloud Sync Hub -->

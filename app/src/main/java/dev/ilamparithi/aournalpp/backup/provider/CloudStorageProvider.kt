@@ -56,7 +56,15 @@ interface CloudStorageProvider {
     suspend fun deleteFile(remotePath: String): Result<Unit>
 
     /**
+     * Peeks at the initial byte slice (e.g. 2 KB) of a remote file to extract
+     * origin application and device fingerprint metadata without downloading the full file.
+     * Returns Pair(originApp, originDevice), or (null, null) if peeking is unsupported or fails.
+     */
+    suspend fun peekFileFingerprint(remotePath: String): Pair<String?, String?> = null to null
+
+    /**
      * Gracefully closes network streams, sessions, and client connections.
      */
     suspend fun disconnect()
 }
+

@@ -188,7 +188,7 @@ data class PageTemplate(
 
         return """
             <?xml version="1.0" standalone="no"?>
-            <xournal creator="Xournal++ 1.2.x" fileversion="4">
+            <xournal creator="Aournal++ 1.3.7" fileversion="4">
               <title>Xournal++ document - see https://github.com/xournalpp/xournalpp</title>
               <page width="$widthStr" height="$heightStr">
                 <background type="solid" color="$color" style="$style"$configAttr/>

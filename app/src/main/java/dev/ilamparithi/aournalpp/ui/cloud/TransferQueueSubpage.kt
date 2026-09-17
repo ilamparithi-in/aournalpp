@@ -99,6 +99,7 @@ enum class QueueFilter {
 @Composable
 fun TransferQueueSubpage(
     engine: BackupEngine? = null,
+    initialFilter: QueueFilter = QueueFilter.ALL,
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -128,7 +129,7 @@ fun TransferQueueSubpage(
         if (selectedServiceId == null) items else items.filter { it.serviceId == selectedServiceId }
     }
 
-    var selectedFilter by remember { mutableStateOf(QueueFilter.ACTIVE) }
+    var selectedFilter by remember { mutableStateOf(initialFilter) }
 
     val activeCount = cloudFilteredItems.count { it.status == TransferStatus.IN_PROGRESS }
     val queuedCount = cloudFilteredItems.count { it.status == TransferStatus.QUEUED }

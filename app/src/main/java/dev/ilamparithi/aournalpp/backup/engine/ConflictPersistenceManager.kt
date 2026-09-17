@@ -42,6 +42,7 @@ class ConflictPersistenceManager internal constructor(storageDir: File) {
     private val conflictsFile: File = File(storageDir, CONFLICTS_FILE_NAME)
     private val _unresolvedConflicts = MutableStateFlow<List<FileConflictGroup>>(emptyList())
     val unresolvedConflicts: StateFlow<List<FileConflictGroup>> = _unresolvedConflicts.asStateFlow()
+    fun getConflicts(): List<FileConflictGroup> = _unresolvedConflicts.value
 
     init {
         loadFromDisk()
@@ -151,6 +152,8 @@ class ConflictPersistenceManager internal constructor(storageDir: File) {
             put("lastModifiedEpochMs", item.lastModifiedEpochMs)
             item.contentHash?.let { put("contentHash", it) }
             item.remotePath?.let { put("remotePath", it) }
+            item.originApp?.let { put("originApp", it) }
+            item.originDevice?.let { put("originDevice", it) }
             when (val src = item.source) {
                 is FileVersionSource.LOCAL -> {
                     put("sourceType", "LOCAL")
@@ -203,6 +206,8 @@ class ConflictPersistenceManager internal constructor(storageDir: File) {
         val lastModified = obj.optLong("lastModifiedEpochMs", 0L)
         val contentHash = obj.optString("contentHash").takeIf { it.isNotEmpty() }
         val remotePath = obj.optString("remotePath").takeIf { it.isNotEmpty() }
+        val originApp = obj.optString("originApp").takeIf { it.isNotEmpty() }
+        val originDevice = obj.optString("originDevice").takeIf { it.isNotEmpty() }
 
         val sourceType = obj.optString("sourceType", "LOCAL")
         val source = if (sourceType == "REMOTE") {
@@ -225,7 +230,9 @@ class ConflictPersistenceManager internal constructor(storageDir: File) {
             sizeBytes = sizeBytes,
             lastModifiedEpochMs = lastModified,
             contentHash = contentHash,
-            remotePath = remotePath
+            remotePath = remotePath,
+            originApp = originApp,
+            originDevice = originDevice
         )
     }
 }

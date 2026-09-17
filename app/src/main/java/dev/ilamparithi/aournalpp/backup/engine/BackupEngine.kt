@@ -448,8 +448,14 @@ class BackupEngine(
                         val remoteNewerThanLocal = remoteMeta.lastModifiedEpochMs > (scanned.lastModified + 2000L)
                         val isFirstSyncCollision = record == null
 
-                        if (remoteModifiedSinceSync || remoteNewerThanLocal || isFirstSyncCollision) {
+                        if (remoteModifiedSinceSync || (isFirstSyncCollision && (remoteNewerThanLocal || remoteMeta.sizeBytes != scanned.sizeBytes))) {
                             Log.w(TAG, "Note conflict detected for ${scanned.relativePath} on ${serviceConfig.name} (remote MTime: ${remoteMeta.lastModifiedEpochMs}, local MTime: ${scanned.lastModified}, lastSync: ${record?.lastSyncedAt})")
+                            val localDevName = DeviceIdentity.getDeviceName()
+                            val (originApp, originDevice) = if (remotePath.endsWith(".xopp", ignoreCase = true)) {
+                                try { provider.peekFileFingerprint(remotePath) } catch (_: Exception) { null to null }
+                            } else {
+                                null to null
+                            }
                             val conflict = FileConflictGroup(
                                 id = "conflict_${serviceConfig.id}_${scanned.relativePath.replace('/', '_')}",
                                 relativePath = scanned.relativePath,
@@ -461,7 +467,9 @@ class BackupEngine(
                                     sizeBytes = scanned.sizeBytes,
                                     lastModifiedEpochMs = scanned.lastModified,
                                     contentHash = scanned.sha256,
-                                    remotePath = null
+                                    remotePath = null,
+                                    originApp = "Aournal++",
+                                    originDevice = localDevName
                                 ),
                                 remoteVersions = listOf(
                                     FileVersionItem(
@@ -476,7 +484,9 @@ class BackupEngine(
                                         sizeBytes = remoteMeta.sizeBytes,
                                         lastModifiedEpochMs = remoteMeta.lastModifiedEpochMs,
                                         contentHash = remoteMeta.contentHash,
-                                        remotePath = remotePath
+                                        remotePath = remotePath,
+                                        originApp = originApp,
+                                        originDevice = originDevice
                                     )
                                 ),
                                 description = "Note was modified in the cloud on ${serviceConfig.name}",
@@ -1502,11 +1512,29 @@ class BackupEngine(
 
             if (hasConflict) {
                 val displayRel = relativePathByLocalPath[canonPath] ?: File(canonPath).name
+                val localDevName = DeviceIdentity.getDeviceName()
+                val enrichedLocal = localVersion?.copy(
+                    originApp = localVersion.originApp ?: "Aournal++",
+                    originDevice = localVersion.originDevice ?: localDevName
+                )
+                val enrichedRemotes = remoteVersions.map { rv ->
+                    if (rv.remotePath != null && rv.originApp == null && rv.fileName.endsWith(".xopp", ignoreCase = true)) {
+                        val src = rv.source
+                        if (src is FileVersionSource.REMOTE) {
+                            val srv = services.firstOrNull { it.id == src.serviceId }
+                            if (srv != null) {
+                                val prov = getStorageProvider(srv)
+                                val (app, dev) = try { prov.peekFileFingerprint(rv.remotePath) } catch (_: Exception) { null to null }
+                                rv.copy(originApp = app, originDevice = dev)
+                            } else rv
+                        } else rv
+                    } else rv
+                }
                 conflictGroups.add(
                     FileConflictGroup(
                         relativePath = displayRel,
-                        localVersion = localVersion,
-                        remoteVersions = remoteVersions
+                        localVersion = enrichedLocal,
+                        remoteVersions = enrichedRemotes
                     )
                 )
             }
@@ -1515,267 +1543,462 @@ class BackupEngine(
         conflictGroups
     }
 
+    data class ConflictTransferPlan(
+        val item: TransferItem,
+        val serviceConfig: ServiceConfig,
+        val resolution: FileConflictResolution,
+        val fileVersion: FileVersionItem,
+        val isPrimary: Boolean,
+        val isAlongside: Boolean
+    )
+
+    fun prepareConflictTransferPlans(
+        resolutions: List<FileConflictResolution>
+    ): List<ConflictTransferPlan> {
+        val services = vault.getAllServices().associateBy { it.id }
+        val conflictMap = ConflictPersistenceManager.getInstance(context).getConflicts().associateBy { it.id }
+        val plans = mutableListOf<ConflictTransferPlan>()
+        val plannedPaths = mutableSetOf<String>()
+
+        for (resolution in resolutions) {
+            val group = conflictMap[resolution.conflictGroupId]
+            val relativePath = resolution.relativePath
+            val targetPath = resolution.targetLocalPath?.takeIf { it.isNotBlank() }
+                ?: group?.localFilePath?.takeIf { it.isNotBlank() }
+                ?: group?.localVersion?.localFilePath?.takeIf { it.isNotBlank() }
+                ?: if (resolution.action is ConflictResolutionAction.ChoosePrimary && resolution.action.chosenVersion.localFilePath.isNotBlank()) resolution.action.chosenVersion.localFilePath
+                else if (resolution.action is ConflictResolutionAction.ResolveSelection && resolution.action.primaryVersion.localFilePath.isNotBlank()) resolution.action.primaryVersion.localFilePath
+                else File(env.getNotesDirectory(), relativePath).absolutePath
+
+            val localFile = File(targetPath)
+            val parentDir = localFile.parentFile ?: env.getNotesDirectory()
+            val scope = if (localFile.absolutePath.startsWith(env.xournalConfigDir.absolutePath)) "config" else "notes"
+
+            when (val action = resolution.action) {
+                is ConflictResolutionAction.ChoosePrimary -> {
+                    val chosen = action.chosenVersion
+                    when (val src = chosen.source) {
+                        is FileVersionSource.REMOTE -> {
+                            val srv = services[src.serviceId]
+                            if (srv != null && chosen.remotePath != null) {
+                                val transferId = "${srv.id}_${TransferDirection.DOWNLOAD.name}_${chosen.remotePath}"
+                                val item = TransferItem(
+                                    id = transferId,
+                                    serviceId = srv.id,
+                                    serviceName = srv.name,
+                                    localFilePath = localFile.absolutePath,
+                                    remotePath = chosen.remotePath,
+                                    fileName = localFile.name,
+                                    direction = TransferDirection.DOWNLOAD,
+                                    totalBytes = chosen.sizeBytes,
+                                    status = TransferStatus.QUEUED,
+                                    scope = scope,
+                                    relativePath = relativePath
+                                )
+                                plans.add(
+                                    ConflictTransferPlan(
+                                        item = item,
+                                        serviceConfig = srv,
+                                        resolution = resolution,
+                                        fileVersion = chosen,
+                                        isPrimary = true,
+                                        isAlongside = false
+                                    )
+                                )
+                            }
+                        }
+                        is FileVersionSource.LOCAL -> {
+                            val remoteVer = group?.remoteVersions?.firstOrNull()
+                            val srvId = (remoteVer?.source as? FileVersionSource.REMOTE)?.serviceId
+                            val srv = srvId?.let { services[it] }
+                            if (srv != null && remoteVer?.remotePath != null && localFile.exists()) {
+                                val transferId = "${srv.id}_${TransferDirection.UPLOAD.name}_${remoteVer.remotePath}"
+                                val item = TransferItem(
+                                    id = transferId,
+                                    serviceId = srv.id,
+                                    serviceName = srv.name,
+                                    localFilePath = localFile.absolutePath,
+                                    remotePath = remoteVer.remotePath,
+                                    fileName = localFile.name,
+                                    direction = TransferDirection.UPLOAD,
+                                    totalBytes = localFile.length(),
+                                    status = TransferStatus.QUEUED,
+                                    scope = scope,
+                                    relativePath = relativePath
+                                )
+                                plans.add(
+                                    ConflictTransferPlan(
+                                        item = item,
+                                        serviceConfig = srv,
+                                        resolution = resolution,
+                                        fileVersion = chosen,
+                                        isPrimary = true,
+                                        isAlongside = false
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+                is ConflictResolutionAction.ResolveSelection -> {
+                    val primary = action.primaryVersion
+                    when (val src = primary.source) {
+                        is FileVersionSource.REMOTE -> {
+                            val srv = services[src.serviceId]
+                            if (srv != null && primary.remotePath != null) {
+                                val transferId = "${srv.id}_${TransferDirection.DOWNLOAD.name}_${primary.remotePath}"
+                                val item = TransferItem(
+                                    id = transferId,
+                                    serviceId = srv.id,
+                                    serviceName = srv.name,
+                                    localFilePath = localFile.absolutePath,
+                                    remotePath = primary.remotePath,
+                                    fileName = localFile.name,
+                                    direction = TransferDirection.DOWNLOAD,
+                                    totalBytes = primary.sizeBytes,
+                                    status = TransferStatus.QUEUED,
+                                    scope = scope,
+                                    relativePath = relativePath
+                                )
+                                plans.add(
+                                    ConflictTransferPlan(
+                                        item = item,
+                                        serviceConfig = srv,
+                                        resolution = resolution,
+                                        fileVersion = primary,
+                                        isPrimary = true,
+                                        isAlongside = false
+                                    )
+                                )
+                            }
+                        }
+                        is FileVersionSource.LOCAL -> {
+                            val remoteVer = group?.remoteVersions?.firstOrNull()
+                            val srvId = (remoteVer?.source as? FileVersionSource.REMOTE)?.serviceId
+                            val srv = srvId?.let { services[it] }
+                            if (srv != null && remoteVer?.remotePath != null && localFile.exists()) {
+                                val transferId = "${srv.id}_${TransferDirection.UPLOAD.name}_${remoteVer.remotePath}"
+                                val item = TransferItem(
+                                    id = transferId,
+                                    serviceId = srv.id,
+                                    serviceName = srv.name,
+                                    localFilePath = localFile.absolutePath,
+                                    remotePath = remoteVer.remotePath,
+                                    fileName = localFile.name,
+                                    direction = TransferDirection.UPLOAD,
+                                    totalBytes = localFile.length(),
+                                    status = TransferStatus.QUEUED,
+                                    scope = scope,
+                                    relativePath = relativePath
+                                )
+                                plans.add(
+                                    ConflictTransferPlan(
+                                        item = item,
+                                        serviceConfig = srv,
+                                        resolution = resolution,
+                                        fileVersion = primary,
+                                        isPrimary = true,
+                                        isAlongside = false
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    for (alongsideVer in action.alongsideVersions) {
+                        val src = alongsideVer.source
+                        if (src is FileVersionSource.REMOTE && alongsideVer.remotePath != null) {
+                            val srv = services[src.serviceId]
+                            if (srv != null) {
+                                val nameWithoutExt = localFile.nameWithoutExtension
+                                val ext = localFile.extension.let { if (it.isNotEmpty()) ".$it" else "" }
+                                val originSuffix = alongsideVer.originApp?.takeIf { it.isNotBlank() } ?: src.sanitizedFileSuffix
+                                val desiredAlongsideName = "$nameWithoutExt ($originSuffix)$ext"
+                                val alongsideFile = generateNonCollidingFileWithExclusions(parentDir, desiredAlongsideName, plannedPaths)
+                                plannedPaths.add(alongsideFile.absolutePath)
+                                val alongsideRel = if (relativePath.contains('/')) {
+                                    "${relativePath.substringBeforeLast('/')}/${alongsideFile.name}"
+                                } else {
+                                    alongsideFile.name
+                                }
+                                val alongsideScope = if (alongsideFile.absolutePath.startsWith(env.xournalConfigDir.absolutePath)) "config" else "notes"
+                                val transferId = "${srv.id}_${TransferDirection.DOWNLOAD.name}_${alongsideVer.remotePath}_alongside_${alongsideFile.name}"
+                                val item = TransferItem(
+                                    id = transferId,
+                                    serviceId = srv.id,
+                                    serviceName = srv.name,
+                                    localFilePath = alongsideFile.absolutePath,
+                                    remotePath = alongsideVer.remotePath,
+                                    fileName = alongsideFile.name,
+                                    direction = TransferDirection.DOWNLOAD,
+                                    totalBytes = alongsideVer.sizeBytes,
+                                    status = TransferStatus.QUEUED,
+                                    scope = alongsideScope,
+                                    relativePath = alongsideRel
+                                )
+                                plans.add(
+                                    ConflictTransferPlan(
+                                        item = item,
+                                        serviceConfig = srv,
+                                        resolution = resolution,
+                                        fileVersion = alongsideVer,
+                                        isPrimary = false,
+                                        isAlongside = true
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+                is ConflictResolutionAction.KeepBoth, is ConflictResolutionAction.KeepAlongside -> {
+                    val versionsToKeep = if (action is ConflictResolutionAction.KeepAlongside) {
+                        action.versionsToKeep
+                    } else {
+                        group?.remoteVersions ?: emptyList()
+                    }
+                    for (remoteVer in versionsToKeep) {
+                        val src = remoteVer.source
+                        if (src is FileVersionSource.REMOTE && remoteVer.remotePath != null) {
+                            val srv = services[src.serviceId]
+                            if (srv != null) {
+                                val nameWithoutExt = localFile.nameWithoutExtension
+                                val ext = localFile.extension.let { if (it.isNotEmpty()) ".$it" else "" }
+                                val originSuffix = remoteVer.originApp?.takeIf { it.isNotBlank() } ?: src.sanitizedFileSuffix
+                                val desiredAlongsideName = "$nameWithoutExt ($originSuffix)$ext"
+                                val alongsideFile = generateNonCollidingFileWithExclusions(parentDir, desiredAlongsideName, plannedPaths)
+                                plannedPaths.add(alongsideFile.absolutePath)
+                                val alongsideRel = if (relativePath.contains('/')) {
+                                    "${relativePath.substringBeforeLast('/')}/${alongsideFile.name}"
+                                } else {
+                                    alongsideFile.name
+                                }
+                                val alongsideScope = if (alongsideFile.absolutePath.startsWith(env.xournalConfigDir.absolutePath)) "config" else "notes"
+                                val transferId = "${srv.id}_${TransferDirection.DOWNLOAD.name}_${remoteVer.remotePath}_alongside_${alongsideFile.name}"
+                                val item = TransferItem(
+                                    id = transferId,
+                                    serviceId = srv.id,
+                                    serviceName = srv.name,
+                                    localFilePath = alongsideFile.absolutePath,
+                                    remotePath = remoteVer.remotePath,
+                                    fileName = alongsideFile.name,
+                                    direction = TransferDirection.DOWNLOAD,
+                                    totalBytes = remoteVer.sizeBytes,
+                                    status = TransferStatus.QUEUED,
+                                    scope = alongsideScope,
+                                    relativePath = alongsideRel
+                                )
+                                plans.add(
+                                    ConflictTransferPlan(
+                                        item = item,
+                                        serviceConfig = srv,
+                                        resolution = resolution,
+                                        fileVersion = remoteVer,
+                                        isPrimary = false,
+                                        isAlongside = true
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+                is ConflictResolutionAction.Skip -> {
+                    // No transfer plans
+                }
+            }
+        }
+        return plans
+    }
+
+    private fun generateNonCollidingFileWithExclusions(parentDir: File, desiredName: String, exclusions: Set<String>): File {
+        val nameWithoutExt = File(desiredName).nameWithoutExtension
+        val ext = File(desiredName).extension.let { if (it.isNotEmpty()) ".$it" else "" }
+        var candidate = File(parentDir, desiredName)
+        var counter = 1
+        while (candidate.exists() || exclusions.contains(candidate.absolutePath)) {
+            candidate = File(parentDir, "$nameWithoutExt ($counter)$ext")
+            counter++
+        }
+        return candidate
+    }
+
+    /**
+     * Enqueues all transfer items for the given resolutions into FileTransferQueueManager immediately.
+     */
+    fun prepareAndEnqueueConflictTransfers(resolutions: List<FileConflictResolution>): List<TransferItem> {
+        val plans = prepareConflictTransferPlans(resolutions)
+        val items = plans.map { it.item }
+        if (items.isNotEmpty()) {
+            FileTransferQueueManager.enqueueAll(items)
+        }
+        return items
+    }
+
     /**
      * Executes conflict resolutions across local storage and cloud services.
      */
     suspend fun resolveConflicts(
         resolutions: List<FileConflictResolution>
     ): ConflictResolutionReport = withContext(Dispatchers.IO) {
-        val services = vault.getAllServices().associateBy { it.id }
-        val dao = db.syncMetadataDao()
+        val plans = prepareConflictTransferPlans(resolutions)
+        if (plans.isNotEmpty()) {
+            FileTransferQueueManager.enqueueAll(plans.map { it.item })
+        }
 
+        val dao = db.syncMetadataDao()
         var filesUpdated = 0
         var filesSavedAlongside = 0
         var filesSkipped = 0
         val errors = mutableListOf<String>()
         var hasRestoredConfigs = false
 
-        for ((_, relativePath, action) in resolutions) {
-            try {
-                when (action) {
-                    is ConflictResolutionAction.ChoosePrimary -> {
-                        val chosen = action.chosenVersion
-                        val localFile = File(chosen.localFilePath)
-                        val parentDir = localFile.parentFile ?: env.getNotesDirectory()
-                        parentDir.mkdirs()
+        val planSuccess = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+        FileTransferQueueManager.setSyncActive(true)
 
-                        when (val src = chosen.source) {
-                            is FileVersionSource.LOCAL -> {
-                                // Local version chosen as primary: keep local file
-                                filesUpdated++
-                            }
-                            is FileVersionSource.REMOTE -> {
-                                val srv = services[src.serviceId]
-                                if (srv != null && chosen.remotePath != null) {
-                                    val provider = getStorageProvider(srv)
-                                    try {
-                                        val downloadResult = provider.downloadFile(
-                                            remotePath = chosen.remotePath,
-                                            destinationFile = localFile,
-                                            onProgress = { _, _ -> }
-                                        )
-                                        if (downloadResult.isSuccess) {
-                                            filesUpdated++
-                                            if (chosen.lastModifiedEpochMs > 0L) {
-                                                try {
-                                                    localFile.setLastModified(chosen.lastModifiedEpochMs)
-                                                } catch (e: Exception) {
-                                                    Log.w(TAG, "Failed to restore lastModified on ${localFile.name}", e)
-                                                }
-                                            }
-                                            dao.insertOrUpdate(
-                                                SyncMetadataEntity(
-                                                    serviceId = srv.id,
-                                                    relativePath = relativePath,
-                                                    scope = if (localFile.absolutePath.startsWith(env.xournalConfigDir.absolutePath)) "config" else "notes",
-                                                    localSha256 = chosen.contentHash ?: "",
-                                                    remoteHash = chosen.contentHash,
-                                                    localLastModified = chosen.lastModifiedEpochMs,
-                                                    sizeBytes = localFile.length(),
-                                                    lastSyncedAt = System.currentTimeMillis()
-                                                )
-                                            )
-                                            if (localFile.absolutePath.startsWith(env.xournalConfigDir.absolutePath)) {
-                                                hasRestoredConfigs = true
-                                            }
-                                        } else {
-                                            errors.add("${localFile.name}: ${downloadResult.exceptionOrNull()?.message}")
-                                        }
-                                    } finally {
-                                        provider.disconnect()
+        try {
+            for (plan in plans) {
+                val item = plan.item
+                if (FileTransferQueueManager.isCancelled(item.id)) {
+                    planSuccess[item.id] = false
+                    continue
+                }
+
+                FileTransferQueueManager.markStarted(item.id)
+
+                val localFile = File(item.localFilePath)
+                localFile.parentFile?.mkdirs()
+
+                val provider = getStorageProvider(plan.serviceConfig)
+                try {
+                    val transferResult = if (item.direction == TransferDirection.DOWNLOAD) {
+                        try {
+                            provider.downloadFile(
+                                remotePath = item.remotePath,
+                                destinationFile = localFile,
+                                onProgress = { transferred, total ->
+                                    if (FileTransferQueueManager.isPaused(item.id)) {
+                                        throw java.io.IOException("Transfer paused by user")
                                     }
+                                    if (FileTransferQueueManager.isCancelled(item.id)) {
+                                        throw java.io.IOException("Transfer cancelled by user")
+                                    }
+                                    FileTransferQueueManager.updateProgress(item.id, transferred, total)
                                 }
-                            }
+                            )
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Result.failure(e)
+                        }
+                    } else {
+                        try {
+                            provider.uploadFile(
+                                localFile = localFile,
+                                remotePath = item.remotePath,
+                                onProgress = { transferred, total ->
+                                    if (FileTransferQueueManager.isPaused(item.id)) {
+                                        throw java.io.IOException("Transfer paused by user")
+                                    }
+                                    if (FileTransferQueueManager.isCancelled(item.id)) {
+                                        throw java.io.IOException("Transfer cancelled by user")
+                                    }
+                                    FileTransferQueueManager.updateProgress(item.id, transferred, total)
+                                }
+                            )
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Result.failure(e)
                         }
                     }
-                    is ConflictResolutionAction.ResolveSelection -> {
-                        val primary = action.primaryVersion
-                        val localFile = File(primary.localFilePath)
-                        val parentDir = localFile.parentFile ?: env.getNotesDirectory()
-                        parentDir.mkdirs()
 
-                        // 1. Primary version
-                        when (val src = primary.source) {
-                            is FileVersionSource.LOCAL -> {
-                                filesUpdated++
-                            }
-                            is FileVersionSource.REMOTE -> {
-                                val srv = services[src.serviceId]
-                                if (srv != null && primary.remotePath != null) {
-                                    val provider = getStorageProvider(srv)
-                                    try {
-                                        val downloadResult = provider.downloadFile(
-                                            remotePath = primary.remotePath,
-                                            destinationFile = localFile,
-                                            onProgress = { _, _ -> }
-                                        )
-                                        if (downloadResult.isSuccess) {
-                                            filesUpdated++
-                                            if (primary.lastModifiedEpochMs > 0L) {
-                                                try {
-                                                    localFile.setLastModified(primary.lastModifiedEpochMs)
-                                                } catch (e: Exception) {
-                                                    Log.w(TAG, "Failed to restore lastModified on ${localFile.name}", e)
-                                                }
-                                            }
-                                            dao.insertOrUpdate(
-                                                SyncMetadataEntity(
-                                                    serviceId = srv.id,
-                                                    relativePath = relativePath,
-                                                    scope = if (localFile.absolutePath.startsWith(env.xournalConfigDir.absolutePath)) "config" else "notes",
-                                                    localSha256 = primary.contentHash ?: "",
-                                                    remoteHash = primary.contentHash,
-                                                    localLastModified = primary.lastModifiedEpochMs,
-                                                    sizeBytes = localFile.length(),
-                                                    lastSyncedAt = System.currentTimeMillis()
-                                                )
-                                            )
-                                            if (localFile.absolutePath.startsWith(env.xournalConfigDir.absolutePath)) {
-                                                hasRestoredConfigs = true
-                                            }
-                                        } else {
-                                            errors.add("${localFile.name}: ${downloadResult.exceptionOrNull()?.message}")
-                                        }
-                                    } finally {
-                                        provider.disconnect()
-                                    }
-                                }
-                            }
-                        }
-
-                        // 2. Alongside versions
-                        for (alongsideVer in action.alongsideVersions) {
-                            val src = alongsideVer.source
-                            if (src is FileVersionSource.REMOTE && alongsideVer.remotePath != null) {
-                                val srv = services[src.serviceId]
-                                if (srv != null) {
-                                    val nameWithoutExt = localFile.nameWithoutExtension
-                                    val ext = localFile.extension.let { if (it.isNotEmpty()) ".$it" else "" }
-                                    val desiredAlongsideName = "$nameWithoutExt (${src.sanitizedFileSuffix})$ext"
-                                    val alongsideFile = generateNonCollidingFile(parentDir, desiredAlongsideName)
-
-                                    val provider = getStorageProvider(srv)
-                                    try {
-                                        val dlResult = provider.downloadFile(
-                                            remotePath = alongsideVer.remotePath,
-                                            destinationFile = alongsideFile,
-                                            onProgress = { _, _ -> }
-                                        )
-                                        if (dlResult.isSuccess) {
-                                            filesSavedAlongside++
-                                            if (alongsideVer.lastModifiedEpochMs > 0L) {
-                                                try {
-                                                    alongsideFile.setLastModified(alongsideVer.lastModifiedEpochMs)
-                                                } catch (e: Exception) {
-                                                    Log.w(TAG, "Failed to restore lastModified on ${alongsideFile.name}", e)
-                                                }
-                                            }
-                                            val alongsideRel = if (relativePath.contains('/')) {
-                                                "${relativePath.substringBeforeLast('/')}/${alongsideFile.name}"
-                                            } else {
-                                                alongsideFile.name
-                                            }
-                                            dao.insertOrUpdate(
-                                                SyncMetadataEntity(
-                                                    serviceId = srv.id,
-                                                    relativePath = alongsideRel,
-                                                    scope = if (alongsideFile.absolutePath.startsWith(env.xournalConfigDir.absolutePath)) "config" else "notes",
-                                                    localSha256 = alongsideVer.contentHash ?: "",
-                                                    remoteHash = alongsideVer.contentHash,
-                                                    localLastModified = alongsideVer.lastModifiedEpochMs,
-                                                    sizeBytes = alongsideFile.length(),
-                                                    lastSyncedAt = System.currentTimeMillis()
-                                                )
-                                            )
-                                        } else {
-                                            errors.add("${alongsideFile.name}: ${dlResult.exceptionOrNull()?.message}")
-                                        }
-                                    } finally {
-                                        provider.disconnect()
-                                    }
-                                }
-                            }
-                        }
+                    if (FileTransferQueueManager.isCancelled(item.id)) {
+                        planSuccess[item.id] = false
+                        continue
                     }
-                    is ConflictResolutionAction.KeepBoth, is ConflictResolutionAction.KeepAlongside -> {
-                        val versionsToKeep = if (action is ConflictResolutionAction.KeepAlongside) {
-                            action.versionsToKeep
+                    if (FileTransferQueueManager.isPaused(item.id)) {
+                        planSuccess[item.id] = false
+                        continue
+                    }
+
+                    if (transferResult.isSuccess) {
+                        FileTransferQueueManager.markCompleted(item.id)
+                        planSuccess[item.id] = true
+
+                        if (item.direction == TransferDirection.DOWNLOAD && plan.fileVersion.lastModifiedEpochMs > 0L) {
+                            try {
+                                localFile.setLastModified(plan.fileVersion.lastModifiedEpochMs)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed to restore lastModified on ${localFile.name}", e)
+                            }
+                        }
+
+                        val sha = if (item.direction == TransferDirection.DOWNLOAD) {
+                            plan.fileVersion.contentHash?.takeIf { it.isNotBlank() } ?: calculateFileHash(localFile)
                         } else {
-                            emptyList()
+                            calculateFileHash(localFile)
                         }
 
-                        for (remoteVer in versionsToKeep) {
-                            val src = remoteVer.source
-                            if (src is FileVersionSource.REMOTE && remoteVer.remotePath != null) {
-                                val srv = services[src.serviceId]
-                                if (srv != null) {
-                                    val localFile = File(remoteVer.localFilePath)
-                                    val parentDir = localFile.parentFile ?: env.getNotesDirectory()
-                                    if (!parentDir.exists()) parentDir.mkdirs()
+                        dao.insertOrUpdate(
+                            SyncMetadataEntity(
+                                serviceId = plan.serviceConfig.id,
+                                relativePath = item.relativePath?.takeIf { it.isNotBlank() } ?: localFile.name,
+                                scope = item.scope?.takeIf { it.isNotBlank() } ?: if (localFile.absolutePath.startsWith(env.xournalConfigDir.absolutePath)) "config" else "notes",
+                                localSha256 = sha,
+                                remoteHash = sha,
+                                localLastModified = localFile.lastModified(),
+                                sizeBytes = localFile.length(),
+                                lastSyncedAt = System.currentTimeMillis()
+                            )
+                        )
 
-                                    val nameWithoutExt = localFile.nameWithoutExtension
-                                    val ext = localFile.extension.let { if (it.isNotEmpty()) ".$it" else "" }
-                                    val desiredAlongsideName = "$nameWithoutExt (${src.sanitizedFileSuffix})$ext"
-                                    val alongsideFile = generateNonCollidingFile(parentDir, desiredAlongsideName)
-
-                                    val provider = getStorageProvider(srv)
-                                    try {
-                                        val dlResult = provider.downloadFile(
-                                            remotePath = remoteVer.remotePath,
-                                            destinationFile = alongsideFile,
-                                            onProgress = { _, _ -> }
-                                        )
-                                        if (dlResult.isSuccess) {
-                                            filesSavedAlongside++
-                                            if (remoteVer.lastModifiedEpochMs > 0L) {
-                                                try {
-                                                    alongsideFile.setLastModified(remoteVer.lastModifiedEpochMs)
-                                                } catch (e: Exception) {
-                                                    Log.w(TAG, "Failed to restore lastModified on ${alongsideFile.name}", e)
-                                                }
-                                            }
-                                            val alongsideRel = if (relativePath.contains('/')) {
-                                                "${relativePath.substringBeforeLast('/')}/${alongsideFile.name}"
-                                            } else {
-                                                alongsideFile.name
-                                            }
-                                            dao.insertOrUpdate(
-                                                SyncMetadataEntity(
-                                                    serviceId = srv.id,
-                                                    relativePath = alongsideRel,
-                                                    scope = if (alongsideFile.absolutePath.startsWith(env.xournalConfigDir.absolutePath)) "config" else "notes",
-                                                    localSha256 = remoteVer.contentHash ?: "",
-                                                    remoteHash = remoteVer.contentHash,
-                                                    localLastModified = remoteVer.lastModifiedEpochMs,
-                                                    sizeBytes = alongsideFile.length(),
-                                                    lastSyncedAt = System.currentTimeMillis()
-                                                )
-                                            )
-                                        } else {
-                                            errors.add("${alongsideFile.name}: ${dlResult.exceptionOrNull()?.message}")
-                                        }
-                                    } finally {
-                                        provider.disconnect()
-                                    }
-                                }
-                            }
+                        if (localFile.absolutePath.startsWith(env.xournalConfigDir.absolutePath)) {
+                            hasRestoredConfigs = true
                         }
+
+                        if (plan.isPrimary) {
+                            filesUpdated++
+                        } else {
+                            filesSavedAlongside++
+                        }
+                    } else {
+                        val errMsg = transferResult.exceptionOrNull()?.message ?: "Transfer failed"
+                        FileTransferQueueManager.markFailed(item.id, errMsg)
+                        errors.add("${item.fileName}: $errMsg")
+                        planSuccess[item.id] = false
                     }
-                    is ConflictResolutionAction.Skip -> {
+                } finally {
+                    provider.disconnect()
+                }
+            }
+
+            val plansByGroupId = plans.groupBy { it.resolution.conflictGroupId }
+            for (resolution in resolutions) {
+                val groupPlans = plansByGroupId[resolution.conflictGroupId]
+                if (groupPlans.isNullOrEmpty()) {
+                    if (resolution.action is ConflictResolutionAction.Skip) {
                         filesSkipped++
+                    } else {
+                        // Local version chosen without needing remote transfer
+                        filesUpdated++
+                        ConflictPersistenceManager.getInstance(context).removeConflict(resolution.conflictGroupId)
+                    }
+                } else {
+                    val allSucceeded = groupPlans.all { planSuccess[it.item.id] == true }
+                    if (allSucceeded) {
+                        ConflictPersistenceManager.getInstance(context).removeConflict(resolution.conflictGroupId)
                     }
                 }
-            } catch (e: Exception) {
-                errors.add("$relativePath: ${e.message}")
             }
-        }
 
-        if (hasRestoredConfigs) {
-            try {
-                NotesHomeConfigManager.restoreSettingsFromNotesHome(env.getNotesDirectory(), context, env)
-            } catch (e: Exception) {
-                Log.w(TAG, "Error restoring settings from Notes Home after conflict resolution", e)
+            if (hasRestoredConfigs) {
+                try {
+                    NotesHomeConfigManager.restoreSettingsFromNotesHome(env.getNotesDirectory(), context, env)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error restoring settings from Notes Home after conflict resolution", e)
+                }
             }
+        } finally {
+            FileTransferQueueManager.setSyncActive(false)
         }
 
         ConflictResolutionReport(

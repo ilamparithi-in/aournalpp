@@ -288,6 +288,27 @@ class WebDavStorageProvider(
         }
     }
 
+    override suspend fun peekFileFingerprint(remotePath: String): Pair<String?, String?> = withContext(Dispatchers.IO) {
+        if (!remotePath.endsWith(".xopp", ignoreCase = true)) return@withContext null to null
+        try {
+            val targetUrl = resolveUrl(remotePath)
+            val request = addAuth(
+                Request.Builder()
+                    .url(targetUrl)
+                    .header("Range", "bytes=0-2047")
+                    .get()
+            ).build()
+
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful && response.code != 206) return@withContext null to null
+                val bytes = response.body?.bytes() ?: return@withContext null to null
+                dev.ilamparithi.aournalpp.backup.engine.FingerprintParser.extractFingerprintFromGzipBytes(bytes)
+            }
+        } catch (_: Exception) {
+            null to null
+        }
+    }
+
     override suspend fun disconnect() {
         // OkHttp handles connection pool eviction automatically
     }

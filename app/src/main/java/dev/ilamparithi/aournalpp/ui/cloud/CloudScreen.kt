@@ -2,6 +2,7 @@ package dev.ilamparithi.aournalpp.ui.cloud
 
 import android.widget.TimePicker
 import androidx.compose.ui.res.stringResource
+import dev.ilamparithi.aournalpp.AournalppApplication
 import dev.ilamparithi.aournalpp.R
 import dev.ilamparithi.aournalpp.backup.engine.ConflictPersistenceManager
 import androidx.compose.animation.AnimatedContent
@@ -206,7 +207,8 @@ import kotlinx.coroutines.withContext
 enum class CloudSubpage {
     OVERVIEW,
     TRANSFER_QUEUE,
-    MAPPING_SETS
+    MAPPING_SETS,
+    CONFLICT_RESOLUTION
 }
 
 @Suppress("FunctionName")
@@ -311,7 +313,6 @@ fun CloudScreen(
     val conflictManager = remember { ConflictPersistenceManager.getInstance(context) }
     val persistedConflicts by conflictManager.unresolvedConflicts.collectAsStateWithLifecycle()
     var detectedConflicts by remember { mutableStateOf<List<FileConflictGroup>>(emptyList()) }
-    var showConflictDialog by remember { mutableStateOf(false) }
     var isCheckingConflicts by remember { mutableStateOf(false) }
 
     val activeConflicts = detectedConflicts.ifEmpty { persistedConflicts }
@@ -390,6 +391,47 @@ fun CloudScreen(
                 TransferQueueSubpage(
                     engine = engine,
                     onNavigateBack = { currentSubpage = CloudSubpage.OVERVIEW }
+                )
+            }
+            CloudSubpage.CONFLICT_RESOLUTION -> {
+                val activeConflicts = detectedConflicts.ifEmpty { persistedConflicts }
+                ConflictResolutionScreen(
+                    conflictGroups = activeConflicts,
+                    engine = engine,
+                    onNavigateBack = { currentSubpage = CloudSubpage.OVERVIEW },
+                    onApplyResolutions = { resolutions ->
+                        // 1. Enqueue all transfers in transfer manager immediately
+                        engine.prepareAndEnqueueConflictTransfers(resolutions)
+                        // 2. Immediately redirect to active transfers subpage
+                        currentSubpage = CloudSubpage.TRANSFER_QUEUE
+                        detectedConflicts = emptyList()
+
+                        // 3. Launch background execution in application scope so navigating back does not cancel transfers
+                        AournalppApplication.applicationScope.launch(Dispatchers.IO) {
+                            try {
+                                val report = engine.resolveConflicts(resolutions)
+                                refreshState()
+                                if (report.errors.isNotEmpty()) {
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar(
+                                            "Resolved with error(s): ${report.errors.first()}"
+                                        )
+                                    }
+                                } else {
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar(
+                                            "Resolved conflicts: ${report.filesUpdated} primary updated, ${report.filesSavedAlongside} saved alongside"
+                                        )
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                android.util.Log.e("CloudScreen", "Error resolving conflicts in background", e)
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("Conflict resolution error: ${e.message}")
+                                }
+                            }
+                        }
+                    }
                 )
             }
             CloudSubpage.OVERVIEW -> {
@@ -556,7 +598,7 @@ fun CloudScreen(
                                         detectedConflicts = conflicts
                                         conflictManager.saveConflicts(conflicts)
                                         if (conflicts.isNotEmpty()) {
-                                            showConflictDialog = true
+                                            currentSubpage = CloudSubpage.CONFLICT_RESOLUTION
                                         } else {
                                             snackbarHostState.showSnackbar("All cloud files and local notes are up to date with zero conflicts!")
                                         }
@@ -635,7 +677,7 @@ fun CloudScreen(
                             .fillMaxWidth()
                             .clickable {
                                 detectedConflicts = activeConflicts
-                                showConflictDialog = true
+                                currentSubpage = CloudSubpage.CONFLICT_RESOLUTION
                             },
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
@@ -667,7 +709,7 @@ fun CloudScreen(
                             Button(
                                 onClick = {
                                     detectedConflicts = activeConflicts
-                                    showConflictDialog = true
+                                    currentSubpage = CloudSubpage.CONFLICT_RESOLUTION
                                 },
                                 shape = RoundedCornerShape(10.dp)
                             ) {
@@ -1124,26 +1166,6 @@ fun CloudScreen(
                     }
                 ) {
                     Text(stringResource(R.string.action_cancel))
-                }
-            }
-        )
-    }
-
-    val dialogConflicts = detectedConflicts.ifEmpty { persistedConflicts }
-    if (showConflictDialog && dialogConflicts.isNotEmpty()) {
-        MultiServiceConflictDialog(
-            conflictGroups = dialogConflicts,
-            engine = engine,
-            onDismissRequest = { showConflictDialog = false },
-            onResolutionComplete = { report ->
-                showConflictDialog = false
-                detectedConflicts = emptyList()
-                conflictManager.clearConflicts()
-                refreshState()
-                coroutineScope.launch {
-                    snackbarHostState.showSnackbar(
-                        "Resolved conflicts: ${report.filesUpdated} primary updated, ${report.filesSavedAlongside} saved alongside"
-                    )
                 }
             }
         )

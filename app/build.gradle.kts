@@ -306,35 +306,56 @@ kotlin {
 }
 
 val bootstrapTasksMap = mapOf(
-    "arm64" to "aarch64",
-    "x86_64" to "x86_64"
+    "arm64" to Pair("aarch64", "arm64-v8a"),
+    "x86_64" to Pair("x86_64", "x86_64")
 )
 
-bootstrapTasksMap.forEach { (flavorName, archName) ->
+bootstrapTasksMap.forEach { (flavorName, target) ->
+    val (archName, abiName) = target
     val capitalizedFlavor = flavorName.replaceFirstChar { it.uppercase() }
-    val taskName = "generateBootstrap$capitalizedFlavor"
+    val bootstrapTaskName = "generateBootstrap$capitalizedFlavor"
+    val compileShimsTaskName = "compileShims$capitalizedFlavor"
     val flavorOutDir = file("build/generated/bootstrap-assets/$flavorName/assets")
     val flavorJniDir = file("build/generated/bootstrap-assets/$flavorName/jniLibs")
     val flavorOutputFile = File(flavorOutDir, "bootstrap.tar.xz")
     val flavorManifestFile = File(flavorOutDir, "bootstrap_manifest.json")
+    val shimOutputFile = File(flavorJniDir, "$abiName/libxopp_shim.so")
 
-    tasks.register<Exec>(taskName) {
-        description = "Downloads and builds bootstrap.tar.xz and jniLibs for $flavorName ($archName)"
+    // Dedicated task to compile native C shims directly from source code
+    val compileShimsTask = tasks.register<Exec>(compileShimsTaskName) {
+        description = "Compiles native shims (libxopp_shim.so) for $flavorName ($archName) from C source code"
         group = "build"
         workingDir = rootDir.resolve("scripts")
         inputs.files(
-            rootDir.resolve("scripts/build_bootstrap.py"),
-            rootDir.resolve("scripts/bootstrap.lock.json"),
             fileTree(rootDir.resolve("scripts")) { include("*.c") }
+        )
+        outputs.file(shimOutputFile)
+        doFirst {
+            shimOutputFile.parentFile.mkdirs()
+        }
+        commandLine(
+            "python3",
+            "build_bootstrap.py",
+            "--arch", archName,
+            "--compile-shims",
+            "--jnilibs-dir", flavorJniDir.absolutePath
+        )
+    }
+
+    tasks.register<Exec>(bootstrapTaskName) {
+        description = "Downloads and builds bootstrap.tar.xz and jniLibs for $flavorName ($archName)"
+        group = "build"
+        workingDir = rootDir.resolve("scripts")
+        dependsOn(compileShimsTask)
+        inputs.files(
+            rootDir.resolve("scripts/build_bootstrap.py"),
+            rootDir.resolve("scripts/bootstrap.lock.json")
         )
         outputs.file(flavorOutputFile)
         outputs.file(flavorManifestFile)
         outputs.dir(flavorJniDir)
-        outputs.upToDateWhen {
-            flavorOutputFile.exists() && flavorManifestFile.exists() && flavorJniDir.exists()
-        }
         onlyIf {
-            !flavorOutputFile.exists() || !flavorManifestFile.exists() || !flavorJniDir.exists()
+            !flavorOutputFile.exists() || !flavorManifestFile.exists()
         }
         doFirst {
             flavorOutDir.mkdirs()
@@ -353,13 +374,14 @@ bootstrapTasksMap.forEach { (flavorName, archName) ->
 val generateBootstrap = tasks.register("generateBootstrap") {
     description = "Downloads and builds bootstrap.tar.xz for all flavors"
     group = "build"
-    dependsOn("generateBootstrapArm64", "generateBootstrapX86_64")
+    dependsOn("generateBootstrapArm64", "generateBootstrapX86_64", "compileShimsArm64", "compileShimsX86_64")
 }
 
 androidComponents.onVariants { variant ->
     val flavorName = variant.flavorName ?: return@onVariants
     val capitalizedFlavor = flavorName.replaceFirstChar { it.uppercase() }
     val bootstrapTask = tasks.named("generateBootstrap$capitalizedFlavor")
+    val compileShimsTask = tasks.named("compileShims$capitalizedFlavor")
     val buildTypeName = variant.buildType!!.replaceFirstChar { it.uppercase() }
 
     val prefixes = listOf(
@@ -370,6 +392,7 @@ androidComponents.onVariants { variant ->
     tasks.configureEach {
         if (name in prefixes) {
             dependsOn(bootstrapTask)
+            dependsOn(compileShimsTask)
         }
     }
 }

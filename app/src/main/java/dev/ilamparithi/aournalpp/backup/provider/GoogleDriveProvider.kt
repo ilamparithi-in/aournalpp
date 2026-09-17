@@ -406,6 +406,35 @@ class GoogleDriveProvider(
         }
     }
 
+    override suspend fun peekFileFingerprint(remotePath: String): Pair<String?, String?> = withContext(Dispatchers.IO) {
+        if (!remotePath.endsWith(".xopp", ignoreCase = true)) return@withContext null to null
+        try {
+            val cleanPath = remotePath.trim('/').replace('\\', '/')
+            val fileName = File(cleanPath).name
+            val parentPath = File(cleanPath).parent?.replace('\\', '/') ?: ""
+            val parentFolderId = if (parentPath.isNotEmpty()) resolveFolderId(parentPath, false) ?: return@withContext null to null else "root"
+            val fileInfo = findFileInfoInFolder(parentFolderId, fileName) ?: return@withContext null to null
+            val downloadUrl = "$DRIVE_API_BASE/files/${fileInfo.id}?alt=media"
+
+            val response = executeWithAuth { token ->
+                Request.Builder()
+                    .url(downloadUrl)
+                    .header("Authorization", "Bearer $token")
+                    .header("Range", "bytes=0-2047")
+                    .get()
+                    .build()
+            }
+
+            response.use { resp ->
+                if (!resp.isSuccessful && resp.code != 206) return@withContext null to null
+                val bytes = resp.body?.bytes() ?: return@withContext null to null
+                dev.ilamparithi.aournalpp.backup.engine.FingerprintParser.extractFingerprintFromGzipBytes(bytes)
+            }
+        } catch (_: Exception) {
+            null to null
+        }
+    }
+
     override suspend fun disconnect() {
         folderIdCache.clear()
     }

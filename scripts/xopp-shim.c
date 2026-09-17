@@ -625,3 +625,72 @@ int execve(const char *pathname, char *const argv[], char *const envp[]) {
     return -1;
 }
 
+/* ========================================================================= */
+/* 6. XML Creator Tag Interception (AOURNALPP_CREATOR_TAG)                   */
+/* ========================================================================= */
+
+typedef int (*real_xmlTextWriterWriteAttribute_t)(void *, const unsigned char *, const unsigned char *);
+static real_xmlTextWriterWriteAttribute_t real_xmlTextWriterWriteAttribute = NULL;
+
+__attribute__((visibility("default")))
+int xmlTextWriterWriteAttribute(void *writer, const unsigned char *name, const unsigned char *content) {
+    if (!real_xmlTextWriterWriteAttribute) {
+        real_xmlTextWriterWriteAttribute = (real_xmlTextWriterWriteAttribute_t)dlsym(RTLD_NEXT, "xmlTextWriterWriteAttribute");
+    }
+
+    if (name && strcmp((const char *)name, "creator") == 0) {
+        const char *tag = getenv("AOURNALPP_CREATOR_TAG");
+        if (tag && *tag && real_xmlTextWriterWriteAttribute) {
+            return real_xmlTextWriterWriteAttribute(writer, name, (const unsigned char *)tag);
+        }
+    }
+
+    if (real_xmlTextWriterWriteAttribute) {
+        return real_xmlTextWriterWriteAttribute(writer, name, content);
+    }
+    return -1;
+}
+
+typedef int (*real_gzwrite_t)(void *, const void *, unsigned int);
+static real_gzwrite_t real_gzwrite = NULL;
+static __thread int saw_creator_attr = 0;
+
+__attribute__((visibility("default")))
+int gzwrite(void *file, const void *buf, unsigned int len) {
+    if (!real_gzwrite) {
+        real_gzwrite = (real_gzwrite_t)dlsym(RTLD_NEXT, "gzwrite");
+    }
+    if (!real_gzwrite) return -1;
+
+    if (buf && len > 0) {
+        const char *tag = getenv("AOURNALPP_CREATOR_TAG");
+        if (tag && *tag) {
+            // Strictly detect the exact sequence from XmlNode::writeAttributes:
+            // Step 1: Attribute name: "creator" (len = 7)
+            // Step 2: Equals & opening quote: "=\"" (len = 2)
+            // Step 3: Default value starting with "xournalpp"
+            if (len == 7 && memcmp(buf, "creator", 7) == 0) {
+                saw_creator_attr = 1;
+                return real_gzwrite(file, buf, len);
+            } else if (saw_creator_attr == 1 && len == 2 && memcmp(buf, "=\"", 2) == 0) {
+                saw_creator_attr = 2;
+                return real_gzwrite(file, buf, len);
+            } else if (saw_creator_attr == 2) {
+                saw_creator_attr = 0;
+                if (len >= 9 && memcmp(buf, "xournalpp", 9) == 0) {
+                    unsigned int tag_len = (unsigned int)strlen(tag);
+                    int res = real_gzwrite(file, tag, tag_len);
+                    if (res == (int)tag_len) {
+                        return (int)len; // Return expected original len to satisfy caller
+                    }
+                    return res;
+                }
+            } else {
+                saw_creator_attr = 0;
+            }
+        }
+    }
+
+    return real_gzwrite(file, buf, len);
+}
+

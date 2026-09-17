@@ -319,7 +319,9 @@ data class FileVersionItem(
     val sizeBytes: Long,
     val lastModifiedEpochMs: Long,
     val contentHash: String? = null,
-    val remotePath: String? = null
+    val remotePath: String? = null,
+    val originApp: String? = null,
+    val originDevice: String? = null
 )
 
 /**
@@ -361,7 +363,8 @@ sealed class ConflictResolutionAction {
 data class FileConflictResolution(
     val conflictGroupId: String,
     val relativePath: String,
-    val action: ConflictResolutionAction
+    val action: ConflictResolutionAction,
+    val targetLocalPath: String? = null
 )
 
 /**

@@ -990,6 +990,11 @@ class LinuxEnvironment(private val context: Context) {
         envMap["LC_ALL"] = effectiveLcAll
         envMap["LC_MESSAGES"] = effectiveLang
 
+        val manufacturer = android.os.Build.MANUFACTURER.replaceFirstChar { it.uppercase() }
+        val model = android.os.Build.MODEL
+        val devName = if (model.startsWith(manufacturer, ignoreCase = true)) model else "$manufacturer $model"
+        envMap["AOURNALPP_CREATOR_TAG"] = "Aournal++ 1.3.7 ($devName)"
+
         if (shimModule.exists()) {
             envMap["LD_PRELOAD"] = shimModule.absolutePath
         }

@@ -83,7 +83,7 @@ class PageTemplateParserTest {
         )
 
         val xml = template.buildXml()
-        assertTrue(xml.contains("""<xournal creator="Xournal++ 1.2.x" fileversion="4">"""))
+        assertTrue(xml.contains("""<xournal creator="Aournal++ 1.3.7" fileversion="4">"""))
         assertTrue(xml.contains("""<page width="595.27559100" height="841.88976400">"""))
         assertTrue(xml.contains("""<background type="solid" color="#ffffffff" style="lined"/>"""))
         assertTrue(xml.contains("<layer/>"))
