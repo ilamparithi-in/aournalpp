@@ -278,9 +278,10 @@ class MainActivity : ComponentActivity() {
                 }
 
                 var hasBootstrapRevealed by rememberSaveable { mutableStateOf(false) }
+                var isRevealingOnboarding by rememberSaveable { mutableStateOf(false) }
 
                 Box(modifier = Modifier.fillMaxSize()) {
-                    if (state is BootstrapState.Ready) {
+                    if (state is BootstrapState.Ready && (isOnboardingCompleted || isRevealingOnboarding)) {
                         LaunchedEffect(state) {
                             pendingIntentToProcess?.let { intentToHandle ->
                                 handleExternalIntent(intentToHandle)
@@ -597,7 +598,11 @@ class MainActivity : ComponentActivity() {
                     if (!isOnboardingCompleted) {
                         OnboardingScreen(
                             bootstrapState = state,
-                            onFinish = { viewModel.completeOnboarding() }
+                            onStartReveal = { isRevealingOnboarding = true },
+                            onFinish = {
+                                hasBootstrapRevealed = true
+                                viewModel.completeOnboarding()
+                            }
                         )
                     }
                 }

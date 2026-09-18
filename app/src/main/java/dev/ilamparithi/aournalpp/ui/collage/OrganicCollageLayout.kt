@@ -689,7 +689,7 @@ fun Material3ExpressiveLoadingScreen(
                         .offset(y = jumpOffset2.dp)
                         .size(50.dp)
                         .scale(2f - pulseScale)
-                        .rotate(-rotation * 1.3f)
+                        .rotate(-rotation)
                         .clip(SunnyShape(vertices = 8, roundness = 0.25f))
                         .background(MaterialTheme.colorScheme.tertiary)
                 )
@@ -700,7 +700,7 @@ fun Material3ExpressiveLoadingScreen(
                         .offset(y = jumpOffset3.dp)
                         .size(46.dp)
                         .scale(pulseScale)
-                        .rotate(rotation * 0.8f)
+                        .rotate(rotation)
                         .clip(ArchShape(cornerRadiusRatio = 0.45f))
                         .background(MaterialTheme.colorScheme.secondary)
                 )
@@ -711,7 +711,7 @@ fun Material3ExpressiveLoadingScreen(
                         .offset(y = -jumpOffset1.dp)
                         .size(40.dp)
                         .scale(1.1f)
-                        .rotate(-rotation * 0.9f)
+                        .rotate(-rotation)
                         .clip(ScallopShape(lobes = 8, depth = 0.10f))
                         .background(MaterialTheme.colorScheme.primaryContainer)
                 )
@@ -865,7 +865,7 @@ fun CreativeEmptyCollageState(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(24000, easing = FastOutSlowInEasing),
+            animation = tween(24000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "rot"
@@ -910,7 +910,7 @@ fun CreativeEmptyCollageState(
                 .align(Alignment.TopEnd)
                 .offset(x = (-30).dp, y = (24f + floatAnim2).dp)
                 .size(68.dp)
-                .rotate(rotAnim / 3)
+                .rotate(rotAnim / 2)
                 .clip(CloverShape())
                 .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f))
         )

@@ -48,18 +48,13 @@ import dev.ilamparithi.aournalpp.ui.theme.SunnyShape
 import dev.ilamparithi.aournalpp.utils.FormatUtils
 import dev.ilamparithi.aournalpp.utils.a11yHeading
 import dev.ilamparithi.aournalpp.backup.engine.BackupEngine
-import dev.ilamparithi.aournalpp.backup.model.ConfigSyncStatus
 import dev.ilamparithi.aournalpp.backup.model.ConflictResolutionPolicy
 import dev.ilamparithi.aournalpp.backup.model.FileConflictGroup
-import dev.ilamparithi.aournalpp.backup.model.FileVersionItem
 import dev.ilamparithi.aournalpp.backup.model.ServiceConfig
 import dev.ilamparithi.aournalpp.backup.security.CredentialsVault
 import dev.ilamparithi.aournalpp.runtime.NotesHomeConfigManager
-import dev.ilamparithi.aournalpp.ui.cloud.ConfigDiffActivity
-import dev.ilamparithi.aournalpp.ui.cloud.ConflictDialogMode
 import dev.ilamparithi.aournalpp.ui.cloud.FolderBrowserDialog
 import dev.ilamparithi.aournalpp.ui.cloud.FolderBrowserMode
-import dev.ilamparithi.aournalpp.ui.cloud.MultiServiceConflictDialog
 import dev.ilamparithi.aournalpp.ui.cloud.ServiceConfigDialog
 import dev.ilamparithi.aournalpp.ui.cloud.CloudProviderIcon
 import dev.ilamparithi.aournalpp.ui.InteractiveMarqueeText
@@ -73,7 +68,8 @@ fun OnboardingChooseFolderPage(
     env: LinuxEnvironment,
     onContinue: () -> Unit,
     onRestoreLocal: (File) -> Unit,
-    onRestoreCloud: (ServiceConfig, String, File, Boolean, ConflictResolutionPolicy) -> Unit
+    onRestoreCloud: (ServiceConfig, String, File, Boolean, ConflictResolutionPolicy) -> Unit,
+    onConflictsDetected: (List<FileConflictGroup>, BackupEngine, ServiceConfig, String, File) -> Unit
 ) {
     val context = LocalContext.current
     val vault = remember { CredentialsVault.getInstance(context) }
@@ -90,7 +86,6 @@ fun OnboardingChooseFolderPage(
     var showServiceSelectionDialog by remember { mutableStateOf(false) }
     var showNoCompleteSyncDialog by remember { mutableStateOf(false) }
     var showFolderBrowserDialog by remember { mutableStateOf(false) }
-    var showConflictDialog by remember { mutableStateOf(false) }
     var isCheckingCloud by remember { mutableStateOf(false) }
     var isResolvingCloudConflict by remember { mutableStateOf(false) }
 
@@ -98,8 +93,6 @@ fun OnboardingChooseFolderPage(
     var currentRemotePath by remember { mutableStateOf(BackupEngine.COMPLETE_BACKUP_REMOTE_ROOT) }
     val configuredServices by vault.servicesFlow.collectAsStateWithLifecycle()
 
-    var detectedConfigConflicts by remember { mutableStateOf<List<FileConflictGroup>>(emptyList()) }
-    var rememberedConfigSelections by remember { mutableStateOf<Map<String, Set<FileVersionItem>>>(emptyMap()) }
     var cloudErrorMessage by remember { mutableStateOf<String?>(null) }
     var showCloudErrorDialog by remember { mutableStateOf(false) }
 
@@ -112,14 +105,13 @@ fun OnboardingChooseFolderPage(
             isCheckingCloud = false
             if (result.isSuccess) {
                 if (result.getOrNull() == true) {
-                    // Complete sync found in remote folder! Check for config file conflicts
+                    // Complete sync found in remote folder! Check for both note and config file conflicts
                     val localFolder = File(selectedPath)
-                    val conflicts = backupEngine.detectConfigConflicts(service, remotePath, localFolder)
+                    val conflicts = backupEngine.detectRestoreConflicts(service, remotePath, localFolder)
                     if (conflicts.isNotEmpty()) {
-                        detectedConfigConflicts = conflicts
-                        showConflictDialog = true
+                        onConflictsDetected(conflicts, backupEngine, service, remotePath, localFolder)
                     } else {
-                        // No conflicts or 0 diff changes: download and restore from cloud
+                        // No conflicts: download and restore from cloud
                         onRestoreCloud(service, remotePath, localFolder, false, ConflictResolutionPolicy.OVERWRITE_LOCAL)
                     }
                 } else {
@@ -158,7 +150,7 @@ fun OnboardingChooseFolderPage(
             } else {
                 rawPath
             }
-            env.setNotesDirectory(resolved)
+            env.setNotesDirectoryPathOnly(resolved)
             selectedPath = resolved
             Toast.makeText(
                 context,
@@ -350,7 +342,7 @@ fun OnboardingChooseFolderPage(
             FilterChip(
                 selected = selectedPath == defaultNotesPath,
                 onClick = {
-                    env.setNotesDirectory(defaultNotesPath)
+                    env.setNotesDirectoryPathOnly(defaultNotesPath)
                     selectedPath = defaultNotesPath
                 },
                 label = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_folder_preset_default)) }
@@ -358,7 +350,7 @@ fun OnboardingChooseFolderPage(
             FilterChip(
                 selected = selectedPath == defaultXournalPath,
                 onClick = {
-                    env.setNotesDirectory(defaultXournalPath)
+                    env.setNotesDirectoryPathOnly(defaultXournalPath)
                     selectedPath = defaultXournalPath
                 },
                 label = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_folder_preset_xournal)) }
@@ -366,7 +358,7 @@ fun OnboardingChooseFolderPage(
             FilterChip(
                 selected = selectedPath == defaultDownloadPath,
                 onClick = {
-                    env.setNotesDirectory(defaultDownloadPath)
+                    env.setNotesDirectoryPathOnly(defaultDownloadPath)
                     selectedPath = defaultDownloadPath
                 },
                 label = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.onboarding_folder_preset_download)) }
@@ -437,6 +429,29 @@ fun OnboardingChooseFolderPage(
                 contentDescription = null,
                 modifier = Modifier.size(18.dp)
             )
+        }
+
+        if (isCompatible) {
+            Spacer(modifier = Modifier.height(10.dp))
+            OutlinedButton(
+                onClick = onContinue,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text(
+                    text = androidx.compose.ui.res.stringResource(R.string.action_continue_without_restoring),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         }
     }
 
@@ -648,44 +663,6 @@ fun OnboardingChooseFolderPage(
                 checkCloudCompleteSync(updated, pickedRemotePath)
             },
             onDismissRequest = { showFolderBrowserDialog = false }
-        )
-    }
-
-    // Dialog 5: Unified Config Conflict Dialog
-    if (showConflictDialog && selectedCloudService != null && detectedConfigConflicts.isNotEmpty()) {
-        MultiServiceConflictDialog(
-            conflictGroups = detectedConfigConflicts,
-            initialSelections = rememberedConfigSelections,
-            mode = ConflictDialogMode.CONFIG_CONFLICT,
-            onDismissRequest = { showConflictDialog = false },
-            onApplyConfigResolutions = { resolutions ->
-                showConflictDialog = false
-                scope.launch {
-                    val localFolder = File(selectedPath)
-                    backupEngine.applyConfigResolutions(resolutions, selectedCloudService!!, localFolder)
-                    onRestoreCloud(selectedCloudService!!, currentRemotePath, localFolder, false, ConflictResolutionPolicy.KEEP_NEWER)
-                }
-            },
-            onPreviewDiff = { group ->
-                context.startActivity(
-                    ConfigDiffActivity.createIntent(
-                        context = context,
-                        fileName = group.fileName,
-                        localPath = group.localFilePath ?: "",
-                        remotePath = group.remoteFilePath ?: ""
-                    )
-                )
-            },
-            secondaryActionButton = {
-                TextButton(
-                    onClick = {
-                        isResolvingCloudConflict = true
-                        folderPickerLauncher.launch(null)
-                    }
-                ) {
-                    Text(androidx.compose.ui.res.stringResource(R.string.action_choose_diff_local_folder))
-                }
-            }
         )
     }
 }

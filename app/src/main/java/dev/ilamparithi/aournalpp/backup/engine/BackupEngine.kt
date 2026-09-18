@@ -746,18 +746,9 @@ class BackupEngine(
                     }
                 }
 
-                // 2. List .config tree (per-device namespace first, fallback to legacy)
-                val deviceId = DeviceIdentity.getDeviceId(context)
-                onLog?.invoke("Scanning configuration files in .devices/$deviceId/.config/...")
-                var remoteConfigs = listRemoteRecursively(provider, "$remoteRoot/.devices/$deviceId/.config")
-                var configBasePrefix = "$remoteRoot/.devices/$deviceId/.config"
-                if (remoteConfigs.none { !it.isDirectory }) {
-                    val legacyConfigs = listRemoteRecursively(provider, "$remoteRoot/.config")
-                    if (legacyConfigs.any { !it.isDirectory }) {
-                        remoteConfigs = legacyConfigs
-                        configBasePrefix = "$remoteRoot/.config"
-                    }
-                }
+                // 2. List .config tree (per-device namespace first, fallback to remote devices, then legacy)
+                val (configBasePrefix, remoteConfigs) = resolveRemoteConfigPrefix(provider, remoteRoot)
+                onLog?.invoke("Scanning configuration files in $configBasePrefix...")
                 val addedRemotePaths = mutableSetOf<String>()
                 for (rf in remoteConfigs) {
                     if (rf.isDirectory) continue
@@ -1018,7 +1009,8 @@ class BackupEngine(
             filesFailed = failedCount,
             totalBytesDownloaded = totalBytesDownloaded,
             durationMs = System.currentTimeMillis() - startTime,
-            errors = errors
+            errors = errors,
+            hasRestoredConfigs = hasRestoredConfigs
         )
     }
 
@@ -1566,9 +1558,13 @@ class BackupEngine(
             val targetPath = resolution.targetLocalPath?.takeIf { it.isNotBlank() }
                 ?: group?.localFilePath?.takeIf { it.isNotBlank() }
                 ?: group?.localVersion?.localFilePath?.takeIf { it.isNotBlank() }
-                ?: if (resolution.action is ConflictResolutionAction.ChoosePrimary && resolution.action.chosenVersion.localFilePath.isNotBlank()) resolution.action.chosenVersion.localFilePath
-                else if (resolution.action is ConflictResolutionAction.ResolveSelection && resolution.action.primaryVersion.localFilePath.isNotBlank()) resolution.action.primaryVersion.localFilePath
-                else File(env.getNotesDirectory(), relativePath).absolutePath
+                ?: when {
+                    resolution.action is ConflictResolutionAction.ChoosePrimary && resolution.action.chosenVersion.localFilePath.isNotBlank() ->
+                        resolution.action.chosenVersion.localFilePath
+                    resolution.action is ConflictResolutionAction.ResolveSelection && resolution.action.primaryVersion.localFilePath.isNotBlank() ->
+                        resolution.action.primaryVersion.localFilePath
+                    else -> File(env.getNotesDirectory(), relativePath).absolutePath
+                }
 
             val localFile = File(targetPath)
             val parentDir = localFile.parentFile ?: env.getNotesDirectory()
@@ -1611,7 +1607,7 @@ class BackupEngine(
                             val remoteVer = group?.remoteVersions?.firstOrNull()
                             val srvId = (remoteVer?.source as? FileVersionSource.REMOTE)?.serviceId
                             val srv = srvId?.let { services[it] }
-                            if (srv != null && remoteVer?.remotePath != null && localFile.exists()) {
+                            if (srv != null && remoteVer.remotePath != null && localFile.exists()) {
                                 val transferId = "${srv.id}_${TransferDirection.UPLOAD.name}_${remoteVer.remotePath}"
                                 val item = TransferItem(
                                     id = transferId,
@@ -1676,7 +1672,7 @@ class BackupEngine(
                             val remoteVer = group?.remoteVersions?.firstOrNull()
                             val srvId = (remoteVer?.source as? FileVersionSource.REMOTE)?.serviceId
                             val srv = srvId?.let { services[it] }
-                            if (srv != null && remoteVer?.remotePath != null && localFile.exists()) {
+                            if (srv != null && remoteVer.remotePath != null && localFile.exists()) {
                                 val transferId = "${srv.id}_${TransferDirection.UPLOAD.name}_${remoteVer.remotePath}"
                                 val item = TransferItem(
                                     id = transferId,
@@ -1837,7 +1833,9 @@ class BackupEngine(
      * Executes conflict resolutions across local storage and cloud services.
      */
     suspend fun resolveConflicts(
-        resolutions: List<FileConflictResolution>
+        resolutions: List<FileConflictResolution>,
+        onProgress: ((current: Int, total: Int, currentFile: String) -> Unit)? = null,
+        onLog: ((String) -> Unit)? = null
     ): ConflictResolutionReport = withContext(Dispatchers.IO) {
         val plans = prepareConflictTransferPlans(resolutions)
         if (plans.isNotEmpty()) {
@@ -1855,12 +1853,15 @@ class BackupEngine(
         FileTransferQueueManager.setSyncActive(true)
 
         try {
-            for (plan in plans) {
+            for ((planIdx, plan) in plans.withIndex()) {
                 val item = plan.item
                 if (FileTransferQueueManager.isCancelled(item.id)) {
                     planSuccess[item.id] = false
                     continue
                 }
+
+                onProgress?.invoke(planIdx + 1, plans.size, item.fileName)
+                onLog?.invoke("Resolving conflict for ${item.fileName} (${planIdx + 1}/${plans.size})...")
 
                 FileTransferQueueManager.markStarted(item.id)
 
@@ -1960,11 +1961,13 @@ class BackupEngine(
                         } else {
                             filesSavedAlongside++
                         }
+                        onLog?.invoke("Resolved: ${item.fileName} (${if (plan.isAlongside) "saved alongside" else "updated"})")
                     } else {
                         val errMsg = transferResult.exceptionOrNull()?.message ?: "Transfer failed"
                         FileTransferQueueManager.markFailed(item.id, errMsg)
                         errors.add("${item.fileName}: $errMsg")
                         planSuccess[item.id] = false
+                        onLog?.invoke("Failed resolving ${item.fileName}: $errMsg")
                     }
                 } finally {
                     provider.disconnect()
@@ -1972,20 +1975,20 @@ class BackupEngine(
             }
 
             val plansByGroupId = plans.groupBy { it.resolution.conflictGroupId }
-            for (resolution in resolutions) {
-                val groupPlans = plansByGroupId[resolution.conflictGroupId]
+            for ((conflictGroupId, _, action) in resolutions) {
+                val groupPlans = plansByGroupId[conflictGroupId]
                 if (groupPlans.isNullOrEmpty()) {
-                    if (resolution.action is ConflictResolutionAction.Skip) {
+                    if (action is ConflictResolutionAction.Skip) {
                         filesSkipped++
                     } else {
                         // Local version chosen without needing remote transfer
                         filesUpdated++
-                        ConflictPersistenceManager.getInstance(context).removeConflict(resolution.conflictGroupId)
+                        ConflictPersistenceManager.getInstance(context).removeConflict(conflictGroupId)
                     }
                 } else {
                     val allSucceeded = groupPlans.all { planSuccess[it.item.id] == true }
                     if (allSucceeded) {
-                        ConflictPersistenceManager.getInstance(context).removeConflict(resolution.conflictGroupId)
+                        ConflictPersistenceManager.getInstance(context).removeConflict(conflictGroupId)
                     }
                 }
             }
@@ -2119,11 +2122,12 @@ class BackupEngine(
                 return@withContext Result.success(false)
             }
 
-            // Check if Notes/ or .config/ exists directly in remoteRoot
+            // Check if Notes/, .config/, or .devices/ exists directly in remoteRoot
             val hasNotesDir = rootList.any { it.isDirectory && (it.remotePath.endsWith("/Notes") || it.remotePath.equals("Notes", ignoreCase = true)) }
             val hasConfigDir = rootList.any { it.isDirectory && (it.remotePath.endsWith("/.config") || it.remotePath.equals(".config", ignoreCase = true)) }
+            val hasDevicesDir = rootList.any { it.isDirectory && (it.remotePath.endsWith("/.devices") || it.remotePath.equals(".devices", ignoreCase = true)) }
 
-            if (hasNotesDir || hasConfigDir) {
+            if (hasNotesDir || hasConfigDir || hasDevicesDir) {
                 return@withContext Result.success(true)
             }
 
@@ -2244,6 +2248,7 @@ class BackupEngine(
 
         try {
             val cacheDir = File(context.cacheDir, "config_diff_cache").apply { if (!exists()) mkdirs() }
+            val (configBasePrefix, _) = resolveRemoteConfigPrefix(provider, cleanRoot)
 
             for ((relPath, fileName, desc) in configFilesToCheck) {
                 val localFile = File(localNotesDir, relPath)
@@ -2257,19 +2262,10 @@ class BackupEngine(
                 else if (altLocalFile != null && altLocalFile.exists() && altLocalFile.length() > 0L) altLocalFile
                 else null
 
-                val deviceId = DeviceIdentity.getDeviceId(context)
-                val deviceRemotePath = "$cleanRoot/.devices/$deviceId/$relPath"
-                val legacyRemotePath = "$cleanRoot/$relPath"
+                val configSubPath = relPath.removePrefix(".config/").trim('/')
+                val remoteFilePath = "$configBasePrefix/$configSubPath"
                 val tempRemoteFile = File(cacheDir, "remote_${serviceConfig.id}_$fileName")
-                
-                var remoteFilePath = deviceRemotePath
-                var downloadRes = provider.downloadFile(deviceRemotePath, tempRemoteFile) { _, _ -> }
-                if (downloadRes.isFailure || !tempRemoteFile.exists() || tempRemoteFile.length() == 0L) {
-                    // Fallback to legacy path
-                    remoteFilePath = legacyRemotePath
-                    downloadRes = provider.downloadFile(legacyRemotePath, tempRemoteFile) { _, _ -> }
-                }
-
+                val downloadRes = provider.downloadFile(remoteFilePath, tempRemoteFile) { _, _ -> }
                 val remoteExists = downloadRes.isSuccess && tempRemoteFile.exists() && tempRemoteFile.length() > 0L
 
                 if (activeLocal != null && remoteExists) {
@@ -2331,6 +2327,153 @@ class BackupEngine(
         }
 
         conflicts
+    }
+
+    /**
+     * Resolves the remote configuration prefix, checking current device (.devices/$deviceId/.config),
+     * other devices (.devices/{remoteDeviceId}/.config), and finally falling back to the legacy root (.config).
+     */
+    suspend fun resolveRemoteConfigPrefix(
+        provider: CloudStorageProvider,
+        cleanRoot: String
+    ): Pair<String, List<RemoteFileMetadata>> = withContext(Dispatchers.IO) {
+        val currentDeviceId = DeviceIdentity.getDeviceId(context)
+        val currentDevicePrefix = "$cleanRoot/.devices/$currentDeviceId/.config"
+        val currentDeviceConfigs = listRemoteRecursively(provider, currentDevicePrefix)
+        if (currentDeviceConfigs.any { !it.isDirectory }) {
+            return@withContext currentDevicePrefix to currentDeviceConfigs
+        }
+
+        // Check if other devices exist under .devices/
+        val devicesDir = "$cleanRoot/.devices"
+        val devicesListing = provider.listFiles(devicesDir).getOrNull() ?: emptyList()
+        val candidateDeviceDirs = devicesListing.filter { it.isDirectory }
+        if (candidateDeviceDirs.isNotEmpty()) {
+            val sortedCandidates = candidateDeviceDirs.sortedByDescending { it.lastModifiedEpochMs }
+            for ((candidateRemotePath) in sortedCandidates) {
+                val candidatePrefix = "${candidateRemotePath.trim('/')}/.config"
+                val candidateConfigs = listRemoteRecursively(provider, candidatePrefix)
+                if (candidateConfigs.any { !it.isDirectory }) {
+                    Log.i(TAG, "Resolved remote config from remote device: $candidatePrefix")
+                    return@withContext candidatePrefix to candidateConfigs
+                }
+            }
+        }
+
+        // Fallback to legacy root config folder
+        val legacyPrefix = "$cleanRoot/.config"
+        val legacyConfigs = listRemoteRecursively(provider, legacyPrefix)
+        return@withContext legacyPrefix to legacyConfigs
+    }
+
+    /**
+     * Checks whether the remote cloud backup has device configuration files (.config).
+     */
+    suspend fun hasRemoteConfigs(
+        serviceConfig: ServiceConfig,
+        remotePath: String = getCompleteBackupRemoteRoot(serviceConfig)
+    ): Boolean = withContext(Dispatchers.IO) {
+        val provider = getStorageProvider(serviceConfig)
+        try {
+            val cleanRoot = remotePath.trim().trim('/')
+            val (_, configs) = resolveRemoteConfigPrefix(provider, cleanRoot)
+            configs.any { !it.isDirectory }
+        } catch (_: Exception) {
+            false
+        } finally {
+            provider.disconnect()
+        }
+    }
+
+    /**
+     * Detects both configuration and note file conflicts between local workspace and cloud backup.
+     */
+    suspend fun detectRestoreConflicts(
+        serviceConfig: ServiceConfig,
+        remotePath: String = getCompleteBackupRemoteRoot(serviceConfig),
+        localNotesDir: File
+    ): List<FileConflictGroup> = withContext(Dispatchers.IO) {
+        val configConflicts = detectConfigConflicts(serviceConfig, remotePath, localNotesDir)
+        if (!localNotesDir.exists() || !localNotesDir.isDirectory) {
+            return@withContext configConflicts
+        }
+
+        val localNotes = localNotesDir.walkTopDown()
+            .filter { it.isFile && it.extension.equals("xopp", ignoreCase = true) }
+            .toList()
+        if (localNotes.isEmpty()) {
+            return@withContext configConflicts
+        }
+
+        val provider = getStorageProvider(serviceConfig)
+        val noteConflicts = mutableListOf<FileConflictGroup>()
+        try {
+            val cleanRoot = remotePath.trim().trim('/')
+            val notesSubDir = "$cleanRoot/Notes"
+            var remoteNotes = listRemoteRecursively(provider, notesSubDir)
+            var notePrefix = notesSubDir
+            if (remoteNotes.none { !it.isDirectory }) {
+                remoteNotes = listRemoteRecursively(provider, cleanRoot)
+                notePrefix = cleanRoot
+            }
+
+            val remoteNotesByRel = remoteNotes
+                .filter { !it.isDirectory && it.remotePath.endsWith(".xopp", ignoreCase = true) }
+                .associateBy { it.remotePath.removePrefix(notePrefix).trim('/') }
+
+            for (localFile in localNotes) {
+                val relPath = localFile.relativeTo(localNotesDir).path
+                val remoteFile = remoteNotesByRel[relPath] ?: continue
+
+                val localHash = calculateFileHash(localFile)
+                val remoteHash = remoteFile.contentHash
+                val sameHash = localHash.isNotEmpty() && !remoteHash.isNullOrEmpty() && localHash.equals(remoteHash, ignoreCase = true)
+                if (sameHash) continue
+
+                val sizeDiff = localFile.length() != remoteFile.sizeBytes
+                val timeDiff = kotlin.math.abs(localFile.lastModified() - remoteFile.lastModifiedEpochMs) > 2000L
+                if (sizeDiff || timeDiff) {
+                    val localVersion = FileVersionItem(
+                        source = FileVersionSource.LOCAL,
+                        fileName = localFile.name,
+                        relativePath = relPath,
+                        localFilePath = localFile.absolutePath,
+                        sizeBytes = localFile.length(),
+                        lastModifiedEpochMs = localFile.lastModified(),
+                        contentHash = localHash
+                    )
+                    val remoteVersion = FileVersionItem(
+                        source = FileVersionSource.REMOTE(
+                            serviceId = serviceConfig.id,
+                            serviceName = serviceConfig.name,
+                            providerType = serviceConfig.providerType
+                        ),
+                        fileName = localFile.name,
+                        relativePath = relPath,
+                        localFilePath = "",
+                        sizeBytes = remoteFile.sizeBytes,
+                        lastModifiedEpochMs = remoteFile.lastModifiedEpochMs,
+                        contentHash = remoteHash,
+                        remotePath = remoteFile.remotePath
+                    )
+                    noteConflicts.add(
+                        FileConflictGroup(
+                            relativePath = relPath,
+                            localVersion = localVersion,
+                            remoteVersions = listOf(remoteVersion),
+                            localFilePath = localFile.absolutePath,
+                            remoteFilePath = remoteFile.remotePath
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed detecting note conflicts during restore check", e)
+        } finally {
+            provider.disconnect()
+        }
+
+        return@withContext configConflicts + noteConflicts
     }
 
     /**

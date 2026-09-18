@@ -125,7 +125,6 @@ fun BootstrapScreen(
     // Material 3 Expressive Infinite Animations
     val infiniteTransition = rememberInfiniteTransition(label = "expressiveWaitingTransition")
     
-    // Slow decorative rotation
     val animatedRotation by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
@@ -135,7 +134,17 @@ fun BootstrapScreen(
         ),
         label = "organicRotation"
     )
+    val animatedCounterRotation by infiniteTransition.animateFloat(
+        initialValue = 360f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 18000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "organicCounterRotation"
+    )
     val rotation = if (reduceAnimations || isError) 0f else animatedRotation
+    val counterRotation = if (reduceAnimations || isError) 0f else animatedCounterRotation
 
     // Breathing pulse for icon
     val animatedPulseScale by infiniteTransition.animateFloat(
@@ -328,7 +337,7 @@ fun BootstrapScreen(
                         Box(
                             modifier = Modifier
                                 .size(112.dp)
-                                .rotate(-rotation * 0.7f)
+                                .rotate(counterRotation)
                                 .clip(ScallopShape(lobes = 8, depth = 0.1f))
                                 .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
                         )

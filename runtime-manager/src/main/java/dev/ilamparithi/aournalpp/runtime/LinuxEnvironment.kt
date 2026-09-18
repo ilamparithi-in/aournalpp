@@ -120,19 +120,45 @@ class LinuxEnvironment(private val context: Context) {
     fun getEmergencySavesDirectory(): File {
         val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
         val savedPath = prefs.getString(PREF_KEY_EMERGENCY_DIR, null)
-        val dir = if (!savedPath.isNullOrBlank()) {
+        return if (!savedPath.isNullOrBlank()) {
             val f = File(savedPath)
             if (f.exists()) f else File(getNotesDirectory(), "Emergency Saves")
         } else {
             File(getNotesDirectory(), "Emergency Saves")
         }
-        if (!dir.exists()) {
-            dir.mkdirs()
+    }
+
+    fun getImportedDirectory(): File {
+        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        val savedPath = prefs.getString(PREF_KEY_IMPORTED_DIR, null)
+        return if (!savedPath.isNullOrBlank()) {
+            val f = File(savedPath)
+            if (f.exists()) f else File(getNotesDirectory(), "Imported")
+        } else {
+            File(getNotesDirectory(), "Imported")
         }
-        val metaFile = File(dir, ".aoppfolder")
-        if (!metaFile.exists()) {
+    }
+
+    fun getAudioDirectory(): File {
+        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        val savedPath = prefs.getString(PREF_KEY_AUDIO_DIR, null)
+        return if (!savedPath.isNullOrBlank()) {
+            val f = File(savedPath)
+            if (f.exists()) f else File(getNotesDirectory(), "Audio")
+        } else {
+            File(getNotesDirectory(), "Audio")
+        }
+    }
+
+    fun ensureWorkspaceDirectories() {
+        val emergencyDir = getEmergencySavesDirectory()
+        if (!emergencyDir.exists()) {
+            emergencyDir.mkdirs()
+        }
+        val emergencyMeta = File(emergencyDir, ".aoppfolder")
+        if (!emergencyMeta.exists()) {
             try {
-                metaFile.writeText(
+                emergencyMeta.writeText(
                     """
                     {
                       "role": "emergency",
@@ -146,25 +172,15 @@ class LinuxEnvironment(private val context: Context) {
                 // ignore
             }
         }
-        return dir
-    }
 
-    fun getImportedDirectory(): File {
-        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
-        val savedPath = prefs.getString(PREF_KEY_IMPORTED_DIR, null)
-        val dir = if (!savedPath.isNullOrBlank()) {
-            val f = File(savedPath)
-            if (f.exists()) f else File(getNotesDirectory(), "Imported")
-        } else {
-            File(getNotesDirectory(), "Imported")
+        val importedDir = getImportedDirectory()
+        if (!importedDir.exists()) {
+            importedDir.mkdirs()
         }
-        if (!dir.exists()) {
-            dir.mkdirs()
-        }
-        val metaFile = File(dir, ".aoppfolder")
-        if (!metaFile.exists()) {
+        val importedMeta = File(importedDir, ".aoppfolder")
+        if (!importedMeta.exists()) {
             try {
-                metaFile.writeText(
+                importedMeta.writeText(
                     """
                     {
                       "role": "import",
@@ -177,25 +193,15 @@ class LinuxEnvironment(private val context: Context) {
                 // ignore
             }
         }
-        return dir
-    }
 
-    fun getAudioDirectory(): File {
-        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
-        val savedPath = prefs.getString(PREF_KEY_AUDIO_DIR, null)
-        val dir = if (!savedPath.isNullOrBlank()) {
-            val f = File(savedPath)
-            if (f.exists()) f else File(getNotesDirectory(), "Audio")
-        } else {
-            File(getNotesDirectory(), "Audio")
+        val audioDir = getAudioDirectory()
+        if (!audioDir.exists()) {
+            audioDir.mkdirs()
         }
-        if (!dir.exists()) {
-            dir.mkdirs()
-        }
-        val metaFile = File(dir, ".aoppfolder")
-        if (!metaFile.exists()) {
+        val audioMeta = File(audioDir, ".aoppfolder")
+        if (!audioMeta.exists()) {
             try {
-                metaFile.writeText(
+                audioMeta.writeText(
                     """
                     {
                       "role": "audio",
@@ -207,7 +213,6 @@ class LinuxEnvironment(private val context: Context) {
                 // ignore
             }
         }
-        return dir
     }
 
     fun setSpecialDirectoryPath(role: String, newPath: String) {
@@ -234,17 +239,12 @@ class LinuxEnvironment(private val context: Context) {
     }
 
     /**
-     * Updates PREF_KEY_NOTES_DIR and GTK bookmarks without triggering eager config copy or sync.
-     * Use this during onboarding or restore flows before external configs are downloaded or restored.
+     * Updates PREF_KEY_NOTES_DIR without creating folders or writing bookmarks eagerly.
+     * Use this during onboarding or restore flows before external configs are finalized.
      */
     fun setNotesDirectoryPathOnly(newPath: String) {
         val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
         prefs.edit().putString(PREF_KEY_NOTES_DIR, newPath).apply()
-        val target = File(newPath)
-        if (!target.exists()) {
-            target.mkdirs()
-        }
-        ensureGtkBookmarks()
     }
 
     fun generateOpenboxConfig(snapLayoutActive: Boolean = false): String =
@@ -384,19 +384,21 @@ class LinuxEnvironment(private val context: Context) {
             }
         }
 
-        // Clean up rogue notesDir/var created by earlier fontconfig versions
-        try {
-            val rogueVar = File(getNotesDirectory(), "var")
-            if (rogueVar.exists() && rogueVar.isDirectory) {
-                val subFiles = rogueVar.walkBottomUp().toList()
-                val isOnlyFontConfig = subFiles.all { it.isDirectory || it.name.endsWith(".cache-12") || it.name.endsWith(".cache-7") || it.name == "CACHEDIR.TAG" || it.parentFile?.name == "fontconfig" }
-                if (isOnlyFontConfig) {
-                    rogueVar.deleteRecursively()
-                    Log.i(TAG, "Cleaned up rogue fontconfig var directory in notes directory: ${rogueVar.absolutePath}")
+        if (isOnboardingCompleted()) {
+            // Clean up rogue notesDir/var created by earlier fontconfig versions
+            try {
+                val rogueVar = File(getNotesDirectory(), "var")
+                if (rogueVar.exists() && rogueVar.isDirectory) {
+                    val subFiles = rogueVar.walkBottomUp().toList()
+                    val isOnlyFontConfig = subFiles.all { it.isDirectory || it.name.endsWith(".cache-12") || it.name.endsWith(".cache-7") || it.name == "CACHEDIR.TAG" || it.parentFile?.name == "fontconfig" }
+                    if (isOnlyFontConfig) {
+                        rogueVar.deleteRecursively()
+                        Log.i(TAG, "Cleaned up rogue fontconfig var directory in notes directory: ${rogueVar.absolutePath}")
+                    }
                 }
+            } catch (e: Exception) {
+                // ignore
             }
-        } catch (e: Exception) {
-            // ignore
         }
 
         val titleWatcherBin = File(binDir, "xopp-title-watcher")
@@ -483,16 +485,17 @@ class LinuxEnvironment(private val context: Context) {
             prefs.edit().putLong("pref_last_provisioned_asset_version", currentVersionCode).apply()
         }
 
-        setupStorageSymlinks()
-        writeGtkBookmarks()
-        writeGtkSettings()
-        ensureXournalppSettings()
-        ensureMenuBarShortcuts()
-        checkAndQuarantineEmergencySave()
         if (isOnboardingCompleted()) {
+            setupStorageSymlinks()
+            ensureWorkspaceDirectories()
+            writeGtkBookmarks()
+            writeGtkSettings()
+            ensureXournalppSettings()
+            ensureMenuBarShortcuts()
+            checkAndQuarantineEmergencySave()
             NotesHomeConfigManager.sync(context, this)
         } else {
-            Log.i(TAG, "Skipping NotesHomeConfigManager.sync: onboarding not completed yet")
+            Log.i(TAG, "Skipping workspace and external storage configuration: onboarding not completed yet")
         }
     }
 

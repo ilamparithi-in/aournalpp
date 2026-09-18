@@ -74,10 +74,6 @@ import androidx.compose.material.icons.filled.SettingsBackupRestore
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Sync
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedVisibility
@@ -101,22 +97,14 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import dev.ilamparithi.aournalpp.R
 import dev.ilamparithi.aournalpp.backup.engine.BackupEngine
-import dev.ilamparithi.aournalpp.backup.model.ConfigSyncStatus
 import dev.ilamparithi.aournalpp.backup.model.ConflictResolutionPolicy
 import dev.ilamparithi.aournalpp.backup.model.ServiceConfig
 import dev.ilamparithi.aournalpp.backup.security.CredentialsVault
 import dev.ilamparithi.aournalpp.backup.security.CustomMappingRepository
 import dev.ilamparithi.aournalpp.runtime.NotesHomeConfigManager
 import dev.ilamparithi.aournalpp.backup.model.FileConflictGroup
-import dev.ilamparithi.aournalpp.backup.model.FileVersionItem
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.runtime.mutableIntStateOf
-import dev.ilamparithi.aournalpp.ui.cloud.ConfigDiffActivity
-import dev.ilamparithi.aournalpp.ui.cloud.ConflictDialogMode
-import dev.ilamparithi.aournalpp.ui.cloud.FolderBrowserDialog
-import dev.ilamparithi.aournalpp.ui.cloud.FolderBrowserMode
-import dev.ilamparithi.aournalpp.ui.cloud.MultiServiceConflictDialog
-import dev.ilamparithi.aournalpp.ui.cloud.ServiceConfigDialog
 import dev.ilamparithi.aournalpp.utils.a11yHeading
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -181,7 +169,11 @@ import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.math.hypot
 
+import dev.ilamparithi.aournalpp.AournalppApplication
+import dev.ilamparithi.aournalpp.backup.model.FileConflictResolution
+import dev.ilamparithi.aournalpp.ui.cloud.ConflictResolutionScreen
 import dev.ilamparithi.aournalpp.ui.onboarding.*
+import kotlinx.coroutines.Dispatchers
 
 enum class RestoreLogType {
     INFO,
@@ -200,6 +192,7 @@ data class RestoreConsoleLog(
 @Composable
 fun OnboardingScreen(
     bootstrapState: BootstrapState,
+    onStartReveal: () -> Unit = {},
     onFinish: () -> Unit
 ) {
     val context = LocalContext.current
@@ -223,6 +216,13 @@ fun OnboardingScreen(
     val restorationLogs = remember { mutableStateListOf<RestoreConsoleLog>() }
     var restorationProgress by remember { mutableFloatStateOf(-1f) }
     var retryRestorationAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    // Conflict resolution state
+    var activeConflicts by remember { mutableStateOf<List<FileConflictGroup>?>(null) }
+    var conflictEngine by remember { mutableStateOf<BackupEngine?>(null) }
+    var pendingConflictService by remember { mutableStateOf<ServiceConfig?>(null) }
+    var pendingConflictRemotePath by remember { mutableStateOf<String?>(null) }
+    var pendingConflictLocalFolder by remember { mutableStateOf<File?>(null) }
 
     val logTimeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
 
@@ -278,6 +278,7 @@ fun OnboardingScreen(
     fun triggerRevealAnimation() {
         if (isRevealing) return
         isRevealing = true
+        onStartReveal()
         scope.launch {
             val rootCoords = rootLayoutCoordinates
             val checkCoords = checkCircleCoordinates
@@ -357,22 +358,46 @@ fun OnboardingScreen(
         skipDownload: Boolean,
         conflictPolicy: ConflictResolutionPolicy
     ) {
-        isRestoringSettings = true
-        isRestorationFailed = false
-        isRestorationComplete = false
-        showPostCloudRestoreReminder = false
-        isRestorationDetailsExpanded = false
-        restorationLogs.clear()
-        restorationProgress = -1f
-        retryRestorationAction = { performCloudRestore(service, remotePath, localFolder, skipDownload, conflictPolicy) }
+        env.setNotesDirectoryPathOnly(localFolder.absolutePath)
 
         scope.launch {
+            val engine = BackupEngine(context, env, CredentialsVault.getInstance(context))
+            val hasConfigs = !skipDownload && engine.hasRemoteConfigs(service, remotePath)
+
+            if (!skipDownload && !hasConfigs) {
+                // Background note download case:
+                // No device-specific configs exist in cloud; only notes/folders.
+                // Enqueue transfers in background applicationScope so user is not blocked.
+                AournalppApplication.applicationScope.launch(Dispatchers.IO) {
+                    try {
+                        engine.performRestore(
+                            serviceConfig = service.copy(remoteBasePath = remotePath),
+                            conflictPolicy = conflictPolicy
+                        )
+                    } catch (e: Exception) {
+                        android.util.Log.e("OnboardingScreen", "Background notes restore failed", e)
+                    }
+                }
+                isRestoringSettings = false
+                pagerState.animateScrollToPage(3)
+                return@launch
+            }
+
+            // Foreground settings restore case (configs exist or skipDownload local config restore)
+            isRestoringSettings = true
+            isRestorationFailed = false
+            isRestorationComplete = false
+            showPostCloudRestoreReminder = false
+            isRestorationDetailsExpanded = false
+            restorationLogs.clear()
+            restorationProgress = -1f
+            retryRestorationAction = { performCloudRestore(service, remotePath, localFolder, skipDownload, conflictPolicy) }
+
             addRestoreLog("Initializing cloud restoration from ${service.name}...")
-            env.setNotesDirectoryPathOnly(localFolder.absolutePath)
             var restoreSuccess = true
 
+            var hasRestoredConfigs = false
             if (!skipDownload) {
-                val engine = BackupEngine(context, env, CredentialsVault.getInstance(context))
                 val result = engine.performRestore(
                     serviceConfig = service.copy(remoteBasePath = remotePath),
                     conflictPolicy = conflictPolicy,
@@ -385,6 +410,7 @@ fun OnboardingScreen(
                         addRestoreLog(logMsg)
                     }
                 )
+                hasRestoredConfigs = result.hasRestoredConfigs
                 if (result.filesFailed > 0 || (result.filesRestored == 0 && result.filesSkipped == 0 && result.totalFilesDiscovered > 0)) {
                     restoreSuccess = false
                 }
@@ -394,25 +420,113 @@ fun OnboardingScreen(
                     addRestoreLog(logMsg)
                 }
                 restoreSuccess = localOk
+                hasRestoredConfigs = localOk
             }
 
             if (restoreSuccess) {
-                NotesHomeConfigManager.sync(context, env)
-                addRestoreLog("Cloud configuration and sync mappings finalized.")
-                // Detect whether mapping sets exist in restored workspace
-                val mappingRepo = CustomMappingRepository(baseDir = context.filesDir, notesHomeDir = localFolder)
-                val sets = try {
-                    mappingRepo.getAllMappingSets()
-                } catch (_: Exception) {
-                    emptyList()
+                if (hasRestoredConfigs) {
+                    NotesHomeConfigManager.sync(context, env)
+                    addRestoreLog("Cloud configuration and sync mappings finalized.")
+                    // Detect whether mapping sets exist in restored workspace
+                    val mappingRepo = CustomMappingRepository(baseDir = context.filesDir, notesHomeDir = localFolder)
+                    val sets = try {
+                        mappingRepo.getAllMappingSets()
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
+                    restoredMappingSetsCount = sets.size
+                    isRestorationComplete = true
+                    showPostCloudRestoreReminder = true
+                } else {
+                    addRestoreLog("Notes restore in progress/complete. Proceeding with onboarding setup.")
+                    isRestoringSettings = false
+                    pagerState.animateScrollToPage(3)
                 }
-                restoredMappingSetsCount = sets.size
-                isRestorationComplete = true
-                showPostCloudRestoreReminder = true
             } else {
                 isRestorationFailed = true
                 isRestorationDetailsExpanded = true
                 addRestoreLog("Cloud restoration finished with errors. You can retry, go back, or continue.")
+            }
+        }
+    }
+
+    fun applyConflictResolutionsAndRestore(
+        engine: BackupEngine,
+        resolutions: List<FileConflictResolution>,
+        service: ServiceConfig,
+        remotePath: String,
+        localFolder: File
+    ) {
+        isRestoringSettings = true
+        isRestorationFailed = false
+        isRestorationComplete = false
+        showPostCloudRestoreReminder = false
+        isRestorationDetailsExpanded = true
+        restorationLogs.clear()
+        restorationProgress = -1f
+
+        scope.launch {
+            addRestoreLog("Applying conflict resolutions...")
+            val report = engine.resolveConflicts(
+                resolutions = resolutions,
+                onProgress = { cur, tot, file ->
+                    if (tot > 0) {
+                        restorationProgress = cur.toFloat() / tot.toFloat()
+                    }
+                },
+                onLog = { logMsg ->
+                    addRestoreLog(logMsg)
+                }
+            )
+
+            val hasConfigResolved = resolutions.any { BackupEngine.isConfigFile(it.relativePath) }
+            val hasConfigsInCloud = engine.hasRemoteConfigs(service, remotePath)
+
+            if (hasConfigResolved || hasConfigsInCloud) {
+                NotesHomeConfigManager.restoreSettingsFromNotesHome(localFolder, context, env) { logMsg ->
+                    addRestoreLog(logMsg)
+                }
+                NotesHomeConfigManager.sync(context, env)
+                val result = engine.performRestore(
+                    serviceConfig = service.copy(remoteBasePath = remotePath),
+                    conflictPolicy = ConflictResolutionPolicy.SKIP_CONFLICTS,
+                    onProgress = { current, total, _ ->
+                        if (total > 0) {
+                            restorationProgress = current.toFloat() / total.toFloat()
+                        }
+                    },
+                    onLog = { logMsg ->
+                        addRestoreLog(logMsg)
+                    }
+                )
+                if (result.isSuccess) {
+                    if (result.hasRestoredConfigs) {
+                        addRestoreLog("Restoration completed successfully.")
+                        isRestorationComplete = true
+                        showPostCloudRestoreReminder = true
+                    } else {
+                        addRestoreLog("Notes restore completed. Proceeding with onboarding setup.")
+                        isRestoringSettings = false
+                        pagerState.animateScrollToPage(3)
+                    }
+                } else {
+                    isRestorationFailed = true
+                    addRestoreLog("Restoration finished with errors.")
+                }
+            } else {
+                // Notes-only restore: Enqueue remaining notes download in background!
+                AournalppApplication.applicationScope.launch(Dispatchers.IO) {
+                    try {
+                        engine.performRestore(
+                            serviceConfig = service.copy(remoteBasePath = remotePath),
+                            conflictPolicy = ConflictResolutionPolicy.SKIP_CONFLICTS
+                        )
+                    } catch (e: Exception) {
+                        android.util.Log.e("OnboardingScreen", "Background notes restore failed", e)
+                    }
+                }
+                isRestoringSettings = false
+                pagerState.animateScrollToPage(3)
             }
         }
     }
@@ -448,12 +562,46 @@ fun OnboardingScreen(
             },
         color = MaterialTheme.colorScheme.background
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-        ) {
+        if (activeConflicts != null && conflictEngine != null) {
+            ConflictResolutionScreen(
+                conflictGroups = activeConflicts!!,
+                engine = conflictEngine!!,
+                onNavigateBack = {
+                    activeConflicts = null
+                    conflictEngine = null
+                    pendingConflictService = null
+                    pendingConflictRemotePath = null
+                    pendingConflictLocalFolder = null
+                },
+                onApplyResolutions = { resolutions ->
+                    val srv = pendingConflictService
+                    val rPath = pendingConflictRemotePath
+                    val lFolder = pendingConflictLocalFolder
+                    val engine = conflictEngine!!
+                    activeConflicts = null
+                    conflictEngine = null
+                    pendingConflictService = null
+                    pendingConflictRemotePath = null
+                    pendingConflictLocalFolder = null
+
+                    if (srv != null && rPath != null && lFolder != null) {
+                        applyConflictResolutionsAndRestore(
+                            engine = engine,
+                            resolutions = resolutions,
+                            service = srv,
+                            remotePath = rPath,
+                            localFolder = lFolder
+                        )
+                    }
+                }
+            )
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+            ) {
             // Top Navigation & Step Indicator (Centered Dots, No Right Counter)
             Surface(
                 color = MaterialTheme.colorScheme.surface,
@@ -884,6 +1032,13 @@ fun OnboardingScreen(
                                 },
                                 onRestoreCloud = { service, remotePath, localFolder, skipDownload, conflictPolicy ->
                                     performCloudRestore(service, remotePath, localFolder, skipDownload, conflictPolicy)
+                                },
+                                onConflictsDetected = { conflicts, engine, service, remotePath, localFolder ->
+                                    conflictEngine = engine
+                                    pendingConflictService = service
+                                    pendingConflictRemotePath = remotePath
+                                    pendingConflictLocalFolder = localFolder
+                                    activeConflicts = conflicts
                                 }
                             )
                             3 -> OnboardingSettingsPage(
@@ -927,4 +1082,5 @@ fun OnboardingScreen(
             }
         }
     }
+}
 }

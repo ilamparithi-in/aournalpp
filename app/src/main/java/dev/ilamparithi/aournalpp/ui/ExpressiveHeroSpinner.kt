@@ -57,10 +57,12 @@ fun ExpressiveHeroSpinner(
     val reduceAnimations = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
 
     val rotation: Float
+    val counterRotation: Float
     val pulseScale: Float
     val iconRotation: Float
     if (reduceAnimations) {
         rotation = 0f
+        counterRotation = 0f
         pulseScale = 1f
         iconRotation = 0f
     } else {
@@ -74,6 +76,15 @@ fun ExpressiveHeroSpinner(
             ),
             label = "expressiveSpinnerRotation"
         )
+        val animatedCounterRotation by infiniteTransition.animateFloat(
+            initialValue = 360f,
+            targetValue = 0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 18000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "expressiveSpinnerCounterRotation"
+        )
         val animatedPulseScale by infiniteTransition.animateFloat(
             initialValue = 0.92f,
             targetValue = 1.08f,
@@ -84,8 +95,8 @@ fun ExpressiveHeroSpinner(
             label = "expressiveSpinnerPulse"
         )
         val animatedIconRotation by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = -360f,
+            initialValue = 360f,
+            targetValue = 0f,
             animationSpec = infiniteRepeatable(
                 animation = tween(durationMillis = 3000, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart
@@ -93,6 +104,7 @@ fun ExpressiveHeroSpinner(
             label = "expressiveSpinnerIconRotation"
         )
         rotation = animatedRotation
+        counterRotation = animatedCounterRotation
         pulseScale = animatedPulseScale
         iconRotation = if (rotateIconOpposite) animatedIconRotation else 0f
     }
@@ -122,7 +134,7 @@ fun ExpressiveHeroSpinner(
         Box(
             modifier = Modifier
                 .size(size * 0.8f)
-                .rotate(-rotation * 0.7f)
+                .rotate(counterRotation)
                 .clip(ScallopShape(lobes = 8, depth = 0.1f))
                 .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
         )

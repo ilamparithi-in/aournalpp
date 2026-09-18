@@ -64,44 +64,44 @@ object ActiveNotesTracker {
         // 1. Check workspace state for detailed multi-window records
         val workspaceState = ActiveWorkspaceTracker.getWorkspaceState(baseDir)
         if (workspaceState != null && workspaceState.windows.isNotEmpty()) {
-            for (win in workspaceState.windows) {
+            for ((winId, winTitle, winCleanTitle, winFilePath) in workspaceState.windows) {
                 // Match by resolved filePath if available
-                if (!win.filePath.isNullOrBlank()) {
-                    val winCanonical = try { File(win.filePath).canonicalPath } catch (_: Exception) { win.filePath }
+                if (!winFilePath.isNullOrBlank()) {
+                    val winCanonical = try { File(winFilePath).canonicalPath } catch (_: Exception) { winFilePath }
                     if (winCanonical.equals(targetCanonical, ignoreCase = true) ||
-                        win.filePath.equals(targetAbsolute, ignoreCase = true)) {
+                        winFilePath.equals(targetAbsolute, ignoreCase = true)) {
                         return ActiveNoteMatch(
-                            windowId = win.id,
-                            title = win.cleanTitle.ifBlank { win.title },
-                            filePath = win.filePath
+                            windowId = winId,
+                            title = winCleanTitle.ifBlank { winTitle },
+                            filePath = winFilePath
                         )
                     }
                 }
 
                 // Match by clean title against file name (with or without extension)
-                val clean = cleanDisplayTitle(win.cleanTitle)
+                val clean = cleanDisplayTitle(winCleanTitle)
                 if (clean.isNotBlank() && !isGenericTitle(clean)) {
                     if (clean.equals(targetNameNoExt, ignoreCase = true) ||
                         clean.equals(targetName, ignoreCase = true)) {
                         return ActiveNoteMatch(
-                            windowId = win.id,
+                            windowId = winId,
                             title = clean,
-                            filePath = win.filePath ?: targetAbsolute
+                            filePath = winFilePath ?: targetAbsolute
                         )
                     }
                 }
 
                 // Match sanitized raw title
-                val sanitized = ProcessSupervisor.sanitizeWindowTitle(win.title).trim()
+                val sanitized = ProcessSupervisor.sanitizeWindowTitle(winTitle).trim()
                 if (sanitized.isNotBlank() && !isGenericTitle(sanitized)) {
                     val cleanSanitized = cleanDisplayTitle(sanitized)
                     if (cleanSanitized.equals(targetNameNoExt, ignoreCase = true) ||
                         cleanSanitized.equals(targetName, ignoreCase = true) ||
                         sanitized.equals(targetName, ignoreCase = true)) {
                         return ActiveNoteMatch(
-                            windowId = win.id,
+                            windowId = winId,
                             title = cleanSanitized.ifBlank { sanitized },
-                            filePath = win.filePath ?: targetAbsolute
+                            filePath = winFilePath ?: targetAbsolute
                         )
                     }
                 }

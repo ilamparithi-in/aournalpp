@@ -253,7 +253,8 @@ data class RestoreResult(
     val filesFailed: Int,
     val totalBytesDownloaded: Long,
     val durationMs: Long,
-    val errors: List<String> = emptyList()
+    val errors: List<String> = emptyList(),
+    val hasRestoredConfigs: Boolean = false
 ) {
     val isSuccess: Boolean get() = filesFailed == 0 && errors.isEmpty()
 }
