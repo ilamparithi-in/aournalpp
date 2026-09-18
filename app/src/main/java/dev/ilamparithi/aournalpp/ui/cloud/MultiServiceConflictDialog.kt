@@ -116,9 +116,12 @@ fun MultiServiceConflictDialog(
             if (!initial.isNullOrEmpty()) {
                 map[group.id] = initial
             } else {
-                // Default selection: newest version checked as Primary Copy (or Cloud version for config)
+                // Default selection: newest version checked as Primary Copy (or Cloud version for config, or primary remote for new files)
                 val newest = if (mode == ConflictDialogMode.CONFIG_CONFLICT) {
                     group.remoteVersions.firstOrNull() ?: group.allVersions.maxByOrNull { it.lastModifiedEpochMs }
+                } else if (group.localVersion == null) {
+                    group.remoteVersions.firstOrNull { (it.source as? FileVersionSource.REMOTE)?.mappingId == null }
+                        ?: group.remoteVersions.firstOrNull()
                 } else {
                     group.allVersions.maxByOrNull { it.lastModifiedEpochMs }
                 }
@@ -431,8 +434,19 @@ private fun ConflictMultiSelectionCard(
         if (group.localVersion != null) {
             list.add(group.localVersion)
         }
-        val sortedRemotes = group.remoteVersions.sortedByDescending { it.lastModifiedEpochMs }
-        list.addAll(sortedRemotes)
+        if (group.localVersion == null) {
+            val primary = group.remoteVersions.firstOrNull { (it.source as? FileVersionSource.REMOTE)?.mappingId == null }
+                ?: group.remoteVersions.firstOrNull()
+            if (primary != null) {
+                list.add(primary)
+                list.addAll(group.remoteVersions.filter { it != primary })
+            } else {
+                list.addAll(group.remoteVersions)
+            }
+        } else {
+            val sortedRemotes = group.remoteVersions.sortedByDescending { it.lastModifiedEpochMs }
+            list.addAll(sortedRemotes)
+        }
         list
     }
 
@@ -442,6 +456,7 @@ private fun ConflictMultiSelectionCard(
         else if (selectedVersions.size == 1) selectedVersions.first()
         else {
             selectedVersions.firstOrNull { it.source is FileVersionSource.LOCAL }
+                ?: selectedVersions.firstOrNull { (it.source as? FileVersionSource.REMOTE)?.mappingId == null }
                 ?: selectedVersions.maxByOrNull { it.lastModifiedEpochMs }
                 ?: selectedVersions.first()
         }

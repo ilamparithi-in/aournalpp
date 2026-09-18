@@ -141,10 +141,18 @@ fun ConflictResolutionScreen(
                     map[group.id] = setOf(defaultChoice)
                 }
             } else {
-                // Default note selection: newest version as primary
-                val newest = group.allVersions.maxByOrNull { it.lastModifiedEpochMs }
-                if (newest != null) {
-                    map[group.id] = setOf(newest)
+                if (group.localVersion == null) {
+                    val primary = group.remoteVersions.firstOrNull { (it.source as? FileVersionSource.REMOTE)?.mappingId == null }
+                        ?: group.remoteVersions.firstOrNull()
+                    if (primary != null) {
+                        map[group.id] = setOf(primary)
+                    }
+                } else {
+                    // Default note selection: newest version as primary
+                    val newest = group.allVersions.maxByOrNull { it.lastModifiedEpochMs }
+                    if (newest != null) {
+                        map[group.id] = setOf(newest)
+                    }
                 }
             }
         }
@@ -432,7 +440,18 @@ private fun ConflictResolutionItemCard(
     val orderedVersions = remember(group) {
         val list = mutableListOf<FileVersionItem>()
         group.localVersion?.let { list.add(it) }
-        list.addAll(group.remoteVersions.sortedByDescending { it.lastModifiedEpochMs })
+        if (group.localVersion == null) {
+            val primary = group.remoteVersions.firstOrNull { (it.source as? FileVersionSource.REMOTE)?.mappingId == null }
+                ?: group.remoteVersions.firstOrNull()
+            if (primary != null) {
+                list.add(primary)
+                list.addAll(group.remoteVersions.filter { it != primary })
+            } else {
+                list.addAll(group.remoteVersions)
+            }
+        } else {
+            list.addAll(group.remoteVersions.sortedByDescending { it.lastModifiedEpochMs })
+        }
         list
     }
 
@@ -441,6 +460,7 @@ private fun ConflictResolutionItemCard(
         else if (selectedVersions.size == 1) selectedVersions.first()
         else {
             selectedVersions.firstOrNull { it.source is FileVersionSource.LOCAL }
+                ?: selectedVersions.firstOrNull { (it.source as? FileVersionSource.REMOTE)?.mappingId == null }
                 ?: selectedVersions.maxByOrNull { it.lastModifiedEpochMs }
                 ?: selectedVersions.first()
         }

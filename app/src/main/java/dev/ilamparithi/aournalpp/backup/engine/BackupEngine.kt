@@ -1040,7 +1040,7 @@ class BackupEngine(
             val services = vault.getActiveConfiguredServices().filter { it.isEnabled }
             if (services.isEmpty()) return emptyList()
 
-            return coroutineScope {
+            val backupResults = coroutineScope {
                 services.map { service ->
                     async(Dispatchers.IO) {
                         try {
@@ -1081,6 +1081,18 @@ class BackupEngine(
                     }
                 }.awaitAll()
             }
+
+            // Auto-pull new cloud files and detect any multi-service conflicts across services
+            try {
+                val multiConflicts = detectMultiServiceConflicts()
+                if (multiConflicts.isNotEmpty()) {
+                    ConflictPersistenceManager.getInstance(context).addConflicts(multiConflicts)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error checking multi-service conflicts during sync", e)
+            }
+
+            return backupResults
         } finally {
             lock.release()
         }
@@ -1445,19 +1457,202 @@ class BackupEngine(
             }
         }
 
-        // 4. Aggregate into conflict groups
+        // 4. Aggregate into conflict groups and auto-pull new non-conflicting cloud files
         val conflictGroups = mutableListOf<FileConflictGroup>()
+        val deviceId = DeviceIdentity.getDeviceId(context)
+        val dao = db.syncMetadataDao()
 
         for ((canonPath, allVersions) in versionsByLocalPath) {
-            if (allVersions.size <= 1) continue
-
             val localVersion = allVersions.firstOrNull { it.source is FileVersionSource.LOCAL }
             val remoteVersions = allVersions.filter { it.source is FileVersionSource.REMOTE }
 
             if (remoteVersions.isEmpty()) continue
 
-            val displayRel = relativePathByLocalPath[canonPath] ?: File(canonPath).name
+            val destFile = File(canonPath)
+            val isNewCloudFile = localVersion == null || !destFile.exists()
+            val displayRel = relativePathByLocalPath[canonPath] ?: destFile.name
             val isConfig = isConfigFile(displayRel)
+
+            // Primary remote selection:
+            // "If the same file appears in more than one cloud/custom mapping, set the first cloud as primary
+            // (or if there is only mapping set, set the first one as primary)"
+            val primaryRemote = remoteVersions.firstOrNull { 
+                (it.source as? FileVersionSource.REMOTE)?.mappingId == null 
+            } ?: remoteVersions.first()
+            val orderedRemotes = listOf(primaryRemote) + (remoteVersions.filter { it != primaryRemote })
+
+            if (isNewCloudFile) {
+                // New file seen on the cloud side but not locally:
+                // Only prompt for conflict if there is a discrepancy among them.
+                var hasDiscrepancy = false
+                if (remoteVersions.size > 1) {
+                    for (i in 0 until remoteVersions.size) {
+                        for (j in i + 1 until remoteVersions.size) {
+                            val v1 = remoteVersions[i]
+                            val v2 = remoteVersions[j]
+
+                            if (v1.sizeBytes != v2.sizeBytes) {
+                                hasDiscrepancy = true
+                                break
+                            }
+
+                            if (v1.contentHash != null && v2.contentHash != null) {
+                                if (!v1.contentHash.equals(v2.contentHash, ignoreCase = true)) {
+                                    hasDiscrepancy = true
+                                    break
+                                } else {
+                                    continue
+                                }
+                            }
+
+                            // Sizes match and at least one hash is null/empty: compare actual content
+                            val srv1 = services.firstOrNull { it.id == (v1.source as? FileVersionSource.REMOTE)?.serviceId }
+                            val srv2 = services.firstOrNull { it.id == (v2.source as? FileVersionSource.REMOTE)?.serviceId }
+                            if (srv1 != null && srv2 != null && v1.remotePath != null && v2.remotePath != null) {
+                                val cacheDir = File(context.cacheDir, "conflict_check_cache").apply { if (!exists()) mkdirs() }
+                                val temp1 = File(cacheDir, "chk_${srv1.id}_${v1.fileName}")
+                                val temp2 = File(cacheDir, "chk_${srv2.id}_${v2.fileName}")
+                                try {
+                                    val p1 = getStorageProvider(srv1)
+                                    val p2 = getStorageProvider(srv2)
+                                    val dl1 = p1.downloadFile(v1.remotePath, temp1) { _, _ -> }
+                                    val dl2 = p2.downloadFile(v2.remotePath, temp2) { _, _ -> }
+                                    if (dl1.isSuccess && dl2.isSuccess && temp1.exists() && temp2.exists()) {
+                                        if (isConfigFile(v1.fileName)) {
+                                            if (hasContentChanges(temp1, temp2)) {
+                                                hasDiscrepancy = true
+                                                break
+                                            }
+                                        } else {
+                                            val h1 = calculateFileHash(temp1)
+                                            val h2 = calculateFileHash(temp2)
+                                            if (!h1.equals(h2, ignoreCase = true)) {
+                                                hasDiscrepancy = true
+                                                break
+                                            }
+                                        }
+                                    } else {
+                                        hasDiscrepancy = true
+                                        break
+                                    }
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Failed verifying discrepancy between remote files", e)
+                                    hasDiscrepancy = true
+                                    break
+                                } finally {
+                                    temp1.delete()
+                                    temp2.delete()
+                                }
+                            } else {
+                                hasDiscrepancy = true
+                                break
+                            }
+                        }
+                        if (hasDiscrepancy) break
+                    }
+                }
+
+                if (!hasDiscrepancy) {
+                    // Automatically pull new non-conflicting cloud file
+                    val primarySrc = primaryRemote.source as? FileVersionSource.REMOTE
+                    val primarySrv = primarySrc?.let { src -> services.firstOrNull { it.id == src.serviceId } }
+                    if (primarySrv != null && primaryRemote.remotePath != null) {
+                        try {
+                            destFile.parentFile?.mkdirs()
+                            val provider = getStorageProvider(primarySrv)
+                            val dl = provider.downloadFile(primaryRemote.remotePath, destFile) { _, _ -> }
+                            if (dl.isSuccess && destFile.exists()) {
+                                if (primaryRemote.lastModifiedEpochMs > 0L) {
+                                    try {
+                                        destFile.setLastModified(primaryRemote.lastModifiedEpochMs)
+                                    } catch (_: Exception) {}
+                                }
+                                val fileSha = primaryRemote.contentHash?.takeIf { it.isNotBlank() } ?: calculateFileHash(destFile)
+                                val scope = if (destFile.canonicalPath.startsWith(configRoot.canonicalPath) ||
+                                    destFile.name.endsWith(".json") ||
+                                    destFile.name.endsWith(".ini") ||
+                                    destFile.name.endsWith(".xml")) BackupScope.CONFIG.id else BackupScope.NOTES.id
+
+                                dao.insertOrUpdate(
+                                    SyncMetadataEntity(
+                                        serviceId = primarySrv.id,
+                                        relativePath = displayRel,
+                                        scope = scope,
+                                        localSha256 = fileSha,
+                                        remoteHash = fileSha,
+                                        localLastModified = destFile.lastModified(),
+                                        sizeBytes = destFile.length(),
+                                        lastSyncedAt = System.currentTimeMillis(),
+                                        deviceId = deviceId
+                                    )
+                                )
+
+                                for (otherRemote in remoteVersions) {
+                                    val otherSrc = otherRemote.source as? FileVersionSource.REMOTE
+                                    val otherSrv = otherSrc?.let { src -> services.firstOrNull { it.id == src.serviceId } }
+                                    if (otherSrv != null && otherSrv.id != primarySrv.id) {
+                                        dao.insertOrUpdate(
+                                            SyncMetadataEntity(
+                                                serviceId = otherSrv.id,
+                                                relativePath = displayRel,
+                                                scope = scope,
+                                                localSha256 = fileSha,
+                                                remoteHash = fileSha,
+                                                localLastModified = destFile.lastModified(),
+                                                sizeBytes = destFile.length(),
+                                                lastSyncedAt = System.currentTimeMillis(),
+                                                deviceId = deviceId
+                                            )
+                                        )
+                                    }
+                                }
+
+                                if (isConfigFile(displayRel)) {
+                                    try {
+                                        NotesHomeConfigManager.restoreSettingsFromNotesHome(notesRoot, context, env)
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "Failed applying auto-pulled config to app workspace", e)
+                                    }
+                                }
+                                Log.i(TAG, "Auto-pulled new cloud file ${destFile.name} from ${primarySrv.name} to ${destFile.absolutePath}")
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed auto-pulling new cloud file ${destFile.name}", e)
+                        }
+                    }
+                    continue // Successfully auto-pulled, do not prompt for conflict
+                } else {
+                    // Prompt for conflict since there is a discrepancy among the remote versions
+                    val enrichedRemotes = orderedRemotes.map { rv ->
+                        if (rv.remotePath != null && rv.originApp == null && rv.fileName.endsWith(".xopp", ignoreCase = true)) {
+                            val src = rv.source
+                            if (src is FileVersionSource.REMOTE) {
+                                val srv = services.firstOrNull { it.id == src.serviceId }
+                                if (srv != null) {
+                                    val prov = getStorageProvider(srv)
+                                    val (app, dev) = try { prov.peekFileFingerprint(rv.remotePath) } catch (_: Exception) { null to null }
+                                    rv.copy(originApp = app, originDevice = dev)
+                                } else rv
+                            } else rv
+                        } else rv
+                    }
+                    conflictGroups.add(
+                        FileConflictGroup(
+                            id = "conflict_new_${primaryRemote.fileName}_${canonPath.hashCode()}",
+                            relativePath = displayRel,
+                            localVersion = null,
+                            remoteVersions = enrichedRemotes,
+                            description = "Discrepancy detected across cloud endpoints for new file",
+                            localFilePath = destFile.absolutePath,
+                            remoteFilePath = primaryRemote.remotePath ?: ""
+                        )
+                    )
+                    continue
+                }
+            }
+
+            // Existing local file: only check for conflicts if multiple versions exist (local + remotes)
+            if (allVersions.size <= 1) continue
 
             // Determine if versions genuinely differ:
             var hasConflict = false
@@ -1503,13 +1698,12 @@ class BackupEngine(
             }
 
             if (hasConflict) {
-                val displayRel = relativePathByLocalPath[canonPath] ?: File(canonPath).name
                 val localDevName = DeviceIdentity.getDeviceName()
                 val enrichedLocal = localVersion?.copy(
                     originApp = localVersion.originApp ?: "Aournal++",
                     originDevice = localVersion.originDevice ?: localDevName
                 )
-                val enrichedRemotes = remoteVersions.map { rv ->
+                val enrichedRemotes = orderedRemotes.map { rv ->
                     if (rv.remotePath != null && rv.originApp == null && rv.fileName.endsWith(".xopp", ignoreCase = true)) {
                         val src = rv.source
                         if (src is FileVersionSource.REMOTE) {
