@@ -61,6 +61,9 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
+import dev.ilamparithi.aournalpp.ui.shell.MainResponsiveAppShell
+import dev.ilamparithi.aournalpp.ui.shell.NavigationTabIcon
+import dev.ilamparithi.aournalpp.ui.shell.NavigationTabLabel
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -147,96 +150,62 @@ class MainActivity : ComponentActivity() {
         private const val TAG = "MainActivity"
     }
 
-    sealed class DeferredNoteOpen {
-        data class NoteFile(val file: File, val isImport: Boolean = false) : DeferredNoteOpen()
-        data class ExternalIntent(val intent: Intent) : DeferredNoteOpen()
-    }
-
     private var pendingIntentToProcess: Intent? = null
     private val externalFileToOpen = androidx.compose.runtime.mutableStateOf<Pair<File, Boolean>?>(null)
     private val externalActiveNoteToPrompt = androidx.compose.runtime.mutableStateOf<Pair<File, ActiveNotesTracker.ActiveNoteMatch>?>(null)
     private val pendingTabNavigation = androidx.compose.runtime.mutableStateOf<Int?>(null)
     private val pendingCloudSubpageNavigation = androidx.compose.runtime.mutableStateOf<CloudSubpage?>(null)
 
-    val quarantinedEmergencySave = androidx.compose.runtime.mutableStateOf<File?>(null)
-    val showEmergencyRecoveryDialog = androidx.compose.runtime.mutableStateOf(false)
-    val showEmergencySaveNameDialog = androidx.compose.runtime.mutableStateOf(false)
-    var emergencySaveNameInput by androidx.compose.runtime.mutableStateOf("")
-    var emergencySaveTargetFolder by androidx.compose.runtime.mutableStateOf<File?>(null)
-    private val pendingDeferredNoteOpen = androidx.compose.runtime.mutableStateOf<DeferredNoteOpen?>(null)
-    private var isRecoveredSessionRunning = false
-
-    fun checkEmergencySave() {
-        val env = LinuxEnvironment(this)
-        val file = env.checkAndQuarantineEmergencySave()
-        if (file != null && file.exists() && file.length() > 0) {
-            quarantinedEmergencySave.value = file
-        } else {
-            quarantinedEmergencySave.value = null
-            showEmergencyRecoveryDialog.value = false
-            showEmergencySaveNameDialog.value = false
-        }
-    }
-
-    fun hasPendingEmergencySave(): Boolean {
-        checkEmergencySave()
-        return quarantinedEmergencySave.value != null
-    }
-
-    fun deferNoteOpenForEmergencySave(file: File, isImport: Boolean = false) {
-        pendingDeferredNoteOpen.value = DeferredNoteOpen.NoteFile(file, isImport)
-        showEmergencyRecoveryDialog.value = true
-    }
-
-    fun onEmergencySaveResolved() {
-        quarantinedEmergencySave.value = null
-        showEmergencyRecoveryDialog.value = false
-        showEmergencySaveNameDialog.value = false
-        replayDeferredNoteOpen()
-    }
-
-    fun replayDeferredNoteOpen() {
-        val pending = pendingDeferredNoteOpen.value ?: return
-        pendingDeferredNoteOpen.value = null
-        when (pending) {
-            is DeferredNoteOpen.NoteFile -> {
-                val action = NoteOpenManager.getDefaultAction(this, pending.file)
-                if (action == NoteOpenAction.ASK || pending.isImport) {
-                    externalFileToOpen.value = pending.file to pending.isImport
-                } else if (action == NoteOpenAction.VIEW) {
-                    val env = LinuxEnvironment(this)
-                    val supervisor = ProcessSupervisor(env)
-                    val pdfExportManager = PdfExportManager(env, supervisor)
-                    NoteOpenManager.openAsPdf(
-                        context = this,
-                        file = pending.file,
-                        pdfExportManager = pdfExportManager,
-                        scope = lifecycleScope,
-                        repository = DocumentRepository.getInstance(this)
-                    )
-                } else {
-                    NoteOpenManager.openInCanvas(
-                        context = this,
-                        file = pending.file,
-                        repository = DocumentRepository.getInstance(this)
-                    )
-                }
+    val emergencyManager: MainActivityEmergencyManager by lazy {
+        MainActivityEmergencyManager(
+            context = this,
+            scope = lifecycleScope,
+            onPromptFileOpen = { file, isImport ->
+                externalFileToOpen.value = file to isImport
+            },
+            onReplayExternalIntent = { intent ->
+                intentHandler.handleIntent(intent)
             }
-            is DeferredNoteOpen.ExternalIntent -> {
-                handleExternalIntent(pending.intent)
-            }
-        }
+        )
     }
+
+    val intentHandler: MainActivityIntentHandler by lazy {
+        MainActivityIntentHandler(
+            context = this,
+            scope = lifecycleScope,
+            emergencyManager = emergencyManager,
+            onNavigateTab = { tabId, subpage ->
+                pendingTabNavigation.value = tabId
+                pendingCloudSubpageNavigation.value = subpage
+            },
+            onShowPrompt = { file, isImport ->
+                externalFileToOpen.value = file to isImport
+            },
+            onShowActiveNotePrompt = { targetFile, match ->
+                externalActiveNoteToPrompt.value = targetFile to match
+            }
+        )
+    }
+
+    val quarantinedEmergencySave: androidx.compose.runtime.MutableState<File?> get() = emergencyManager.quarantinedEmergencySave
+    val showEmergencyRecoveryDialog: androidx.compose.runtime.MutableState<Boolean> get() = emergencyManager.showEmergencyRecoveryDialog
+    val showEmergencySaveNameDialog: androidx.compose.runtime.MutableState<Boolean> get() = emergencyManager.showEmergencySaveNameDialog
+    var emergencySaveNameInput: String
+        get() = emergencyManager.emergencySaveNameInput
+        set(value) { emergencyManager.emergencySaveNameInput = value }
+    var emergencySaveTargetFolder: File?
+        get() = emergencyManager.emergencySaveTargetFolder
+        set(value) { emergencyManager.emergencySaveTargetFolder = value }
+
+    fun checkEmergencySave() = emergencyManager.checkEmergencySave()
+    fun hasPendingEmergencySave(): Boolean = emergencyManager.hasPendingEmergencySave()
+    fun deferNoteOpenForEmergencySave(file: File, isImport: Boolean = false) = emergencyManager.deferNoteOpenForEmergencySave(file, isImport)
+    fun onEmergencySaveResolved() = emergencyManager.onEmergencySaveResolved()
+    fun replayDeferredNoteOpen() = emergencyManager.replayDeferredNoteOpen()
 
     override fun onResume() {
         super.onResume()
-        checkEmergencySave()
-        if (isRecoveredSessionRunning) {
-            if (!dev.ilamparithi.aournalpp.runtime.ActiveSessionTracker.isSessionActive(this)) {
-                isRecoveredSessionRunning = false
-                replayDeferredNoteOpen()
-            }
-        }
+        emergencyManager.onResume()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -284,7 +253,7 @@ class MainActivity : ComponentActivity() {
                     if (state is BootstrapState.Ready && (isOnboardingCompleted || isRevealingOnboarding)) {
                         LaunchedEffect(state) {
                             pendingIntentToProcess?.let { intentToHandle ->
-                                handleExternalIntent(intentToHandle)
+                                intentHandler.handleIntent(intentToHandle)
                                 pendingIntentToProcess = null
                             }
                         }
@@ -351,9 +320,9 @@ class MainActivity : ComponentActivity() {
                             val receiver = object : android.content.BroadcastReceiver() {
                                 override fun onReceive(c: Context?, intent: android.content.Intent?) {
                                     if (intent?.action == "dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED") {
-                                        if (isRecoveredSessionRunning) {
-                                            isRecoveredSessionRunning = false
-                                            replayDeferredNoteOpen()
+                                        if (emergencyManager.isRecoveredSessionRunning) {
+                                            emergencyManager.isRecoveredSessionRunning = false
+                                            emergencyManager.replayDeferredNoteOpen()
                                         }
                                     }
                                 }
@@ -385,16 +354,14 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
                                     DragActionTarget.EDIT_CANVAS -> {
-                                        val activeMatch = ActiveNotesTracker.findActiveNote(this@MainActivity, note.file)
-                                        if (activeMatch != null) {
-                                            externalActiveNoteToPrompt.value = note.file to activeMatch
-                                        } else {
-                                            NoteOpenManager.openInCanvas(
-                                                context = this@MainActivity,
-                                                file = note.file,
-                                                repository = repo
-                                            )
-                                        }
+                                        NoteOpenManager.openInCanvasWithActiveCheck(
+                                            context = this@MainActivity,
+                                            file = note.file,
+                                            repository = repo,
+                                            onActiveSessionFound = { targetFile, match ->
+                                                externalActiveNoteToPrompt.value = targetFile to match
+                                            }
+                                        )
                                     }
                                     DragActionTarget.NONE -> {}
                                 }
@@ -462,16 +429,14 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onEditInCanvas = {
                                     externalFileToOpen.value = null
-                                    val activeMatch = ActiveNotesTracker.findActiveNote(this@MainActivity, promptFile)
-                                    if (activeMatch != null) {
-                                        externalActiveNoteToPrompt.value = promptFile to activeMatch
-                                    } else {
-                                        NoteOpenManager.openInCanvas(
-                                            context = this@MainActivity,
-                                            file = promptFile,
-                                            repository = repo
-                                        )
-                                    }
+                                    NoteOpenManager.openInCanvasWithActiveCheck(
+                                        context = this@MainActivity,
+                                        file = promptFile,
+                                        repository = repo,
+                                        onActiveSessionFound = { targetFile, match ->
+                                            externalActiveNoteToPrompt.value = targetFile to match
+                                        }
+                                    )
                                 }
                             )
                         }
@@ -509,8 +474,8 @@ class MainActivity : ComponentActivity() {
                                 onOpenNow = {
                                     showEmergencyRecoveryDialog.value = false
                                     val staged = repo.openEmergencyRecoverySession(emergencyFile)
-                                    quarantinedEmergencySave.value = null
-                                    isRecoveredSessionRunning = true
+                                    emergencyManager.quarantinedEmergencySave.value = null
+                                    emergencyManager.isRecoveredSessionRunning = true
                                     NoteOpenManager.openInCanvas(this@MainActivity, staged, repo)
                                 },
                                 onSaveAsNote = {
@@ -613,616 +578,12 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handleExternalIntent(intent)
-    }
-
-    private fun handleExternalIntent(intent: Intent?) {
-        if (intent == null) return
-        val action = intent.action
-
-        // 1. Notification / Tab Navigation (e.g. Action Open Transfer Queue)
-        if (action == "dev.ilamparithi.aournalpp.ACTION_OPEN_TRANSFER_QUEUE" ||
-            intent.hasExtra("EXTRA_OPEN_TAB") ||
-            intent.hasExtra("EXTRA_CLOUD_SUBPAGE")
-        ) {
-            val tabId = intent.getIntExtra("EXTRA_OPEN_TAB", AppTab.CLOUD.id)
-            val subpageStr = intent.getStringExtra("EXTRA_CLOUD_SUBPAGE")
-            val subpage = if (subpageStr == "TRANSFER_QUEUE" || action == "dev.ilamparithi.aournalpp.ACTION_OPEN_TRANSFER_QUEUE") {
-                CloudSubpage.TRANSFER_QUEUE
-            } else {
-                null
-            }
-            pendingTabNavigation.value = tabId
-            pendingCloudSubpageNavigation.value = subpage
-            return
-        }
-
-        val uri = intent.data ?: return
-
-        // 1. Google OAuth2 Redirect Handler
-        val isOAuthRedirect = (uri.scheme == "dev.ilamparithi.aournalpp" ||
-                uri.scheme?.startsWith("com.googleusercontent.apps.") == true) &&
-                (uri.host == "oauth2redirect" || uri.path?.contains("oauth2redirect") == true)
-        if (isOAuthRedirect) {
-            lifecycleScope.launch {
-                try {
-                    val result = dev.ilamparithi.aournalpp.backup.security.GoogleOAuthManager.handleRedirectUri(uri)
-                    if (result.isSuccess) {
-                        val tokenResponse = result.getOrThrow()
-                        val vault = dev.ilamparithi.aournalpp.backup.security.CredentialsVault.getInstance(this@MainActivity)
-                        val existingGdrive = vault.getAllServices().firstOrNull { it.providerType == dev.ilamparithi.aournalpp.backup.model.StorageProviderType.GOOGLE_DRIVE }
-                        if (existingGdrive != null) {
-                            val updated = existingGdrive.copy(
-                                authToken = tokenResponse.accessToken,
-                                refreshToken = tokenResponse.refreshToken ?: existingGdrive.refreshToken,
-                                accountIdentifier = tokenResponse.userEmail ?: existingGdrive.accountIdentifier,
-                                tokenExpiryEpochMs = System.currentTimeMillis() + (tokenResponse.expiresInSeconds * 1000L),
-                                lastSyncStatus = "Connected"
-                            )
-                            vault.saveService(updated)
-                        }
-                        Log.i(TAG, "Successfully authenticated Google Drive for ${tokenResponse.userEmail}")
-                        withContext(Dispatchers.Main) {
-                            android.widget.Toast.makeText(
-                                this@MainActivity,
-                                "Google Drive connected: ${tokenResponse.userEmail ?: "Authorized"}",
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    } else {
-                        Log.e(TAG, "Google OAuth token exchange failed: ${result.exceptionOrNull()?.message}")
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error handling Google OAuth redirect", e)
-                }
-            }
-            return
-        }
-
-        if (action != Intent.ACTION_VIEW && action != Intent.ACTION_EDIT) return
-
-        if (quarantinedEmergencySave.value != null) {
-            pendingDeferredNoteOpen.value = DeferredNoteOpen.ExternalIntent(intent)
-            showEmergencyRecoveryDialog.value = true
-            return
-        }
-
-        lifecycleScope.launch {
-            try {
-                Log.i(TAG, "Handling external file intent: $uri (action=$action)")
-                val env = LinuxEnvironment(this@MainActivity)
-                val repo = DocumentRepository.getInstance(this@MainActivity)
-                val rootNotesDir = repo.getRootNotesDirectory()
-
-                // 1. Origin check: If file is already inside notes home, open in-place!
-                val existingNote = ExternalFileHandler.resolveIfInNotesDirectory(this@MainActivity, uri, rootNotesDir)
-                if (existingNote != null) {
-                    Log.i(TAG, "URI belongs to existing note in notes directory: ${existingNote.absolutePath}. Opening in-place.")
-                    val supervisor = ProcessSupervisor(env)
-                    val pdfExportManager = PdfExportManager(env, supervisor)
-                    NoteOpenManager.handleFileOpen(
-                        context = this@MainActivity,
-                        file = existingNote,
-                        pdfExportManager = pdfExportManager,
-                        scope = lifecycleScope,
-                        repository = repo,
-                        onShowPrompt = { externalFileToOpen.value = it to false },
-                        onShowActiveNotePrompt = { targetFile, match ->
-                            externalActiveNoteToPrompt.value = targetFile to match
-                        }
-                    )
-                    return@launch
-                }
-
-                // 2. External file: stage to temporary cache
-                val result = ExternalFileHandler.stageExternalUri(this@MainActivity, uri, env)
-                if (result.isSuccess) {
-                    val stagedFile = result.getOrThrow()
-
-                    // 3. Inspect file type via magic bytes
-                    val detection = FileTypeDetector.detect(stagedFile)
-                    if (!detection.isSupportedNote) {
-                        Log.i(TAG, "Unsupported file type '${detection.detectedMimeType}' for $uri. Redirecting to external app.")
-                        stagedFile.delete()
-
-                        Toast.makeText(
-                            this@MainActivity,
-                            getString(R.string.unsupported_file_redirecting, detection.detectedMimeType),
-                            Toast.LENGTH_SHORT
-                        ).show()
-
-                        val redirected = FileTypeDetector.redirectIntent(
-                            context = this@MainActivity,
-                            uri = uri,
-                            detectedMimeType = detection.detectedMimeType
-                        )
-                        if (!redirected) {
-                            Toast.makeText(
-                                this@MainActivity,
-                                getString(R.string.unsupported_file_no_app, detection.detectedMimeType),
-                                Toast.LENGTH_LONG
-                            ).show()
-                        }
-                        return@launch
-                    }
-
-                    // 4. Supported note format: proceed with normal open flow
-                    val supervisor = ProcessSupervisor(env)
-                    val pdfExportManager = PdfExportManager(env, supervisor)
-
-                    NoteOpenManager.handleFileOpen(
-                        context = this@MainActivity,
-                        file = stagedFile,
-                        pdfExportManager = pdfExportManager,
-                        scope = lifecycleScope,
-                        repository = repo,
-                        onShowPrompt = { externalFileToOpen.value = it to true },
-                        onShowActiveNotePrompt = { targetFile, match ->
-                            externalActiveNoteToPrompt.value = targetFile to match
-                        }
-                    )
-                } else {
-                    Log.e(TAG, "Failed to stage external file URI: $uri", result.exceptionOrNull())
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Exception handling external intent", e)
-            }
-        }
+        intentHandler.handleIntent(intent)
     }
 
     override fun onStop() {
         super.onStop()
         BackupScheduler.triggerOnAppExitSync(this)
-    }
-}
-
-enum class AppTab(
-    @param:StringRes val titleRes: Int,
-    val filledIcon: ImageVector,
-    val outlinedIcon: ImageVector
-) {
-    WORKSPACE(R.string.tab_workspace, Icons.Filled.Dashboard, Icons.Outlined.Dashboard),
-    HOME(R.string.tab_home, Icons.Filled.Home, Icons.Outlined.Home),
-    FILES(R.string.tab_files, Icons.Filled.FolderCopy, Icons.Outlined.FolderCopy),
-    CLOUD(R.string.tab_cloud, Icons.Filled.Cloud, Icons.Outlined.Cloud),
-    SETTINGS(R.string.tab_settings, Icons.Filled.Settings, Icons.Outlined.Settings),
-    ABOUT(R.string.tab_about, Icons.Filled.Info, Icons.Outlined.Info);
-
-    val id: Int get() = ordinal
-}
-
-@Composable
-fun MainResponsiveAppShell(
-    targetTab: Int? = null,
-    targetCloudSubpage: CloudSubpage? = null,
-    onNavigationHandled: () -> Unit = {}
-) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val reduceAnimations = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
-
-    var selectedTab by rememberSaveable { mutableIntStateOf(AppTab.HOME.id) }
-
-    LaunchedEffect(targetTab) {
-        if (targetTab != null) {
-            selectedTab = targetTab
-            onNavigationHandled()
-        }
-    }
-    val saveableStateHolder = rememberSaveableStateHolder()
-    var tabGenerations by rememberSaveable { mutableStateOf(mapOf<Int, Int>()) }
-
-    var lastClickTime by remember { mutableLongStateOf(0L) }
-    var lastClickedTab by remember { mutableIntStateOf(-1) }
-    var lastTabSwitchTime by remember { mutableLongStateOf(0L) }
-    var isRapidSwitch by remember { mutableStateOf(false) }
-
-    val onTabSelect: (Int) -> Unit = { tabId ->
-        val currentTime = System.currentTimeMillis()
-        val isDoubleTap = (lastClickedTab == tabId) && (currentTime - lastClickTime < 400L)
-
-        if (selectedTab != tabId) {
-            val delta = currentTime - lastTabSwitchTime
-            isRapidSwitch = lastTabSwitchTime > 0L && delta < 320L
-            lastTabSwitchTime = currentTime
-            selectedTab = tabId
-            val mainActivity = context as? MainActivity
-            if (tabId == AppTab.FILES.id && mainActivity?.quarantinedEmergencySave?.value != null) {
-                mainActivity.showEmergencyRecoveryDialog.value = true
-            }
-        }
-
-        if (isDoubleTap) {
-            val oldGen = tabGenerations[tabId] ?: 0
-            val newGen = oldGen + 1
-            tabGenerations = tabGenerations + (tabId to newGen)
-            saveableStateHolder.removeState("tab_${tabId}_$oldGen")
-            lastClickTime = 0L
-        } else {
-            lastClickTime = currentTime
-            lastClickedTab = tabId
-        }
-    }
-
-    val isCanvasSessionActive by dev.ilamparithi.aournalpp.runtime.ActiveSessionTracker.activeSessionFlow(context)
-        .collectAsStateWithLifecycle(initialValue = null)
-    val isSessionRunning = isCanvasSessionActive?.isRunning == true
-
-    val visibleTabs = remember(isSessionRunning) {
-        if (isSessionRunning) {
-            listOf(AppTab.WORKSPACE, AppTab.HOME, AppTab.FILES, AppTab.CLOUD, AppTab.SETTINGS, AppTab.ABOUT)
-        } else {
-            listOf(AppTab.HOME, AppTab.FILES, AppTab.CLOUD, AppTab.SETTINGS, AppTab.ABOUT)
-        }
-    }
-
-    LaunchedEffect(isSessionRunning) {
-        if (!isSessionRunning && selectedTab == AppTab.WORKSPACE.id) {
-            selectedTab = AppTab.HOME.id
-        }
-    }
-
-    var isClosingSession by rememberSaveable { mutableStateOf(false) }
-
-    LaunchedEffect(isClosingSession) {
-        if (isClosingSession) {
-            val activity = context as? android.app.Activity
-            while (isClosingSession) {
-                if (!dev.ilamparithi.aournalpp.runtime.ActiveSessionTracker.isSessionActive(context)) {
-                    isClosingSession = false
-                    activity?.finishAffinity() ?: activity?.finish()
-                    break
-                }
-                delay(50.milliseconds)
-            }
-        }
-    }
-
-    androidx.compose.runtime.DisposableEffect(isClosingSession) {
-        if (!isClosingSession) return@DisposableEffect onDispose {}
-        val receiver = object : android.content.BroadcastReceiver() {
-            override fun onReceive(c: android.content.Context?, intent: android.content.Intent?) {
-                if (intent?.action == "dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED") {
-                    isClosingSession = false
-                    val activity = context as? android.app.Activity
-                    activity?.finishAffinity() ?: activity?.finish()
-                }
-            }
-        }
-        val filter = android.content.IntentFilter("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED")
-        androidx.core.content.ContextCompat.registerReceiver(
-            context,
-            receiver,
-            filter,
-            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
-        )
-        onDispose {
-            try {
-                context.unregisterReceiver(receiver)
-            } catch (_: Exception) {}
-        }
-    }
-
-    BackHandler(enabled = selectedTab != AppTab.HOME.id) {
-        onTabSelect(AppTab.HOME.id)
-    }
-
-    BackHandler(enabled = selectedTab == AppTab.HOME.id && isCanvasSessionActive?.isRunning == true && !isClosingSession) {
-        isClosingSession = true
-        val broadcastIntent = Intent(CanvasCommandReceiver.ACTION_REQUEST_BACKGROUND_CLOSE).apply {
-            setPackage(context.packageName)
-        }
-        context.sendBroadcast(broadcastIntent)
-        CanvasActivity.handleBackgroundCloseRequest()
-    }
-
-    val allTabs = remember {
-        listOf(AppTab.WORKSPACE, AppTab.HOME, AppTab.FILES, AppTab.CLOUD, AppTab.SETTINGS, AppTab.ABOUT)
-    }
-
-    val unresolvedConflicts by ConflictPersistenceManager.getInstance(context).unresolvedConflicts.collectAsStateWithLifecycle()
-    val hasUnresolvedConflicts = unresolvedConflicts.isNotEmpty()
-
-    val tabTransitionSpec: androidx.compose.animation.AnimatedContentTransitionScope<Int>.() -> androidx.compose.animation.ContentTransform = {
-        val fromIndex = allTabs.indexOfFirst { it.id == initialState }
-        val toIndex = allTabs.indexOfFirst { it.id == targetState }
-        val isForward = if (fromIndex != -1 && toIndex != -1) toIndex > fromIndex else targetState > initialState
-        SpringSlideTransition.createSpec<Int>(
-            isForward = isForward,
-            reduceAnimations = reduceAnimations,
-            isRapid = isRapidSwitch
-        )(this)
-    }
-
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val isWideScreen = maxWidth >= 600.dp
-
-        if (isWideScreen) {
-            // Tablet / Landscape: Navigation Rail on Left
-            Row(modifier = Modifier.fillMaxSize()) {
-                NavigationRail(
-                    modifier = Modifier.fillMaxHeight(),
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    header = {
-                        dev.ilamparithi.aournalpp.ui.AppLogoBadge(
-                            modifier = Modifier.padding(top = 16.dp, bottom = 12.dp),
-                            size = 38.dp
-                        )
-                    }
-                ) {
-                    visibleTabs.forEach { tab ->
-                        val tabTitle = androidx.compose.ui.res.stringResource(tab.titleRes)
-                        val isWorkspace = tab == AppTab.WORKSPACE
-                        val isFiles = tab == AppTab.FILES
-                        val isCloud = tab == AppTab.CLOUD
-                        val mainActivity = context as? MainActivity
-                        val showFilesRedDot = isFiles && mainActivity?.quarantinedEmergencySave?.value != null
-                        val showCloudRedDot = isCloud && hasUnresolvedConflicts
-                        val windowCount = isCanvasSessionActive?.openWindowCount ?: 1
-                        NavigationRailItem(
-                            selected = selectedTab == tab.id,
-                            onClick = { onTabSelect(tab.id) },
-                            icon = {
-                                if (isWorkspace && isSessionRunning) {
-                                    BadgedBox(
-                                        badge = {
-                                            Badge(
-                                                containerColor = MaterialTheme.colorScheme.primary,
-                                                contentColor = MaterialTheme.colorScheme.onPrimary
-                                            ) {
-                                                Text(
-                                                    text = if (windowCount > 9) "9+" else windowCount.coerceAtLeast(1).toString(),
-                                                    style = MaterialTheme.typography.labelSmall
-                                                )
-                                            }
-                                        }
-                                    ) {
-                                        Icon(
-                                            imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
-                                            contentDescription = tabTitle,
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                } else if (showFilesRedDot) {
-                                    BadgedBox(
-                                        badge = {
-                                            Badge(
-                                                containerColor = MaterialTheme.colorScheme.error,
-                                                contentColor = MaterialTheme.colorScheme.onError
-                                            )
-                                        }
-                                    ) {
-                                        Icon(
-                                            imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
-                                            contentDescription = tabTitle,
-                                            tint = if (selectedTab == tab.id) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                                        )
-                                    }
-                                } else if (showCloudRedDot) {
-                                    BadgedBox(
-                                        badge = {
-                                            Badge(
-                                                containerColor = MaterialTheme.colorScheme.error,
-                                                contentColor = MaterialTheme.colorScheme.onError
-                                            )
-                                        }
-                                    ) {
-                                        Icon(
-                                            imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
-                                            contentDescription = tabTitle,
-                                            tint = if (selectedTab == tab.id) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                                        )
-                                    }
-                                } else {
-                                    Icon(
-                                        imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
-                                        contentDescription = tabTitle
-                                    )
-                                }
-                            },
-                            label = {
-                                Text(
-                                    text = tabTitle,
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    fontWeight = if (selectedTab == tab.id) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isWorkspace && isSessionRunning && selectedTab != tab.id) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Unspecified
-                                )
-                            }
-                        )
-                    }
-                }
-
-                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                    AnimatedContent(
-                        targetState = selectedTab,
-                        transitionSpec = tabTransitionSpec,
-                        label = "railTabTransition"
-                    ) { tabId ->
-                        TabHost(
-                            tabId = tabId,
-                            tabGenerations = tabGenerations,
-                            saveableStateHolder = saveableStateHolder,
-                            targetCloudSubpage = targetCloudSubpage,
-                            onTabSelect = onTabSelect
-                        )
-                    }
-                }
-            }
-        } else {
-            // Mobile Portrait: Bottom Navigation Bar
-            Scaffold(
-                contentWindowInsets = WindowInsets(0, 0, 0, 0),
-                bottomBar = {
-                    NavigationBar(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ) {
-                        visibleTabs.forEach { tab ->
-                            val tabTitle = androidx.compose.ui.res.stringResource(tab.titleRes)
-                            val isWorkspace = tab == AppTab.WORKSPACE
-                            val isFiles = tab == AppTab.FILES
-                            val isCloud = tab == AppTab.CLOUD
-                            val mainActivity = context as? MainActivity
-                            val showFilesRedDot = isFiles && mainActivity?.quarantinedEmergencySave?.value != null
-                            val showCloudRedDot = isCloud && hasUnresolvedConflicts
-                            val windowCount = isCanvasSessionActive?.openWindowCount ?: 1
-                            NavigationBarItem(
-                                selected = selectedTab == tab.id,
-                                onClick = { onTabSelect(tab.id) },
-                                icon = {
-                                    if (isWorkspace && isSessionRunning) {
-                                        BadgedBox(
-                                            badge = {
-                                                Badge(
-                                                    containerColor = MaterialTheme.colorScheme.primary,
-                                                    contentColor = MaterialTheme.colorScheme.onPrimary
-                                                ) {
-                                                    Text(
-                                                        text = if (windowCount > 9) "9+" else windowCount.coerceAtLeast(1).toString(),
-                                                        style = MaterialTheme.typography.labelSmall
-                                                    )
-                                                }
-                                            }
-                                        ) {
-                                            Icon(
-                                                imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
-                                                contentDescription = tabTitle,
-                                                tint = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
-                                    } else if (showFilesRedDot) {
-                                        BadgedBox(
-                                            badge = {
-                                                Badge(
-                                                    containerColor = MaterialTheme.colorScheme.error,
-                                                    contentColor = MaterialTheme.colorScheme.onError
-                                                )
-                                            }
-                                        ) {
-                                            Icon(
-                                                imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
-                                                contentDescription = tabTitle,
-                                                tint = if (selectedTab == tab.id) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                                            )
-                                        }
-                                    } else if (showCloudRedDot) {
-                                        BadgedBox(
-                                            badge = {
-                                                Badge(
-                                                    containerColor = MaterialTheme.colorScheme.error,
-                                                    contentColor = MaterialTheme.colorScheme.onError
-                                                )
-                                            }
-                                        ) {
-                                            Icon(
-                                                imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
-                                                contentDescription = tabTitle,
-                                                tint = if (selectedTab == tab.id) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                                            )
-                                        }
-                                    } else {
-                                        Icon(
-                                            imageVector = if (selectedTab == tab.id) tab.filledIcon else tab.outlinedIcon,
-                                            contentDescription = tabTitle
-                                        )
-                                    }
-                                },
-                                label = {
-                                    Text(
-                                        text = tabTitle,
-                                        textAlign = TextAlign.Center,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                        fontWeight = if (selectedTab == tab.id) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isWorkspace && isSessionRunning && selectedTab != tab.id) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Unspecified
-                                    )
-                                }
-                            )
-                        }
-                    }
-                }
-            ) { padding ->
-                Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-                    AnimatedContent(
-                        targetState = selectedTab,
-                        transitionSpec = tabTransitionSpec,
-                        label = "bottomTabTransition"
-                    ) { tabId ->
-                        TabHost(
-                            tabId = tabId,
-                            tabGenerations = tabGenerations,
-                            saveableStateHolder = saveableStateHolder,
-                            targetCloudSubpage = targetCloudSubpage,
-                            onTabSelect = onTabSelect
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    AppAnimatedVisibility(
-        visible = isClosingSession,
-        enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(300)),
-        exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(300))
-    ) {
-        dev.ilamparithi.aournalpp.ui.SessionClosingScreen(
-            documentTitle = isCanvasSessionActive?.documentTitle
-        )
-    }
-}
-
-@Composable
-private fun TabHost(
-    tabId: Int,
-    tabGenerations: Map<Int, Int>,
-    saveableStateHolder: SaveableStateHolder,
-    targetCloudSubpage: CloudSubpage? = null,
-    onTabSelect: (Int) -> Unit
-) {
-    val gen = tabGenerations[tabId] ?: 0
-    val pageKey = "tab_${tabId}_$gen"
-    saveableStateHolder.SaveableStateProvider(key = pageKey) {
-        key(pageKey) {
-            RenderTabContent(
-                tab = tabId,
-                targetCloudSubpage = targetCloudSubpage,
-                onTabSelect = onTabSelect
-            )
-        }
-    }
-}
-
-@Composable
-private fun RenderTabContent(
-    tab: Int,
-    targetCloudSubpage: CloudSubpage? = null,
-    onTabSelect: (Int) -> Unit
-) {
-    when (tab) {
-        AppTab.HOME.id -> HomeScreen(
-            onNavigateToFiles = { onTabSelect(AppTab.FILES.id) },
-            onNavigateToSettings = { onTabSelect(AppTab.SETTINGS.id) },
-            onNavigateToAbout = { onTabSelect(AppTab.ABOUT.id) }
-        )
-        AppTab.FILES.id -> DocumentHubScreen(
-            onNavigateToSettings = { onTabSelect(AppTab.SETTINGS.id) },
-            onNavigateToLicenses = { onTabSelect(AppTab.ABOUT.id) }
-        )
-        AppTab.WORKSPACE.id -> ActiveWorkspacePortalScreen(
-            onNavigateHome = { onTabSelect(AppTab.HOME.id) }
-        )
-        AppTab.CLOUD.id -> CloudScreen(
-            initialSubpage = targetCloudSubpage ?: CloudSubpage.OVERVIEW,
-            onNavigateToSettings = { onTabSelect(AppTab.SETTINGS.id) }
-        )
-        AppTab.SETTINGS.id -> SettingsScreen(onBack = { onTabSelect(AppTab.HOME.id) })
-        AppTab.ABOUT.id -> LicensesScreen(onBack = { onTabSelect(AppTab.HOME.id) })
-        else -> HomeScreen(
-            onNavigateToFiles = { onTabSelect(AppTab.FILES.id) },
-            onNavigateToSettings = { onTabSelect(AppTab.SETTINGS.id) },
-            onNavigateToAbout = { onTabSelect(AppTab.ABOUT.id) }
-        )
     }
 }
 

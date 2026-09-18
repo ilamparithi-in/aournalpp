@@ -57,9 +57,9 @@ class EmergencySaveRecoveryTest {
     @Test
     fun `test deferred note open sealed class equality and instances`() {
         val file1 = java.io.File("/path/to/test.xopp")
-        val deferred1 = MainActivity.DeferredNoteOpen.NoteFile(file1, isImport = false)
-        val deferred2 = MainActivity.DeferredNoteOpen.NoteFile(file1, isImport = false)
-        val deferredImport = MainActivity.DeferredNoteOpen.NoteFile(file1, isImport = true)
+        val deferred1 = MainActivityEmergencyManager.DeferredNoteOpen.NoteFile(file1, isImport = false)
+        val deferred2 = MainActivityEmergencyManager.DeferredNoteOpen.NoteFile(file1, isImport = false)
+        val deferredImport = MainActivityEmergencyManager.DeferredNoteOpen.NoteFile(file1, isImport = true)
 
         org.junit.Assert.assertEquals(deferred1, deferred2)
         org.junit.Assert.assertNotEquals(deferred1, deferredImport)

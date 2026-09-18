@@ -97,6 +97,31 @@ object NoteOpenManager {
     }
 
     /**
+     * Checks if the note is already open in an active canvas session window.
+     * If an active session is found, invokes [onActiveSessionFound] so the UI can prompt the user.
+     * Otherwise, directly opens the note in the canvas editor.
+     */
+    fun openInCanvasWithActiveCheck(
+        context: Context,
+        file: File,
+        repository: DocumentRepository? = null,
+        localView: View? = null,
+        onActiveSessionFound: (targetFile: File, match: ActiveNotesTracker.ActiveNoteMatch) -> Unit
+    ) {
+        val activeMatch = ActiveNotesTracker.findActiveNote(context, file)
+        if (activeMatch != null) {
+            onActiveSessionFound(file, activeMatch)
+        } else {
+            openInCanvas(
+                context = context,
+                file = file,
+                repository = repository,
+                localView = localView
+            )
+        }
+    }
+
+    /**
      * Directly launches the native Xournal++ canvas editor for the given note file.
      */
     fun openInCanvas(

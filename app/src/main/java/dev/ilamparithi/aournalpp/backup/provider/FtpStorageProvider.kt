@@ -11,8 +11,6 @@ import org.apache.commons.net.ftp.FTPClient
 import org.apache.commons.net.ftp.FTPReply
 import org.apache.commons.net.ftp.FTPSClient
 import java.io.File
-import java.io.FilterInputStream
-import java.io.FilterOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 
@@ -25,8 +23,6 @@ class FtpStorageProvider(
 
     companion object {
         private const val TAG = "FtpStorageProvider"
-        private const val PROGRESS_STEP_BYTES = 32 * 1024L
-        private const val PROGRESS_INTERVAL_MS = 100L
     }
 
     override val providerType: StorageProviderType = StorageProviderType.FTP
@@ -96,14 +92,7 @@ class FtpStorageProvider(
     }
 
     internal fun resolveRemotePath(path: String): String {
-        val base = config.remoteBasePath.trim().trim('/')
-        val cleanPath = path.trim().trim('/').replace('\\', '/')
-        if (base.isEmpty()) return cleanPath
-        if (cleanPath.isEmpty()) return base
-        if (cleanPath == base || cleanPath.startsWith("$base/")) {
-            return cleanPath
-        }
-        return "$base/$cleanPath"
+        return CloudPathUtils.resolveRemotePath(config.remoteBasePath, path)
     }
 
     override suspend fun testConnection(): Result<Boolean> = withContext(Dispatchers.IO) {
@@ -237,95 +226,5 @@ class FtpStorageProvider(
 
     override suspend fun disconnect() = withContext(Dispatchers.IO) {
         disconnectInternal()
-    }
-
-    private class CountingInputStream(
-        input: InputStream,
-        private val onProgress: (Long) -> Unit
-    ) : FilterInputStream(input) {
-        private var bytesReadTotal = 0L
-        private var lastReportedBytes = 0L
-        private var lastReportedTime = 0L
-
-        private fun notifyProgressIfNeeded(force: Boolean = false) {
-            val now = System.currentTimeMillis()
-            if (force || (bytesReadTotal - lastReportedBytes >= PROGRESS_STEP_BYTES) || (now - lastReportedTime >= PROGRESS_INTERVAL_MS)) {
-                if (bytesReadTotal != lastReportedBytes || force) {
-                    lastReportedBytes = bytesReadTotal
-                    lastReportedTime = now
-                    onProgress(bytesReadTotal)
-                }
-            }
-        }
-
-        override fun read(): Int {
-            val b = super.read()
-            if (b != -1) {
-                bytesReadTotal++
-                notifyProgressIfNeeded()
-            } else {
-                notifyProgressIfNeeded(force = true)
-            }
-            return b
-        }
-
-        override fun read(b: ByteArray, off: Int, len: Int): Int {
-            val count = super.read(b, off, len)
-            if (count != -1) {
-                bytesReadTotal += count
-                notifyProgressIfNeeded()
-            } else {
-                notifyProgressIfNeeded(force = true)
-            }
-            return count
-        }
-
-        override fun close() {
-            try {
-                notifyProgressIfNeeded(force = true)
-            } finally {
-                super.close()
-            }
-        }
-    }
-
-    private class CountingOutputStream(
-        output: OutputStream,
-        private val onProgress: (Long) -> Unit
-    ) : FilterOutputStream(output) {
-        private var bytesWrittenTotal = 0L
-        private var lastReportedBytes = 0L
-        private var lastReportedTime = 0L
-
-        private fun notifyProgressIfNeeded(force: Boolean = false) {
-            val now = System.currentTimeMillis()
-            if (force || (bytesWrittenTotal - lastReportedBytes >= PROGRESS_STEP_BYTES) || (now - lastReportedTime >= PROGRESS_INTERVAL_MS)) {
-                if (bytesWrittenTotal != lastReportedBytes || force) {
-                    lastReportedBytes = bytesWrittenTotal
-                    lastReportedTime = now
-                    onProgress(bytesWrittenTotal)
-                }
-            }
-        }
-
-        override fun write(b: Int) {
-            super.write(b)
-            bytesWrittenTotal++
-            notifyProgressIfNeeded()
-        }
-
-        override fun write(b: ByteArray, off: Int, len: Int) {
-            out.write(b, off, len)
-            bytesWrittenTotal += len
-            notifyProgressIfNeeded()
-        }
-
-        override fun close() {
-            try {
-                notifyProgressIfNeeded(force = true)
-            } finally {
-                super.close()
-            }
-        }
     }
 }

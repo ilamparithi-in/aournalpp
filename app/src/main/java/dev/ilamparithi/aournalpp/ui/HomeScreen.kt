@@ -969,17 +969,15 @@ private fun HomeDialogHost(
                 },
                 onEditInCanvas = {
                     viewModel.dismissDialog()
-                    val activeMatch = ActiveNotesTracker.findActiveNote(context, file)
-                    if (activeMatch != null) {
-                        viewModel.setDialogState(HomeDialogState.ActiveSessionPrompt(file, activeMatch))
-                    } else {
-                        NoteOpenManager.openInCanvas(
-                            context = context,
-                            file = file,
-                            repository = viewModel.repository,
-                            localView = localView
-                        )
-                    }
+                    NoteOpenManager.openInCanvasWithActiveCheck(
+                        context = context,
+                        file = file,
+                        repository = viewModel.repository,
+                        localView = localView,
+                        onActiveSessionFound = { _, activeMatch ->
+                            viewModel.setDialogState(HomeDialogState.ActiveSessionPrompt(file, activeMatch))
+                        }
+                    )
                 }
             )
         }

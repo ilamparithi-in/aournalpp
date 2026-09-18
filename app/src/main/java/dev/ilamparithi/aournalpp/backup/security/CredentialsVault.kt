@@ -408,7 +408,13 @@ class CredentialsVault private constructor(context: Context) {
         }
     }
 
-    private fun serializeService(s: ServiceConfig): JSONObject {
+    @androidx.annotation.VisibleForTesting
+    internal fun reloadServicesFromDisk() {
+        _servicesFlow.value = loadServicesFromDisk()
+    }
+
+    @androidx.annotation.VisibleForTesting
+    internal fun serializeService(s: ServiceConfig): JSONObject {
         val obj = JSONObject()
         obj.put("id", s.id)
         obj.put("name", s.name)
@@ -451,7 +457,8 @@ class CredentialsVault private constructor(context: Context) {
         return obj
     }
 
-    private fun deserializeService(obj: JSONObject): ServiceConfig {
+    @androidx.annotation.VisibleForTesting
+    internal fun deserializeService(obj: JSONObject): ServiceConfig {
         val mappingsArray = obj.optJSONArray("customMappings") ?: JSONArray()
         val mappings = mutableListOf<CustomFolderMapping>()
         for (i in 0 until mappingsArray.length()) {

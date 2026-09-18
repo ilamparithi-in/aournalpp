@@ -114,14 +114,7 @@ class SftpStorageProvider(
     }
 
     internal fun resolveRemotePath(path: String): String {
-        val base = config.remoteBasePath.trim().trim('/')
-        val cleanPath = path.trim().trim('/').replace('\\', '/')
-        if (base.isEmpty()) return cleanPath
-        if (cleanPath.isEmpty()) return base
-        if (cleanPath == base || cleanPath.startsWith("$base/")) {
-            return cleanPath
-        }
-        return "$base/$cleanPath"
+        return CloudPathUtils.resolveRemotePath(config.remoteBasePath, path)
     }
 
     override suspend fun testConnection(): Result<Boolean> = withContext(Dispatchers.IO) {
