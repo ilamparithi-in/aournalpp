@@ -1,14 +1,13 @@
 package dev.ilamparithi.aournalpp.ui.collage
 
-import androidx.compose.animation.AnimatedContent
+import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedContent
+import dev.ilamparithi.aournalpp.ui.animation.rememberAppInfiniteTransition
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -487,7 +486,7 @@ fun OrganicCollageView(
             }
         }
 
-        AnimatedContent(
+        AppAnimatedContent(
             targetState = layoutState,
             transitionSpec = {
                 (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
@@ -592,72 +591,52 @@ fun Material3ExpressiveLoadingScreen(
     modifier: Modifier = Modifier,
     message: String = "Arranging studio notes..."
 ) {
-    val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
-    val rotation: Float
-    val jumpOffset1: Float
-    val jumpOffset2: Float
-    val jumpOffset3: Float
-    val pulseScale: Float
-
-    if (reduceMotion) {
-        rotation = 0f
-        jumpOffset1 = 0f
-        jumpOffset2 = 0f
-        jumpOffset3 = 0f
-        pulseScale = 1f
-    } else {
-        val infiniteTransition = rememberInfiniteTransition(label = "m3eLoadingInfinite")
-        val r by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 3200, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "shapeRotation"
-        )
-        val j1 by infiniteTransition.animateFloat(
-            initialValue = -12f,
-            targetValue = 12f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 700, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "jump1"
-        )
-        val j2 by infiniteTransition.animateFloat(
-            initialValue = 10f,
-            targetValue = -10f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 800, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "jump2"
-        )
-        val j3 by infiniteTransition.animateFloat(
-            initialValue = -8f,
-            targetValue = 8f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 650, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "jump3"
-        )
-        val ps by infiniteTransition.animateFloat(
-            initialValue = 0.88f,
-            targetValue = 1.12f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1100, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "pulseScale"
-        )
-        rotation = r
-        jumpOffset1 = j1
-        jumpOffset2 = j2
-        jumpOffset3 = j3
-        pulseScale = ps
-    }
+    val infiniteTransition = rememberAppInfiniteTransition(label = "m3eLoadingInfinite")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 3200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shapeRotation"
+    )
+    val jumpOffset1 by infiniteTransition.animateFloat(
+        initialValue = -12f,
+        targetValue = 12f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 700, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "jump1"
+    )
+    val jumpOffset2 by infiniteTransition.animateFloat(
+        initialValue = 10f,
+        targetValue = -10f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "jump2"
+    )
+    val jumpOffset3 by infiniteTransition.animateFloat(
+        initialValue = -8f,
+        targetValue = 8f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 750, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "jump3"
+    )
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.92f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1100, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
 
     Box(
         modifier = modifier,
@@ -761,36 +740,25 @@ fun ExpressivePullRefreshIndicator(
     isRefreshing: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
-    val spinRotation: Float
-    val bounceScale: Float
-
-    if (reduceMotion) {
-        spinRotation = 0f
-        bounceScale = 1f
-    } else {
-        val infiniteTransition = rememberInfiniteTransition(label = "pullInfinite")
-        val sr by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(1200, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "pullSpin"
-        )
-        val bs by infiniteTransition.animateFloat(
-            initialValue = 0.9f,
-            targetValue = 1.15f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(500, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "pullBounce"
-        )
-        spinRotation = sr
-        bounceScale = bs
-    }
+    val infiniteTransition = rememberAppInfiniteTransition(label = "pullInfinite")
+    val spinRotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pullSpin"
+    )
+    val bounceScale by infiniteTransition.animateFloat(
+        initialValue = 0.9f,
+        targetValue = 1.15f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pullBounce"
+    )
 
     val pullFraction = state.distanceFraction.coerceIn(0f, 1f)
     val displayRotation = if (isRefreshing) spinRotation else pullFraction * 180f
@@ -841,8 +809,7 @@ fun CreativeEmptyCollageState(
     onNewNoteClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
-    val infiniteTransition = rememberInfiniteTransition(label = "emptyShapesMotion")
+    val infiniteTransition = rememberAppInfiniteTransition(label = "emptyShapesMotion")
     val animF1 by infiniteTransition.animateFloat(
         initialValue = -8f,
         targetValue = 8f,
@@ -871,9 +838,9 @@ fun CreativeEmptyCollageState(
         label = "rot"
     )
 
-    val floatAnim1 = if (reduceMotion) 0f else animF1
-    val floatAnim2 = if (reduceMotion) 0f else animF2
-    val rotAnim = if (reduceMotion) 0f else animRot
+    val floatAnim1 = animF1
+    val floatAnim2 = animF2
+    val rotAnim = animRot
 
     Box(
         modifier = modifier

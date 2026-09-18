@@ -25,6 +25,8 @@ class FtpStorageProvider(
 
     companion object {
         private const val TAG = "FtpStorageProvider"
+        private const val PROGRESS_STEP_BYTES = 32 * 1024L
+        private const val PROGRESS_INTERVAL_MS = 100L
     }
 
     override val providerType: StorageProviderType = StorageProviderType.FTP
@@ -241,12 +243,27 @@ class FtpStorageProvider(
         private val onProgress: (Long) -> Unit
     ) : FilterInputStream(input) {
         private var bytesReadTotal = 0L
+        private var lastReportedBytes = 0L
+        private var lastReportedTime = 0L
+
+        private fun notifyProgressIfNeeded(force: Boolean = false) {
+            val now = System.currentTimeMillis()
+            if (force || (bytesReadTotal - lastReportedBytes >= PROGRESS_STEP_BYTES) || (now - lastReportedTime >= PROGRESS_INTERVAL_MS)) {
+                if (bytesReadTotal != lastReportedBytes || force) {
+                    lastReportedBytes = bytesReadTotal
+                    lastReportedTime = now
+                    onProgress(bytesReadTotal)
+                }
+            }
+        }
 
         override fun read(): Int {
             val b = super.read()
             if (b != -1) {
                 bytesReadTotal++
-                onProgress(bytesReadTotal)
+                notifyProgressIfNeeded()
+            } else {
+                notifyProgressIfNeeded(force = true)
             }
             return b
         }
@@ -255,9 +272,19 @@ class FtpStorageProvider(
             val count = super.read(b, off, len)
             if (count != -1) {
                 bytesReadTotal += count
-                onProgress(bytesReadTotal)
+                notifyProgressIfNeeded()
+            } else {
+                notifyProgressIfNeeded(force = true)
             }
             return count
+        }
+
+        override fun close() {
+            try {
+                notifyProgressIfNeeded(force = true)
+            } finally {
+                super.close()
+            }
         }
     }
 
@@ -266,17 +293,38 @@ class FtpStorageProvider(
         private val onProgress: (Long) -> Unit
     ) : FilterOutputStream(output) {
         private var bytesWrittenTotal = 0L
+        private var lastReportedBytes = 0L
+        private var lastReportedTime = 0L
+
+        private fun notifyProgressIfNeeded(force: Boolean = false) {
+            val now = System.currentTimeMillis()
+            if (force || (bytesWrittenTotal - lastReportedBytes >= PROGRESS_STEP_BYTES) || (now - lastReportedTime >= PROGRESS_INTERVAL_MS)) {
+                if (bytesWrittenTotal != lastReportedBytes || force) {
+                    lastReportedBytes = bytesWrittenTotal
+                    lastReportedTime = now
+                    onProgress(bytesWrittenTotal)
+                }
+            }
+        }
 
         override fun write(b: Int) {
             super.write(b)
             bytesWrittenTotal++
-            onProgress(bytesWrittenTotal)
+            notifyProgressIfNeeded()
         }
 
         override fun write(b: ByteArray, off: Int, len: Int) {
             out.write(b, off, len)
             bytesWrittenTotal += len
-            onProgress(bytesWrittenTotal)
+            notifyProgressIfNeeded()
+        }
+
+        override fun close() {
+            try {
+                notifyProgressIfNeeded(force = true)
+            } finally {
+                super.close()
+            }
         }
     }
 }

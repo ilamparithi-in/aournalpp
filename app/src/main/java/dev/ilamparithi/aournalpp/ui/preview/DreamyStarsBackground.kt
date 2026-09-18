@@ -6,7 +6,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
+import dev.ilamparithi.aournalpp.ui.animation.rememberAppInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
@@ -128,23 +128,16 @@ fun PersistentTurbulenceLayer(
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
     if (alpha <= 0.01f || progress <= 0.001f) return
 
-    val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
-    val time: Float
-    if (reduceMotion) {
-        time = 0f
-    } else {
-        val infiniteTransition = rememberInfiniteTransition(label = "agslTurbulence")
-        val animatedTime by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 100f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 60000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "agslTime"
-        )
-        time = animatedTime
-    }
+    val infiniteTransition = rememberAppInfiniteTransition(label = "agslTurbulence")
+    val time by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 100f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 60000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "agslTime"
+    )
 
     val shader = remember {
         try {
@@ -220,23 +213,16 @@ fun DreamyParticleField(
         }
     }
 
-    val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
-    val time: Float
-    if (reduceMotion) {
-        time = 0f
-    } else {
-        val infiniteTransition = rememberInfiniteTransition(label = "particleShimmer")
-        val animatedTime by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = (2f * PI.toFloat()),
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 2800, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "particleTime"
-        )
-        time = animatedTime
-    }
+    val infiniteTransition = rememberAppInfiniteTransition(label = "particleShimmer")
+    val time by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2f * PI.toFloat()),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "particleTime"
+    )
 
     Canvas(modifier = modifier) {
         val canvasWidth = size.width

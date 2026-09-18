@@ -291,6 +291,17 @@ fun DocumentHubScreen(
         )
     }
 
+    fun openNoteWithPrecedence(note: NoteDocument) {
+        val activeMatch = ActiveNotesTracker.findActiveNote(context, note.file)
+        if (activeMatch != null) {
+            noteForActiveSessionDialog = note.file to activeMatch
+        } else if (note.autosaveInfo != null) {
+            pendingAutosaveNote = note
+        } else {
+            handleNoteOpen(note.file)
+        }
+    }
+
     // Launchers
     val legacyPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -677,10 +688,7 @@ fun DocumentHubScreen(
                                         DynamicRecentsCarousel(
                                             recentNotes = recentNotes,
                                             pdfExportManager = pdfExportManager,
-                                            onOpenNote = { note ->
-                                                if (note.autosaveInfo != null) pendingAutosaveNote = note
-                                                else handleNoteOpen(note.file)
-                                            },
+                                            onOpenNote = { note -> openNoteWithPrecedence(note) },
                                             onOpenAsNote = { note ->
                                                 noteForActionDialog = note.file
                                             },
@@ -824,8 +832,7 @@ fun DocumentHubScreen(
                                                 viewModel.setLastSelectedNotePath(note.path)
                                             } else if (!isViewingTrash) {
                                                 if (!hasPermission) showPermissionDialog = true
-                                                else if (note.autosaveInfo != null) pendingAutosaveNote = note
-                                                else handleNoteOpen(note.file)
+                                                else openNoteWithPrecedence(note)
                                             }
                                         },
                                         onLongClick = {

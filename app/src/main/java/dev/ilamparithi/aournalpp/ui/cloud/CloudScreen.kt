@@ -5,13 +5,13 @@ import androidx.compose.ui.res.stringResource
 import dev.ilamparithi.aournalpp.AournalppApplication
 import dev.ilamparithi.aournalpp.R
 import dev.ilamparithi.aournalpp.backup.engine.ConflictPersistenceManager
-import androidx.compose.animation.AnimatedContent
+import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedContent
 import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedVisibility
+import dev.ilamparithi.aournalpp.ui.animation.appAnimateFloatAsState
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -344,12 +344,10 @@ fun CloudScreen(
         }
     }
 
-    AnimatedContent(
+    AppAnimatedContent(
         targetState = currentSubpage,
         transitionSpec = {
-            if (reduceAnimations) {
-                fadeIn(animationSpec = tween(150)) togetherWith fadeOut(animationSpec = tween(150))
-            } else if (targetState.ordinal > initialState.ordinal) {
+            if (targetState.ordinal > initialState.ordinal) {
                 slideInHorizontally { width -> width } togetherWith slideOutHorizontally { width -> -width }
             } else {
                 slideInHorizontally { width -> -width } togetherWith slideOutHorizontally { width -> width }
@@ -435,12 +433,10 @@ fun CloudScreen(
                 )
             }
             CloudSubpage.OVERVIEW -> {
-                AnimatedContent(
+                AppAnimatedContent(
                     targetState = selectedDetailServiceId,
                     transitionSpec = {
-                        if (reduceAnimations) {
-                            fadeIn(animationSpec = tween(150)) togetherWith fadeOut(animationSpec = tween(150))
-                        } else if (targetState != null && initialState == null) {
+                        if (targetState != null && initialState == null) {
                             slideInHorizontally { width -> width } togetherWith slideOutHorizontally { width -> -width }
                         } else if (targetState == null && initialState != null) {
                             slideInHorizontally { width -> -width } togetherWith slideOutHorizontally { width -> width }
@@ -897,14 +893,14 @@ fun CloudScreen(
             .padding(24.dp),
         contentAlignment = Alignment.BottomEnd
     ) {
-        val mappingItemSpring by animateFloatAsState(
+        val mappingItemSpring by appAnimateFloatAsState(
             targetValue = if (isFabExpanded) 1f else 0f,
-            animationSpec = if (reduceAnimations) snap() else spring(dampingRatio = 0.78f, stiffness = 340f),
+            animationSpec = spring(dampingRatio = 0.78f, stiffness = 340f),
             label = "mappingItemSpring"
         )
-        val serviceItemSpring by animateFloatAsState(
+        val serviceItemSpring by appAnimateFloatAsState(
             targetValue = if (isFabExpanded) 1f else 0f,
-            animationSpec = if (reduceAnimations) snap() else spring(dampingRatio = 0.78f, stiffness = 360f),
+            animationSpec = spring(dampingRatio = 0.78f, stiffness = 360f),
             label = "serviceItemSpring"
         )
 
@@ -942,7 +938,7 @@ fun CloudScreen(
 
             val fabInteractionSource = remember { MutableInteractionSource() }
             val isFabPressed by fabInteractionSource.collectIsPressedAsState()
-            val fabPressScale by animateFloatAsState(
+            val fabPressScale by appAnimateFloatAsState(
                 targetValue = if (isFabPressed) 0.90f else 1f,
                 animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
                 label = "fabPressScale"

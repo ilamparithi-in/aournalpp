@@ -1,7 +1,6 @@
 package dev.ilamparithi.aournalpp.data
 
 import dev.ilamparithi.aournalpp.model.NoteDocument
-import dev.ilamparithi.aournalpp.utils.FormatUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -211,8 +210,6 @@ class TrashRepository(
                     path = file.absolutePath,
                     lastModifiedMs = file.lastModified(),
                     sizeBytes = file.length(),
-                    lastModifiedFormatted = FormatUtils.formatDateTimeMedium(file.lastModified()),
-                    sizeFormatted = FormatUtils.formatFileSize(file.length()),
                     folder = "Trash"
                 )
             }.sortedByDescending { it.lastModifiedMs }

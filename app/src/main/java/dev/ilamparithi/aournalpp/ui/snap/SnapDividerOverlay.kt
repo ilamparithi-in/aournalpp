@@ -3,7 +3,7 @@ package dev.ilamparithi.aournalpp.ui.snap
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
+import dev.ilamparithi.aournalpp.ui.animation.appAnimateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -87,9 +87,9 @@ fun SnapDividerOverlay(
             }
 
             val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
-            val animatedAlpha by animateFloatAsState(
+            val animatedAlpha by appAnimateFloatAsState(
                 targetValue = if (isDragging || isResetAnimating) 1.0f else if (isHovered) 0.85f else 0.0f,
-                animationSpec = if (reduceMotion) androidx.compose.animation.core.snap() else tween(durationMillis = 200),
+                animationSpec = tween(durationMillis = 200),
                 label = "handleAlpha_${div.id}"
             )
 

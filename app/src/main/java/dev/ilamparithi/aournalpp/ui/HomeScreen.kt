@@ -16,8 +16,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedVisibility
+import dev.ilamparithi.aournalpp.ui.animation.appAnimateFloatAsState
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.fadeIn
@@ -26,12 +26,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.layout.widthIn
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.ilamparithi.aournalpp.runtime.ActiveNotesTracker
@@ -189,101 +183,61 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import android.view.View
+import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.ilamparithi.aournalpp.ui.home.HomeViewModel
+import dev.ilamparithi.aournalpp.ui.home.HomeDialogState
+import dev.ilamparithi.aournalpp.ui.home.HomeUiState
+import androidx.activity.result.ActivityResultLauncher
+
+data class PendingSingleExport(
+    val note: NoteDocument,
+    val format: dev.ilamparithi.aournalpp.data.DocumentRepository.ShareExportFormat,
+    val customName: String
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onNavigateToFiles: () -> Unit,
     onNavigateToSettings: () -> Unit,
-    onNavigateToAbout: () -> Unit
+    onNavigateToAbout: () -> Unit,
+    viewModel: HomeViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val repository = remember { DocumentRepository.getInstance(context) }
-    val env = remember { repository.getLinuxEnvironment() }
-    val supervisor = remember { ProcessSupervisor(env) }
-    val pdfExportManager = remember { PdfExportManager(env, supervisor) }
+    val repository = viewModel.repository
+    val env = viewModel.env
+    val supervisor = viewModel.supervisor
+    val pdfExportManager = viewModel.pdfExportManager
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val prefs = remember { dev.ilamparithi.aournalpp.data.AppPreferences.getGeneral(context) }
-    var viewMode by remember { mutableStateOf(prefs.getString("pref_home_view_mode", "EXPRESSIVE") ?: "EXPRESSIVE") }
-
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val activeSession by ActiveSessionTracker.activeSessionFlow(context, env)
         .collectAsStateWithLifecycle(initialValue = null)
 
-    var recentNotes by remember { mutableStateOf<List<NoteDocument>>(repository.getCachedHomeNotes(16) ?: emptyList()) }
-    var continueNote by remember { mutableStateOf<NoteDocument?>(repository.getCachedContinueNote()) }
-    var totalNotesCount by remember { mutableStateOf(repository.getCachedTotalNotesCount() ?: 0) }
-    var totalFoldersCount by remember { mutableStateOf(repository.getCachedTotalFoldersCount() ?: 0) }
-    var isRefreshing by remember { mutableStateOf(false) }
-    var refreshSeed by remember { mutableLongStateOf(0L) }
     val pullRefreshState = rememberPullToRefreshState()
-
-    // Autosave on-open resolution state
-    var pendingAutosaveNote by remember { mutableStateOf<NoteDocument?>(null) }
-    var pendingSaveAutosaveNote by remember { mutableStateOf<NoteDocument?>(null) }
-
-    // Autoload override conflict notification state
-    var showAutoloadOverrideDialog by remember { mutableStateOf(false) }
-
-    // Dialog states
-    var showCreateFolderDialog by remember { mutableStateOf(false) }
-    var newFolderName by remember { mutableStateOf("") }
-    var selectedFolderColor by remember { mutableStateOf("#4CAF50") }
-    var selectedFolderEmoji by remember { mutableStateOf<String?>(null) }
-    var selectedFolderIconType by remember { mutableStateOf<String?>("folder") }
-
-    // Speed Dial FAB state
-    var isFabExpanded by remember { mutableStateOf(false) }
-    var showNewNoteDialog by remember { mutableStateOf(false) }
-    var newNoteDefaultName by remember { mutableStateOf("") }
-    var allFoldersForNewNote by remember { mutableStateOf<List<FolderItem>>(emptyList()) }
-
     val scrollState = rememberScrollState()
     val isScrolled by remember { derivedStateOf { scrollState.value > 100 } }
+    val localView = LocalView.current
 
-    suspend fun loadHomeDataNow() {
-        val payload = withContext(Dispatchers.IO) {
-            repository.getHomeData(16)
-        }
-        recentNotes = payload.notes
-        totalNotesCount = payload.totalNotesCount
-        totalFoldersCount = payload.totalFoldersCount
-        continueNote = payload.continueNote
-
-        // Prefetch thumbnails off the main thread
-        ThumbnailManager.prefetchThumbnails(context, payload.notes, pdfExportManager, scope)
-
-        val emergencyFile = withContext(Dispatchers.IO) { env.checkAndQuarantineEmergencySave() }
+    LaunchedEffect(uiState.quarantinedEmergencyFile) {
+        val emergencyFile = uiState.quarantinedEmergencyFile
         if (emergencyFile != null && emergencyFile.exists() && emergencyFile.length() > 0) {
             val mainActivity = context as? MainActivity
             mainActivity?.quarantinedEmergencySave?.value = emergencyFile
+            viewModel.clearQuarantinedEmergencyFile()
         }
-
-        val autoloadOverridden = withContext(Dispatchers.IO) { env.checkAndOverrideAutoloadPreference() }
-        if (autoloadOverridden || env.hasPendingAutoloadOverrideNotification()) {
-            showAutoloadOverrideDialog = true
-        }
-    }
-
-    fun loadHomeData() {
-        scope.launch { loadHomeDataNow() }
     }
 
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                ActiveSessionTracker.notifySessionChanged()
-                scope.launch {
-                    // Brief delay to allow tab/activity entrance transition to settle smoothly before disk scan
-                    delay(200.milliseconds)
-                    loadHomeDataNow()
-                }
+                viewModel.onAppResume()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -291,38 +245,6 @@ fun HomeScreen(
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
-
-    DisposableEffect(Unit) {
-        val receiver = object : android.content.BroadcastReceiver() {
-            override fun onReceive(c: android.content.Context?, intent: android.content.Intent?) {
-                ActiveSessionTracker.notifySessionChanged()
-                scope.launch {
-                    delay(500.milliseconds)
-                    loadHomeDataNow()
-                }
-            }
-        }
-        val filter = android.content.IntentFilter("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED")
-        androidx.core.content.ContextCompat.registerReceiver(
-            context,
-            receiver,
-            filter,
-            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
-        )
-        onDispose {
-            try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
-        }
-    }
-
-    // Note action & dialog states
-    var noteToRename by remember { mutableStateOf<NoteDocument?>(null) }
-    var renameInputText by remember { mutableStateOf("") }
-    var noteToDelete by remember { mutableStateOf<NoteDocument?>(null) }
-    var isPdfConverting by remember { mutableStateOf(false) }
-    var convertingMessage by remember { mutableStateOf("") }
-    var noteForActionDialog by remember { mutableStateOf<File?>(null) }
-    var noteForActiveSessionDialog by remember { mutableStateOf<Pair<File, ActiveNotesTracker.ActiveNoteMatch>?>(null) }
-    val localView = LocalView.current
 
     fun handleNoteOpen(file: File) {
         NoteOpenManager.handleFileOpen(
@@ -332,14 +254,17 @@ fun HomeScreen(
             scope = scope,
             repository = repository,
             localView = localView,
-            onShowPrompt = { noteForActionDialog = it },
+            onShowPrompt = { viewModel.setDialogState(HomeDialogState.NoteAction(it)) },
             onShowActiveNotePrompt = { targetFile, match ->
-                noteForActiveSessionDialog = targetFile to match
+                viewModel.setDialogState(HomeDialogState.ActiveSessionPrompt(targetFile, match))
             },
             onConvertingState = { isConverting ->
-                isPdfConverting = isConverting
                 if (isConverting) {
-                    convertingMessage = "Rendering PDF for \"${file.nameWithoutExtension}\"..."
+                    viewModel.setDialogState(
+                        HomeDialogState.PdfConverting("Rendering PDF for \"${file.nameWithoutExtension}\"...")
+                    )
+                } else if (uiState.dialogState is HomeDialogState.PdfConverting) {
+                    viewModel.dismissDialog()
                 }
             },
             onError = { err ->
@@ -348,11 +273,12 @@ fun HomeScreen(
         )
     }
 
-    fun openNote(file: File) {
-        handleNoteOpen(file)
+    val onNoteClick: (NoteDocument) -> Unit = { note ->
+        viewModel.onNoteClick(note, context) { file ->
+            handleNoteOpen(file)
+        }
     }
 
-    // File Import Launcher (Supports PDF, XOPP, XOJ)
     val importFileLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -368,7 +294,7 @@ fun HomeScreen(
                 val staged = ExternalFileHandler.stageExternalUri(context, uri, repository.getLinuxEnvironment())
                 if (staged.isSuccess) {
                     val file = staged.getOrThrow()
-                    loadHomeData()
+                    viewModel.loadHomeData()
                     handleNoteOpen(file)
                 } else {
                     snackbarHostState.showSnackbar("Failed to import file: ${staged.exceptionOrNull()?.message}")
@@ -378,30 +304,19 @@ fun HomeScreen(
     }
 
     val onTogglePin: (NoteDocument) -> Unit = { note ->
-        scope.launch {
-            repository.togglePinNote(note.path)
-            loadHomeData()
-        }
+        viewModel.togglePin(note)
     }
 
     val onDuplicate: (NoteDocument) -> Unit = { note ->
-        scope.launch {
-            val result = repository.duplicateNote(note)
+        viewModel.duplicateNote(note) { result ->
             if (result.isSuccess) {
-                loadHomeData()
-                snackbarHostState.showSnackbar("Duplicated \"${note.title}\"")
+                scope.launch { snackbarHostState.showSnackbar("Duplicated \"${note.title}\"") }
             } else {
-                snackbarHostState.showSnackbar("Failed to duplicate: ${result.exceptionOrNull()?.message}")
+                scope.launch { snackbarHostState.showSnackbar("Failed to duplicate: ${result.exceptionOrNull()?.message}") }
             }
         }
     }
 
-    data class PendingSingleExport(
-        val note: NoteDocument,
-        val format: dev.ilamparithi.aournalpp.data.DocumentRepository.ShareExportFormat,
-        val customName: String
-    )
-    var shareExportNote by remember { mutableStateOf<NoteDocument?>(null) }
     var pendingSingleExport by remember { mutableStateOf<PendingSingleExport?>(null) }
 
     val singleSaveLauncher = rememberLauncherForActivityResult(
@@ -410,8 +325,7 @@ fun HomeScreen(
         val pending = pendingSingleExport
         pendingSingleExport = null
         if (uri != null && pending != null) {
-            isPdfConverting = true
-            convertingMessage = "Saving \"${pending.customName}\"..."
+            viewModel.setDialogState(HomeDialogState.PdfConverting("Saving \"${pending.customName}\"..."))
             scope.launch {
                 val result = repository.exportDocumentToUri(
                     context = context,
@@ -420,7 +334,7 @@ fun HomeScreen(
                     destUri = uri,
                     pdfExportManager = pdfExportManager
                 )
-                isPdfConverting = false
+                viewModel.dismissDialog()
                 if (result.isSuccess) {
                     val ext = if (pending.format == dev.ilamparithi.aournalpp.data.DocumentRepository.ShareExportFormat.PDF) "pdf" else "xopp"
                     snackbarHostState.showSnackbar(context.getString(dev.ilamparithi.aournalpp.R.string.msg_exported_success, "${pending.customName}.$ext"))
@@ -432,31 +346,19 @@ fun HomeScreen(
     }
 
     val onOpenAs: (NoteDocument) -> Unit = { note ->
-        noteForActionDialog = note.file
+        viewModel.setDialogState(HomeDialogState.NoteAction(note.file))
     }
 
     val onShareExport: (NoteDocument) -> Unit = { note ->
-        shareExportNote = note
+        viewModel.setDialogState(HomeDialogState.ShareExport(note))
     }
 
     val onRename: (NoteDocument) -> Unit = { note ->
-        noteToRename = note
-        renameInputText = note.file.nameWithoutExtension
+        viewModel.setDialogState(HomeDialogState.RenameNote(note))
     }
 
     val onDelete: (NoteDocument) -> Unit = { note ->
-        noteToDelete = note
-    }
-
-    fun promptNewNote() {
-        val template = FileNameTemplateEngine.getNewFileTemplate(context)
-        newNoteDefaultName = FileNameTemplateEngine.evaluate(template, context)
-        scope.launch {
-            allFoldersForNewNote = withContext(Dispatchers.IO) {
-                repository.getAllFolders()
-            }
-        }
-        showNewNoteDialog = true
+        viewModel.setDialogState(HomeDialogState.DeleteNote(note))
     }
 
     fun startNewNote() {
@@ -491,11 +393,11 @@ fun HomeScreen(
     }
 
     // Dynamic fun subhero phrase
-    val funSubhero = remember(recentNotes.size, totalNotesCount) {
+    val funSubhero = remember(uiState.recentNotes.size, uiState.totalNotesCount) {
         when {
-            totalNotesCount == 0 -> "✨ Ready to sketch your first idea?"
-            recentNotes.size == 1 -> "✨ 1 note active • Ideas ready to flow"
-            else -> "✨ ${recentNotes.size} notes in studio • Ideas ready to flow"
+            uiState.totalNotesCount == 0 -> "✨ Ready to sketch your first idea?"
+            uiState.recentNotes.size == 1 -> "✨ 1 note active • Ideas ready to flow"
+            else -> "✨ ${uiState.recentNotes.size} notes in studio • Ideas ready to flow"
         }
     }
 
@@ -520,21 +422,13 @@ fun HomeScreen(
             }
         ) { innerPadding ->
             PullToRefreshBox(
-                isRefreshing = isRefreshing,
-                onRefresh = {
-                    scope.launch {
-                        isRefreshing = true
-                        refreshSeed = System.currentTimeMillis()
-                        loadHomeData()
-                        delay(600.milliseconds)
-                        isRefreshing = false
-                    }
-                },
+                isRefreshing = uiState.isRefreshing,
+                onRefresh = { viewModel.refresh() },
                 state = pullRefreshState,
                 indicator = {
                     PullToRefreshDefaults.Indicator(
                         state = pullRefreshState,
-                        isRefreshing = isRefreshing,
+                        isRefreshing = uiState.isRefreshing,
                         modifier = Modifier.align(Alignment.TopCenter),
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                         color = MaterialTheme.colorScheme.primary
@@ -596,8 +490,8 @@ fun HomeScreen(
                                     Text(
                                         androidx.compose.ui.res.pluralStringResource(
                                             dev.ilamparithi.aournalpp.R.plurals.home_stat_notes_count,
-                                            totalNotesCount,
-                                            totalNotesCount
+                                            uiState.totalNotesCount,
+                                            uiState.totalNotesCount
                                         ),
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold
@@ -623,8 +517,8 @@ fun HomeScreen(
                                     Text(
                                         androidx.compose.ui.res.pluralStringResource(
                                             dev.ilamparithi.aournalpp.R.plurals.home_stat_folders_count,
-                                            totalFoldersCount,
-                                            totalFoldersCount
+                                            uiState.totalFoldersCount,
+                                            uiState.totalFoldersCount
                                         ),
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold
@@ -635,17 +529,11 @@ fun HomeScreen(
                     }
 
                     // 2. Enlarged "Continue where you left off" Section
-                    continueNote?.let { note ->
+                    uiState.continueNote?.let { note ->
                         EnlargedContinueHeroSection(
                             note = note,
                             pdfExportManager = pdfExportManager,
-                            onResume = {
-                                if (note.autosaveInfo != null) {
-                                    pendingAutosaveNote = note
-                                } else {
-                                    openNote(note.file)
-                                }
-                            }
+                            onResume = { onNoteClick(note) }
                         )
                     }
 
@@ -661,10 +549,9 @@ fun HomeScreen(
                                 Row(modifier = Modifier.padding(3.dp)) {
                                     Surface(
                                         shape = RoundedCornerShape(9.dp),
-                                        color = if (viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.primary else Color.Transparent,
+                                        color = if (uiState.viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.primary else Color.Transparent,
                                         modifier = Modifier.clickable {
-                                            viewMode = "EXPRESSIVE"
-                                            prefs.edit {putString("pref_home_view_mode", "EXPRESSIVE")}
+                                            viewModel.setViewMode("EXPRESSIVE")
                                         }
                                     ) {
                                         Row(
@@ -674,7 +561,7 @@ fun HomeScreen(
                                             Icon(
                                                 Icons.Default.AutoAwesome,
                                                 contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_view_mode_collage),
-                                                tint = if (viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                tint = if (uiState.viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier.size(14.dp)
                                             )
                                             Spacer(modifier = Modifier.width(4.dp))
@@ -682,17 +569,16 @@ fun HomeScreen(
                                                 androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_view_mode_collage),
                                                 style = MaterialTheme.typography.labelMedium,
                                                 fontWeight = FontWeight.Bold,
-                                                color = if (viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                color = if (uiState.viewMode == "EXPRESSIVE") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
                                     }
 
                                     Surface(
                                         shape = RoundedCornerShape(9.dp),
-                                        color = if (viewMode == "NORMAL") MaterialTheme.colorScheme.primary else Color.Transparent,
+                                        color = if (uiState.viewMode == "NORMAL") MaterialTheme.colorScheme.primary else Color.Transparent,
                                         modifier = Modifier.clickable {
-                                            viewMode = "NORMAL"
-                                            prefs.edit {putString("pref_home_view_mode", "NORMAL")}
+                                            viewModel.setViewMode("NORMAL")
                                         }
                                     ) {
                                         Row(
@@ -702,7 +588,7 @@ fun HomeScreen(
                                             Icon(
                                                 Icons.Default.GridView,
                                                 contentDescription = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_view_mode_grid),
-                                                tint = if (viewMode == "NORMAL") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                tint = if (uiState.viewMode == "NORMAL") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier.size(14.dp)
                                             )
                                             Spacer(modifier = Modifier.width(4.dp))
@@ -710,7 +596,7 @@ fun HomeScreen(
                                                 androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.home_view_mode_grid),
                                                 style = MaterialTheme.typography.labelMedium,
                                                 fontWeight = FontWeight.Bold,
-                                                color = if (viewMode == "NORMAL") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                color = if (uiState.viewMode == "NORMAL") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
                                     }
@@ -792,21 +678,15 @@ fun HomeScreen(
                             ViewModeToggle(modifier = Modifier.align(Alignment.Start))
                         }
 
-                        if (recentNotes.isEmpty()) {
-                            CreativeEmptyCollageState(onNewNoteClick = { promptNewNote() })
-                        } else if (viewMode == "EXPRESSIVE") {
+                        if (uiState.recentNotes.isEmpty()) {
+                            CreativeEmptyCollageState(onNewNoteClick = { viewModel.promptNewNote(context) })
+                        } else if (uiState.viewMode == "EXPRESSIVE") {
                             OrganicCollageView(
-                                notes = recentNotes,
+                                notes = uiState.recentNotes,
                                 pdfExportManager = pdfExportManager,
-                                onNoteClick = { note ->
-                                    if (note.autosaveInfo != null) {
-                                        pendingAutosaveNote = note
-                                    } else {
-                                        openNote(note.file)
-                                    }
-                                },
-                                onNewNoteClick = { promptNewNote() },
-                                refreshSeed = refreshSeed,
+                                onNoteClick = onNoteClick,
+                                onNewNoteClick = { viewModel.promptNewNote(context) },
+                                refreshSeed = uiState.refreshSeed,
                                 onOpenAs = onOpenAs,
                                 onTogglePin = onTogglePin,
                                 onShareExport = onShareExport,
@@ -816,15 +696,9 @@ fun HomeScreen(
                             )
                         } else {
                             NormalHomeGalleryView(
-                                notes = recentNotes,
+                                notes = uiState.recentNotes,
                                 pdfExportManager = pdfExportManager,
-                                onNoteClick = { note ->
-                                    if (note.autosaveInfo != null) {
-                                        pendingAutosaveNote = note
-                                    } else {
-                                        openNote(note.file)
-                                    }
-                                },
+                                onNoteClick = onNoteClick,
                                 onOpenAs = onOpenAs,
                                 onTogglePin = onTogglePin,
                                 onShareExport = onShareExport,
@@ -842,415 +716,452 @@ fun HomeScreen(
 
         // 4. Expressive Speed Dial Floating Action Menu (Bottom Right)
         HomeFloatingActionMenu(
-            isExpanded = isFabExpanded,
-            onExpandedChange = { isFabExpanded = it },
+            isExpanded = uiState.isFabExpanded,
+            onExpandedChange = { viewModel.setFabExpanded(it) },
             onCreateFolderClick = {
-                newFolderName = ""
-                showCreateFolderDialog = true
+                viewModel.setDialogState(HomeDialogState.CreateFolder)
             },
             onOpenFileClick = {
                 importFileLauncher.launch(arrayOf("*/*", "application/pdf", "application/x-xopp", "application/x-xoj", "application/octet-stream"))
             },
             onCreateNoteClick = {
-                promptNewNote()
+                viewModel.promptNewNote(context)
             },
             modifier = Modifier.align(Alignment.BottomEnd)
         )
     }
 
-    // Create Folder Dialog
-    if (showCreateFolderDialog) {
-        CreateFolderDialog(
-            title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_new_folder_title),
-            confirmButtonLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_create_button),
-            onDismiss = { showCreateFolderDialog = false },
-            onCreate = { name, colorHex, iconEmoji, iconType ->
-                showCreateFolderDialog = false
-                scope.launch {
-                    val res = repository.createFolder(
-                        parentDir = repository.getRootNotesDirectory(),
-                        name = name,
-                        colorHex = colorHex,
-                        iconEmoji = iconEmoji,
-                        iconType = iconType
-                    )
-                    if (res.isSuccess) {
-                        snackbarHostState.showSnackbar("Created folder \"$name\"")
-                        loadHomeData()
-                    } else {
-                        snackbarHostState.showSnackbar("Failed to create folder: ${res.exceptionOrNull()?.message}")
+    HomeDialogHost(
+        dialogState = uiState.dialogState,
+        viewModel = viewModel,
+        pdfExportManager = pdfExportManager,
+        snackbarHostState = snackbarHostState,
+        localView = localView,
+        singleSaveLauncher = singleSaveLauncher,
+        onSavePendingExport = { pendingSingleExport = it },
+        onStartNewNote = { startNewNote() },
+        onDirectOpen = { file -> handleNoteOpen(file) }
+    )
+}
+
+@Composable
+private fun HomeDialogHost(
+    dialogState: HomeDialogState,
+    viewModel: HomeViewModel,
+    pdfExportManager: PdfExportManager,
+    snackbarHostState: SnackbarHostState,
+    localView: View,
+    singleSaveLauncher: ActivityResultLauncher<String>,
+    onSavePendingExport: (PendingSingleExport) -> Unit,
+    onStartNewNote: () -> Unit,
+    onDirectOpen: (File) -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    when (dialogState) {
+        HomeDialogState.None -> Unit
+
+        HomeDialogState.CreateFolder -> {
+            CreateFolderDialog(
+                title = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_new_folder_title),
+                confirmButtonLabel = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_create_button),
+                onDismiss = { viewModel.dismissDialog() },
+                onCreate = { name, colorHex, iconEmoji, iconType ->
+                    viewModel.dismissDialog()
+                    viewModel.createFolder(name, colorHex, iconEmoji, iconType) { res ->
+                        if (res.isSuccess) {
+                            scope.launch { snackbarHostState.showSnackbar("Created folder \"$name\"") }
+                        } else {
+                            scope.launch { snackbarHostState.showSnackbar("Failed to create folder: ${res.exceptionOrNull()?.message}") }
+                        }
                     }
-                }
-            }
-        )
-    }
-
-    // New Note Dialog
-    if (showNewNoteDialog) {
-        SaveAsNoteDialog(
-            title = "New Note",
-            subtitle = "Choose a name and destination folder for your new note.",
-            icon = Icons.Default.Edit,
-            initialName = newNoteDefaultName,
-            initialFolder = repository.getRootNotesDirectory(),
-            availableFolders = allFoldersForNewNote,
-            rootFolder = repository.getRootNotesDirectory(),
-            confirmButtonLabel = "Create & Open",
-            onDismiss = { showNewNoteDialog = false },
-            onSkip = {
-                showNewNoteDialog = false
-                startNewNote()
-            },
-            onSave = { name, targetFolder ->
-                showNewNoteDialog = false
-                scope.launch {
-                    val result = repository.createBlankNote(name, targetFolder)
-                    if (result.isSuccess) {
-                        val file = result.getOrThrow()
-                        loadHomeData()
-                        NoteOpenManager.openInCanvas(
-                            context = context,
-                            file = file,
-                            repository = repository,
-                            localView = localView
-                        )
-                    } else {
-                        snackbarHostState.showSnackbar(
-                            "Failed to create note: ${result.exceptionOrNull()?.message}"
-                        )
-                    }
-                }
-            },
-            onCreateFolder = { name, colorHex, iconEmoji, iconType ->
-                val result = repository.createFolder(
-                    parentDir = repository.getRootNotesDirectory(),
-                    name = name,
-                    colorHex = colorHex,
-                    iconEmoji = iconEmoji,
-                    iconType = iconType
-                )
-                if (result.isSuccess) {
-                    val newFolder = result.getOrThrow()
-                    allFoldersForNewNote = allFoldersForNewNote + dev.ilamparithi.aournalpp.model.FolderItem(
-                        file = newFolder,
-                        name = newFolder.name,
-                        colorHex = colorHex,
-                        iconEmoji = iconEmoji,
-                        iconType = iconType,
-                        isEmergencyFolder = false
-                    )
-                    loadHomeData()
-                }
-                result
-            }
-        )
-    }
-
-    // Autoload Preference Conflict Overridden Dialog
-    if (showAutoloadOverrideDialog) {
-
-        AlertDialog(
-            onDismissRequest = {
-                showAutoloadOverrideDialog = false
-                env.clearPendingAutoloadOverrideNotification()
-            },
-            properties = AppDialogDefaults.Properties,
-            modifier = Modifier.promptWidth(),
-            icon = {
-                Icon(
-                    Icons.Default.Tune,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(32.dp)
-                )
-            },
-            title = {
-                Text("Startup Preference Overridden", fontWeight = FontWeight.Bold)
-            },
-            text = {
-                Text(
-                    "In Xournal++ Preferences > Load/Save, \"Enable autoloading of most recent file on application startup\" was detected and has been cleared to \"false\".\n\n" +
-                    "This setting conflicts with Aournal++'s \"Continue where you left off\" workspace control. You can continue launching recent notes directly from your Home Screen."
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showAutoloadOverrideDialog = false
-                        env.clearPendingAutoloadOverrideNotification()
-                    }
-                ) {
-                    Text("Understood")
-                }
-            }
-        )
-    }
-
-    // Autosave Resolution Dialog
-    pendingAutosaveNote?.let { note ->
-        val autoInfo = note.autosaveInfo
-        if (autoInfo != null) {
-            AutosaveResolutionDialog(
-                note = note,
-                autosaveInfo = autoInfo,
-                onDismiss = { pendingAutosaveNote = null },
-                onReplaceWithAutosave = {
-                    val target = repository.replaceWithAutosave(note)
-                    pendingAutosaveNote = null
-                    loadHomeData()
-                    openNote(target)
-                },
-                onKeepBoth = {
-                    pendingAutosaveNote = null
-                    pendingSaveAutosaveNote = note
-                },
-                onKeepExisting = {
-                    val target = repository.discardAutosave(note)
-                    pendingAutosaveNote = null
-                    loadHomeData()
-                    openNote(target)
                 }
             )
         }
-    }
 
-    // Save Autosave as Note Dialog
-    pendingSaveAutosaveNote?.let { note ->
-        val autoInfo = note.autosaveInfo
-        if (autoInfo != null) {
-            val allAvailableFolders by produceState<List<FolderItem>>(emptyList(), pendingSaveAutosaveNote) {
-                value = repository.getAllFolders()
-            }
-
+        is HomeDialogState.NewNote -> {
+            var allFolders by remember(dialogState) { mutableStateOf(dialogState.folders) }
             SaveAsNoteDialog(
-                title = "Save Autosave as Note",
-                subtitle = "Save a separate copy of the autosaved version with your chosen name and folder.",
-                icon = Icons.Default.Description,
-                initialName = "${note.title} (Autosave)",
-                initialFolder = note.file.parentFile ?: repository.getRootNotesDirectory(),
-                availableFolders = allAvailableFolders,
-                rootFolder = repository.getRootNotesDirectory(),
-                onDismiss = { pendingSaveAutosaveNote = null },
+                title = "New Note",
+                subtitle = "Choose a name and destination folder for your new note.",
+                icon = Icons.Default.Edit,
+                initialName = dialogState.defaultName,
+                initialFolder = viewModel.repository.getRootNotesDirectory(),
+                availableFolders = allFolders,
+                rootFolder = viewModel.repository.getRootNotesDirectory(),
+                confirmButtonLabel = "Create & Open",
+                onDismiss = { viewModel.dismissDialog() },
+                onSkip = {
+                    viewModel.dismissDialog()
+                    onStartNewNote()
+                },
                 onSave = { name, targetFolder ->
-                    val savedFile = repository.saveAutosaveAsNote(autoInfo, name, targetFolder)
-                    pendingSaveAutosaveNote = null
-                    loadHomeData()
-                    openNote(note.file)
-                    scope.launch {
-                        snackbarHostState.showSnackbar("Saved autosave copy as \"${savedFile.name}\"")
+                    viewModel.dismissDialog()
+                    viewModel.createBlankNote(name, targetFolder) { result ->
+                        if (result.isSuccess) {
+                            val file = result.getOrThrow()
+                            NoteOpenManager.openInCanvas(
+                                context = context,
+                                file = file,
+                                repository = viewModel.repository,
+                                localView = localView
+                            )
+                        } else {
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    "Failed to create note: ${result.exceptionOrNull()?.message}"
+                                )
+                            }
+                        }
                     }
                 },
                 onCreateFolder = { name, colorHex, iconEmoji, iconType ->
-                    val result = repository.createFolder(
-                        parentDir = repository.getRootNotesDirectory(),
+                    val result = viewModel.repository.createFolder(
+                        parentDir = viewModel.repository.getRootNotesDirectory(),
                         name = name,
                         colorHex = colorHex,
                         iconEmoji = iconEmoji,
                         iconType = iconType
                     )
                     if (result.isSuccess) {
-                        loadHomeData()
+                        val newFolder = result.getOrThrow()
+                        allFolders = allFolders + dev.ilamparithi.aournalpp.model.FolderItem(
+                            file = newFolder,
+                            name = newFolder.name,
+                            colorHex = colorHex,
+                            iconEmoji = iconEmoji,
+                            iconType = iconType,
+                            isEmergencyFolder = false
+                        )
+                        viewModel.loadHomeData(force = true)
                     }
                     result
                 }
             )
         }
-    }
 
-    // Note Open Action Prompt Dialog (View as PDF / Edit in Xournal++)
-    noteForActionDialog?.let { file ->
-        NoteOpenActionDialog(
-            file = file,
-            onDismiss = { noteForActionDialog = null },
-            onViewAsPdf = {
-                noteForActionDialog = null
-                NoteOpenManager.openAsPdf(
-                    context = context,
-                    file = file,
-                    pdfExportManager = pdfExportManager,
-                    scope = scope,
-                    repository = repository,
-                    onConvertingState = { isConverting ->
-                        isPdfConverting = isConverting
-                        if (isConverting) {
-                            convertingMessage = "Rendering PDF for \"${file.nameWithoutExtension}\"..."
+        HomeDialogState.AutoloadOverride -> {
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissAutoloadOverride() },
+                properties = AppDialogDefaults.Properties,
+                modifier = Modifier.promptWidth(),
+                icon = {
+                    Icon(
+                        Icons.Default.Tune,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp)
+                    )
+                },
+                title = {
+                    Text("Startup Preference Overridden", fontWeight = FontWeight.Bold)
+                },
+                text = {
+                    Text(
+                        "In Xournal++ Preferences > Load/Save, \"Enable autoloading of most recent file on application startup\" was detected and has been cleared to \"false\".\n\n" +
+                        "This setting conflicts with Aournal++'s \"Continue where you left off\" workspace control. You can continue launching recent notes directly from your Home Screen."
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { viewModel.dismissAutoloadOverride() }
+                    ) {
+                        Text("Understood")
+                    }
+                }
+            )
+        }
+
+        is HomeDialogState.AutosavePrompt -> {
+            val note = dialogState.note
+            val autoInfo = note.autosaveInfo
+            if (autoInfo != null) {
+                AutosaveResolutionDialog(
+                    note = note,
+                    autosaveInfo = autoInfo,
+                    onDismiss = { viewModel.dismissDialog() },
+                    onReplaceWithAutosave = {
+                        val target = viewModel.replaceWithAutosave(note)
+                        viewModel.dismissDialog()
+                        onDirectOpen(target)
+                    },
+                    onKeepBoth = {
+                        viewModel.setDialogState(HomeDialogState.SaveAutosavePrompt(note))
+                    },
+                    onKeepExisting = {
+                        val target = viewModel.discardAutosave(note)
+                        viewModel.dismissDialog()
+                        onDirectOpen(target)
+                    }
+                )
+            }
+        }
+
+        is HomeDialogState.SaveAutosavePrompt -> {
+            val note = dialogState.note
+            val autoInfo = note.autosaveInfo
+            if (autoInfo != null) {
+                val allAvailableFolders by produceState<List<FolderItem>>(emptyList(), note) {
+                    value = viewModel.repository.getAllFolders()
+                }
+
+                SaveAsNoteDialog(
+                    title = "Save Autosave as Note",
+                    subtitle = "Save a separate copy of the autosaved version with your chosen name and folder.",
+                    icon = Icons.Default.Description,
+                    initialName = "${note.title} (Autosave)",
+                    initialFolder = note.file.parentFile ?: viewModel.repository.getRootNotesDirectory(),
+                    availableFolders = allAvailableFolders,
+                    rootFolder = viewModel.repository.getRootNotesDirectory(),
+                    onDismiss = { viewModel.dismissDialog() },
+                    onSave = { name, targetFolder ->
+                        val savedFile = viewModel.saveAutosaveAsNote(autoInfo, name, targetFolder)
+                        viewModel.dismissDialog()
+                        onDirectOpen(note.file)
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Saved autosave copy as \"${savedFile.name}\"")
                         }
                     },
-                    onError = { err ->
-                        scope.launch { snackbarHostState.showSnackbar(err) }
+                    onCreateFolder = { name, colorHex, iconEmoji, iconType ->
+                        val result = viewModel.repository.createFolder(
+                            parentDir = viewModel.repository.getRootNotesDirectory(),
+                            name = name,
+                            colorHex = colorHex,
+                            iconEmoji = iconEmoji,
+                            iconType = iconType
+                        )
+                        if (result.isSuccess) {
+                            viewModel.loadHomeData(force = true)
+                        }
+                        result
                     }
                 )
-            },
-            onEditInCanvas = {
-                noteForActionDialog = null
-                val activeMatch = ActiveNotesTracker.findActiveNote(context, file)
-                if (activeMatch != null) {
-                    noteForActiveSessionDialog = file to activeMatch
-                } else {
-                    NoteOpenManager.openInCanvas(
+            }
+        }
+
+        is HomeDialogState.NoteAction -> {
+            val file = dialogState.file
+            NoteOpenActionDialog(
+                file = file,
+                onDismiss = { viewModel.dismissDialog() },
+                onViewAsPdf = {
+                    viewModel.dismissDialog()
+                    NoteOpenManager.openAsPdf(
                         context = context,
                         file = file,
-                        repository = repository,
-                        localView = localView
-                    )
-                }
-            }
-        )
-    }
-
-    // Active Note Already Open Dialog
-    noteForActiveSessionDialog?.let { (file, match) ->
-        ActiveNoteOpenPromptDialog(
-            file = file,
-            activeMatch = match,
-            onDismiss = { noteForActiveSessionDialog = null },
-            onViewExistingWindow = {
-                noteForActiveSessionDialog = null
-                NoteOpenManager.viewExistingWindow(context, match.windowId)
-            },
-            onOpenInNewWindow = {
-                noteForActiveSessionDialog = null
-                NoteOpenManager.openInCanvas(
-                    context = context,
-                    file = file,
-                    repository = repository,
-                    localView = localView
-                )
-            }
-        )
-    }
-
-    // PDF Converting Progress Dialog
-    if (isPdfConverting) {
-        PdfConversionProgressDialog(message = convertingMessage)
-    }
-
-    // Rename Note Dialog
-    noteToRename?.let { note ->
-        AlertDialog(
-            onDismissRequest = { noteToRename = null },
-            properties = AppDialogDefaults.Properties,
-            modifier = Modifier.promptWidth(),
-            icon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp)) },
-            title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_rename_title), fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = renameInputText,
-                        onValueChange = { renameInputText = it },
-                        label = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_note_name_hint)) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(onClick = {
-                    noteToRename = null
-                    if (renameInputText.isNotBlank()) {
-                        scope.launch {
-                            val result = repository.renameNote(note, renameInputText)
-                            if (result.isSuccess) {
-                                loadHomeData()
-                                snackbarHostState.showSnackbar("Renamed to \"${renameInputText.trim()}\"")
-                            } else {
-                                snackbarHostState.showSnackbar("Failed to rename: ${result.exceptionOrNull()?.message}")
-                            }
-                        }
-                    }
-                }) {
-                    Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_rename))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { noteToRename = null }) {
-                    Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel))
-                }
-            }
-        )
-    }
-
-    // Delete Note Confirmation Dialog
-    noteToDelete?.let { note ->
-        AlertDialog(
-            onDismissRequest = { noteToDelete = null },
-            properties = AppDialogDefaults.Properties,
-            modifier = Modifier.promptWidth(),
-            icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(32.dp)) },
-            title = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_delete_note_title), fontWeight = FontWeight.Bold) },
-            text = {
-                Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_delete_note_body, note.title))
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        noteToDelete = null
-                        scope.launch {
-                            val result = repository.moveToTrash(listOf(note))
-                            if (result.isSuccess) {
-                                loadHomeData()
-                                val action = snackbarHostState.showSnackbar(
-                                    message = "Moved \"${note.title}\" to Trash",
-                                    actionLabel = "Undo",
-                                    duration = androidx.compose.material3.SnackbarDuration.Short
+                        pdfExportManager = pdfExportManager,
+                        scope = scope,
+                        repository = viewModel.repository,
+                        onConvertingState = { isConverting ->
+                            if (isConverting) {
+                                viewModel.setDialogState(
+                                    HomeDialogState.PdfConverting("Rendering PDF for \"${file.nameWithoutExtension}\"...")
                                 )
-                                if (action == androidx.compose.material3.SnackbarResult.ActionPerformed) {
-                                    val trashed = repository.scanTrash().find { it.title == note.title }
-                                    if (trashed != null) {
-                                        repository.restoreFromTrash(trashed)
-                                        loadHomeData()
-                                    }
+                            } else {
+                                viewModel.dismissDialog()
+                            }
+                        },
+                        onError = { err ->
+                            scope.launch { snackbarHostState.showSnackbar(err) }
+                        }
+                    )
+                },
+                onEditInCanvas = {
+                    viewModel.dismissDialog()
+                    val activeMatch = ActiveNotesTracker.findActiveNote(context, file)
+                    if (activeMatch != null) {
+                        viewModel.setDialogState(HomeDialogState.ActiveSessionPrompt(file, activeMatch))
+                    } else {
+                        NoteOpenManager.openInCanvas(
+                            context = context,
+                            file = file,
+                            repository = viewModel.repository,
+                            localView = localView
+                        )
+                    }
+                }
+            )
+        }
+
+        is HomeDialogState.ActiveSessionPrompt -> {
+            val file = dialogState.file
+            val match = dialogState.match
+            val pendingNote = dialogState.pendingNote
+            ActiveNoteOpenPromptDialog(
+                file = file,
+                activeMatch = match,
+                onDismiss = { viewModel.dismissDialog() },
+                onViewExistingWindow = {
+                    viewModel.dismissDialog()
+                    NoteOpenManager.viewExistingWindow(context, match.windowId)
+                },
+                onOpenInNewWindow = {
+                    viewModel.dismissDialog()
+                    if (pendingNote?.autosaveInfo != null) {
+                        viewModel.setDialogState(HomeDialogState.AutosavePrompt(pendingNote))
+                    } else {
+                        NoteOpenManager.openInCanvas(
+                            context = context,
+                            file = file,
+                            repository = viewModel.repository,
+                            localView = localView
+                        )
+                    }
+                }
+            )
+        }
+
+        is HomeDialogState.PdfConverting -> {
+            PdfConversionProgressDialog(message = dialogState.message)
+        }
+
+        is HomeDialogState.RenameNote -> {
+            val note = dialogState.note
+            var renameInputText by remember(note) { mutableStateOf(note.file.nameWithoutExtension) }
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissDialog() },
+                properties = AppDialogDefaults.Properties,
+                modifier = Modifier.promptWidth(),
+                icon = {
+                    Icon(
+                        Icons.Default.DriveFileRenameOutline,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp)
+                    )
+                },
+                title = {
+                    Text(
+                        androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_rename_title),
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = renameInputText,
+                            onValueChange = { renameInputText = it },
+                            label = { Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_note_name_hint)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        viewModel.dismissDialog()
+                        if (renameInputText.isNotBlank()) {
+                            viewModel.renameNote(note, renameInputText) { result ->
+                                if (result.isSuccess) {
+                                    scope.launch { snackbarHostState.showSnackbar("Renamed to \"${renameInputText.trim()}\"") }
+                                } else {
+                                    scope.launch { snackbarHostState.showSnackbar("Failed to rename: ${result.exceptionOrNull()?.message}") }
                                 }
                             }
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_delete))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { noteToDelete = null }) {
-                    Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel))
-                }
-            }
-        )
-    }
-
-    // Single Document Share/Export Dialog
-    shareExportNote?.let { note ->
-        val defaultName = remember(note.file.path) {
-            note.file.nameWithoutExtension
-        }
-        SingleShareExportDialog(
-            note = note,
-            initialName = defaultName,
-            onDismiss = { shareExportNote = null },
-            onSave = { sanitizedName, format ->
-                shareExportNote = null
-                pendingSingleExport = PendingSingleExport(note, format, sanitizedName)
-                val ext = if (format == dev.ilamparithi.aournalpp.data.DocumentRepository.ShareExportFormat.PDF) "pdf" else "xopp"
-                singleSaveLauncher.launch("$sanitizedName.$ext")
-            },
-            onShare = { sanitizedName, format ->
-                shareExportNote = null
-                isPdfConverting = true
-                convertingMessage = "Preparing to share \"$sanitizedName\"..."
-                scope.launch {
-                    val result = repository.shareUnifiedDocuments(
-                        context = context,
-                        docs = listOf(note),
-                        format = format,
-                        customNameForSingle = sanitizedName,
-                        pdfExportManager = pdfExportManager
-                    )
-                    isPdfConverting = false
-                    if (result.isFailure) {
-                        snackbarHostState.showSnackbar("Failed to share: ${result.exceptionOrNull()?.message}")
+                    }) {
+                        Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_rename))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.dismissDialog() }) {
+                        Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel))
                     }
                 }
+            )
+        }
+
+        is HomeDialogState.DeleteNote -> {
+            val note = dialogState.note
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissDialog() },
+                properties = AppDialogDefaults.Properties,
+                modifier = Modifier.promptWidth(),
+                icon = {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(32.dp)
+                    )
+                },
+                title = {
+                    Text(
+                        androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_delete_note_title),
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.dialog_delete_note_body, note.title))
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.dismissDialog()
+                            viewModel.deleteNote(note) { result ->
+                                if (result.isSuccess) {
+                                    scope.launch {
+                                        val action = snackbarHostState.showSnackbar(
+                                            message = "Moved \"${note.title}\" to Trash",
+                                            actionLabel = "Undo",
+                                            duration = androidx.compose.material3.SnackbarDuration.Short
+                                        )
+                                        if (action == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                                            viewModel.restoreFromTrash(note)
+                                        }
+                                    }
+                                } else {
+                                    scope.launch { snackbarHostState.showSnackbar("Failed to delete: ${result.exceptionOrNull()?.message}") }
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_delete))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.dismissDialog() }) {
+                        Text(androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.action_cancel))
+                    }
+                }
+            )
+        }
+
+        is HomeDialogState.ShareExport -> {
+            val note = dialogState.note
+            val defaultName = remember(note.file.path) {
+                note.file.nameWithoutExtension
             }
-        )
+            SingleShareExportDialog(
+                note = note,
+                initialName = defaultName,
+                onDismiss = { viewModel.dismissDialog() },
+                onSave = { sanitizedName, format ->
+                    viewModel.dismissDialog()
+                    onSavePendingExport(PendingSingleExport(note, format, sanitizedName))
+                    val ext = if (format == dev.ilamparithi.aournalpp.data.DocumentRepository.ShareExportFormat.PDF) "pdf" else "xopp"
+                    singleSaveLauncher.launch("$sanitizedName.$ext")
+                },
+                onShare = { sanitizedName, format ->
+                    viewModel.setDialogState(HomeDialogState.PdfConverting("Preparing to share \"$sanitizedName\"..."))
+                    scope.launch {
+                        val result = viewModel.repository.shareUnifiedDocuments(
+                            context = context,
+                            docs = listOf(note),
+                            format = format,
+                            customNameForSingle = sanitizedName,
+                            pdfExportManager = pdfExportManager
+                        )
+                        viewModel.dismissDialog()
+                        if (result.isFailure) {
+                            snackbarHostState.showSnackbar("Failed to share: ${result.exceptionOrNull()?.message}")
+                        }
+                    }
+                }
+            )
+        }
     }
 }
 
@@ -1269,7 +1180,7 @@ private fun EnlargedContinueHeroSection(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    val cardScale by animateFloatAsState(
+    val cardScale by appAnimateFloatAsState(
         targetValue = if (isPressed) 0.98f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
         label = "heroScale"

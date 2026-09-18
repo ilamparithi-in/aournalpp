@@ -20,6 +20,8 @@ class DocumentCache {
     @Volatile var cachedTotalFoldersCount: Int? = null
     @Volatile var cachedPinnedNotes: List<String>? = null
     @Volatile var cachedPinnedNotesSet: Set<String>? = null
+    @Volatile var cachedPinnedNotesWithinRoot: List<String>? = null
+    @Volatile var cachedPinnedNotesWithinRootSet: Set<String>? = null
     @Volatile var cachedPinnedFolders: List<String>? = null
     @Volatile var cachedOpenedNotesHistory: List<String>? = null
     @Volatile var cachedOpenedNotesTimestamps: Map<String, Long>? = null
@@ -34,6 +36,8 @@ class DocumentCache {
         cachedTotalFoldersCount = null
         cachedPinnedNotes = null
         cachedPinnedNotesSet = null
+        cachedPinnedNotesWithinRoot = null
+        cachedPinnedNotesWithinRootSet = null
         cachedPinnedFolders = null
         cachedOpenedNotesHistory = null
         cachedOpenedNotesTimestamps = null

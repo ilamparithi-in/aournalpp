@@ -72,6 +72,14 @@ class DocumentRepository internal constructor(private val context: Context) {
             get() = cache.cachedPinnedNotesSet
             set(value) { cache.cachedPinnedNotesSet = value }
 
+        private var cachedPinnedNotesWithinRoot: List<String>?
+            get() = cache.cachedPinnedNotesWithinRoot
+            set(value) { cache.cachedPinnedNotesWithinRoot = value }
+
+        private var cachedPinnedNotesWithinRootSet: Set<String>?
+            get() = cache.cachedPinnedNotesWithinRootSet
+            set(value) { cache.cachedPinnedNotesWithinRootSet = value }
+
         private var cachedPinnedFolders: List<String>?
             get() = cache.cachedPinnedFolders
             set(value) { cache.cachedPinnedFolders = value }
@@ -169,12 +177,15 @@ class DocumentRepository internal constructor(private val context: Context) {
     }
 
     fun isWithinRootDirectory(file: File): Boolean {
-        val target = file.absolutePath
+        return isWithinRootDirectory(file.absolutePath)
+    }
+
+    fun isWithinRootDirectory(targetAbsolutePath: String): Boolean {
         val root = rootNotesDirAbsolutePath
-        if (target == root || target.startsWith("$root/") || target.startsWith("$root\\")) return true
+        if (targetAbsolutePath == root || targetAbsolutePath.startsWith("$root/") || targetAbsolutePath.startsWith("$root\\")) return true
         return try {
             val rootCanon = rootNotesDirCanonicalPath
-            val targetCanon = canonicalOf(file)
+            val targetCanon = canonicalOf(File(targetAbsolutePath))
             targetCanon == rootCanon || targetCanon.startsWith("$rootCanon/") || targetCanon.startsWith("$rootCanon\\")
         } catch (e: Exception) {
             false
@@ -183,6 +194,9 @@ class DocumentRepository internal constructor(private val context: Context) {
 
     // Pinned Notes Persistence
     fun getPinnedNotePaths(strictlyWithinRoot: Boolean = true): List<String> {
+        if (strictlyWithinRoot) {
+            cachedPinnedNotesWithinRoot?.let { return it }
+        }
         var list = cachedPinnedNotes
         if (list == null) {
             val raw = prefs.getString("pref_pinned_notes_order_json", null)
@@ -208,18 +222,21 @@ class DocumentRepository internal constructor(private val context: Context) {
         }
 
         return if (strictlyWithinRoot) {
-            list.filter { isWithinRootDirectory(File(it)) }
+            val filtered = list.filter { isWithinRootDirectory(it) }
+            cachedPinnedNotesWithinRoot = filtered
+            cachedPinnedNotesWithinRootSet = filtered.toSet()
+            filtered
         } else {
             list
         }
     }
 
     fun isNotePinned(path: String): Boolean {
-        var set = cachedPinnedNotesSet
+        var set = cachedPinnedNotesWithinRootSet
         if (set == null) {
-            val list = getPinnedNotePaths()
-            set = list.toSet()
-            cachedPinnedNotesSet = set
+            val list = getPinnedNotePaths(strictlyWithinRoot = true)
+            set = cachedPinnedNotesWithinRootSet ?: list.toSet()
+            cachedPinnedNotesWithinRootSet = set
         }
         return set.contains(path)
     }
@@ -477,8 +494,6 @@ class DocumentRepository internal constructor(private val context: Context) {
                     path = file.absolutePath,
                     lastModifiedMs = file.lastModified(),
                     sizeBytes = file.length(),
-                    lastModifiedFormatted = FormatUtils.formatDateTimeMedium(file.lastModified()),
-                    sizeFormatted = FormatUtils.formatFileSize(file.length()),
                     autosaveInfo = autosaveInfo,
                     isHidden = false,
                     isPinned = cache.pinnedPaths.contains(file.absolutePath),
@@ -508,8 +523,6 @@ class DocumentRepository internal constructor(private val context: Context) {
                         path = path,
                         lastModifiedMs = file.lastModified(),
                         sizeBytes = file.length(),
-                        lastModifiedFormatted = FormatUtils.formatDateTimeMedium(file.lastModified()),
-                        sizeFormatted = FormatUtils.formatFileSize(file.length()),
                         autosaveInfo = null,
                         isHidden = true,
                         folder = targetDir.name,
@@ -1552,8 +1565,6 @@ class DocumentRepository internal constructor(private val context: Context) {
                                 path = f.absolutePath,
                                 lastModifiedMs = f.lastModified(),
                                 sizeBytes = f.length(),
-                                lastModifiedFormatted = FormatUtils.formatDateTimeMedium(f.lastModified()),
-                                sizeFormatted = FormatUtils.formatFileSize(f.length()),
                                 autosaveInfo = null,
                                 isHidden = isHiddenOrBackup,
                                 isPinned = cache.pinnedPaths.contains(f.absolutePath),
@@ -1598,8 +1609,6 @@ class DocumentRepository internal constructor(private val context: Context) {
             path = file.absolutePath,
             lastModifiedMs = file.lastModified(),
             sizeBytes = file.length(),
-            lastModifiedFormatted = FormatUtils.formatDateTimeMedium(file.lastModified()),
-            sizeFormatted = FormatUtils.formatFileSize(file.length()),
             autosaveInfo = autosaveInfo,
             isHidden = file.name.startsWith("."),
             isPinned = cache.pinnedPaths.contains(file.absolutePath),

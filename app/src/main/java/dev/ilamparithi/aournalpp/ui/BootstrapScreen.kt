@@ -2,13 +2,13 @@ package dev.ilamparithi.aournalpp.ui
 
 import androidx.activity.compose.BackHandler
 
-import androidx.compose.animation.AnimatedContent
+import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedContent
+import dev.ilamparithi.aournalpp.ui.animation.rememberAppInfiniteTransition
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -123,7 +123,7 @@ fun BootstrapScreen(
     val isError = state is BootstrapState.Error
 
     // Material 3 Expressive Infinite Animations
-    val infiniteTransition = rememberInfiniteTransition(label = "expressiveWaitingTransition")
+    val infiniteTransition = rememberAppInfiniteTransition(label = "expressiveWaitingTransition")
     
     val animatedRotation by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -502,7 +502,7 @@ fun BootstrapScreen(
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(12.dp))
-                            AnimatedContent(
+                            AppAnimatedContent(
                                 targetState = TIPS_LIST[tipIndex],
                                 transitionSpec = {
                                     (slideInVertically(animationSpec = spring(stiffness = 380f)) { it / 2 } + fadeIn())

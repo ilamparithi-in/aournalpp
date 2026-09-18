@@ -291,7 +291,7 @@ class MainActivity : ComponentActivity() {
                         // Provision the runtime tree once the bootstrap is ready, onboarding completed, and reveal animation completes.
                         LaunchedEffect(isOnboardingCompleted) {
                             if (!isOnboardingCompleted) return@LaunchedEffect
-                            withContext(Dispatchers.IO) {
+                            lifecycleScope.launch(Dispatchers.IO) {
                                 delay(850.milliseconds)
                                 LinuxEnvironment(this@MainActivity).ensureDirectoryTree()
                                 val backupPrefs = BackupPreferences(this@MainActivity)
@@ -315,6 +315,7 @@ class MainActivity : ComponentActivity() {
                         LaunchedEffect(isOnboardingCompleted) {
                             if (!isOnboardingCompleted) return@LaunchedEffect
                             val backupPrefs = BackupPreferences(this@MainActivity)
+                            val engine = BackupEngine(this@MainActivity)
                             while (isActive) {
                                 val intervalMins = backupPrefs.periodicSyncIntervalMinutes
                                 if (intervalMins > 0) {
@@ -322,7 +323,6 @@ class MainActivity : ComponentActivity() {
                                     if (dev.ilamparithi.aournalpp.utils.NetworkUtils.isOnline(this@MainActivity)) {
                                         withContext(Dispatchers.IO) {
                                             try {
-                                                val engine = BackupEngine(this@MainActivity)
                                                 val results = engine.performMultiServiceBackup()
                                                 val allConflicts = results.flatMap { it.detectedConflicts }
                                                 if (allConflicts.isNotEmpty()) {
@@ -919,6 +919,9 @@ fun MainResponsiveAppShell(
         listOf(AppTab.WORKSPACE, AppTab.HOME, AppTab.FILES, AppTab.CLOUD, AppTab.SETTINGS, AppTab.ABOUT)
     }
 
+    val unresolvedConflicts by ConflictPersistenceManager.getInstance(context).unresolvedConflicts.collectAsStateWithLifecycle()
+    val hasUnresolvedConflicts = unresolvedConflicts.isNotEmpty()
+
     val tabTransitionSpec: androidx.compose.animation.AnimatedContentTransitionScope<Int>.() -> androidx.compose.animation.ContentTransform = {
         val fromIndex = allTabs.indexOfFirst { it.id == initialState }
         val toIndex = allTabs.indexOfFirst { it.id == targetState }
@@ -953,8 +956,7 @@ fun MainResponsiveAppShell(
                         val isCloud = tab == AppTab.CLOUD
                         val mainActivity = context as? MainActivity
                         val showFilesRedDot = isFiles && mainActivity?.quarantinedEmergencySave?.value != null
-                        val unresolvedConflicts by ConflictPersistenceManager.getInstance(context).unresolvedConflicts.collectAsStateWithLifecycle()
-                        val showCloudRedDot = isCloud && unresolvedConflicts.isNotEmpty()
+                        val showCloudRedDot = isCloud && hasUnresolvedConflicts
                         val windowCount = isCanvasSessionActive?.openWindowCount ?: 1
                         NavigationRailItem(
                             selected = selectedTab == tab.id,
@@ -1062,8 +1064,7 @@ fun MainResponsiveAppShell(
                             val isCloud = tab == AppTab.CLOUD
                             val mainActivity = context as? MainActivity
                             val showFilesRedDot = isFiles && mainActivity?.quarantinedEmergencySave?.value != null
-                            val unresolvedConflicts by ConflictPersistenceManager.getInstance(context).unresolvedConflicts.collectAsStateWithLifecycle()
-                            val showCloudRedDot = isCloud && unresolvedConflicts.isNotEmpty()
+                            val showCloudRedDot = isCloud && hasUnresolvedConflicts
                             val windowCount = isCanvasSessionActive?.openWindowCount ?: 1
                             NavigationBarItem(
                                 selected = selectedTab == tab.id,

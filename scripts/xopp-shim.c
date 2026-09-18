@@ -552,7 +552,15 @@ int execve(const char *pathname, char *const argv[], char *const envp[]) {
         sys_execve = (real_execve_t)dlsym(RTLD_NEXT, "execve");
     }
 
-    if (!pathname) {
+    // Defensive check: pathname is declared __attribute__((nonnull)) in <unistd.h>,
+    // but in an LD_PRELOAD interposition library, external callers might still pass NULL.
+    // Reading through a volatile pointer prevents compilers (Clang/GCC) from warning
+    // (-Wpointer-bool-conversion / -Wnonnull-compare) and optimizing away the check.
+    const char *volatile safe_pathname = pathname;
+    if (!safe_pathname) {
+        if (sys_execve) {
+            return sys_execve(pathname, argv, envp);
+        }
         errno = EFAULT;
         return -1;
     }

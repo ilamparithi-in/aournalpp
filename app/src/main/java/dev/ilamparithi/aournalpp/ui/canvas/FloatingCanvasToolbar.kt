@@ -14,7 +14,7 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
-import androidx.compose.animation.core.animateDpAsState
+import dev.ilamparithi.aournalpp.ui.animation.appAnimateDpAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -393,7 +393,7 @@ fun FloatingToolbarOverlay(
         }
     }
 
-    val animatedTitleWidthDp by animateDpAsState(
+    val animatedTitleWidthDp by appAnimateDpAsState(
         targetValue = targetTitleWidthDp,
         animationSpec = if (isRapidTitleSwitch) {
             tween(durationMillis = 180, easing = FastOutSlowInEasing)
@@ -722,9 +722,9 @@ fun FloatingToolbarOverlay(
                                 val spacing = 2.dp
                                 val padding = 2.dp
 
-                                val indicatorOffset by animateDpAsState(
+                                val indicatorOffset by appAnimateDpAsState(
                                     targetValue = (itemWidth + spacing) * selectedIndex,
-                                    animationSpec = if (reduceMotion) snap() else tween(
+                                    animationSpec = tween(
                                         durationMillis = 240,
                                         easing = m3MorphEasing
                                     ),

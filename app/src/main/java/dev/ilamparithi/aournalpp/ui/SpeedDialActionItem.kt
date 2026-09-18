@@ -1,7 +1,7 @@
 package dev.ilamparithi.aournalpp.ui
 
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
+import dev.ilamparithi.aournalpp.ui.animation.appAnimateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -48,7 +48,7 @@ fun SpeedDialActionItem(
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(
+    val pressScale by appAnimateFloatAsState(
         targetValue = if (isPressed) 0.92f else 1f,
         animationSpec = dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springFloat(
             dampingRatio = Spring.DampingRatioMediumBouncy,

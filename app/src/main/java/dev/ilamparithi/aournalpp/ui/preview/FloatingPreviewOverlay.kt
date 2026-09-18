@@ -9,12 +9,10 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
+import dev.ilamparithi.aournalpp.ui.animation.appAnimateDpAsState
+import dev.ilamparithi.aournalpp.ui.animation.appAnimateFloatAsState
+import dev.ilamparithi.aournalpp.ui.animation.rememberAppInfiniteTransition
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import kotlinx.coroutines.coroutineScope
@@ -409,12 +407,12 @@ private fun FloatingPreviewOverlay(
             else -> 0f
         }
 
-        val animatedPushX by animateFloatAsState(
+        val animatedPushX by appAnimateFloatAsState(
             targetValue = targetPushX,
             animationSpec = dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springFloat(0.80f, 340f),
             label = "pushX"
         )
-        val animatedPushY by animateFloatAsState(
+        val animatedPushY by appAnimateFloatAsState(
             targetValue = targetPushY,
             animationSpec = dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springFloat(0.80f, 340f),
             label = "pushY"
@@ -429,14 +427,14 @@ private fun FloatingPreviewOverlay(
             DragActionTarget.EDIT_CANVAS -> if (isLandscape) 2.8f else 1.2f
             DragActionTarget.NONE -> (dragDelta.x / screenWidthPx * 6f).coerceIn(-1.5f, 1.5f)
         }
-        val animatedTilt by animateFloatAsState(
+        val animatedTilt by appAnimateFloatAsState(
             targetValue = targetTilt,
             animationSpec = dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springFloat(0.80f, 340f),
             label = "tilt"
         )
 
         val targetScale = if (activeAction != DragActionTarget.NONE) 0.98f else 1.0f
-        val animatedScale by animateFloatAsState(
+        val animatedScale by appAnimateFloatAsState(
             targetValue = targetScale,
             animationSpec = dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springFloat(0.80f, 340f),
             label = "scale"
@@ -458,9 +456,9 @@ private fun FloatingPreviewOverlay(
         if (isLandscape) {
             // LANDSCAPE: Left = View as PDF, Right = Edit in Xournal++
             val isViewPdfActive = activeAction == DragActionTarget.VIEW_PDF
-            val viewPdfAlpha by animateFloatAsState(if (isViewPdfActive) 1f else 0f, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springFloat(0.8f, 350f), label = "viewPdfAlpha")
-            val viewPdfScale by animateFloatAsState(if (isViewPdfActive) 1f else 0.86f, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springFloat(0.75f, 320f), label = "viewPdfScale")
-            val viewPdfSlideX by animateDpAsState(if (isViewPdfActive) 0.dp else (-24).dp, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springDp(0.8f, 350f), label = "viewPdfSlideX")
+            val viewPdfAlpha by appAnimateFloatAsState(if (isViewPdfActive) 1f else 0f, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springFloat(0.8f, 350f), label = "viewPdfAlpha")
+            val viewPdfScale by appAnimateFloatAsState(if (isViewPdfActive) 1f else 0.86f, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springFloat(0.75f, 320f), label = "viewPdfScale")
+            val viewPdfSlideX by appAnimateDpAsState(if (isViewPdfActive) 0.dp else (-24).dp, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springDp(0.8f, 350f), label = "viewPdfSlideX")
 
             if (viewPdfAlpha > 0.005f) {
                 ActionRegionCard(
@@ -485,9 +483,9 @@ private fun FloatingPreviewOverlay(
             }
 
             val isEditCanvasActive = activeAction == DragActionTarget.EDIT_CANVAS
-            val editCanvasAlpha by animateFloatAsState(if (isEditCanvasActive) 1f else 0f, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springFloat(0.8f, 350f), label = "editCanvasAlpha")
-            val editCanvasScale by animateFloatAsState(if (isEditCanvasActive) 1f else 0.86f, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springFloat(0.75f, 320f), label = "editCanvasScale")
-            val editCanvasSlideX by animateDpAsState(if (isEditCanvasActive) 0.dp else 24.dp, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springDp(0.8f, 350f), label = "editCanvasSlideX")
+            val editCanvasAlpha by appAnimateFloatAsState(if (isEditCanvasActive) 1f else 0f, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springFloat(0.8f, 350f), label = "editCanvasAlpha")
+            val editCanvasScale by appAnimateFloatAsState(if (isEditCanvasActive) 1f else 0.86f, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springFloat(0.75f, 320f), label = "editCanvasScale")
+            val editCanvasSlideX by appAnimateDpAsState(if (isEditCanvasActive) 0.dp else 24.dp, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springDp(0.8f, 350f), label = "editCanvasSlideX")
 
             if (editCanvasAlpha > 0.005f) {
                 ActionRegionCard(
@@ -513,9 +511,9 @@ private fun FloatingPreviewOverlay(
         } else {
             // PORTRAIT: Top = View as PDF, Bottom = Edit in Xournal++
             val isViewPdfActive = activeAction == DragActionTarget.VIEW_PDF
-            val viewPdfAlpha by animateFloatAsState(if (isViewPdfActive) 1f else 0f, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springFloat(0.8f, 350f), label = "viewPdfAlphaPort")
-            val viewPdfScale by animateFloatAsState(if (isViewPdfActive) 1f else 0.86f, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springFloat(0.75f, 320f), label = "viewPdfScalePort")
-            val viewPdfSlideY by animateDpAsState(if (isViewPdfActive) 0.dp else (-20).dp, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springDp(0.8f, 350f), label = "viewPdfSlideY")
+            val viewPdfAlpha by appAnimateFloatAsState(if (isViewPdfActive) 1f else 0f, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springFloat(0.8f, 350f), label = "viewPdfAlphaPort")
+            val viewPdfScale by appAnimateFloatAsState(if (isViewPdfActive) 1f else 0.86f, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springFloat(0.75f, 320f), label = "viewPdfScalePort")
+            val viewPdfSlideY by appAnimateDpAsState(if (isViewPdfActive) 0.dp else (-20).dp, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springDp(0.8f, 350f), label = "viewPdfSlideY")
 
             if (viewPdfAlpha > 0.005f) {
                 ActionRegionCardHorizontal(
@@ -540,9 +538,9 @@ private fun FloatingPreviewOverlay(
             }
 
             val isEditCanvasActive = activeAction == DragActionTarget.EDIT_CANVAS
-            val editCanvasAlpha by animateFloatAsState(if (isEditCanvasActive) 1f else 0f, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springFloat(0.8f, 350f), label = "editCanvasAlphaPort")
-            val editCanvasScale by animateFloatAsState(if (isEditCanvasActive) 1f else 0.86f, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springFloat(0.75f, 320f), label = "editCanvasScalePort")
-            val editCanvasSlideY by animateDpAsState(if (isEditCanvasActive) 0.dp else 20.dp, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springDp(0.8f, 350f), label = "editCanvasSlideY")
+            val editCanvasAlpha by appAnimateFloatAsState(if (isEditCanvasActive) 1f else 0f, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springFloat(0.8f, 350f), label = "editCanvasAlphaPort")
+            val editCanvasScale by appAnimateFloatAsState(if (isEditCanvasActive) 1f else 0.86f, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springFloat(0.75f, 320f), label = "editCanvasScalePort")
+            val editCanvasSlideY by appAnimateDpAsState(if (isEditCanvasActive) 0.dp else 20.dp, dev.ilamparithi.aournalpp.ui.animation.AppAnimationSpecs.springDp(0.8f, 350f), label = "editCanvasSlideY")
 
             if (editCanvasAlpha > 0.005f) {
                 ActionRegionCardHorizontal(
@@ -937,23 +935,16 @@ private fun PixelParticleField(
         }
     }
 
-    val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
-    val time: Float
-    if (reduceMotion) {
-        time = 0f
-    } else {
-        val infiniteTransition = rememberInfiniteTransition(label = "particleShimmer")
-        val animTime by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = (2f * PI.toFloat()),
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 2800, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "particleTime"
-        )
-        time = animTime
-    }
+    val infiniteTransition = rememberAppInfiniteTransition(label = "particleShimmer")
+    val time by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2f * PI.toFloat()),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "particleTime"
+    )
 
     Canvas(modifier = modifier) {
         val canvasWidth = size.width
@@ -1036,23 +1027,16 @@ private fun PersistentTurbulenceOverlay(
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
     if (alpha <= 0.01f || progress <= 0.001f) return
 
-    val reduceMotion = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
-    val time: Float
-    if (reduceMotion) {
-        time = 0f
-    } else {
-        val infiniteTransition = rememberInfiniteTransition(label = "agslTurbulence")
-        val animTime by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 100f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 60000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "agslTime"
-        )
-        time = animTime
-    }
+    val infiniteTransition = rememberAppInfiniteTransition(label = "agslTurbulence")
+    val time by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 100f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 60000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "agslTime"
+    )
 
     val shader = remember {
         try {

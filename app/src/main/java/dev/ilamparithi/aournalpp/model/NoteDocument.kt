@@ -20,8 +20,6 @@ data class NoteDocument(
     val path: String = file.absolutePath,
     val lastModifiedMs: Long = 0L,
     val sizeBytes: Long = 0L,
-    val lastModifiedFormatted: String = if (lastModifiedMs > 0L) FormatUtils.formatDateTimeMedium(lastModifiedMs) else "",
-    val sizeFormatted: String = if (sizeBytes > 0L) FormatUtils.formatFileSize(sizeBytes) else "",
     val autosaveInfo: AutosaveInfo? = null,
     val isHidden: Boolean = false,
     val isEmergencyRecovery: Boolean = false,
@@ -31,8 +29,54 @@ data class NoteDocument(
     val folderIconEmoji: String? = null,
     val folderIconType: String? = null,
     val tags: List<String> = emptyList(),
-    val lastOpenedMs: Long? = null
+    val lastOpenedMs: Long? = null,
+    private val explicitLastModifiedFormatted: String? = null,
+    private val explicitSizeFormatted: String? = null
 ) {
+    constructor(
+        file: File,
+        title: String = file.nameWithoutExtension,
+        path: String = file.absolutePath,
+        lastModifiedMs: Long = 0L,
+        sizeBytes: Long = 0L,
+        lastModifiedFormatted: String,
+        sizeFormatted: String,
+        autosaveInfo: AutosaveInfo? = null,
+        isHidden: Boolean = false,
+        isEmergencyRecovery: Boolean = false,
+        isPinned: Boolean = false,
+        folder: String = "",
+        folderColorHex: String? = null,
+        folderIconEmoji: String? = null,
+        folderIconType: String? = null,
+        tags: List<String> = emptyList(),
+        lastOpenedMs: Long? = null
+    ) : this(
+        file = file,
+        title = title,
+        path = path,
+        lastModifiedMs = lastModifiedMs,
+        sizeBytes = sizeBytes,
+        autosaveInfo = autosaveInfo,
+        isHidden = isHidden,
+        isEmergencyRecovery = isEmergencyRecovery,
+        isPinned = isPinned,
+        folder = folder,
+        folderColorHex = folderColorHex,
+        folderIconEmoji = folderIconEmoji,
+        folderIconType = folderIconType,
+        tags = tags,
+        lastOpenedMs = lastOpenedMs,
+        explicitLastModifiedFormatted = lastModifiedFormatted,
+        explicitSizeFormatted = sizeFormatted
+    )
+
+    val lastModifiedFormatted: String
+        get() = explicitLastModifiedFormatted ?: if (lastModifiedMs > 0L) FormatUtils.formatDateTimeMedium(lastModifiedMs) else ""
+
+    val sizeFormatted: String
+        get() = explicitSizeFormatted ?: if (sizeBytes > 0L) FormatUtils.formatFileSize(sizeBytes) else ""
+
     val fileType: NoteFileType
         get() = when (file.extension.lowercase()) {
             "xoj" -> NoteFileType.XOJ
@@ -40,26 +84,31 @@ data class NoteDocument(
             else -> NoteFileType.XOPP
         }
 
-    val fuzzyLastModified: String = if (lastModifiedMs > 0L) formatFuzzyTime(lastModifiedMs, lastModifiedFormatted) else ""
-    val fuzzyLastOpened: String? = lastOpenedMs?.let { formatFuzzyTime(it, null) }
+    val fuzzyLastModified: String
+        get() = if (lastModifiedMs > 0L) formatFuzzyTime(lastModifiedMs, lastModifiedFormatted) else ""
 
-    val fullFormattedDateTime: String = if (lastModifiedMs > 0L) {
-        try {
-            FormatUtils.formatDateTimeMedium(lastModifiedMs)
-        } catch (_: Exception) {
-            lastModifiedFormatted
-        }
-    } else {
-        ""
-    }
+    val fuzzyLastOpened: String?
+        get() = lastOpenedMs?.let { formatFuzzyTime(it, null) }
 
-    val fullFormattedOpenedDateTime: String? = lastOpenedMs?.let { opened ->
-        try {
-            FormatUtils.formatDateTimeMedium(opened)
-        } catch (_: Exception) {
-            null
+    val fullFormattedDateTime: String
+        get() = if (lastModifiedMs > 0L) {
+            try {
+                FormatUtils.formatDateTimeMedium(lastModifiedMs)
+            } catch (_: Exception) {
+                lastModifiedFormatted
+            }
+        } else {
+            ""
         }
-    }
+
+    val fullFormattedOpenedDateTime: String?
+        get() = lastOpenedMs?.let { opened ->
+            try {
+                FormatUtils.formatDateTimeMedium(opened)
+            } catch (_: Exception) {
+                null
+            }
+        }
 }
 
 private fun formatFuzzyTime(timestampMs: Long, fallback: String?): String {
