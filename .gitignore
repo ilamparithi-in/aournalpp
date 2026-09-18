@@ -53,6 +53,8 @@ scripts/*-arm64
 scripts/*-x86_64
 scripts/*.so
 scripts/*.o
-scripts/keys/
+scripts/keys/*
+!scripts/keys/termux-archive-keyring.gpg
 *.gpg
+!scripts/keys/termux-archive-keyring.gpg
 

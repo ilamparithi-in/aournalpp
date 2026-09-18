@@ -224,16 +224,49 @@ def provision_xournalpp_translations(staging_usr: str, cache_dir: str):
         print(f"[!] Warning: Failed extracting/compiling translations: {e}")
 
 
+REPO_MIRRORS = {
+    "main": [
+        "https://packages.termux.dev/apt/termux-main/",
+        "https://mirror.mwt.me/termux/main/",
+        "https://grimler.se/termux/termux-main/"
+    ],
+    "x11": [
+        "https://packages.termux.dev/apt/termux-x11/",
+        "https://mirror.mwt.me/termux/x11/",
+        "https://grimler.se/termux/termux-x11/"
+    ]
+}
+
+
 class RepositoryIndex:
-    def __init__(self, repo_bases: Dict[str, str]):
-        self.repo_bases = repo_bases
+    def __init__(self, repo_mirrors: Dict[str, List[str]]):
+        self.repo_mirrors = repo_mirrors
         self.packages: Dict[str, dict] = {}
 
-    def load_index(self, repo_key: str, dist_name: str, inrelease_url: str, termux_arch: str, keyring_path: str = None):
-        print(f"[*] Fetching and verifying repository: {repo_key} ({inrelease_url})...")
-        req = urllib.request.Request(inrelease_url, headers={"User-Agent": "xopp-builder"})
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            inrelease_data = resp.read()
+    def load_index(self, repo_key: str, dist_name: str, termux_arch: str, keyring_path: str = None):
+        mirrors = self.repo_mirrors.get(repo_key, [])
+        if not mirrors:
+            raise ValueError(f"No mirrors configured for repository '{repo_key}'")
+
+        inrelease_data = None
+        used_mirror = None
+        last_error = None
+
+        for mirror in mirrors:
+            inrelease_url = f"{mirror.rstrip('/')}/dists/{dist_name}/InRelease"
+            print(f"[*] Fetching and verifying repository: {repo_key} ({inrelease_url})...")
+            try:
+                req = urllib.request.Request(inrelease_url, headers={"User-Agent": "xopp-builder"})
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    inrelease_data = resp.read()
+                    used_mirror = mirror
+                    break
+            except Exception as e:
+                last_error = e
+                print(f"[!] Warning: Failed fetching InRelease from {inrelease_url} ({e}), trying next mirror...")
+
+        if not inrelease_data or not used_mirror:
+            raise RuntimeError(f"Failed to fetch InRelease for {repo_key} from all mirrors! Last error: {last_error}")
 
         # 1. Cryptographic GPG signature verification using Linux gpgv
         if keyring_path and os.path.exists(keyring_path) and shutil.which("gpgv"):
@@ -252,7 +285,7 @@ class RepositoryIndex:
                 if os.path.exists(temp_inrelease):
                     os.unlink(temp_inrelease)
         else:
-            print(f"[!] Notice: gpgv not found or keyring missing at {keyring_path}. Skipping GPG signature check.")
+            raise RuntimeError(f"GPG verification aborted: gpgv not found or keyring missing at {keyring_path}!")
 
         # 2. Extract SHA256 of Packages.gz from InRelease
         inrelease_text = inrelease_data.decode("utf-8", errors="ignore")
@@ -271,7 +304,7 @@ class RepositoryIndex:
             elif sha256_active and not line.startswith(" "):
                 sha256_active = False
 
-        pkg_gz_url = f"{self.repo_bases[repo_key]}dists/{dist_name}/main/binary-{termux_arch}/Packages.gz"
+        pkg_gz_url = f"{used_mirror.rstrip('/')}/dists/{dist_name}/main/binary-{termux_arch}/Packages.gz"
         print(f"[*] Downloading Packages.gz from {pkg_gz_url}...")
         req = urllib.request.Request(pkg_gz_url, headers={"User-Agent": "xopp-builder"})
         with urllib.request.urlopen(req, timeout=30) as resp:
@@ -290,7 +323,7 @@ class RepositoryIndex:
             if not line.strip():
                 if "Package" in current_pkg:
                     pkg_name = current_pkg["Package"]
-                    current_pkg["_repo_base"] = self.repo_bases[repo_key]
+                    current_pkg["_repo_base"] = used_mirror
                     current_pkg["_repo"] = repo_key
                     self.packages[pkg_name] = current_pkg
                 current_pkg = {}
@@ -370,30 +403,13 @@ def find_ndk_clang(clang_target: str) -> str:
 def ensure_keyring(keyring_path: str) -> str:
     if os.path.exists(keyring_path) and os.path.getsize(keyring_path) > 0:
         return keyring_path
-
-    trusted_sources = [
-        "https://raw.githubusercontent.com/termux/termux-packages/master/packages/termux-keyring/termux-autobuilds.gpg",
-        "https://packages.termux.dev/apt/termux-main/termux-archive-keyring.gpg"
-    ]
-    os.makedirs(os.path.dirname(keyring_path), exist_ok=True)
-    for url in trusted_sources:
-        try:
-            print(f"[*] Fetching trusted Termux archive keyring from: {url}...")
-            req = urllib.request.Request(url, headers={"User-Agent": "Aournalpp-Bootstrap-Build/1.0"})
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                data = resp.read()
-                if len(data) > 0:
-                    with open(keyring_path, "wb") as f:
-                        f.write(data)
-                    print(f"[✔] Trusted keyring fetched and cached at {keyring_path} ({len(data)} bytes).")
-                    return keyring_path
-        except Exception as e:
-            print(f"[!] Warning: Failed fetching keyring from {url}: {e}")
-    return keyring_path
+    raise RuntimeError(
+        f"Trusted Termux archive keyring not found at {keyring_path}!\n"
+        f"Ensure scripts/keys/termux-archive-keyring.gpg is tracked and present."
+    )
 
 
-
-def download_deb_secure(url_primary: str, url_archive: str, expected_sha: str, cached_path: str, pkg_name: str, version: str = "") -> bytes:
+def download_deb_secure(mirror_bases: List[str], rel_filename: str, expected_sha: str, cached_path: str, pkg_name: str, version: str = "") -> bytes:
     if os.path.exists(cached_path):
         with open(cached_path, "rb") as f:
             deb_bytes = f.read()
@@ -409,24 +425,22 @@ def download_deb_secure(url_primary: str, url_archive: str, expected_sha: str, c
             return deb_bytes
 
     deb_bytes = None
-    print(f" -> [Download] {pkg_name} ({version}) from {url_primary}")
-    try:
-        req = urllib.request.Request(url_primary, headers={"User-Agent": "xopp-builder"})
-        with urllib.request.urlopen(req, timeout=45) as resp:
-            deb_bytes = resp.read()
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            print(f"[!] Primary mirror returned 404 for {pkg_name}. Falling back to Termux archive: {url_archive}")
-            req = urllib.request.Request(url_archive, headers={"User-Agent": "xopp-builder"})
-            with urllib.request.urlopen(req, timeout=60) as resp:
+    last_err = None
+    for mirror in mirror_bases:
+        full_url = mirror.rstrip("/") + "/" + rel_filename.lstrip("/")
+        print(f" -> [Download] {pkg_name} ({version}) from {full_url}")
+        try:
+            req = urllib.request.Request(full_url, headers={"User-Agent": "xopp-builder"})
+            with urllib.request.urlopen(req, timeout=45) as resp:
                 deb_bytes = resp.read()
-        else:
-            raise
-    except Exception as e:
-        print(f"[!] Primary mirror download failed ({e}). Falling back to Termux archive: {url_archive}")
-        req = urllib.request.Request(url_archive, headers={"User-Agent": "xopp-builder"})
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            deb_bytes = resp.read()
+                if deb_bytes:
+                    break
+        except Exception as e:
+            last_err = e
+            print(f"[!] Mirror download failed from {full_url} ({e}), trying next mirror...")
+
+    if deb_bytes is None:
+        raise RuntimeError(f"Failed to download package '{pkg_name}' ({version}) from all available mirrors. Last error: {last_err}")
 
     if expected_sha:
         actual_sha = hashlib.sha256(deb_bytes).hexdigest()
@@ -445,7 +459,7 @@ def download_deb_secure(url_primary: str, url_archive: str, expected_sha: str, c
 
 
 def update_lockfile(lockfile_path: str, termux_arch: str, resolved_pkgs: Dict[str, dict]) -> dict:
-    lock_data = {"lock_version": 1, "updated_at": "", "packages": {}}
+    lock_data = {"lock_version": 2, "updated_at": "", "packages": {}}
     if os.path.exists(lockfile_path):
         try:
             with open(lockfile_path, "r", encoding="utf-8") as f:
@@ -453,7 +467,7 @@ def update_lockfile(lockfile_path: str, termux_arch: str, resolved_pkgs: Dict[st
         except Exception as e:
             print(f"[!] Warning reading existing lockfile: {e}. Reinitializing.")
 
-    lock_data["lock_version"] = 1
+    lock_data["lock_version"] = 2
     lock_data["updated_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     if "packages" not in lock_data:
         lock_data["packages"] = {}
@@ -463,27 +477,20 @@ def update_lockfile(lockfile_path: str, termux_arch: str, resolved_pkgs: Dict[st
     for pkg_name in sorted(resolved_pkgs.keys()):
         meta = resolved_pkgs[pkg_name]
         new_pkgs[pkg_name] = {
-            "version": meta.get("Version", ""),
-            "sha256": meta.get("SHA256", ""),
-            "filename": meta.get("Filename", ""),
             "repo": meta.get("_repo", "main")
         }
 
     added = set(new_pkgs.keys()) - set(old_pkgs.keys())
     removed = set(old_pkgs.keys()) - set(new_pkgs.keys())
-    updated = [k for k in (set(new_pkgs.keys()) & set(old_pkgs.keys())) if old_pkgs[k].get("version") != new_pkgs[k].get("version")]
 
     print(f"==================================================")
     print(f"[*] Lockfile Update Summary for [{termux_arch}]")
-    print(f"[*] Total locked packages : {len(new_pkgs)}")
+    print(f"[*] Total manifest packages : {len(new_pkgs)}")
     if added:
         print(f"[+] Added ({len(added)}): {', '.join(sorted(added))}")
     if removed:
         print(f"[-] Removed ({len(removed)}): {', '.join(sorted(removed))}")
-    if updated:
-        for u in sorted(updated):
-            print(f"[~] Updated: {u} ({old_pkgs[u].get('version')} -> {new_pkgs[u].get('version')})")
-    if not added and not removed and not updated:
+    if not added and not removed:
         print(f"[=] All packages up-to-date with upstream repository.")
     print(f"==================================================")
 
@@ -524,14 +531,6 @@ def main():
     scripts_dir = os.path.dirname(os.path.abspath(__file__))
     lockfile_path = args.lockfile or os.path.join(scripts_dir, "bootstrap.lock.json")
 
-    repo_bases = {
-        "main": "https://packages.termux.dev/apt/termux-main/",
-        "x11": "https://packages.termux.dev/apt/termux-x11/"
-    }
-    archive_bases = {
-        "main": "https://archive.termux.dev/apt/termux-main/",
-        "x11": "https://archive.termux.dev/apt/termux-x11/"
-    }
 
     if args.compile_shims:
         if not args.jnilibs_dir:
@@ -580,15 +579,15 @@ def main():
         print(f"==================================================")
 
         repos = {
-            "main": ("stable", "https://packages.termux.dev/apt/termux-main/dists/stable/InRelease"),
-            "x11": ("x11", "https://packages.termux.dev/apt/termux-x11/dists/x11/InRelease")
+            "main": "stable",
+            "x11": "x11"
         }
         keyring_path = os.path.join(scripts_dir, "keys", "termux-archive-keyring.gpg")
         ensure_keyring(keyring_path)
 
-        index = RepositoryIndex(repo_bases)
-        for key, (dist, inrelease_url) in repos.items():
-            index.load_index(key, dist, inrelease_url, termux_arch, keyring_path)
+        index = RepositoryIndex(REPO_MIRRORS)
+        for key, dist in repos.items():
+            index.load_index(key, dist, termux_arch, keyring_path)
 
         print(f"[*] Resolving recursive dependency graph for: {ROOT_PACKAGES}")
         all_packages = index.resolve_dependencies(ROOT_PACKAGES)
@@ -603,9 +602,9 @@ def main():
 
         arch_lock = lock_data["packages"][termux_arch]
     else:
-        # Default: Enforce locked versions and cryptographic checksums
+        # Default: Enforce locked packages and verify against official GPG repository index
         print(f"==================================================")
-        print(f"[*] Building Bootstrap Archive (Hermetic / Locked Mode)")
+        print(f"[*] Building Bootstrap Archive (GPG-Verified Mode)")
         print(f"[*] Target Architecture : {args.arch} -> Termux [{termux_arch}], ABI [{abi_name}]")
         print(f"[*] Output Destination  : {args.output}")
         print(f"[*] Lockfile            : {lockfile_path}")
@@ -632,6 +631,17 @@ def main():
 
         print(f"[✔] Loaded lockfile: {lockfile_path} ({len(arch_lock)} packages for {termux_arch})")
 
+        repos = {
+            "main": "stable",
+            "x11": "x11"
+        }
+        keyring_path = os.path.join(scripts_dir, "keys", "termux-archive-keyring.gpg")
+        ensure_keyring(keyring_path)
+
+        index = RepositoryIndex(REPO_MIRRORS)
+        for key, dist in repos.items():
+            index.load_index(key, dist, termux_arch, keyring_path)
+
     staging_dir = args.staging or os.path.join("build", f"bootstrap_staging_{termux_arch}")
     cache_dir = args.cache_dir or os.path.join("build", "deb_cache", termux_arch)
     os.makedirs(cache_dir, exist_ok=True)
@@ -643,26 +653,31 @@ def main():
     all_packages = sorted(arch_lock.keys())
     package_metrics = {}
     for pkg_name in all_packages:
-        pkg_info = arch_lock[pkg_name]
-        rel_filename = pkg_info["filename"]
+        if pkg_name not in index.packages:
+            raise RuntimeError(f"Package '{pkg_name}' from lockfile was not found in verified repository indexes!")
+
+        pkg_info = index.packages[pkg_name]
+        rel_filename = pkg_info["Filename"]
         deb_filename = os.path.basename(rel_filename)
         cached_deb_path = os.path.join(cache_dir, deb_filename)
-        expected_sha = pkg_info.get("sha256")
-        repo_name = pkg_info.get("repo", "main")
-        primary_url = repo_bases.get(repo_name, repo_bases["main"]) + rel_filename
-        archive_url = archive_bases.get(repo_name, archive_bases["main"]) + rel_filename
+        expected_sha = pkg_info.get("SHA256", "")
+        version = pkg_info.get("Version", "")
+        repo_name = pkg_info.get("_repo", arch_lock[pkg_name].get("repo", "main"))
+        mirrors = REPO_MIRRORS.get(repo_name, REPO_MIRRORS["main"])
 
         deb_bytes = download_deb_secure(
-            url_primary=primary_url,
-            url_archive=archive_url,
+            mirror_bases=mirrors,
+            rel_filename=rel_filename,
             expected_sha=expected_sha,
             cached_path=cached_deb_path,
             pkg_name=pkg_name,
-            version=pkg_info.get("version", "")
+            version=version
         )
 
         installed_size = DebExtractor.extract_data_tar(deb_bytes, staging_dir)
         package_metrics[pkg_name] = {
+            "version": version,
+            "sha256": expected_sha,
             "deb_size": len(deb_bytes),
             "installed_size": installed_size
         }
@@ -857,14 +872,13 @@ def main():
 
     manifest_packages = {}
     for pkg in sorted(all_packages):
-        if pkg in arch_lock:
-            meta = arch_lock[pkg]
-            metrics = package_metrics.get(pkg, {})
-            manifest_packages[pkg] = {
-                "version": meta.get("version", ""),
-                "installed_size": metrics.get("installed_size", 0),
-                "deb_size": metrics.get("deb_size", 0)
-            }
+        metrics = package_metrics.get(pkg, {})
+        manifest_packages[pkg] = {
+            "version": metrics.get("version", ""),
+            "sha256": metrics.get("sha256", ""),
+            "installed_size": metrics.get("installed_size", 0),
+            "deb_size": metrics.get("deb_size", 0)
+        }
 
     manifest_data = {
         "manifest_version": 1,
