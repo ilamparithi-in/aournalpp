@@ -160,13 +160,17 @@ class CanvasActivity : ComponentActivity() {
                 inst.runOnUiThread {
                     try {
                         inst.sendBroadcast(Intent("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED").setPackage(inst.packageName))
-                    } catch (_: Exception) {}
+                    } catch (e: Exception) {
+                        Log.w("CanvasActivity", "Failed to send ACTION_SESSION_CLOSED broadcast", e)
+                    }
                     inst.finish()
                 }
             } else {
                 try {
                     context.sendBroadcast(Intent("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED").setPackage(context.packageName))
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    Log.w("CanvasActivity", "Failed to send ACTION_SESSION_CLOSED broadcast", e)
+                }
             }
         }
 
@@ -363,7 +367,9 @@ class CanvasActivity : ComponentActivity() {
                     sessionManager.stopSession()
                     try {
                         sendBroadcast(Intent("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED").setPackage(packageName))
-                    } catch (_: Exception) {}
+                    } catch (e: Exception) {
+                        Log.w("CanvasActivity", "Failed to send ACTION_SESSION_CLOSED broadcast", e)
+                    }
                     if (!isAppExitInProgress) {
                         navigateBackToHome()
                     }
@@ -434,7 +440,9 @@ class CanvasActivity : ComponentActivity() {
                     sessionManager.stopSession()
                     try {
                         sendBroadcast(Intent("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED").setPackage(packageName))
-                    } catch (_: Exception) {}
+                    } catch (e: Exception) {
+                        Log.w("CanvasActivity", "Failed to send ACTION_SESSION_CLOSED broadcast", e)
+                    }
                     finish()
                 }
             },
@@ -508,7 +516,9 @@ class CanvasActivity : ComponentActivity() {
                                 sessionManager.stopSession()
                                 try {
                                     sendBroadcast(Intent("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED").setPackage(packageName))
-                                } catch (_: Exception) {}
+                                } catch (e: Exception) {
+                                    Log.w("CanvasActivity", "Failed to send ACTION_SESSION_CLOSED broadcast", e)
+                                }
                                 navigateBackToHome()
                                 finish()
                             }
@@ -1035,7 +1045,9 @@ class CanvasActivity : ComponentActivity() {
                                 }
                             }
                         }, Handler(Looper.getMainLooper()))
-                    } catch (_: Exception) {}
+                    } catch (e: Exception) {
+                        Log.w("CanvasActivity", "Failed to capture window preview snapshot", e)
+                    }
                 }
             }
             sessionManager.openNoteInNewWindow(targetPath)

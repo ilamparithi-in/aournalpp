@@ -187,6 +187,7 @@ data class ServiceConfig(
     val isFtpsExplicit: Boolean = true,
     val isCompleteBackupEnabled: Boolean = true,
     val isEnabled: Boolean = true,
+    val hostKeyFingerprint: String = "",
     val lastSyncedAtEpochMs: Long = 0L,
     val lastSyncStatus: String? = null,
     val customMappings: List<CustomFolderMapping> = emptyList()

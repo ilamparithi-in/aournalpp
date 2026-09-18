@@ -17,13 +17,14 @@ object StorageProviderFactory {
 
     fun createProvider(
         config: ServiceConfig,
-        onTokenRefreshed: ((newAccessToken: String, newRefreshToken: String?, expiryEpochMs: Long) -> Unit)? = null
+        onTokenRefreshed: ((newAccessToken: String, newRefreshToken: String?, expiryEpochMs: Long) -> Unit)? = null,
+        onHostKeyTrusted: ((fingerprint: String) -> Unit)? = null
     ): CloudStorageProvider {
         return when (config.providerType) {
             StorageProviderType.NEXTCLOUD,
             StorageProviderType.WEBDAV -> WebDavStorageProvider(config, sharedHttpClient)
             StorageProviderType.GOOGLE_DRIVE -> GoogleDriveProvider(config, sharedHttpClient, onTokenRefreshed)
-            StorageProviderType.SFTP -> SftpStorageProvider(config)
+            StorageProviderType.SFTP -> SftpStorageProvider(config, onHostKeyTrusted)
             StorageProviderType.SMB3 -> SmbStorageProvider(config)
             StorageProviderType.FTP -> FtpStorageProvider(config)
         }

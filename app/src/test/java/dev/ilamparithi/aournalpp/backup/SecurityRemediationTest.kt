@@ -118,4 +118,59 @@ class SecurityRemediationTest {
             assertEquals(false, parser.getFeature("http://xmlpull.org/v1/doc/features.html#process-docdecl"))
         } catch (_: Exception) {}
     }
+
+    @Test
+    fun testWebDavStorageProvider_isLocalOrPrivateHost() {
+        // Standard loopback and emulator
+        assertTrue(dev.ilamparithi.aournalpp.backup.provider.WebDavStorageProvider.isLocalOrPrivateHost("localhost"))
+        assertTrue(dev.ilamparithi.aournalpp.backup.provider.WebDavStorageProvider.isLocalOrPrivateHost("127.0.0.1"))
+        assertTrue(dev.ilamparithi.aournalpp.backup.provider.WebDavStorageProvider.isLocalOrPrivateHost("10.0.2.2"))
+        assertTrue(dev.ilamparithi.aournalpp.backup.provider.WebDavStorageProvider.isLocalOrPrivateHost("::1"))
+
+        // RFC 1918 Private ranges
+        assertTrue(dev.ilamparithi.aournalpp.backup.provider.WebDavStorageProvider.isLocalOrPrivateHost("192.168.1.100"))
+        assertTrue(dev.ilamparithi.aournalpp.backup.provider.WebDavStorageProvider.isLocalOrPrivateHost("10.1.2.3"))
+        assertTrue(dev.ilamparithi.aournalpp.backup.provider.WebDavStorageProvider.isLocalOrPrivateHost("172.16.0.1"))
+        assertTrue(dev.ilamparithi.aournalpp.backup.provider.WebDavStorageProvider.isLocalOrPrivateHost("172.31.255.254"))
+
+        // Local domains
+        assertTrue(dev.ilamparithi.aournalpp.backup.provider.WebDavStorageProvider.isLocalOrPrivateHost("nas.local"))
+        assertTrue(dev.ilamparithi.aournalpp.backup.provider.WebDavStorageProvider.isLocalOrPrivateHost("server.lan"))
+
+        // Public hosts - should return false
+        assertFalse(dev.ilamparithi.aournalpp.backup.provider.WebDavStorageProvider.isLocalOrPrivateHost("cloud.nextcloud.com"))
+        assertFalse(dev.ilamparithi.aournalpp.backup.provider.WebDavStorageProvider.isLocalOrPrivateHost("8.8.8.8"))
+        assertFalse(dev.ilamparithi.aournalpp.backup.provider.WebDavStorageProvider.isLocalOrPrivateHost("172.32.0.1"))
+    }
+
+    @Test
+    fun testNextcloudQrParser_cleartextHttpDetection() {
+        val httpCreds = dev.ilamparithi.aournalpp.backup.security.NextcloudQrParser.parse(
+            "nc://login/server:http://insecure.cloud.example&user:alice&password:secret"
+        )
+        assertNotNull(httpCreds)
+        assertTrue(httpCreds!!.isCleartextHttp)
+        assertEquals("http://insecure.cloud.example", httpCreds.serverUrl)
+
+        val httpsCreds = dev.ilamparithi.aournalpp.backup.security.NextcloudQrParser.parse(
+            "nc://login/server:https://secure.cloud.example&user:bob&password:secret"
+        )
+        assertNotNull(httpsCreds)
+        assertFalse(httpsCreds!!.isCleartextHttp)
+        assertEquals("https://secure.cloud.example", httpsCreds.serverUrl)
+    }
+
+    @Test
+    fun testServiceConfig_hostKeyFingerprintSerialization() {
+        val sftpConfig = dev.ilamparithi.aournalpp.backup.model.ServiceConfig(
+            id = "sftp-test-1",
+            name = "My SFTP Server",
+            providerType = dev.ilamparithi.aournalpp.backup.model.StorageProviderType.SFTP,
+            host = "ssh.example.com",
+            port = 2222,
+            username = "admin",
+            hostKeyFingerprint = "SHA256:abc123trustedfingerprint"
+        )
+        assertEquals("SHA256:abc123trustedfingerprint", sftpConfig.hostKeyFingerprint)
+    }
 }

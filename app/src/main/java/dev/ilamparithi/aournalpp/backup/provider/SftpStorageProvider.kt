@@ -20,7 +20,8 @@ import java.io.File
  * Supports password authentication and SSH private key authentication with optional passphrase.
  */
 class SftpStorageProvider(
-    private val config: ServiceConfig
+    private val config: ServiceConfig,
+    private val onHostKeyTrusted: ((fingerprint: String) -> Unit)? = null
 ) : CloudStorageProvider {
 
     companion object {
@@ -47,7 +48,31 @@ class SftpStorageProvider(
         val user = config.username.trim()
 
         val ssh = SSHClient()
-        ssh.addHostKeyVerifier(PromiscuousVerifier())
+        val expectedFingerprint = config.hostKeyFingerprint.trim()
+
+        ssh.addHostKeyVerifier(object : net.schmizz.sshj.transport.verification.HostKeyVerifier {
+            override fun verify(hostname: String?, port: Int, key: java.security.PublicKey?): Boolean {
+                if (key == null) return false
+                val presentedFingerprint = net.schmizz.sshj.common.SecurityUtils.getFingerprint(key)
+                return if (expectedFingerprint.isBlank()) {
+                    // Trust-On-First-Use (TOFU): Record trusted host key fingerprint
+                    Log.i(TAG, "Trust-On-First-Use: Trusting SFTP host key fingerprint '$presentedFingerprint' for host '$hostname:$port'")
+                    onHostKeyTrusted?.invoke(presentedFingerprint)
+                    true
+                } else {
+                    if (expectedFingerprint.equals(presentedFingerprint, ignoreCase = true)) {
+                        true
+                    } else {
+                        Log.e(TAG, "Security Alert: SSH host key fingerprint mismatch! Expected: '$expectedFingerprint', Presented: '$presentedFingerprint'. Rejecting connection.")
+                        false
+                    }
+                }
+            }
+
+            override fun findExistingAlgorithms(hostname: String?, port: Int): List<String> {
+                return emptyList()
+            }
+        })
         ssh.connectTimeout = 30000
         ssh.timeout = 30000
 

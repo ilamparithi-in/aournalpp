@@ -34,6 +34,7 @@ class CredentialsVault private constructor(context: Context) {
         private const val KEY_ACTIVE_SERVICE_ID = "active_service_id"
         private const val KEY_EXCLUSION_FILTER = "exclusion_filter_json"
         private const val KEY_PENDING_DELETIONS = "pending_deleted_service_ids"
+        private const val KEY_HOST_FINGERPRINT_PREFIX = "ssh_host_fingerprint_"
         private val vaultScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
 
         @Volatile
@@ -168,6 +169,38 @@ class CredentialsVault private constructor(context: Context) {
     }
 
     @Synchronized
+    fun getHostKeyFingerprint(serviceId: String): String? {
+        val service = getService(serviceId)
+        if (service != null && service.hostKeyFingerprint.isNotBlank()) {
+            return service.hostKeyFingerprint
+        }
+        val directKey = "${KEY_HOST_FINGERPRINT_PREFIX}$serviceId"
+        return securePrefs.getString(directKey, null)?.ifBlank { null }
+    }
+
+    @Synchronized
+    fun saveHostKeyFingerprint(serviceId: String, fingerprint: String) {
+        val directKey = "${KEY_HOST_FINGERPRINT_PREFIX}$serviceId"
+        securePrefs.edit().putString(directKey, fingerprint).apply()
+        getService(serviceId)?.let { current ->
+            if (current.hostKeyFingerprint != fingerprint) {
+                saveService(current.copy(hostKeyFingerprint = fingerprint))
+            }
+        }
+    }
+
+    @Synchronized
+    fun removeHostKeyFingerprint(serviceId: String) {
+        val directKey = "${KEY_HOST_FINGERPRINT_PREFIX}$serviceId"
+        securePrefs.edit().remove(directKey).apply()
+        getService(serviceId)?.let { current ->
+            if (current.hostKeyFingerprint.isNotEmpty()) {
+                saveService(current.copy(hostKeyFingerprint = ""))
+            }
+        }
+    }
+
+    @Synchronized
     fun deleteService(serviceId: String) {
         val current = getAllServices().filterNot { it.id == serviceId }
         persistServices(current)
@@ -219,6 +252,7 @@ class CredentialsVault private constructor(context: Context) {
     fun purgeServicePermanently(serviceId: String, context: Context) {
         // 1. Remove from vault
         deleteService(serviceId)
+        removeHostKeyFingerprint(serviceId)
 
         // Also remove from pending deletions set
         val pending = _pendingDeletionsFlow.value.toMutableSet()
@@ -397,6 +431,7 @@ class CredentialsVault private constructor(context: Context) {
         obj.put("isFtpsExplicit", s.isFtpsExplicit)
         obj.put("isCompleteBackupEnabled", s.isCompleteBackupEnabled)
         obj.put("isEnabled", s.isEnabled)
+        obj.put("hostKeyFingerprint", s.hostKeyFingerprint)
         obj.put("lastSyncedAtEpochMs", s.lastSyncedAtEpochMs)
         obj.put("lastSyncStatus", s.lastSyncStatus ?: "")
 
@@ -455,6 +490,7 @@ class CredentialsVault private constructor(context: Context) {
             isFtpsExplicit = obj.optBoolean("isFtpsExplicit", true),
             isCompleteBackupEnabled = obj.optBoolean("isCompleteBackupEnabled", true),
             isEnabled = obj.optBoolean("isEnabled", true),
+            hostKeyFingerprint = obj.optString("hostKeyFingerprint", ""),
             lastSyncedAtEpochMs = obj.optLong("lastSyncedAtEpochMs", 0L),
             lastSyncStatus = obj.optString("lastSyncStatus", "").ifEmpty { null }?.let { status ->
                 if (dev.ilamparithi.aournalpp.utils.NetworkUtils.isTransientNetworkErrorMessage(status)) null else status

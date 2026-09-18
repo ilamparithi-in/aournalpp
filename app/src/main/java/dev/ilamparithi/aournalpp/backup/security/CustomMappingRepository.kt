@@ -1,6 +1,7 @@
 package dev.ilamparithi.aournalpp.backup.security
 
 import android.content.Context
+import android.util.Log
 import dev.ilamparithi.aournalpp.backup.engine.BackupEngine
 import dev.ilamparithi.aournalpp.backup.model.CustomFolderMapping
 import dev.ilamparithi.aournalpp.backup.model.FolderValidationResult
@@ -27,6 +28,10 @@ class CustomMappingRepository(
     private val baseDir: File,
     private val notesHomeDir: File? = null
 ) {
+    companion object {
+        private const val TAG = "CustomMappingRepository"
+    }
+
     constructor(context: Context) : this(
         baseDir = context.filesDir,
         notesHomeDir = try { LinuxEnvironment(context).getNotesDirectory() } catch (_: Exception) { null }
@@ -254,7 +259,9 @@ class CustomMappingRepository(
             val configDir = File(notesHomeDir, ".config").apply { if (!exists()) mkdirs() }
             val target = File(configDir, "sync_mappings.json")
             configFile.copyTo(target, overwrite = true)
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to sync sync_mappings.json to notes home .config", e)
+        }
     }
 
     /**
@@ -266,7 +273,9 @@ class CustomMappingRepository(
             if (source.exists() && source.isFile) {
                 source.copyTo(configFile, overwrite = true)
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to restore sync_mappings.json from notes home .config", e)
+        }
     }
 
     /**
@@ -355,6 +364,8 @@ class CustomMappingRepository(
         try {
             configFile.writeText(root.toString(2), Charsets.UTF_8)
             notesHomeDir?.let { syncToNotesHome(it) }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to persist sync_mappings.json", e)
+        }
     }
 }

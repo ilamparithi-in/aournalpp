@@ -50,6 +50,7 @@ class FtpStorageProvider(
         } else if (config.isFtpsExplicit) {
             FTPSClient(false)
         } else {
+            Log.w(TAG, "Security Warning: Cleartext FTP is configured for host '$host'. Credentials and notes will be sent across the network without encryption.")
             FTPClient()
         }
 

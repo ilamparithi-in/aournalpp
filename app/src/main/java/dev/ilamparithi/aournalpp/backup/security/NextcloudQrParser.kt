@@ -1,6 +1,7 @@
 package dev.ilamparithi.aournalpp.backup.security
 
 import android.net.Uri
+import android.util.Log
 import org.json.JSONObject
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
@@ -9,9 +10,13 @@ data class NextcloudCredentials(
     val serverUrl: String,
     val username: String,
     val appPassword: String
-)
+) {
+    val isCleartextHttp: Boolean
+        get() = serverUrl.startsWith("http://", ignoreCase = true)
+}
 
 object NextcloudQrParser {
+    private const val TAG = "NextcloudQrParser"
 
     /**
      * Parses QR code content from Nextcloud web app password generation or login flow.
@@ -61,7 +66,11 @@ object NextcloudQrParser {
         }
 
         // Format 2: server:<url>;user:<username>;password:<password>
-        if (trimmed.contains("server:", ignoreCase = true) || trimmed.contains("user:", ignoreCase = true) || trimmed.contains("password:", ignoreCase = true)) {
+        if (trimmed.contains("server:", ignoreCase = true) || trimmed.contains(
+                "user:",
+                ignoreCase = true
+            ) || trimmed.contains("password:", ignoreCase = true)
+        ) {
             var server = ""
             var user = ""
             var pass = ""
@@ -92,7 +101,12 @@ object NextcloudQrParser {
         if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
             val server = extractJsonKey(trimmed, "server").ifBlank { extractJsonKey(trimmed, "url") }
             val user = extractJsonKey(trimmed, "user").ifBlank { extractJsonKey(trimmed, "username") }
-            val pass = extractJsonKey(trimmed, "password").ifBlank { extractJsonKey(trimmed, "apppassword").ifBlank { extractJsonKey(trimmed, "token") } }
+            val pass = extractJsonKey(trimmed, "password").ifBlank {
+                extractJsonKey(
+                    trimmed,
+                    "apppassword"
+                ).ifBlank { extractJsonKey(trimmed, "token") }
+            }
 
             if (server.isNotEmpty() || user.isNotEmpty() || pass.isNotEmpty()) {
                 return NextcloudCredentials(
@@ -132,7 +146,14 @@ object NextcloudQrParser {
     private fun normalizeServerUrl(url: String): String {
         var clean = url.trim()
         if (clean.isEmpty()) return ""
-        if (!clean.startsWith("http://", ignoreCase = true) && !clean.startsWith("https://", ignoreCase = true)) {
+        if (clean.startsWith("http://", ignoreCase = true)) {
+            try {
+                Log.w(TAG, "Security Warning: Nextcloud QR code contains cleartext http:// URL: $clean")
+            } catch (e: RuntimeException) {
+                // In local JVM unit tests android.util.Log throws "Method ... not mocked"
+                if (e.message?.contains("not mocked") != true) throw e
+            }
+        } else if (!clean.startsWith("https://", ignoreCase = true)) {
             clean = "https://$clean"
         }
         return clean.trimEnd('/')

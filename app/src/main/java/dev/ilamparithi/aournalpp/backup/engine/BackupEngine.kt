@@ -2194,15 +2194,22 @@ class BackupEngine(
     }
 
     fun getStorageProvider(service: ServiceConfig): CloudStorageProvider {
-        return StorageProviderFactory.createProvider(service) { newAccessToken, newRefreshToken, expiryEpochMs ->
-            Log.i(TAG, "Refreshed tokens for ${service.name} (${service.id}), persisting to CredentialsVault")
-            val updated = service.copy(
-                authToken = newAccessToken,
-                refreshToken = newRefreshToken ?: service.refreshToken,
-                tokenExpiryEpochMs = expiryEpochMs
-            )
-            vault.saveService(updated)
-        }
+        return StorageProviderFactory.createProvider(
+            config = service,
+            onTokenRefreshed = { newAccessToken, newRefreshToken, expiryEpochMs ->
+                Log.i(TAG, "Refreshed tokens for ${service.name} (${service.id}), persisting to CredentialsVault")
+                val updated = service.copy(
+                    authToken = newAccessToken,
+                    refreshToken = newRefreshToken ?: service.refreshToken,
+                    tokenExpiryEpochMs = expiryEpochMs
+                )
+                vault.saveService(updated)
+            },
+            onHostKeyTrusted = { fingerprint ->
+                Log.i(TAG, "Trusting host key fingerprint for ${service.name} (${service.id}): $fingerprint")
+                vault.saveHostKeyFingerprint(service.id, fingerprint)
+            }
+        )
     }
 
     /**

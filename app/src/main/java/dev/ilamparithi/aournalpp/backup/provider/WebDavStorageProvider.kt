@@ -41,6 +41,30 @@ class WebDavStorageProvider(
                 }
             }
         }
+
+        fun isLocalOrPrivateHost(host: String): Boolean {
+            val h = host.lowercase().trim()
+            if (h == "localhost" || h == "127.0.0.1" || h == "10.0.2.2" || h == "::1") return true
+            if (h.endsWith(".local") || h.endsWith(".lan") || h.endsWith(".home.arpa")) return true
+
+            // IPv4 RFC 1918 and loopback/link-local checks
+            val parts = h.split('.')
+            if (parts.size == 4 && parts.all { it.toIntOrNull() in 0..255 }) {
+                val b0 = parts[0].toInt()
+                val b1 = parts[1].toInt()
+                // 10.0.0.0/8
+                if (b0 == 10) return true
+                // 172.16.0.0/12
+                if (b0 == 172 && b1 in 16..31) return true
+                // 192.168.0.0/16
+                if (b0 == 192 && b1 == 168) return true
+                // 169.254.0.0/16 (link-local)
+                if (b0 == 169 && b1 == 254) return true
+                // 127.0.0.0/8
+                if (b0 == 127) return true
+            }
+            return false
+        }
     }
 
     override val providerType: StorageProviderType = config.providerType
@@ -58,7 +82,7 @@ class WebDavStorageProvider(
         }
         if (url.startsWith("http://")) {
             val hostLower = config.host.lowercase().trim()
-            val isLocal = hostLower == "localhost" || hostLower == "127.0.0.1" || hostLower == "10.0.2.2"
+            val isLocal = isLocalOrPrivateHost(hostLower)
             if (!isLocal) {
                 Log.w(TAG, "Security: Cleartext HTTP is configured for remote host '$hostLower'. Basic authentication credentials and notes will be sent without transit encryption.")
             }

@@ -218,6 +218,7 @@ android {
             jniLibs.directories += listOf("src/x86_64/jniLibs", "build/generated/bootstrap-assets/x86_64/jniLibs")
         }
     }
+
 }
 
 val usePrebuiltX11 = (providers.gradleProperty("usePrebuiltX11").orNull?.toBoolean()

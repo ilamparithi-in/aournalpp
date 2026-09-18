@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.util.Log
 import android.view.View
 import android.widget.Toast
 import androidx.core.app.ActivityOptionsCompat
@@ -39,6 +40,7 @@ enum class NoteOpenAction(val value: String, val displayName: String) {
  * default open actions, and PDF/Canvas dispatching.
  */
 object NoteOpenManager {
+    private const val TAG = "NoteOpenManager"
 
     const val PREF_KEY_DEFAULT_OPEN_ACTION_XOPP = "pref_default_open_action_xopp"
     const val PREF_KEY_DEFAULT_OPEN_ACTION_PDF = "pref_default_open_action_pdf"
@@ -134,7 +136,9 @@ object NoteOpenManager {
             repository?.recordNoteOpened(targetFile.absolutePath) ?: run {
                 DocumentRepository.getInstance(context).recordNoteOpened(targetFile.absolutePath)
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to record note opened for ${targetFile.absolutePath}", e)
+        }
 
         val intent = Intent(context, CanvasActivity::class.java).apply {
             putExtra(CanvasActivity.EXTRA_NOTE_PATH, targetFile.absolutePath)
@@ -179,7 +183,9 @@ object NoteOpenManager {
                     DocumentRepository.getInstance(context).recordNoteOpened(file.absolutePath)
                 }
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to record note opened for ${file.absolutePath}", e)
+        }
 
         scope.launch {
             try {

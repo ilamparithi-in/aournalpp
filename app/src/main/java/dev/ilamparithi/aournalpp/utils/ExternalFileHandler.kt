@@ -135,7 +135,9 @@ object ExternalFileHandler {
                         }
                     }
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                Log.d(TAG, "MediaProvider data column check skipped or failed for $uri", e)
+            }
 
             // 5. Decoded URI path matching (third-party file manager providers containing filesystem path)
             try {
@@ -148,7 +150,9 @@ object ExternalFileHandler {
                         return file
                     }
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                Log.d(TAG, "Decoded URI matching skipped or failed for $uri", e)
+            }
 
             // 6. Content matching fallback for opaque file manager URIs (Google Files, Solid Explorer, etc.)
             try {
