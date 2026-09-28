@@ -75,6 +75,28 @@ jobs:
       - name: Set up Gradle Build Cache
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Grant Execute Permissions for Gradle Wrapper
+        run: chmod +x gradlew
+
+      - name: Checkout Submodules (Fallback)
+        if: steps.x11-cache.outputs.cache-hit != 'true'
+        run: git submodule update --init --recursive
+
+      - name: Build Prebuilt x11-core AAR (Fallback)
+        if: steps.x11-cache.outputs.cache-hit != 'true'
+        run: |
+          ./gradlew :x11-core:assembleRelease -PusePrebuiltX11=false --stacktrace
+          mkdir -p libs
+          cp x11-core/build/outputs/aar/x11-core-release.aar libs/x11-core-release.aar
+
+      - name: Cache Prebuilt x11-core AAR (Fallback)
+        if: steps.x11-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        with:
+          path: libs/x11-core-release.aar
+          key: ${{ steps.x11-cache-key.outputs.key }}
+
       - name: Decode Production Release Keystore
         if: env.RELEASE_KEYSTORE_BASE64 != ''
         env:
