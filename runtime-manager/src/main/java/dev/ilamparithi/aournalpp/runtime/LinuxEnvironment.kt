@@ -960,7 +960,7 @@ class LinuxEnvironment(private val context: Context) {
             "PREFIX" to usrDir.absolutePath,
             "HOME" to homeDir.absolutePath,
             "PATH" to "${nativeLibDir.absolutePath}:${binDir.absolutePath}:/system/bin:/system/xbin",
-            "LD_LIBRARY_PATH" to "${nativeLibDir.absolutePath}:${libDir.absolutePath}:$systemLibDir",
+            "LD_LIBRARY_PATH" to "${libDir.absolutePath}:${nativeLibDir.absolutePath}:$systemLibDir",
             "XOPP_FAKE_EXE" to "${binDir.absolutePath}/xournalpp",
             "XDG_CONFIG_HOME" to configDir.absolutePath,
             "XDG_DATA_DIRS" to "${shareDir.absolutePath}:/usr/share:${homeDir.absolutePath}/share",

@@ -53,8 +53,6 @@ jobs:
         with:
           path: app/build/generated/bootstrap-assets/arm64
           key: bootstrap-assets-arm64-${{ hashFiles('scripts/build_bootstrap.py', 'scripts/bootstrap.lock.json', 'scripts/*.c') }}
-          restore-keys: |
-            bootstrap-assets-arm64-
 
       - name: Restore Bootstrap Assets (X86_64)
         id: bootstrap-cache-x86_64
@@ -62,8 +60,6 @@ jobs:
         with:
           path: app/build/generated/bootstrap-assets/x86_64
           key: bootstrap-assets-x86_64-${{ hashFiles('scripts/build_bootstrap.py', 'scripts/bootstrap.lock.json', 'scripts/*.c') }}
-          restore-keys: |
-            bootstrap-assets-x86_64-
 
       - name: Set up Android NDK (r27d)
         if: steps.x11-cache.outputs.cache-hit != 'true' || steps.bootstrap-cache-arm64.outputs.cache-hit != 'true' || steps.bootstrap-cache-x86_64.outputs.cache-hit != 'true'
