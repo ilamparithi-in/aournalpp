@@ -1,6 +1,6 @@
 # Building Aournal++
 
-This guide outlines the prerequisites, cloning instructions, and steps required to build **Aournal++** from source across multiple architectures (**ARM64** and **x86_64**).
+This guide outlines the prerequisites, cloning instructions, and steps required to build **Aournal++** from source across multiple architectures (**ARM64** and **x86_64**), run automated tests, and package rootfs bundles.
 
 ---
 
@@ -173,7 +173,40 @@ Outputs:
 
 ---
 
-## 5. Standalone Bootstrap Packaging
+## 5. Running Tests & Static Analysis
+
+Aournal++ enforces automated quality gates in CI and local workflows (see [ADR 0018](docs/ADRs/0018-testing-strategy-testability-architecture-and-code-guidelines.md)).
+
+### Host JVM Unit Tests
+Host unit tests run without an emulator or physical device (< 4 seconds total execution) and cover ViewModels, business logic, configuration generators, and `:runtime-manager` orchestration:
+
+```bash
+# Run all host unit tests across both :app and :runtime-manager:
+./gradlew testArm64DebugUnitTest :runtime-manager:testDebugUnitTest
+
+# Run a specific unit test class:
+./gradlew :app:testArm64DebugUnitTest --tests "dev.ilamparithi.aournalpp.ui.viewmodel.DocumentHubViewModelTest"
+./gradlew :runtime-manager:testDebugUnitTest --tests "dev.ilamparithi.aournalpp.runtime.DesktopConfigGeneratorTest"
+```
+
+### Static Analysis & Android Lint
+Verify code quality, resource cleanliness, and Android platform rules:
+
+```bash
+./gradlew lintArm64Debug
+```
+Reports are generated at `app/build/reports/lint-results-arm64Debug.html`.
+
+### Instrumented Device Tests
+Instrumented tests run on a connected Android device or emulator to verify Room SQLite database operations, Compose UI semantics, and hardware stylus/event routing:
+
+```bash
+./gradlew :app:connectedArm64DebugAndroidTest
+```
+
+---
+
+## 6. Standalone Bootstrap Packaging
 
 Aournal++ bundles an embedded userland bootstrap archive (`bootstrap.tar.xz`) containing Xournal++, GTK, and runtime dependencies.
 
@@ -207,7 +240,7 @@ python3 scripts/build_bootstrap.py --update-lock
 
 ---
 
-## 6. Syncing with Upstream `termux-x11`
+## 7. Syncing with Upstream `termux-x11`
 
 If new features or fixes arrive in upstream `termux/termux-x11`:
 
@@ -230,7 +263,7 @@ If new features or fixes arrive in upstream `termux/termux-x11`:
 
 ---
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 * **`bison: command not found` or `patch: command not found`**:
   Ensure `bison` and `patch` are installed on your host system and accessible in your `$PATH`.

@@ -1,4 +1,4 @@
-From a003213b657fe017ac7cbd33ceb855e6aee2ecd0 Mon Sep 17 00:00:00 2001
+From 3fe175367fde09afe863e553f3dfa24330595391 Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Sun, 23 Aug 2026 08:07:47 +0530
 Subject: [PATCH 2/9] feat(input): add stylus event handling, Lenovo pen

@@ -1,4 +1,4 @@
-From e936bde2f04b2c6cc7a66f1e75b24ef5d03fbf7a Mon Sep 17 00:00:00 2001
+From 96f9f2e6c907e0232e00284813730885af7d80c8 Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Sun, 23 Aug 2026 08:07:38 +0530
 Subject: [PATCH 1/9] fix(native): address event threading, socket error check

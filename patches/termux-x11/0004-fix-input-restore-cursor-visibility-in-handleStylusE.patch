@@ -1,4 +1,4 @@
-From 2cd5fac3932e3c939ebc0373fbb98d71783ffd72 Mon Sep 17 00:00:00 2001
+From 4bd7757d9c209e307261729695352d913461bb3c Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Tue, 25 Aug 2026 01:23:42 +0530
 Subject: [PATCH 4/9] fix(input): restore cursor visibility in

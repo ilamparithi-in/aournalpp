@@ -1,4 +1,4 @@
-From b0ca599f5c2d74eea348993457f2f8b6b73e8c63 Mon Sep 17 00:00:00 2001
+From 52398df15000d6cea371caa6a262ffce1ba667d3 Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Sun, 30 Aug 2026 02:20:17 +0530
 Subject: [PATCH 9/9] feat(clipboard): overhaul native clipboard with in-memory
@@ -652,7 +652,7 @@ index 1b9815d..69f1249 100644
      if (conn_fd == -1)
          return false;
 diff --git a/lorie/src/main/cpp/lorie/lorie.h b/lorie/src/main/cpp/lorie/lorie.h
-index 34890b8..087201c 100644
+index 016a273..f06aab6 100644
 --- a/lorie/src/main/cpp/lorie/lorie.h
 +++ b/lorie/src/main/cpp/lorie/lorie.h
 @@ -24,17 +24,17 @@ extern "C" {

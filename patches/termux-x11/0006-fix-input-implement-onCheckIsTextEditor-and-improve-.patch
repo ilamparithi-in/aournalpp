@@ -1,4 +1,4 @@
-From bdffa5e0b7ed646148dc2f3a1b91eb5db559ac64 Mon Sep 17 00:00:00 2001
+From c5dddb9c4988023a2550983976e59aab8654474b Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Tue, 25 Aug 2026 18:39:47 +0530
 Subject: [PATCH 6/9] fix(input): implement onCheckIsTextEditor and improve

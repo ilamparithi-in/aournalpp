@@ -1,4 +1,4 @@
-From 7cf1658a03c2533ce915d7eb88b2a90ee89c60bd Mon Sep 17 00:00:00 2001
+From c4c23a8b9f4de31d8515fa55a2d1cd90d48beeec Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Tue, 25 Aug 2026 15:42:17 +0530
 Subject: [PATCH 5/9] feat(clipboard): implement multi-MIME shared clipboard
@@ -661,7 +661,7 @@ index 3972b58..0e072ba 100644
  }
  
 diff --git a/lorie/src/main/cpp/lorie/lorie.h b/lorie/src/main/cpp/lorie/lorie.h
-index 17052a4..34890b8 100644
+index ca2638e..016a273 100644
 --- a/lorie/src/main/cpp/lorie/lorie.h
 +++ b/lorie/src/main/cpp/lorie/lorie.h
 @@ -24,13 +24,17 @@ extern "C" {

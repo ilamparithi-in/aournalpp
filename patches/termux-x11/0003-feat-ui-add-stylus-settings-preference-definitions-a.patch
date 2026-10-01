@@ -1,4 +1,4 @@
-From a7ba9ed30138fa174051273786400b6dc54cc90b Mon Sep 17 00:00:00 2001
+From f78d2490f4947bba9e685d42747a63c6992115f9 Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Sun, 23 Aug 2026 08:07:54 +0530
 Subject: [PATCH 3/9] feat(ui): add stylus settings, preference definitions,
@@ -436,10 +436,10 @@ index 54dbbc7..d85d209 100644
          int imeHeight = 0;
          if (activity.hasWindowFocus() && !SamsungDexUtils.checkDeXEnabled(activity) && !activity.isInPictureInPictureMode()) {
 diff --git a/lorie/src/main/java/com/termux/x11/utils/TermuxX11ExtraKeys.java b/lorie/src/main/java/com/termux/x11/utils/TermuxX11ExtraKeys.java
-index 89fcf8e..1fb7d30 100644
+index 9547407..12eae67 100644
 --- a/lorie/src/main/java/com/termux/x11/utils/TermuxX11ExtraKeys.java
 +++ b/lorie/src/main/java/com/termux/x11/utils/TermuxX11ExtraKeys.java
-@@ -21,6 +21,7 @@ import androidx.annotation.NonNull;
+@@ -20,6 +20,7 @@ import androidx.annotation.NonNull;
  import com.termux.x11.extrakeys.*;
  import com.termux.x11.LoriePreferences;
  import com.termux.x11.MainActivity;
@@ -447,7 +447,7 @@ index 89fcf8e..1fb7d30 100644
  
  import org.json.JSONException;
  
-@@ -208,19 +209,21 @@ public class TermuxX11ExtraKeys implements ExtraKeysView.IExtraKeysView {
+@@ -202,19 +203,21 @@ public class TermuxX11ExtraKeys implements ExtraKeysView.IExtraKeysView {
          mExtraKeysInfo = null;
  
          try {
