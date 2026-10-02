@@ -58,3 +58,4 @@ scripts/keys/*
 *.gpg
 !scripts/keys/termux-archive-keyring.gpg
 
+docs/m3e

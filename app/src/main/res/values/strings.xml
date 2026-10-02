@@ -1124,6 +1124,116 @@
     <string name="pref_reset_defaults">Reset All Settings</string>
 
     <!-- ======================================================================= -->
+    <!-- Files & Storage Settings (Section 1)                                    -->
+    <!-- ======================================================================= -->
+    <string name="pref_cat_files_storage">Files &amp; Storage</string>
+    <string name="pref_cat_files_storage_desc">Notes folder, templates, open actions &amp; recovery</string>
+
+    <!-- Storage Location & Presets -->
+    <string name="pref_storage_location_title">Storage Location</string>
+    <string name="pref_notes_storage_folder">Notes Storage Folder</string>
+    <string name="pref_folder_presets_title">Documents Folder Presets</string>
+    <string name="pref_preset_notes">Notes</string>
+    <string name="pref_preset_xournal">Xournal++</string>
+    <string name="pref_preset_notebooks">Notebooks</string>
+    <string name="action_browse_system">Browse System…</string>
+    <string name="action_custom_path">Custom Path…</string>
+
+    <!-- Dialog: Custom Notes Folder -->
+    <string name="dialog_custom_folder_title">Custom Notes Folder</string>
+    <string name="dialog_custom_folder_desc">Enter an absolute path on device storage where notes will be stored:</string>
+    <string name="pref_directory_path">Directory Path</string>
+
+    <!-- Dialog: Switch Notes Directory -->
+    <string name="dialog_switch_dir_title">Switch Notes Directory?</string>
+    <string name="dialog_switch_dir_question">Do you want to switch your active notes storage location to:</string>
+    <string name="dialog_switch_dir_warning">Xournal++ will save and organize new notes in this folder. Any notes in your previous folder will remain untouched.</string>
+    <string name="action_switch_directory">Switch Directory</string>
+
+    <!-- Default Note Open Action -->
+    <string name="pref_default_note_action_title">Default Note Action</string>
+    <string name="pref_notebook_files_title">Notebook Files (.xopp, .xoj)</string>
+    <string name="pref_action_ask">Ask</string>
+    <string name="pref_action_edit_canvas">Edit (Canvas)</string>
+    <string name="pref_action_view_pdf">View (PDF)</string>
+    <string name="pref_notebook_action_edit_desc">Notes open directly in Xournal++ Canvas editor.</string>
+    <string name="pref_notebook_action_view_desc">Notes convert and open in external PDF viewer.</string>
+    <string name="pref_notebook_action_ask_desc">A prompt asks whether to View or Edit every time.</string>
+
+    <string name="pref_pdf_documents_title">PDF Documents (.pdf)</string>
+    <string name="pref_action_annotate">Annotate</string>
+    <string name="pref_action_view_system">View (System)</string>
+    <string name="pref_pdf_action_annotate_desc">PDF files open for annotation in Xournal++ Canvas.</string>
+    <string name="pref_pdf_action_view_desc">PDF files open in your default system PDF reader.</string>
+    <string name="pref_pdf_action_ask_desc">A prompt asks whether to Annotate or View every time.</string>
+
+    <!-- File Name Templates -->
+    <string name="pref_filename_templates_title">File Name Templates</string>
+    <string name="pref_filename_templates_desc">Automated file naming patterns for new notes, exports, and shares.</string>
+    <string name="template_target_new_note">New Note</string>
+    <string name="template_target_save_as">Save As</string>
+    <string name="template_target_export_pdf">Export PDF</string>
+    <string name="template_target_share_pdf">Share PDF</string>
+    <string name="template_target_share_xopp">Share XOPP</string>
+    <string name="template_live_preview_badge">LIVE PREVIEW</string>
+    <string name="template_live_preview_sample_context">Evaluated with sample note \'Mechanics_Lecture\' in \'Physics_101\'</string>
+    <string name="template_invalid_syntax">Invalid template syntax</string>
+    <string name="template_pattern_field_label">%1$s Pattern</string>
+    <string name="action_reset_pattern_desc">Reset pattern to default</string>
+    <string name="msg_pattern_reset_default">Reset pattern to default</string>
+    <string name="template_insert_tokens_title">Insert Placeholder Tokens:</string>
+    <string name="template_token_group_datetime">Date &amp; Time</string>
+    <string name="template_token_group_context">Note Context</string>
+    <string name="template_token_group_metadata">Metadata</string>
+
+    <!-- File Management & Recovery -->
+    <string name="pref_file_management_recovery_title">File Management &amp; Recovery</string>
+    <string name="pref_show_hidden_files_title">Show Hidden &amp; Backup Files</string>
+    <string name="pref_show_hidden_files_desc">Display hidden dotfiles (.note.xopp) and emergency backup copies in Document Hub.</string>
+    <string name="pref_intelligent_recovery_title">Intelligent Session Recovery</string>
+    <string name="pref_intelligent_recovery_desc">Detect interrupted sessions or crashed notes upon launch and offer restoration.</string>
+
+    <!-- ======================================================================= -->
+    <!-- Appearance & Canvas Settings                                            -->
+    <!-- ======================================================================= -->
+    <string name="pref_cat_appearance_canvas">Appearance &amp; Canvas</string>
+    <string name="pref_cat_appearance_canvas_desc">App theme, GTK canvas theme, wallpaper &amp; animations</string>
+    <string name="pref_app_theme_title">Android App Theme</string>
+    <string name="pref_app_theme_desc">Material You dynamic theming and color styling</string>
+    <string name="pref_theme_system">System</string>
+    <string name="pref_theme_light">Light</string>
+    <string name="pref_theme_dark">Dark</string>
+    <string name="pref_theme_system_default">System Default</string>
+
+    <string name="pref_gtk_theme_title">Xournal++ GTK Canvas Theme</string>
+    <string name="pref_gtk_theme_desc">Desktop interface theme for native toolbars and menus</string>
+    <string name="pref_gtk_theme_adwaita_light">Adwaita Light</string>
+    <string name="pref_gtk_theme_adwaita_dark">Adwaita Dark</string>
+    <string name="pref_gtk_theme_follow_system">Follow System</string>
+    <string name="msg_gtk_theme_updated">Xournal++ GTK canvas theme updated to %1$s</string>
+
+    <string name="pref_wallpaper_title">Canvas Backdrop &amp; Wallpaper</string>
+    <string name="pref_wallpaper_desc">Backdrop painted behind X11 note windows</string>
+    <string name="pref_wallpaper_custom">Custom</string>
+    <string name="pref_wallpaper_theme">Theme</string>
+    <string name="pref_wallpaper_system_label">System Wallpaper</string>
+    <string name="pref_wallpaper_custom_label">Custom Image</string>
+    <string name="pref_wallpaper_theme_label">Theme Gradient</string>
+    <string name="pref_wallpaper_select_image">Select Image…</string>
+    <string name="pref_wallpaper_change_image">Change Image…</string>
+    <string name="pref_wallpaper_reset">Reset</string>
+    <string name="msg_custom_wallpaper_applied">Custom wallpaper applied for Canvas</string>
+    <string name="msg_wallpaper_set">Canvas backdrop set to %1$s</string>
+    <string name="msg_wallpaper_reset">Reset to System Wallpaper</string>
+    <string name="msg_wallpaper_error">Failed to set wallpaper: %1$s</string>
+
+    <string name="pref_motion_title">Motion &amp; Animations</string>
+    <string name="pref_reduce_animations_title">Reduce Animations</string>
+    <string name="pref_reduce_animations_desc">Disable expressive motion effects and sunburst spinners for improved performance on lower-end devices.</string>
+    <string name="msg_reduce_animations_enabled">Reduce Animations enabled</string>
+    <string name="msg_reduce_animations_disabled">Reduce Animations disabled</string>
+
+    <!-- ======================================================================= -->
     <!-- Language & Localization                                                 -->
     <!-- ======================================================================= -->
     <string name="pref_cat_language">Language &amp; Localization</string>
