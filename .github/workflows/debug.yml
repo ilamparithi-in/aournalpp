@@ -134,6 +134,7 @@ jobs:
         with:
           path: release-dist
           merge-multiple: true
+          skip-decompress: true
 
       - name: Stage Release Artifacts
         run: |
