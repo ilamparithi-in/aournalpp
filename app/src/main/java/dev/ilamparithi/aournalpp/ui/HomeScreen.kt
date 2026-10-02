@@ -409,6 +409,7 @@ fun HomeScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            containerColor = MaterialTheme.colorScheme.surface,
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 HomeTopAppBar(

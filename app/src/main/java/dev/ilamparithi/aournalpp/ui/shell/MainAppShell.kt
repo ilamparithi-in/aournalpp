@@ -275,6 +275,7 @@ fun MainResponsiveAppShell(
             // Mobile Portrait: Bottom Navigation Bar
             Scaffold(
                 contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                containerColor = MaterialTheme.colorScheme.surface,
                 bottomBar = {
                     NavigationBar(
                         containerColor = MaterialTheme.colorScheme.surface
