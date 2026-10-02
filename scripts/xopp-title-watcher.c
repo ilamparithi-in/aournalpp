@@ -1,21 +1,21 @@
+#include <X11/Xatom.h>
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
+#include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include <ctype.h>
 #include <unistd.h>
-#include <poll.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <X11/Xlib.h>
-#include <X11/Xatom.h>
-#include <X11/Xutil.h>
 
 static int ignore_x_errors(Display *dpy, XErrorEvent *err) {
-    (void)dpy;
-    (void)err;
-    // Suppress asynchronous BadWindow / BadDrawable errors when dialogs close
-    return 0;
+  (void)dpy;
+  (void)err;
+  // Suppress asynchronous BadWindow / BadDrawable errors when dialogs close
+  return 0;
 }
 
 static char last_emitted_title[1024] = "";
@@ -48,828 +48,947 @@ static Atom motif_wm_hints = None;
 static Atom ob_wm_state_undecorated = None;
 
 static void init_atoms(Display *dpy) {
-    net_wm_name = XInternAtom(dpy, "_NET_WM_NAME", False);
-    net_wm_visible_name = XInternAtom(dpy, "_NET_WM_VISIBLE_NAME", False);
-    net_wm_window_type = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE", False);
-    net_wm_window_type_normal = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_NORMAL", False);
-    net_wm_window_type_dialog = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DIALOG", False);
-    net_wm_window_type_utility = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_UTILITY", False);
-    net_wm_window_type_toolbar = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_TOOLBAR", False);
-    net_wm_window_type_menu = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_MENU", False);
-    net_wm_window_type_dropdown_menu = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DROPDOWN_MENU", False);
-    net_wm_window_type_popup_menu = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_POPUP_MENU", False);
-    net_wm_window_type_tooltip = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_TOOLTIP", False);
-    net_wm_window_type_notification = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_NOTIFICATION", False);
-    net_wm_window_type_combo = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_COMBO", False);
-    net_wm_window_type_dnd = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DND", False);
-    net_wm_window_type_splash = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_SPLASH", False);
-    net_wm_window_type_dock = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DOCK", False);
-    net_wm_window_type_desktop = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DESKTOP", False);
-    net_active = XInternAtom(dpy, "_NET_ACTIVE_WINDOW", False);
-    net_client_list = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
-    net_wm_state = XInternAtom(dpy, "_NET_WM_STATE", False);
-    net_wm_state_modal = XInternAtom(dpy, "_NET_WM_STATE_MODAL", False);
-    net_wm_state_maximized_vert = XInternAtom(dpy, "_NET_WM_STATE_MAXIMIZED_VERT", False);
-    net_wm_state_maximized_horz = XInternAtom(dpy, "_NET_WM_STATE_MAXIMIZED_HORZ", False);
-    net_moveresize_window = XInternAtom(dpy, "_NET_MOVERESIZE_WINDOW", False);
-    motif_wm_hints = XInternAtom(dpy, "_MOTIF_WM_HINTS", False);
-    ob_wm_state_undecorated = XInternAtom(dpy, "_OB_WM_STATE_UNDECORATED", False);
+  net_wm_name = XInternAtom(dpy, "_NET_WM_NAME", False);
+  net_wm_visible_name = XInternAtom(dpy, "_NET_WM_VISIBLE_NAME", False);
+  net_wm_window_type = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE", False);
+  net_wm_window_type_normal =
+      XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_NORMAL", False);
+  net_wm_window_type_dialog =
+      XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DIALOG", False);
+  net_wm_window_type_utility =
+      XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_UTILITY", False);
+  net_wm_window_type_toolbar =
+      XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_TOOLBAR", False);
+  net_wm_window_type_menu = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_MENU", False);
+  net_wm_window_type_dropdown_menu =
+      XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DROPDOWN_MENU", False);
+  net_wm_window_type_popup_menu =
+      XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_POPUP_MENU", False);
+  net_wm_window_type_tooltip =
+      XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_TOOLTIP", False);
+  net_wm_window_type_notification =
+      XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_NOTIFICATION", False);
+  net_wm_window_type_combo =
+      XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_COMBO", False);
+  net_wm_window_type_dnd = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DND", False);
+  net_wm_window_type_splash =
+      XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_SPLASH", False);
+  net_wm_window_type_dock = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DOCK", False);
+  net_wm_window_type_desktop =
+      XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DESKTOP", False);
+  net_active = XInternAtom(dpy, "_NET_ACTIVE_WINDOW", False);
+  net_client_list = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
+  net_wm_state = XInternAtom(dpy, "_NET_WM_STATE", False);
+  net_wm_state_modal = XInternAtom(dpy, "_NET_WM_STATE_MODAL", False);
+  net_wm_state_maximized_vert =
+      XInternAtom(dpy, "_NET_WM_STATE_MAXIMIZED_VERT", False);
+  net_wm_state_maximized_horz =
+      XInternAtom(dpy, "_NET_WM_STATE_MAXIMIZED_HORZ", False);
+  net_moveresize_window = XInternAtom(dpy, "_NET_MOVERESIZE_WINDOW", False);
+  motif_wm_hints = XInternAtom(dpy, "_MOTIF_WM_HINTS", False);
+  ob_wm_state_undecorated = XInternAtom(dpy, "_OB_WM_STATE_UNDECORATED", False);
 }
 
 static char *case_str_search(const char *haystack, const char *needle) {
-    if (!haystack || !needle) return NULL;
-    size_t needle_len = strlen(needle);
-    if (needle_len == 0) return (char *)haystack;
-    while (*haystack) {
-        if (strncasecmp(haystack, needle, needle_len) == 0) {
-            return (char *)haystack;
-        }
-        haystack++;
-    }
+  if (!haystack || !needle)
     return NULL;
+  size_t needle_len = strlen(needle);
+  if (needle_len == 0)
+    return (char *)haystack;
+  while (*haystack) {
+    if (strncasecmp(haystack, needle, needle_len) == 0) {
+      return (char *)haystack;
+    }
+    haystack++;
+  }
+  return NULL;
 }
 
 static char *get_window_title(Display *dpy, Window w) {
-    if (!dpy || !w || w == DefaultRootWindow(dpy)) return NULL;
-
-    Atom type;
-    int format;
-    unsigned long nitems = 0, bytes_after = 0;
-    unsigned char *prop = NULL;
-    char *title = NULL;
-
-    // 1. Try _NET_WM_NAME (UTF-8)
-    if (net_wm_name != None &&
-        XGetWindowProperty(dpy, w, net_wm_name, 0, 1024, False, AnyPropertyType,
-                           &type, &format, &nitems, &bytes_after, &prop) == Success && prop) {
-        if (nitems > 0 && prop[0] != '\0') {
-            char *buf = (char *)malloc(nitems + 1);
-            if (buf) {
-                memcpy(buf, prop, nitems);
-                buf[nitems] = '\0';
-                title = buf;
-            }
-        }
-        XFree(prop);
-        if (title) return title;
-    }
-
-    // 2. Try _NET_WM_VISIBLE_NAME
-    if (net_wm_visible_name != None &&
-        XGetWindowProperty(dpy, w, net_wm_visible_name, 0, 1024, False, AnyPropertyType,
-                           &type, &format, &nitems, &bytes_after, &prop) == Success && prop) {
-        if (nitems > 0 && prop[0] != '\0') {
-            char *buf = (char *)malloc(nitems + 1);
-            if (buf) {
-                memcpy(buf, prop, nitems);
-                buf[nitems] = '\0';
-                title = buf;
-            }
-        }
-        XFree(prop);
-        if (title) return title;
-    }
-
-    // 3. Fallback to standard WM_NAME
-    char *name = NULL;
-    if (XFetchName(dpy, w, &name) > 0 && name && name[0] != '\0') {
-        title = strdup(name);
-        XFree(name);
-        return title;
-    }
-
+  if (!dpy || !w || w == DefaultRootWindow(dpy))
     return NULL;
+
+  Atom type;
+  int format;
+  unsigned long nitems = 0, bytes_after = 0;
+  unsigned char *prop = NULL;
+  char *title = NULL;
+
+  // 1. Try _NET_WM_NAME (UTF-8)
+  if (net_wm_name != None &&
+      XGetWindowProperty(dpy, w, net_wm_name, 0, 1024, False, AnyPropertyType,
+                         &type, &format, &nitems, &bytes_after,
+                         &prop) == Success &&
+      prop) {
+    if (nitems > 0 && prop[0] != '\0') {
+      char *buf = (char *)malloc(nitems + 1);
+      if (buf) {
+        memcpy(buf, prop, nitems);
+        buf[nitems] = '\0';
+        title = buf;
+      }
+    }
+    XFree(prop);
+    if (title)
+      return title;
+  }
+
+  // 2. Try _NET_WM_VISIBLE_NAME
+  if (net_wm_visible_name != None &&
+      XGetWindowProperty(dpy, w, net_wm_visible_name, 0, 1024, False,
+                         AnyPropertyType, &type, &format, &nitems, &bytes_after,
+                         &prop) == Success &&
+      prop) {
+    if (nitems > 0 && prop[0] != '\0') {
+      char *buf = (char *)malloc(nitems + 1);
+      if (buf) {
+        memcpy(buf, prop, nitems);
+        buf[nitems] = '\0';
+        title = buf;
+      }
+    }
+    XFree(prop);
+    if (title)
+      return title;
+  }
+
+  // 3. Fallback to standard WM_NAME
+  char *name = NULL;
+  if (XFetchName(dpy, w, &name) > 0 && name && name[0] != '\0') {
+    title = strdup(name);
+    XFree(name);
+    return title;
+  }
+
+  return NULL;
 }
 
 static int is_transient_window(Display *dpy, Window w) {
-    Window prop_w = None;
-    if (XGetTransientForHint(dpy, w, &prop_w) != 0 && prop_w != None && prop_w != DefaultRootWindow(dpy)) {
-        return 1;
-    }
-    return 0;
+  Window prop_w = None;
+  if (XGetTransientForHint(dpy, w, &prop_w) != 0 && prop_w != None &&
+      prop_w != DefaultRootWindow(dpy)) {
+    return 1;
+  }
+  return 0;
 }
 
 static int is_dialog_or_non_document_window_type(Display *dpy, Window w) {
-    if (net_wm_window_type == None) return 0;
-
-    Atom type;
-    int format;
-    unsigned long nitems = 0, bytes_after = 0;
-    unsigned char *prop = NULL;
-
-    if (XGetWindowProperty(dpy, w, net_wm_window_type, 0, 32, False, XA_ATOM,
-                           &type, &format, &nitems, &bytes_after, &prop) == Success && prop) {
-        if (type == XA_ATOM && format == 32) {
-            Atom *atoms = (Atom *)prop;
-            for (unsigned long i = 0; i < nitems; i++) {
-                Atom a = atoms[i];
-                if (a == net_wm_window_type_dialog ||
-                    a == net_wm_window_type_utility ||
-                    a == net_wm_window_type_toolbar ||
-                    a == net_wm_window_type_menu ||
-                    a == net_wm_window_type_dropdown_menu ||
-                    a == net_wm_window_type_popup_menu ||
-                    a == net_wm_window_type_tooltip ||
-                    a == net_wm_window_type_notification ||
-                    a == net_wm_window_type_combo ||
-                    a == net_wm_window_type_dnd ||
-                    a == net_wm_window_type_splash ||
-                    a == net_wm_window_type_dock ||
-                    a == net_wm_window_type_desktop) {
-                    XFree(prop);
-                    return 1;
-                }
-            }
-        }
-        XFree(prop);
-    }
+  if (net_wm_window_type == None)
     return 0;
+
+  Atom type;
+  int format;
+  unsigned long nitems = 0, bytes_after = 0;
+  unsigned char *prop = NULL;
+
+  if (XGetWindowProperty(dpy, w, net_wm_window_type, 0, 32, False, XA_ATOM,
+                         &type, &format, &nitems, &bytes_after,
+                         &prop) == Success &&
+      prop) {
+    if (type == XA_ATOM && format == 32) {
+      Atom *atoms = (Atom *)prop;
+      for (unsigned long i = 0; i < nitems; i++) {
+        Atom a = atoms[i];
+        if (a == net_wm_window_type_dialog || a == net_wm_window_type_utility ||
+            a == net_wm_window_type_toolbar || a == net_wm_window_type_menu ||
+            a == net_wm_window_type_dropdown_menu ||
+            a == net_wm_window_type_popup_menu ||
+            a == net_wm_window_type_tooltip ||
+            a == net_wm_window_type_notification ||
+            a == net_wm_window_type_combo || a == net_wm_window_type_dnd ||
+            a == net_wm_window_type_splash || a == net_wm_window_type_dock ||
+            a == net_wm_window_type_desktop) {
+          XFree(prop);
+          return 1;
+        }
+      }
+    }
+    XFree(prop);
+  }
+  return 0;
 }
 
 static int is_dialog_or_ignored_title(const char *title) {
-    if (!title || title[0] == '\0') return 1;
+  if (!title || title[0] == '\0')
+    return 1;
 
-    // Skip leading asterisks and whitespace
-    const char *p = title;
-    while (*p == '*' || isspace((unsigned char)*p)) p++;
-    if (*p == '\0') return 1;
+  // Skip leading asterisks and whitespace
+  const char *p = title;
+  while (*p == '*' || isspace((unsigned char)*p))
+    p++;
+  if (*p == '\0')
+    return 1;
 
-    // Check exact matches
-    const char *exact_ignored[] = {
-        "openbox",
-        "desktop",
-        "x11",
-        "xournal++",
-        "com.github.xournalpp.xournalpp",
-        "preferences",
-        "xournal++ preferences",
-        "about xournal++",
-        "about",
-        "plugin manager",
-        "manage plugins",
-        "page background",
-        "set page background",
-        "paper format",
-        "select font",
-        "font selection",
-        "choose font",
-        "font",
-        "select color",
-        "color selection",
-        "choose color",
-        "custom color",
-        "color",
-        "export as pdf",
-        "export pdf",
-        "export as...",
-        "export as",
-        "export",
-        "save file",
-        "save as",
-        "save document",
-        "save",
-        "open file",
-        "open document",
-        "open",
-        "select folder",
-        "choose folder",
-        "select destination folder",
-        "question",
-        "warning",
-        "error",
-        "information",
-        "confirm",
-        "print",
-        "page setup",
-        "insert text",
-        "edit text",
-        "latex",
-        NULL
-    };
+  // Check exact matches
+  const char *exact_ignored[] = {"openbox",
+                                 "desktop",
+                                 "x11",
+                                 "xournal++",
+                                 "com.github.xournalpp.xournalpp",
+                                 "preferences",
+                                 "xournal++ preferences",
+                                 "about xournal++",
+                                 "about",
+                                 "plugin manager",
+                                 "manage plugins",
+                                 "page background",
+                                 "set page background",
+                                 "paper format",
+                                 "select font",
+                                 "font selection",
+                                 "choose font",
+                                 "font",
+                                 "select color",
+                                 "color selection",
+                                 "choose color",
+                                 "custom color",
+                                 "color",
+                                 "export as pdf",
+                                 "export pdf",
+                                 "export as...",
+                                 "export as",
+                                 "export",
+                                 "save file",
+                                 "save as",
+                                 "save document",
+                                 "save",
+                                 "open file",
+                                 "open document",
+                                 "open",
+                                 "select folder",
+                                 "choose folder",
+                                 "select destination folder",
+                                 "question",
+                                 "warning",
+                                 "error",
+                                 "information",
+                                 "confirm",
+                                 "print",
+                                 "page setup",
+                                 "insert text",
+                                 "edit text",
+                                 "latex",
+                                 NULL};
 
-    for (int i = 0; exact_ignored[i] != NULL; i++) {
-        if (strcasecmp(p, exact_ignored[i]) == 0) return 1;
-    }
+  for (int i = 0; exact_ignored[i] != NULL; i++) {
+    if (strcasecmp(p, exact_ignored[i]) == 0)
+      return 1;
+  }
 
-    // Substring / prefix checks
-    if (case_str_search(p, "preferences") != NULL && case_str_search(p, ".xopp") == NULL) return 1;
-    if (case_str_search(p, "about xournal++") != NULL) return 1;
-    if (case_str_search(p, "plugin manager") != NULL) return 1;
-    if (case_str_search(p, "font selection") != NULL) return 1;
-    if (case_str_search(p, "color selection") != NULL) return 1;
-    if (case_str_search(p, "page background") != NULL) return 1;
-    if (case_str_search(p, "save changes") != NULL) return 1;
-    if (case_str_search(p, "error saving") != NULL) return 1;
-    if (case_str_search(p, "error loading") != NULL) return 1;
+  // Substring / prefix checks
+  if (case_str_search(p, "preferences") != NULL &&
+      case_str_search(p, ".xopp") == NULL)
+    return 1;
+  if (case_str_search(p, "about xournal++") != NULL)
+    return 1;
+  if (case_str_search(p, "plugin manager") != NULL)
+    return 1;
+  if (case_str_search(p, "font selection") != NULL)
+    return 1;
+  if (case_str_search(p, "color selection") != NULL)
+    return 1;
+  if (case_str_search(p, "page background") != NULL)
+    return 1;
+  if (case_str_search(p, "save changes") != NULL)
+    return 1;
+  if (case_str_search(p, "error saving") != NULL)
+    return 1;
+  if (case_str_search(p, "error loading") != NULL)
+    return 1;
 
-    // Dialog titles starting with "Xournal++ " (e.g. "Xournal++ Preferences", "Xournal++ Warning")
-    // Note: Document windows in Xournal++ format title as "<filename> - Xournal++" (ends with "- Xournal++")
-    if (strncasecmp(p, "xournal++ ", 10) == 0 && case_str_search(p, "- xournal++") == NULL) {
-        return 1;
-    }
+  // Dialog titles starting with "Xournal++ " (e.g. "Xournal++ Preferences",
+  // "Xournal++ Warning") Note: Document windows in Xournal++ format title as
+  // "<filename> - Xournal++" (ends with "- Xournal++")
+  if (strncasecmp(p, "xournal++ ", 10) == 0 &&
+      case_str_search(p, "- xournal++") == NULL) {
+    return 1;
+  }
 
-    return 0;
+  return 0;
 }
 
 static int is_xournalpp_window(Display *dpy, Window w) {
-    XClassHint ch;
-    memset(&ch, 0, sizeof(ch));
-    int match = 0;
-    if (XGetClassHint(dpy, w, &ch)) {
-        if (ch.res_name && (strcasecmp(ch.res_name, "xournalpp") == 0 ||
-                            strcasecmp(ch.res_name, "xopp") == 0 ||
-                            case_str_search(ch.res_name, "xournal") != NULL)) {
-            match = 1;
-        } else if (ch.res_class && (strcasecmp(ch.res_class, "xournalpp") == 0 ||
-                                   strcasecmp(ch.res_class, "xopp") == 0 ||
-                                   case_str_search(ch.res_class, "xournal") != NULL)) {
-            match = 1;
-        }
-        if (ch.res_name) XFree(ch.res_name);
-        if (ch.res_class) XFree(ch.res_class);
+  XClassHint ch;
+  memset(&ch, 0, sizeof(ch));
+  int match = 0;
+  if (XGetClassHint(dpy, w, &ch)) {
+    if (ch.res_name && (strcasecmp(ch.res_name, "xournalpp") == 0 ||
+                        strcasecmp(ch.res_name, "xopp") == 0 ||
+                        case_str_search(ch.res_name, "xournal") != NULL)) {
+      match = 1;
+    } else if (ch.res_class &&
+               (strcasecmp(ch.res_class, "xournalpp") == 0 ||
+                strcasecmp(ch.res_class, "xopp") == 0 ||
+                case_str_search(ch.res_class, "xournal") != NULL)) {
+      match = 1;
     }
-    return match;
+    if (ch.res_name)
+      XFree(ch.res_name);
+    if (ch.res_class)
+      XFree(ch.res_class);
+  }
+  return match;
 }
 
 static int score_candidate_window(Display *dpy, Window w, char **out_title) {
-    *out_title = NULL;
-    if (!dpy || !w || w == DefaultRootWindow(dpy)) return -1;
+  *out_title = NULL;
+  if (!dpy || !w || w == DefaultRootWindow(dpy))
+    return -1;
 
-    if (is_transient_window(dpy, w)) return -1;
-    if (is_dialog_or_non_document_window_type(dpy, w)) return -1;
+  if (is_transient_window(dpy, w))
+    return -1;
+  if (is_dialog_or_non_document_window_type(dpy, w))
+    return -1;
 
-    char *title = get_window_title(dpy, w);
-    if (!title || title[0] == '\0') {
-        if (title) free(title);
-        return -1;
-    }
+  char *title = get_window_title(dpy, w);
+  if (!title || title[0] == '\0') {
+    if (title)
+      free(title);
+    return -1;
+  }
 
-    if (is_dialog_or_ignored_title(title)) {
-        free(title);
-        return -1;
-    }
+  if (is_dialog_or_ignored_title(title)) {
+    free(title);
+    return -1;
+  }
 
-    int score = 10;
-    int is_xopp = is_xournalpp_window(dpy, w);
-    if (is_xopp) score += 30;
+  int score = 10;
+  int is_xopp = is_xournalpp_window(dpy, w);
+  if (is_xopp)
+    score += 30;
 
-    // Check if title contains standard Xournal++ app suffix: "- Xournal++"
-    if (case_str_search(title, "- xournal++") != NULL) {
-        score += 100;
-    }
-    if (case_str_search(title, "[autosaved]") != NULL) {
-        score += 20;
-    }
+  // Check if title contains standard Xournal++ app suffix: "- Xournal++"
+  if (case_str_search(title, "- xournal++") != NULL) {
+    score += 100;
+  }
+  if (case_str_search(title, "[autosaved]") != NULL) {
+    score += 20;
+  }
 
-    *out_title = title;
-    return score;
+  *out_title = title;
+  return score;
 }
 
-static void scan_window_tree(Display *dpy, Window w, int *best_score, char **best_title) {
-    if (!dpy || !w) return;
+static void scan_window_tree(Display *dpy, Window w, int *best_score,
+                             char **best_title) {
+  if (!dpy || !w)
+    return;
 
-    XSelectInput(dpy, w, PropertyChangeMask | StructureNotifyMask | SubstructureNotifyMask);
+  XSelectInput(dpy, w,
+               PropertyChangeMask | StructureNotifyMask |
+                   SubstructureNotifyMask);
 
-    char *title = NULL;
-    int score = score_candidate_window(dpy, w, &title);
-    if (score > *best_score && title != NULL) {
-        if (*best_title) free(*best_title);
-        *best_title = title;
-        *best_score = score;
-    } else {
-        if (title) free(title);
+  char *title = NULL;
+  int score = score_candidate_window(dpy, w, &title);
+  if (score > *best_score && title != NULL) {
+    if (*best_title)
+      free(*best_title);
+    *best_title = title;
+    *best_score = score;
+  } else {
+    if (title)
+      free(title);
+  }
+
+  Window root_ret, parent_ret, *children = NULL;
+  unsigned int nchildren = 0;
+
+  if (XQueryTree(dpy, w, &root_ret, &parent_ret, &children, &nchildren) &&
+      children) {
+    for (unsigned int i = 0; i < nchildren; i++) {
+      scan_window_tree(dpy, children[i], best_score, best_title);
     }
-
-    Window root_ret, parent_ret, *children = NULL;
-    unsigned int nchildren = 0;
-
-    if (XQueryTree(dpy, w, &root_ret, &parent_ret, &children, &nchildren) && children) {
-        for (unsigned int i = 0; i < nchildren; i++) {
-            scan_window_tree(dpy, children[i], best_score, best_title);
-        }
-        XFree(children);
-    }
+    XFree(children);
+  }
 }
 
-static void evaluate_and_emit_document_title(Display *dpy, Window root, Window active_win) {
-    if (active_win != None) {
-        Window target_doc_win = active_win;
-        Window prop_w = None;
-        if (XGetTransientForHint(dpy, active_win, &prop_w) != 0 && prop_w != None && prop_w != root) {
-            target_doc_win = prop_w;
-        }
-
-        char *active_title = NULL;
-        int score = score_candidate_window(dpy, target_doc_win, &active_title);
-        if (score > 0 && active_title != NULL) {
-            if (strcmp(last_emitted_title, active_title) != 0) {
-                snprintf(last_emitted_title, sizeof(last_emitted_title), "%s", active_title);
-                printf("TITLE:%s\n", active_title);
-                fflush(stdout);
-            }
-            free(active_title);
-            return;
-        }
-        if (active_title) free(active_title);
+static void evaluate_and_emit_document_title(Display *dpy, Window root,
+                                             Window active_win) {
+  if (active_win != None) {
+    Window target_doc_win = active_win;
+    Window prop_w = None;
+    if (XGetTransientForHint(dpy, active_win, &prop_w) != 0 && prop_w != None &&
+        prop_w != root) {
+      target_doc_win = prop_w;
     }
 
-    // Only fallback to scanning window tree on initial startup if NO title was ever established
-    if (last_emitted_title[0] != '\0') {
-        return;
+    char *active_title = NULL;
+    int score = score_candidate_window(dpy, target_doc_win, &active_title);
+    if (score > 0 && active_title != NULL) {
+      if (strcmp(last_emitted_title, active_title) != 0) {
+        snprintf(last_emitted_title, sizeof(last_emitted_title), "%s",
+                 active_title);
+        printf("TITLE:%s\n", active_title);
+        fflush(stdout);
+      }
+      free(active_title);
+      return;
     }
+    if (active_title)
+      free(active_title);
+  }
 
-    int best_score = -1;
-    char *best_title = NULL;
+  // Only fallback to scanning window tree on initial startup if NO title was
+  // ever established
+  if (last_emitted_title[0] != '\0') {
+    return;
+  }
 
-    scan_window_tree(dpy, root, &best_score, &best_title);
+  int best_score = -1;
+  char *best_title = NULL;
 
-    if (best_title != NULL && best_score > 0) {
-        if (strcmp(last_emitted_title, best_title) != 0) {
-            snprintf(last_emitted_title, sizeof(last_emitted_title), "%s", best_title);
-            printf("TITLE:%s\n", best_title);
-            fflush(stdout);
-        }
-        free(best_title);
+  scan_window_tree(dpy, root, &best_score, &best_title);
+
+  if (best_title != NULL && best_score > 0) {
+    if (strcmp(last_emitted_title, best_title) != 0) {
+      snprintf(last_emitted_title, sizeof(last_emitted_title), "%s",
+               best_title);
+      printf("TITLE:%s\n", best_title);
+      fflush(stdout);
     }
+    free(best_title);
+  }
 }
 
 static int is_modal_state(Display *dpy, Window w) {
-    if (net_wm_state == None || net_wm_state_modal == None) return 0;
-    Atom type;
-    int format;
-    unsigned long nitems = 0, bytes_after = 0;
-    unsigned char *prop = NULL;
-    int modal = 0;
-    if (XGetWindowProperty(dpy, w, net_wm_state, 0, 32, False, XA_ATOM,
-                           &type, &format, &nitems, &bytes_after, &prop) == Success && prop) {
-        if (type == XA_ATOM && format == 32) {
-            Atom *atoms = (Atom *)prop;
-            for (unsigned long i = 0; i < nitems; i++) {
-                if (atoms[i] == net_wm_state_modal) {
-                    modal = 1;
-                    break;
-                }
-            }
+  if (net_wm_state == None || net_wm_state_modal == None)
+    return 0;
+  Atom type;
+  int format;
+  unsigned long nitems = 0, bytes_after = 0;
+  unsigned char *prop = NULL;
+  int modal = 0;
+  if (XGetWindowProperty(dpy, w, net_wm_state, 0, 32, False, XA_ATOM, &type,
+                         &format, &nitems, &bytes_after, &prop) == Success &&
+      prop) {
+    if (type == XA_ATOM && format == 32) {
+      Atom *atoms = (Atom *)prop;
+      for (unsigned long i = 0; i < nitems; i++) {
+        if (atoms[i] == net_wm_state_modal) {
+          modal = 1;
+          break;
         }
-        XFree(prop);
+      }
     }
-    return modal;
+    XFree(prop);
+  }
+  return modal;
 }
 
 static int is_tooltip_window(Display *dpy, Window w) {
-    XWindowAttributes attr;
-    if (XGetWindowAttributes(dpy, w, &attr)) {
-        // Tooltips and menus in X11/GTK are override-redirect windows
-        if (attr.override_redirect) return 1;
-    }
-    if (net_wm_window_type != None) {
-        Atom type;
-        int format;
-        unsigned long nitems = 0, bytes_after = 0;
-        unsigned char *prop = NULL;
-        if (XGetWindowProperty(dpy, w, net_wm_window_type, 0, 32, False, XA_ATOM,
-                               &type, &format, &nitems, &bytes_after, &prop) == Success && prop) {
-            if (type == XA_ATOM && format == 32) {
-                Atom *atoms = (Atom *)prop;
-                for (unsigned long i = 0; i < nitems; i++) {
-                    if (atoms[i] == net_wm_window_type_tooltip ||
-                        atoms[i] == net_wm_window_type_notification ||
-                        atoms[i] == net_wm_window_type_popup_menu ||
-                        atoms[i] == net_wm_window_type_dropdown_menu ||
-                        atoms[i] == net_wm_window_type_dnd) {
-                        XFree(prop);
-                        return 1;
-                    }
-                }
-            }
-            XFree(prop);
-        }
-    }
-    return 0;
-}
-
-static int is_viewable_managed_xournal_window(Display *dpy, Window w) {
-    if (!dpy || !w || w == DefaultRootWindow(dpy)) return 0;
-    XWindowAttributes attr;
-    if (!XGetWindowAttributes(dpy, w, &attr)) return 0;
-    if (attr.map_state != IsViewable) return 0;
-    if (attr.override_redirect) return 0; // Filter out tooltips, menus, popups
-    if (!is_xournalpp_window(dpy, w)) return 0;
-    if (is_tooltip_window(dpy, w)) return 0;
-    return 1;
-}
-
-static int is_dialog_window(Display *dpy, Window w) {
-    if (is_transient_window(dpy, w)) return 1;
-    if (is_modal_state(dpy, w)) return 1;
-
-    // Check _NET_WM_WINDOW_TYPE
-    if (net_wm_window_type != None) {
-        Atom type;
-        int format;
-        unsigned long nitems = 0, bytes_after = 0;
-        unsigned char *prop = NULL;
-        if (XGetWindowProperty(dpy, w, net_wm_window_type, 0, 32, False, XA_ATOM,
-                               &type, &format, &nitems, &bytes_after, &prop) == Success && prop) {
-            if (type == XA_ATOM && format == 32) {
-                Atom *atoms = (Atom *)prop;
-                for (unsigned long i = 0; i < nitems; i++) {
-                    if (atoms[i] == net_wm_window_type_dialog ||
-                        atoms[i] == net_wm_window_type_utility ||
-                        atoms[i] == net_wm_window_type_splash) {
-                        XFree(prop);
-                        return 1;
-                    }
-                }
-            }
-            XFree(prop);
-        }
-    }
-
-    char *title = get_window_title(dpy, w);
-    if (!title || title[0] == '\0') {
-        if (title) free(title);
-        // Window lacks a title.
-        return 1;
-    }
-
-    int d = is_dialog_or_ignored_title(title);
-    free(title);
-    return d;
-}
-
-static void query_managed_xournal_windows(Display *dpy, Window root,
-                                         Window *out_main, int *out_main_count,
-                                         Window *out_dialogs, int *out_dialog_count,
-                                         int max_windows) {
-    *out_main_count = 0;
-    *out_dialog_count = 0;
-
-    Window candidate_windows[64];
-    int candidate_count = 0;
-
+  XWindowAttributes attr;
+  if (XGetWindowAttributes(dpy, w, &attr)) {
+    // Tooltips and menus in X11/GTK are override-redirect windows
+    if (attr.override_redirect)
+      return 1;
+  }
+  if (net_wm_window_type != None) {
     Atom type;
     int format;
     unsigned long nitems = 0, bytes_after = 0;
     unsigned char *prop = NULL;
-
-    if (net_client_list != None &&
-        XGetWindowProperty(dpy, root, net_client_list, 0, 1024, False, XA_WINDOW,
-                           &type, &format, &nitems, &bytes_after, &prop) == Success && prop) {
-        if (type == XA_WINDOW && format == 32 && nitems > 0) {
-            Window *clients = (Window *)prop;
-            for (unsigned long i = 0; i < nitems && candidate_count < 64; i++) {
-                Window w = clients[i];
-                if (is_viewable_managed_xournal_window(dpy, w)) {
-                    candidate_windows[candidate_count++] = w;
-                }
-            }
+    if (XGetWindowProperty(dpy, w, net_wm_window_type, 0, 32, False, XA_ATOM,
+                           &type, &format, &nitems, &bytes_after,
+                           &prop) == Success &&
+        prop) {
+      if (type == XA_ATOM && format == 32) {
+        Atom *atoms = (Atom *)prop;
+        for (unsigned long i = 0; i < nitems; i++) {
+          if (atoms[i] == net_wm_window_type_tooltip ||
+              atoms[i] == net_wm_window_type_notification ||
+              atoms[i] == net_wm_window_type_popup_menu ||
+              atoms[i] == net_wm_window_type_dropdown_menu ||
+              atoms[i] == net_wm_window_type_dnd) {
+            XFree(prop);
+            return 1;
+          }
         }
-        XFree(prop);
+      }
+      XFree(prop);
     }
+  }
+  return 0;
+}
 
-    if (candidate_count == 0) {
-        Window root_ret, parent_ret, *children = NULL;
-        unsigned int nchildren = 0;
-        if (XQueryTree(dpy, root, &root_ret, &parent_ret, &children, &nchildren) && children) {
-            for (unsigned int i = 0; i < nchildren && candidate_count < 64; i++) {
-                Window w = children[i];
-                if (is_viewable_managed_xournal_window(dpy, w)) {
-                    candidate_windows[candidate_count++] = w;
-                }
-            }
-            XFree(children);
+static int is_viewable_managed_xournal_window(Display *dpy, Window w) {
+  if (!dpy || !w || w == DefaultRootWindow(dpy))
+    return 0;
+  XWindowAttributes attr;
+  if (!XGetWindowAttributes(dpy, w, &attr))
+    return 0;
+  if (attr.map_state != IsViewable)
+    return 0;
+  if (attr.override_redirect)
+    return 0; // Filter out tooltips, menus, popups
+  if (!is_xournalpp_window(dpy, w))
+    return 0;
+  if (is_tooltip_window(dpy, w))
+    return 0;
+  return 1;
+}
+
+static int is_dialog_window(Display *dpy, Window w) {
+  if (is_transient_window(dpy, w))
+    return 1;
+  if (is_modal_state(dpy, w))
+    return 1;
+
+  // Check _NET_WM_WINDOW_TYPE
+  if (net_wm_window_type != None) {
+    Atom type;
+    int format;
+    unsigned long nitems = 0, bytes_after = 0;
+    unsigned char *prop = NULL;
+    if (XGetWindowProperty(dpy, w, net_wm_window_type, 0, 32, False, XA_ATOM,
+                           &type, &format, &nitems, &bytes_after,
+                           &prop) == Success &&
+        prop) {
+      if (type == XA_ATOM && format == 32) {
+        Atom *atoms = (Atom *)prop;
+        for (unsigned long i = 0; i < nitems; i++) {
+          if (atoms[i] == net_wm_window_type_dialog ||
+              atoms[i] == net_wm_window_type_utility ||
+              atoms[i] == net_wm_window_type_splash) {
+            XFree(prop);
+            return 1;
+          }
         }
+      }
+      XFree(prop);
     }
+  }
 
-    if (candidate_count == 0) return;
+  char *title = get_window_title(dpy, w);
+  if (!title || title[0] == '\0') {
+    if (title)
+      free(title);
+    // Window lacks a title.
+    return 1;
+  }
 
-    // Classify candidate windows: document windows vs dialogs/prompts
-    for (int i = 0; i < candidate_count; i++) {
-        Window w = candidate_windows[i];
-        if (is_dialog_window(dpy, w)) {
-            if (*out_dialog_count < max_windows) {
-                out_dialogs[(*out_dialog_count)++] = w;
-            }
-        } else {
-            char *title = NULL;
-            int score = score_candidate_window(dpy, w, &title);
-            if (title) free(title);
-            if (score > 0) {
-                // Legitimate document window (including multi-window sessions)
-                if (*out_main_count < max_windows) {
-                    out_main[(*out_main_count)++] = w;
-                }
-            } else {
-                // Managed window lacking document characteristics -> prompt/dialog
-                if (*out_dialog_count < max_windows) {
-                    out_dialogs[(*out_dialog_count)++] = w;
-                }
-            }
+  int d = is_dialog_or_ignored_title(title);
+  free(title);
+  return d;
+}
+
+static void query_managed_xournal_windows(Display *dpy, Window root,
+                                          Window *out_main, int *out_main_count,
+                                          Window *out_dialogs,
+                                          int *out_dialog_count,
+                                          int max_windows) {
+  *out_main_count = 0;
+  *out_dialog_count = 0;
+
+  Window candidate_windows[64];
+  int candidate_count = 0;
+
+  Atom type;
+  int format;
+  unsigned long nitems = 0, bytes_after = 0;
+  unsigned char *prop = NULL;
+
+  if (net_client_list != None &&
+      XGetWindowProperty(dpy, root, net_client_list, 0, 1024, False, XA_WINDOW,
+                         &type, &format, &nitems, &bytes_after,
+                         &prop) == Success &&
+      prop) {
+    if (type == XA_WINDOW && format == 32 && nitems > 0) {
+      Window *clients = (Window *)prop;
+      for (unsigned long i = 0; i < nitems && candidate_count < 64; i++) {
+        Window w = clients[i];
+        if (is_viewable_managed_xournal_window(dpy, w)) {
+          candidate_windows[candidate_count++] = w;
         }
+      }
     }
+    XFree(prop);
+  }
+
+  if (candidate_count == 0) {
+    Window root_ret, parent_ret, *children = NULL;
+    unsigned int nchildren = 0;
+    if (XQueryTree(dpy, root, &root_ret, &parent_ret, &children, &nchildren) &&
+        children) {
+      for (unsigned int i = 0; i < nchildren && candidate_count < 64; i++) {
+        Window w = children[i];
+        if (is_viewable_managed_xournal_window(dpy, w)) {
+          candidate_windows[candidate_count++] = w;
+        }
+      }
+      XFree(children);
+    }
+  }
+
+  if (candidate_count == 0)
+    return;
+
+  // Classify candidate windows: document windows vs dialogs/prompts
+  for (int i = 0; i < candidate_count; i++) {
+    Window w = candidate_windows[i];
+    if (is_dialog_window(dpy, w)) {
+      if (*out_dialog_count < max_windows) {
+        out_dialogs[(*out_dialog_count)++] = w;
+      }
+    } else {
+      char *title = NULL;
+      int score = score_candidate_window(dpy, w, &title);
+      if (title)
+        free(title);
+      if (score > 0) {
+        // Legitimate document window (including multi-window sessions)
+        if (*out_main_count < max_windows) {
+          out_main[(*out_main_count)++] = w;
+        }
+      } else {
+        // Managed window lacking document characteristics -> prompt/dialog
+        if (*out_dialog_count < max_windows) {
+          out_dialogs[(*out_dialog_count)++] = w;
+        }
+      }
+    }
+  }
 }
 
 static int last_emitted_dialog_count = -1;
 static char last_emitted_prompt[1024] = "";
 static char last_emitted_windows_buffer[4096] = "";
+static Window last_selected_active_window = None;
 
 static void evaluate_and_emit_status(Display *dpy, Window root) {
-    // Determine currently active window first
-    Window active_win = None;
-    if (net_active != None) {
-        Atom actual_type;
-        int actual_format;
-        unsigned long nitems = 0, bytes_after = 0;
-        unsigned char *prop = NULL;
-        if (XGetWindowProperty(dpy, root, net_active, 0, 1, False, XA_WINDOW,
-                               &actual_type, &actual_format, &nitems, &bytes_after, &prop) == Success && prop) {
-            if (actual_type == XA_WINDOW && actual_format == 32 && nitems > 0) {
-                active_win = *((Window *)prop);
-            }
-            XFree(prop);
-        }
+  // Determine currently active window first
+  Window active_win = None;
+  if (net_active != None) {
+    Atom actual_type;
+    int actual_format;
+    unsigned long nitems = 0, bytes_after = 0;
+    unsigned char *prop = NULL;
+    if (XGetWindowProperty(dpy, root, net_active, 0, 1, False, XA_WINDOW,
+                           &actual_type, &actual_format, &nitems, &bytes_after,
+                           &prop) == Success &&
+        prop) {
+      if (actual_type == XA_WINDOW && actual_format == 32 && nitems > 0) {
+        active_win = *((Window *)prop);
+      }
+      XFree(prop);
     }
+  }
 
-    Window main_wins[64];
-    Window dialog_wins[64];
-    int main_count = 0, dialog_count = 0;
-    query_managed_xournal_windows(dpy, root, main_wins, &main_count, dialog_wins, &dialog_count, 64);
+  Window main_wins[64];
+  Window dialog_wins[64];
+  int main_count = 0, dialog_count = 0;
+  query_managed_xournal_windows(dpy, root, main_wins, &main_count, dialog_wins,
+                                &dialog_count, 64);
 
-    // If active_win is temporarily None mid-transition in Openbox, retain last known active window
-    if (active_win == None && last_selected_active_window != None && main_count > 0) {
-        for (int i = 0; i < main_count; i++) {
-            if (main_wins[i] == last_selected_active_window) {
-                active_win = last_selected_active_window;
-                break;
-            }
-        }
-    }
-
-    if (active_win != None && active_win != last_selected_active_window) {
-        last_selected_active_window = active_win;
-        XSelectInput(dpy, active_win, PropertyChangeMask | StructureNotifyMask);
-    }
-
-    char windows_buf[4096];
-    int offset = snprintf(windows_buf, sizeof(windows_buf), "WINDOWS:%lu|", (unsigned long)active_win);
+  // If active_win is temporarily None mid-transition in Openbox, retain last
+  // known active window
+  if (active_win == None && last_selected_active_window != None &&
+      main_count > 0) {
     for (int i = 0; i < main_count; i++) {
-        char *title = get_window_title(dpy, main_wins[i]);
-        const char *clean_title = title ? title : "Untitled";
-        int written = snprintf(windows_buf + offset, sizeof(windows_buf) - offset,
-                               "%lu:%s%s", (unsigned long)main_wins[i], clean_title,
-                               (i < main_count - 1) ? "|" : "");
-        if (title) free(title);
-        if (written > 0 && offset + written < (int)sizeof(windows_buf)) {
-            offset += written;
-        } else {
-            break;
+      if (main_wins[i] == last_selected_active_window) {
+        active_win = last_selected_active_window;
+        break;
+      }
+    }
+  }
+
+  if (active_win != None && active_win != last_selected_active_window) {
+    last_selected_active_window = active_win;
+    XSelectInput(dpy, active_win, PropertyChangeMask | StructureNotifyMask);
+  }
+
+  char windows_buf[4096];
+  int offset = snprintf(windows_buf, sizeof(windows_buf), "WINDOWS:%lu|",
+                        (unsigned long)active_win);
+  for (int i = 0; i < main_count; i++) {
+    char *title = get_window_title(dpy, main_wins[i]);
+    const char *clean_title = title ? title : "Untitled";
+    int written = snprintf(windows_buf + offset, sizeof(windows_buf) - offset,
+                           "%lu:%s%s", (unsigned long)main_wins[i], clean_title,
+                           (i < main_count - 1) ? "|" : "");
+    if (title)
+      free(title);
+    if (written > 0 && offset + written < (int)sizeof(windows_buf)) {
+      offset += written;
+    } else {
+      break;
+    }
+  }
+
+  if (strcmp(windows_buf, last_emitted_windows_buffer) != 0) {
+    snprintf(last_emitted_windows_buffer, sizeof(last_emitted_windows_buffer),
+             "%s", windows_buf);
+    printf("%s\n", windows_buf);
+    fflush(stdout);
+  }
+
+  evaluate_and_emit_document_title(dpy, root, active_win);
+
+  if (dialog_count != last_emitted_dialog_count) {
+    last_emitted_dialog_count = dialog_count;
+    printf("DIALOGS:%d\n", dialog_count);
+    fflush(stdout);
+  }
+
+  char current_prompt[1024] = "";
+  if (dialog_count > 0) {
+    Window target_dialog = None;
+    if (active_win != None) {
+      for (int i = 0; i < dialog_count; i++) {
+        if (dialog_wins[i] == active_win) {
+          target_dialog = active_win;
+          break;
         }
+      }
     }
-
-    if (strcmp(windows_buf, last_emitted_windows_buffer) != 0) {
-        snprintf(last_emitted_windows_buffer, sizeof(last_emitted_windows_buffer), "%s", windows_buf);
-        printf("%s\n", windows_buf);
-        fflush(stdout);
+    if (target_dialog == None) {
+      target_dialog = dialog_wins[dialog_count - 1];
     }
+    char *d_title = get_window_title(dpy, target_dialog);
+    if (d_title) {
+      char *nl = strchr(d_title, '\n');
+      if (nl)
+        *nl = '\0';
+      nl = strchr(d_title, '\r');
+      if (nl)
+        *nl = '\0';
+      char *start = d_title;
+      while (isspace((unsigned char)*start))
+        start++;
+      char *end = start + strlen(start);
+      while (end > start && isspace((unsigned char)*(end - 1)))
+        end--;
+      *end = '\0';
 
-    evaluate_and_emit_document_title(dpy, root, active_win);
+      char *suffix = case_str_search(start, "- xournal++");
+      if (suffix) {
+        while (suffix > start && isspace((unsigned char)*(suffix - 1)))
+          suffix--;
+        *suffix = '\0';
+      }
 
-    if (dialog_count != last_emitted_dialog_count) {
-        last_emitted_dialog_count = dialog_count;
-        printf("DIALOGS:%d\n", dialog_count);
-        fflush(stdout);
+      snprintf(current_prompt, sizeof(current_prompt), "%s", start);
+      free(d_title);
     }
+  }
 
-    char current_prompt[1024] = "";
-    if (dialog_count > 0) {
-        Window target_dialog = None;
-        if (active_win != None) {
-            for (int i = 0; i < dialog_count; i++) {
-                if (dialog_wins[i] == active_win) {
-                    target_dialog = active_win;
-                    break;
-                }
-            }
-        }
-        if (target_dialog == None) {
-            target_dialog = dialog_wins[dialog_count - 1];
-        }
-        char *d_title = get_window_title(dpy, target_dialog);
-        if (d_title) {
-            char *nl = strchr(d_title, '\n');
-            if (nl) *nl = '\0';
-            nl = strchr(d_title, '\r');
-            if (nl) *nl = '\0';
-            char *start = d_title;
-            while (isspace((unsigned char)*start)) start++;
-            char *end = start + strlen(start);
-            while (end > start && isspace((unsigned char)*(end - 1))) end--;
-            *end = '\0';
-
-            char *suffix = case_str_search(start, "- xournal++");
-            if (suffix) {
-                while (suffix > start && isspace((unsigned char)*(suffix - 1))) suffix--;
-                *suffix = '\0';
-            }
-
-            snprintf(current_prompt, sizeof(current_prompt), "%s", start);
-            free(d_title);
-        }
-    }
-
-    if (strcmp(current_prompt, last_emitted_prompt) != 0) {
-        snprintf(last_emitted_prompt, sizeof(last_emitted_prompt), "%s", current_prompt);
-        printf("PROMPT:%s\n", current_prompt);
-        fflush(stdout);
-    }
+  if (strcmp(current_prompt, last_emitted_prompt) != 0) {
+    snprintf(last_emitted_prompt, sizeof(last_emitted_prompt), "%s",
+             current_prompt);
+    printf("PROMPT:%s\n", current_prompt);
+    fflush(stdout);
+  }
 }
 
 struct MotifHints {
-    unsigned long flags;
-    unsigned long functions;
-    unsigned long decorations;
-    long input_mode;
-    unsigned long status;
+  unsigned long flags;
+  unsigned long functions;
+  unsigned long decorations;
+  long input_mode;
+  unsigned long status;
 };
 
 static int is_maximized_state(Display *dpy, Window w) {
-    if (net_wm_state == None || net_wm_state_maximized_vert == None) return 0;
-    Atom type;
-    int format;
-    unsigned long nitems = 0, bytes_after = 0;
-    unsigned char *prop = NULL;
-    int max = 0;
-    if (XGetWindowProperty(dpy, w, net_wm_state, 0, 32, False, XA_ATOM,
-                           &type, &format, &nitems, &bytes_after, &prop) == Success && prop) {
-        if (type == XA_ATOM && format == 32) {
-            Atom *atoms = (Atom *)prop;
-            for (unsigned long i = 0; i < nitems; i++) {
-                if (atoms[i] == net_wm_state_maximized_vert || atoms[i] == net_wm_state_maximized_horz) {
-                    max = 1;
-                    break;
-                }
-            }
+  if (net_wm_state == None || net_wm_state_maximized_vert == None)
+    return 0;
+  Atom type;
+  int format;
+  unsigned long nitems = 0, bytes_after = 0;
+  unsigned char *prop = NULL;
+  int max = 0;
+  if (XGetWindowProperty(dpy, w, net_wm_state, 0, 32, False, XA_ATOM, &type,
+                         &format, &nitems, &bytes_after, &prop) == Success &&
+      prop) {
+    if (type == XA_ATOM && format == 32) {
+      Atom *atoms = (Atom *)prop;
+      for (unsigned long i = 0; i < nitems; i++) {
+        if (atoms[i] == net_wm_state_maximized_vert ||
+            atoms[i] == net_wm_state_maximized_horz) {
+          max = 1;
+          break;
         }
-        XFree(prop);
+      }
     }
-    return max;
+    XFree(prop);
+  }
+  return max;
 }
 
-static void set_window_maximized_state(Display *dpy, Window root, Window target, int maximize) {
-    if (!dpy || target == None) return;
-    if (net_wm_state != None && net_wm_state_maximized_vert != None && net_wm_state_maximized_horz != None) {
-        XEvent ev;
-        memset(&ev, 0, sizeof(ev));
-        ev.xclient.type = ClientMessage;
-        ev.xclient.window = target;
-        ev.xclient.message_type = net_wm_state;
-        ev.xclient.format = 32;
-        ev.xclient.data.l[0] = maximize ? 1 : 0; // 1 = _NET_WM_STATE_ADD, 0 = _NET_WM_STATE_REMOVE
-        ev.xclient.data.l[1] = (long)net_wm_state_maximized_vert;
-        ev.xclient.data.l[2] = (long)net_wm_state_maximized_horz;
-        ev.xclient.data.l[3] = 1; // source indication: normal application
-        ev.xclient.data.l[4] = 0;
-        XSendEvent(dpy, root, False, SubstructureRedirectMask | SubstructureNotifyMask, &ev);
-    }
-}
-
-static void snap_window_geometry(Display *dpy, Window root, Window target, int x, int y, int w, int h) {
-    if (!dpy || target == None) return;
-    if (is_maximized_state(dpy, target)) {
-        set_window_maximized_state(dpy, root, target, 0);
-    }
-    int real_w = (w > 0) ? w : 1;
-    int real_h = (h > 0) ? h : 1;
-    XMoveResizeWindow(dpy, target, x, y, real_w, real_h);
-    XRaiseWindow(dpy, target);
-}
-
-static void set_window_decorations(Display *dpy, Window root, Window target, int decorated) {
-    if (!dpy || target == None) return;
-
-    if (net_wm_state != None && ob_wm_state_undecorated != None) {
-        XEvent ev;
-        memset(&ev, 0, sizeof(ev));
-        ev.xclient.type = ClientMessage;
-        ev.xclient.window = target;
-        ev.xclient.message_type = net_wm_state;
-        ev.xclient.format = 32;
-        ev.xclient.data.l[0] = decorated ? 0 : 1; // 0 = _NET_WM_STATE_REMOVE, 1 = _NET_WM_STATE_ADD
-        ev.xclient.data.l[1] = (long)ob_wm_state_undecorated;
-        ev.xclient.data.l[2] = 0;
-        ev.xclient.data.l[3] = 1;
-        ev.xclient.data.l[4] = 0;
-        XSendEvent(dpy, root, False, SubstructureRedirectMask | SubstructureNotifyMask, &ev);
-    }
-
-    if (motif_wm_hints != None) {
-        struct MotifHints hints;
-        memset(&hints, 0, sizeof(hints));
-        hints.flags = 2; // MWM_HINTS_DECORATIONS
-        hints.decorations = decorated ? 1 : 0;
-        XChangeProperty(dpy, target, motif_wm_hints, motif_wm_hints, 32,
-                        PropModeReplace, (unsigned char *)&hints, 5);
-    }
-}
-
-static void activate_window(Display *dpy, Window root, Window target) {
-    if (!dpy || target == None) return;
-    if (net_active != None) {
-        XEvent ev;
-        memset(&ev, 0, sizeof(ev));
-        ev.xclient.type = ClientMessage;
-        ev.xclient.window = target;
-        ev.xclient.message_type = net_active;
-        ev.xclient.data.l[0] = 2; // Source = Pager (window switcher/taskbar) to bypass focus-stealing suppression
-        ev.xclient.data.l[1] = CurrentTime;
-        XSendEvent(dpy, root, False, SubstructureRedirectMask | SubstructureNotifyMask, &ev);
-    }
-    XSetInputFocus(dpy, target, RevertToPointerRoot, CurrentTime);
-    XRaiseWindow(dpy, target);
-}
-
-static void close_window_graceful(Display *dpy, Window target) {
-    if (!dpy || target == None) return;
-    Atom wm_protocols = XInternAtom(dpy, "WM_PROTOCOLS", False);
-    Atom wm_delete_window = XInternAtom(dpy, "WM_DELETE_WINDOW", False);
+static void set_window_maximized_state(Display *dpy, Window root, Window target,
+                                       int maximize) {
+  if (!dpy || target == None)
+    return;
+  if (net_wm_state != None && net_wm_state_maximized_vert != None &&
+      net_wm_state_maximized_horz != None) {
     XEvent ev;
     memset(&ev, 0, sizeof(ev));
     ev.xclient.type = ClientMessage;
     ev.xclient.window = target;
-    ev.xclient.message_type = wm_protocols;
+    ev.xclient.message_type = net_wm_state;
     ev.xclient.format = 32;
-    ev.xclient.data.l[0] = (long)wm_delete_window;
-    ev.xclient.data.l[1] = CurrentTime;
-    XSendEvent(dpy, target, False, NoEventMask, &ev);
+    ev.xclient.data.l[0] =
+        maximize ? 1 : 0; // 1 = _NET_WM_STATE_ADD, 0 = _NET_WM_STATE_REMOVE
+    ev.xclient.data.l[1] = (long)net_wm_state_maximized_vert;
+    ev.xclient.data.l[2] = (long)net_wm_state_maximized_horz;
+    ev.xclient.data.l[3] = 1; // source indication: normal application
+    ev.xclient.data.l[4] = 0;
+    XSendEvent(dpy, root, False,
+               SubstructureRedirectMask | SubstructureNotifyMask, &ev);
+  }
 }
 
-static void process_snap_batch(Display *dpy, Window root, const char *batch_str) {
-    if (!batch_str || !*batch_str) return;
-    char *copy = strdup(batch_str);
-    if (!copy) return;
-    Window batch_windows[32];
-    int batch_count = 0;
-    char *saveptr = NULL;
-    char *token = strtok_r(copy, "|;", &saveptr);
-    while (token) {
-        while (*token == ' ') token++;
-        if (*token) {
-            unsigned long wid = 0;
-            int x = 0, y = 0, w = 0, h = 0;
-            if (sscanf(token, "%lu:%d,%d,%d,%d", &wid, &x, &y, &w, &h) == 5 ||
-                sscanf(token, "%lu %d %d %d %d", &wid, &x, &y, &w, &h) == 5) {
-                if (wid != 0) {
-                    snap_window_geometry(dpy, root, (Window)wid, x, y, w, h);
-                    if (batch_count < 32) {
-                        batch_windows[batch_count++] = (Window)wid;
-                    }
-                }
-            }
+static void snap_window_geometry(Display *dpy, Window root, Window target,
+                                 int x, int y, int w, int h) {
+  if (!dpy || target == None)
+    return;
+  if (is_maximized_state(dpy, target)) {
+    set_window_maximized_state(dpy, root, target, 0);
+  }
+  int real_w = (w > 0) ? w : 1;
+  int real_h = (h > 0) ? h : 1;
+  XMoveResizeWindow(dpy, target, x, y, real_w, real_h);
+  XRaiseWindow(dpy, target);
+}
+
+static void set_window_decorations(Display *dpy, Window root, Window target,
+                                   int decorated) {
+  if (!dpy || target == None)
+    return;
+
+  if (net_wm_state != None && ob_wm_state_undecorated != None) {
+    XEvent ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.xclient.type = ClientMessage;
+    ev.xclient.window = target;
+    ev.xclient.message_type = net_wm_state;
+    ev.xclient.format = 32;
+    ev.xclient.data.l[0] =
+        decorated ? 0 : 1; // 0 = _NET_WM_STATE_REMOVE, 1 = _NET_WM_STATE_ADD
+    ev.xclient.data.l[1] = (long)ob_wm_state_undecorated;
+    ev.xclient.data.l[2] = 0;
+    ev.xclient.data.l[3] = 1;
+    ev.xclient.data.l[4] = 0;
+    XSendEvent(dpy, root, False,
+               SubstructureRedirectMask | SubstructureNotifyMask, &ev);
+  }
+
+  if (motif_wm_hints != None) {
+    struct MotifHints hints;
+    memset(&hints, 0, sizeof(hints));
+    hints.flags = 2; // MWM_HINTS_DECORATIONS
+    hints.decorations = decorated ? 1 : 0;
+    XChangeProperty(dpy, target, motif_wm_hints, motif_wm_hints, 32,
+                    PropModeReplace, (unsigned char *)&hints, 5);
+  }
+}
+
+static void activate_window(Display *dpy, Window root, Window target) {
+  if (!dpy || target == None)
+    return;
+  if (net_active != None) {
+    XEvent ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.xclient.type = ClientMessage;
+    ev.xclient.window = target;
+    ev.xclient.message_type = net_active;
+    ev.xclient.data.l[0] = 2; // Source = Pager (window switcher/taskbar) to
+                              // bypass focus-stealing suppression
+    ev.xclient.data.l[1] = CurrentTime;
+    XSendEvent(dpy, root, False,
+               SubstructureRedirectMask | SubstructureNotifyMask, &ev);
+  }
+  XSetInputFocus(dpy, target, RevertToPointerRoot, CurrentTime);
+  XRaiseWindow(dpy, target);
+}
+
+static void close_window_graceful(Display *dpy, Window target) {
+  if (!dpy || target == None)
+    return;
+  Atom wm_protocols = XInternAtom(dpy, "WM_PROTOCOLS", False);
+  Atom wm_delete_window = XInternAtom(dpy, "WM_DELETE_WINDOW", False);
+  XEvent ev;
+  memset(&ev, 0, sizeof(ev));
+  ev.xclient.type = ClientMessage;
+  ev.xclient.window = target;
+  ev.xclient.message_type = wm_protocols;
+  ev.xclient.format = 32;
+  ev.xclient.data.l[0] = (long)wm_delete_window;
+  ev.xclient.data.l[1] = CurrentTime;
+  XSendEvent(dpy, target, False, NoEventMask, &ev);
+}
+
+static void process_snap_batch(Display *dpy, Window root,
+                               const char *batch_str) {
+  if (!batch_str || !*batch_str)
+    return;
+  char *copy = strdup(batch_str);
+  if (!copy)
+    return;
+  Window batch_windows[32];
+  int batch_count = 0;
+  char *saveptr = NULL;
+  char *token = strtok_r(copy, "|;", &saveptr);
+  while (token) {
+    while (*token == ' ')
+      token++;
+    if (*token) {
+      unsigned long wid = 0;
+      int x = 0, y = 0, w = 0, h = 0;
+      if (sscanf(token, "%lu:%d,%d,%d,%d", &wid, &x, &y, &w, &h) == 5 ||
+          sscanf(token, "%lu %d %d %d %d", &wid, &x, &y, &w, &h) == 5) {
+        if (wid != 0) {
+          snap_window_geometry(dpy, root, (Window)wid, x, y, w, h);
+          if (batch_count < 32) {
+            batch_windows[batch_count++] = (Window)wid;
+          }
         }
-        token = strtok_r(NULL, "|;", &saveptr);
+      }
     }
-    free(copy);
+    token = strtok_r(NULL, "|;", &saveptr);
+  }
+  free(copy);
 
-    // Raise all batch windows in reverse order so slot 0 ends up on top
-    for (int i = batch_count - 1; i >= 0; i--) {
-        XRaiseWindow(dpy, batch_windows[i]);
+  // Raise all batch windows in reverse order so slot 0 ends up on top
+  for (int i = batch_count - 1; i >= 0; i--) {
+    XRaiseWindow(dpy, batch_windows[i]);
+  }
+
+  // Determine currently active window
+  Window current_active = None;
+  if (net_active != None) {
+    Atom actual_type;
+    int actual_format;
+    unsigned long nitems = 0, bytes_after = 0;
+    unsigned char *prop = NULL;
+    if (XGetWindowProperty(dpy, root, net_active, 0, 1, False, XA_WINDOW,
+                           &actual_type, &actual_format, &nitems, &bytes_after,
+                           &prop) == Success &&
+        prop) {
+      if (actual_type == XA_WINDOW && actual_format == 32 && nitems > 0) {
+        current_active = *((Window *)prop);
+      }
+      XFree(prop);
     }
+  }
 
-    // Determine currently active window
-    Window current_active = None;
-    if (net_active != None) {
-        Atom actual_type;
-        int actual_format;
-        unsigned long nitems = 0, bytes_after = 0;
-        unsigned char *prop = NULL;
-        if (XGetWindowProperty(dpy, root, net_active, 0, 1, False, XA_WINDOW,
-                               &actual_type, &actual_format, &nitems, &bytes_after, &prop) == Success && prop) {
-            if (actual_type == XA_WINDOW && actual_format == 32 && nitems > 0) {
-                current_active = *((Window *)prop);
-            }
-            XFree(prop);
-        }
+  int active_in_batch = 0;
+  if (current_active != None) {
+    for (int i = 0; i < batch_count; i++) {
+      if (batch_windows[i] == current_active) {
+        active_in_batch = 1;
+        break;
+      }
     }
+  }
 
-    int active_in_batch = 0;
-    if (current_active != None) {
-        for (int i = 0; i < batch_count; i++) {
-            if (batch_windows[i] == current_active) {
-                active_in_batch = 1;
-                break;
-            }
-        }
-    }
+  // Focus and raise the active window, or the primary window (slot 0) if none
+  // was active
+  if (active_in_batch && current_active != None) {
+    activate_window(dpy, root, current_active);
+  } else if (batch_count > 0) {
+    activate_window(dpy, root, batch_windows[0]);
+  }
 
-    // Focus and raise the active window, or the primary window (slot 0) if none was active
-    if (active_in_batch && current_active != None) {
-        activate_window(dpy, root, current_active);
-    } else if (batch_count > 0) {
-        activate_window(dpy, root, batch_windows[0]);
-    }
-
-    XSync(dpy, False);
+  XSync(dpy, False);
 }
 
 static void handle_ipc_command(Display *dpy, Window root, const char *line);
@@ -878,251 +997,258 @@ static char ipc_accum[8192];
 static size_t ipc_accum_len = 0;
 
 static void process_ipc_stream(Display *dpy, Window root) {
-    while (1) {
-        char *nl = (char *)memchr(ipc_accum, '\n', ipc_accum_len);
-        if (!nl) {
-            break;
-        }
-        *nl = '\0';
-        if (nl > ipc_accum && *(nl - 1) == '\r') {
-            *(nl - 1) = '\0';
-        }
-        handle_ipc_command(dpy, root, ipc_accum);
-        size_t line_len = (size_t)((nl - ipc_accum) + 1);
-        memmove(ipc_accum, ipc_accum + line_len, ipc_accum_len - line_len);
-        ipc_accum_len -= line_len;
+  while (1) {
+    char *nl = (char *)memchr(ipc_accum, '\n', ipc_accum_len);
+    if (!nl) {
+      break;
     }
+    *nl = '\0';
+    if (nl > ipc_accum && *(nl - 1) == '\r') {
+      *(nl - 1) = '\0';
+    }
+    handle_ipc_command(dpy, root, ipc_accum);
+    size_t line_len = (size_t)((nl - ipc_accum) + 1);
+    memmove(ipc_accum, ipc_accum + line_len, ipc_accum_len - line_len);
+    ipc_accum_len -= line_len;
+  }
 }
 
 static void handle_ipc_command(Display *dpy, Window root, const char *line) {
-    if (!line || !*line) return;
-    while (*line == ' ' || *line == '\t') line++;
-    if (*line == '\0' || *line == '\n') return;
+  if (!line || !*line)
+    return;
+  while (*line == ' ' || *line == '\t')
+    line++;
+  if (*line == '\0' || *line == '\n')
+    return;
 
-    if (strncmp(line, "SNAP_BATCH ", 11) == 0) {
-        process_snap_batch(dpy, root, line + 11);
-    } else if (strncmp(line, "SNAP ", 5) == 0) {
-        unsigned long wid = 0;
-        int x = 0, y = 0, w = 0, h = 0;
-        if (sscanf(line + 5, "%lu %d %d %d %d", &wid, &x, &y, &w, &h) == 5) {
-            snap_window_geometry(dpy, root, (Window)wid, x, y, w, h);
-            XFlush(dpy);
-        }
-    } else if (strncmp(line, "UNMAXIMIZE ", 11) == 0) {
-        unsigned long wid = strtoul(line + 11, NULL, 0);
-        if (wid != 0) {
-            set_window_maximized_state(dpy, root, (Window)wid, 0);
-            XFlush(dpy);
-        }
-    } else if (strncmp(line, "MAXIMIZE ", 9) == 0) {
-        unsigned long wid = strtoul(line + 9, NULL, 0);
-        if (wid != 0) {
-            set_window_maximized_state(dpy, root, (Window)wid, 1);
-            XFlush(dpy);
-        }
-    } else if (strncmp(line, "SET_DECOR ", 10) == 0) {
-        unsigned long wid = 0;
-        int decor = 0;
-        if (sscanf(line + 10, "%lu %d", &wid, &decor) == 2) {
-            set_window_decorations(dpy, root, (Window)wid, decor);
-            XFlush(dpy);
-        }
-    } else if (strncmp(line, "ACTIVATE ", 9) == 0) {
-        unsigned long wid = strtoul(line + 9, NULL, 0);
-        if (wid != 0) {
-            activate_window(dpy, root, (Window)wid);
-            XFlush(dpy);
-        }
-    } else if (strncmp(line, "CLOSE ", 6) == 0) {
-        unsigned long wid = strtoul(line + 6, NULL, 0);
-        if (wid != 0) {
-            close_window_graceful(dpy, (Window)wid);
-            XFlush(dpy);
-        }
+  if (strncmp(line, "SNAP_BATCH ", 11) == 0) {
+    process_snap_batch(dpy, root, line + 11);
+  } else if (strncmp(line, "SNAP ", 5) == 0) {
+    unsigned long wid = 0;
+    int x = 0, y = 0, w = 0, h = 0;
+    if (sscanf(line + 5, "%lu %d %d %d %d", &wid, &x, &y, &w, &h) == 5) {
+      snap_window_geometry(dpy, root, (Window)wid, x, y, w, h);
+      XFlush(dpy);
     }
+  } else if (strncmp(line, "UNMAXIMIZE ", 11) == 0) {
+    unsigned long wid = strtoul(line + 11, NULL, 0);
+    if (wid != 0) {
+      set_window_maximized_state(dpy, root, (Window)wid, 0);
+      XFlush(dpy);
+    }
+  } else if (strncmp(line, "MAXIMIZE ", 9) == 0) {
+    unsigned long wid = strtoul(line + 9, NULL, 0);
+    if (wid != 0) {
+      set_window_maximized_state(dpy, root, (Window)wid, 1);
+      XFlush(dpy);
+    }
+  } else if (strncmp(line, "SET_DECOR ", 10) == 0) {
+    unsigned long wid = 0;
+    int decor = 0;
+    if (sscanf(line + 10, "%lu %d", &wid, &decor) == 2) {
+      set_window_decorations(dpy, root, (Window)wid, decor);
+      XFlush(dpy);
+    }
+  } else if (strncmp(line, "ACTIVATE ", 9) == 0) {
+    unsigned long wid = strtoul(line + 9, NULL, 0);
+    if (wid != 0) {
+      activate_window(dpy, root, (Window)wid);
+      XFlush(dpy);
+    }
+  } else if (strncmp(line, "CLOSE ", 6) == 0) {
+    unsigned long wid = strtoul(line + 6, NULL, 0);
+    if (wid != 0) {
+      close_window_graceful(dpy, (Window)wid);
+      XFlush(dpy);
+    }
+  }
 }
 
 int main(int argc, char **argv) {
-    // Install custom error handler so closing dialogs never abort this process
-    XSetErrorHandler(ignore_x_errors);
+  // Install custom error handler so closing dialogs never abort this process
+  XSetErrorHandler(ignore_x_errors);
 
-    Display *dpy = NULL;
+  Display *dpy = NULL;
 
-    // Retry connection while X server boots up (faster 50ms interval)
-    int max_retries = (argc > 1) ? 10 : 50;
-    for (int i = 0; i < max_retries; i++) {
-        dpy = XOpenDisplay(NULL);
-        if (dpy) break;
-        usleep(50000); // 50ms
+  // Retry connection while X server boots up (faster 50ms interval)
+  int max_retries = (argc > 1) ? 10 : 50;
+  for (int i = 0; i < max_retries; i++) {
+    dpy = XOpenDisplay(NULL);
+    if (dpy)
+      break;
+    usleep(50000); // 50ms
+  }
+
+  if (!dpy) {
+    fprintf(stderr, "xopp-title-watcher: Failed to connect to X display\n");
+    return 1;
+  }
+
+  init_atoms(dpy);
+  Window root = DefaultRootWindow(dpy);
+
+  if (argc > 1) {
+    if (strcmp(argv[1], "--close-window") == 0 && argc > 2) {
+      Window target = (Window)strtoul(argv[2], NULL, 0);
+      close_window_graceful(dpy, target);
+      XFlush(dpy);
+      printf("OK\n");
+      XCloseDisplay(dpy);
+      return 0;
+    } else if (strcmp(argv[1], "--snap-window") == 0 && argc > 6) {
+      Window target = (Window)strtoul(argv[2], NULL, 0);
+      int x = atoi(argv[3]);
+      int y = atoi(argv[4]);
+      int w = atoi(argv[5]);
+      int h = atoi(argv[6]);
+      snap_window_geometry(dpy, root, target, x, y, w, h);
+      XFlush(dpy);
+      printf("OK\n");
+      XCloseDisplay(dpy);
+      return 0;
+    } else if (strcmp(argv[1], "--snap-batch") == 0 && argc > 2) {
+      process_snap_batch(dpy, root, argv[2]);
+      printf("OK\n");
+      XCloseDisplay(dpy);
+      return 0;
+    } else if (strcmp(argv[1], "--unmaximize") == 0 && argc > 2) {
+      Window target = (Window)strtoul(argv[2], NULL, 0);
+      set_window_maximized_state(dpy, root, target, 0);
+      XFlush(dpy);
+      printf("OK\n");
+      XCloseDisplay(dpy);
+      return 0;
+    } else if (strcmp(argv[1], "--maximize") == 0 && argc > 2) {
+      Window target = (Window)strtoul(argv[2], NULL, 0);
+      set_window_maximized_state(dpy, root, target, 1);
+      XFlush(dpy);
+      printf("OK\n");
+      XCloseDisplay(dpy);
+      return 0;
+    } else if (strcmp(argv[1], "--set-decor") == 0 && argc > 3) {
+      Window target = (Window)strtoul(argv[2], NULL, 0);
+      int decor = atoi(argv[3]);
+      set_window_decorations(dpy, root, target, decor);
+      XFlush(dpy);
+      printf("OK\n");
+      XCloseDisplay(dpy);
+      return 0;
+    } else if (strcmp(argv[1], "--activate-window") == 0 && argc > 2) {
+      Window target = (Window)strtoul(argv[2], NULL, 0);
+      activate_window(dpy, root, target);
+      XFlush(dpy);
+      printf("OK\n");
+      XCloseDisplay(dpy);
+      return 0;
+    } else if (strcmp(argv[1], "--list-dialogs") == 0 ||
+               strcmp(argv[1], "--check-dialogs") == 0) {
+      Window main_wins[64];
+      Window dialog_wins[64];
+      int main_count = 0, dialog_count = 0;
+      query_managed_xournal_windows(dpy, root, main_wins, &main_count,
+                                    dialog_wins, &dialog_count, 64);
+      for (int i = 0; i < dialog_count; i++) {
+        printf("%lu\n", (unsigned long)dialog_wins[i]);
+      }
+      fflush(stdout);
+      XCloseDisplay(dpy);
+      return (dialog_count > 0) ? 0 : 1;
+    } else if (strcmp(argv[1], "--list-windows") == 0) {
+      Window main_wins[64];
+      Window dialog_wins[64];
+      int main_count = 0, dialog_count = 0;
+      query_managed_xournal_windows(dpy, root, main_wins, &main_count,
+                                    dialog_wins, &dialog_count, 64);
+      for (int i = 0; i < main_count; i++) {
+        printf("%lu\n", (unsigned long)main_wins[i]);
+      }
+      for (int i = 0; i < dialog_count; i++) {
+        printf("%lu\n", (unsigned long)dialog_wins[i]);
+      }
+      fflush(stdout);
+      XCloseDisplay(dpy);
+      return 0;
     }
+  }
 
-    if (!dpy) {
-        fprintf(stderr, "xopp-title-watcher: Failed to connect to X display\n");
-        return 1;
-    }
+  XSelectInput(dpy, root, PropertyChangeMask | SubstructureNotifyMask);
+  evaluate_and_emit_status(dpy, root);
 
-    init_atoms(dpy);
-    Window root = DefaultRootWindow(dpy);
+  int stdin_flags = fcntl(STDIN_FILENO, F_GETFL, 0);
+  if (stdin_flags >= 0) {
+    fcntl(STDIN_FILENO, F_SETFL, stdin_flags | O_NONBLOCK);
+  }
 
-    if (argc > 1) {
-        if (strcmp(argv[1], "--close-window") == 0 && argc > 2) {
-            Window target = (Window)strtoul(argv[2], NULL, 0);
-            close_window_graceful(dpy, target);
-            XFlush(dpy);
-            printf("OK\n");
-            XCloseDisplay(dpy);
-            return 0;
-        } else if (strcmp(argv[1], "--snap-window") == 0 && argc > 6) {
-            Window target = (Window)strtoul(argv[2], NULL, 0);
-            int x = atoi(argv[3]);
-            int y = atoi(argv[4]);
-            int w = atoi(argv[5]);
-            int h = atoi(argv[6]);
-            snap_window_geometry(dpy, root, target, x, y, w, h);
-            XFlush(dpy);
-            printf("OK\n");
-            XCloseDisplay(dpy);
-            return 0;
-        } else if (strcmp(argv[1], "--snap-batch") == 0 && argc > 2) {
-            process_snap_batch(dpy, root, argv[2]);
-            printf("OK\n");
-            XCloseDisplay(dpy);
-            return 0;
-        } else if (strcmp(argv[1], "--unmaximize") == 0 && argc > 2) {
-            Window target = (Window)strtoul(argv[2], NULL, 0);
-            set_window_maximized_state(dpy, root, target, 0);
-            XFlush(dpy);
-            printf("OK\n");
-            XCloseDisplay(dpy);
-            return 0;
-        } else if (strcmp(argv[1], "--maximize") == 0 && argc > 2) {
-            Window target = (Window)strtoul(argv[2], NULL, 0);
-            set_window_maximized_state(dpy, root, target, 1);
-            XFlush(dpy);
-            printf("OK\n");
-            XCloseDisplay(dpy);
-            return 0;
-        } else if (strcmp(argv[1], "--set-decor") == 0 && argc > 3) {
-            Window target = (Window)strtoul(argv[2], NULL, 0);
-            int decor = atoi(argv[3]);
-            set_window_decorations(dpy, root, target, decor);
-            XFlush(dpy);
-            printf("OK\n");
-            XCloseDisplay(dpy);
-            return 0;
-        } else if (strcmp(argv[1], "--activate-window") == 0 && argc > 2) {
-            Window target = (Window)strtoul(argv[2], NULL, 0);
-            activate_window(dpy, root, target);
-            XFlush(dpy);
-            printf("OK\n");
-            XCloseDisplay(dpy);
-            return 0;
-        } else if (strcmp(argv[1], "--list-dialogs") == 0 || strcmp(argv[1], "--check-dialogs") == 0) {
-            Window main_wins[64];
-            Window dialog_wins[64];
-            int main_count = 0, dialog_count = 0;
-            query_managed_xournal_windows(dpy, root, main_wins, &main_count, dialog_wins, &dialog_count, 64);
-            for (int i = 0; i < dialog_count; i++) {
-                printf("%lu\n", (unsigned long)dialog_wins[i]);
-            }
-            fflush(stdout);
-            XCloseDisplay(dpy);
-            return (dialog_count > 0) ? 0 : 1;
-        } else if (strcmp(argv[1], "--list-windows") == 0) {
-            Window main_wins[64];
-            Window dialog_wins[64];
-            int main_count = 0, dialog_count = 0;
-            query_managed_xournal_windows(dpy, root, main_wins, &main_count, dialog_wins, &dialog_count, 64);
-            for (int i = 0; i < main_count; i++) {
-                printf("%lu\n", (unsigned long)main_wins[i]);
-            }
-            for (int i = 0; i < dialog_count; i++) {
-                printf("%lu\n", (unsigned long)dialog_wins[i]);
-            }
-            fflush(stdout);
-            XCloseDisplay(dpy);
-            return 0;
+  int x11_fd = ConnectionNumber(dpy);
+  XEvent ev;
+
+  while (1) {
+    int need_update = 0;
+    while (XPending(dpy) > 0) {
+      XNextEvent(dpy, &ev);
+      if (ev.type == PropertyNotify) {
+        if (ev.xproperty.atom == net_wm_name ||
+            ev.xproperty.atom == XA_WM_NAME ||
+            ev.xproperty.atom == net_wm_visible_name ||
+            ev.xproperty.atom == net_active ||
+            ev.xproperty.atom == net_client_list ||
+            ev.xproperty.atom == net_wm_window_type ||
+            ev.xproperty.atom == net_wm_state) {
+          need_update = 1;
         }
+      } else if (ev.type == CreateNotify || ev.type == MapNotify ||
+                 ev.type == ReparentNotify || ev.type == DestroyNotify ||
+                 ev.type == UnmapNotify) {
+        need_update = 1;
+      }
     }
 
-    XSelectInput(dpy, root, PropertyChangeMask | SubstructureNotifyMask);
-    evaluate_and_emit_status(dpy, root);
-
-    int stdin_flags = fcntl(STDIN_FILENO, F_GETFL, 0);
-    if (stdin_flags >= 0) {
-        fcntl(STDIN_FILENO, F_SETFL, stdin_flags | O_NONBLOCK);
+    if (need_update) {
+      evaluate_and_emit_status(dpy, root);
     }
 
-    int x11_fd = ConnectionNumber(dpy);
-    XEvent ev;
+    struct pollfd pfds[2];
+    pfds[0].fd = x11_fd;
+    pfds[0].events = POLLIN;
+    pfds[0].revents = 0;
+    pfds[1].fd = STDIN_FILENO;
+    pfds[1].events = POLLIN;
+    pfds[1].revents = 0;
 
-    while (1) {
-        int need_update = 0;
-        while (XPending(dpy) > 0) {
-            XNextEvent(dpy, &ev);
-            if (ev.type == PropertyNotify) {
-                if (ev.xproperty.atom == net_wm_name ||
-                    ev.xproperty.atom == XA_WM_NAME ||
-                    ev.xproperty.atom == net_wm_visible_name ||
-                    ev.xproperty.atom == net_active ||
-                    ev.xproperty.atom == net_client_list ||
-                    ev.xproperty.atom == net_wm_window_type ||
-                    ev.xproperty.atom == net_wm_state) {
-                    need_update = 1;
-                }
-            } else if (ev.type == CreateNotify ||
-                       ev.type == MapNotify ||
-                       ev.type == ReparentNotify ||
-                       ev.type == DestroyNotify ||
-                       ev.type == UnmapNotify) {
-                need_update = 1;
+    int ret = poll(pfds, 2, 400); // 400ms periodic refresh & poll
+    if (ret > 0) {
+      if (pfds[1].revents & (POLLIN | POLLHUP)) {
+        while (1) {
+          if (ipc_accum_len >= sizeof(ipc_accum) - 1) {
+            ipc_accum_len = 0;
+          }
+          ssize_t n = read(STDIN_FILENO, ipc_accum + ipc_accum_len,
+                           sizeof(ipc_accum) - 1 - ipc_accum_len);
+          if (n > 0) {
+            ipc_accum_len += (size_t)n;
+            ipc_accum[ipc_accum_len] = '\0';
+            process_ipc_stream(dpy, root);
+          } else if (n < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+              break;
             }
+            break;
+          } else {
+            // EOF on stdin
+            break;
+          }
         }
-
-        if (need_update) {
-            evaluate_and_emit_status(dpy, root);
-        }
-
-        struct pollfd pfds[2];
-        pfds[0].fd = x11_fd;
-        pfds[0].events = POLLIN;
-        pfds[0].revents = 0;
-        pfds[1].fd = STDIN_FILENO;
-        pfds[1].events = POLLIN;
-        pfds[1].revents = 0;
-
-        int ret = poll(pfds, 2, 400); // 400ms periodic refresh & poll
-        if (ret > 0) {
-            if (pfds[1].revents & (POLLIN | POLLHUP)) {
-                while (1) {
-                    if (ipc_accum_len >= sizeof(ipc_accum) - 1) {
-                        ipc_accum_len = 0;
-                    }
-                    ssize_t n = read(STDIN_FILENO, ipc_accum + ipc_accum_len, sizeof(ipc_accum) - 1 - ipc_accum_len);
-                    if (n > 0) {
-                        ipc_accum_len += (size_t)n;
-                        ipc_accum[ipc_accum_len] = '\0';
-                        process_ipc_stream(dpy, root);
-                    } else if (n < 0) {
-                        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                            break;
-                        }
-                        break;
-                    } else {
-                        // EOF on stdin
-                        break;
-                    }
-                }
-            }
-            if ((pfds[1].revents & POLLHUP) && ipc_accum_len == 0) {
-                break;
-            }
-        } else if (ret == 0) {
-            // Periodic sync check to guarantee title and dialog state are always current
-            evaluate_and_emit_status(dpy, root);
-        }
+      }
+      if ((pfds[1].revents & POLLHUP) && ipc_accum_len == 0) {
+        break;
+      }
+    } else if (ret == 0) {
+      // Periodic sync check to guarantee title and dialog state are always
+      // current
+      evaluate_and_emit_status(dpy, root);
     }
+  }
 
-    XCloseDisplay(dpy);
-    return 0;
+  XCloseDisplay(dpy);
+  return 0;
 }

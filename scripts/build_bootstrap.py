@@ -565,9 +565,11 @@ def main():
             print(f"[*] Compiling {stub_c} -> {dest_pa} (16KB aligned)...")
             cmd = f"{ndk_clang} -shared -fPIC {page_size_flags} -Wl,-soname,libportaudio.so.2 -o '{dest_pa}' '{stub_c}'"
             ret = os.system(cmd)
-            if ret == 0 and os.path.exists(dest_pa):
-                os.chmod(dest_pa, 0o755)
-                print(f"[✔] Built portaudio stub: {dest_pa}")
+            if ret != 0 or not os.path.exists(dest_pa):
+                print(f"[!] Error compiling {stub_c}")
+                sys.exit(1)
+            os.chmod(dest_pa, 0o755)
+            print(f"[✔] Built portaudio stub: {dest_pa}")
 
         return
 
@@ -702,7 +704,10 @@ def main():
         out_pa = os.path.join(staging_usr, "lib", "libportaudio.so.2")
         if os.path.exists(stub_c):
             print("[*] Compiling libportaudio stub (16KB aligned)...")
-            os.system(f"{ndk_clang} -shared -fPIC {page_size_flags} -Wl,-soname,libportaudio.so.2 -o '{out_pa}' '{stub_c}'")
+            res = os.system(f"{ndk_clang} -shared -fPIC {page_size_flags} -Wl,-soname,libportaudio.so.2 -o '{out_pa}' '{stub_c}'")
+            if res != 0 or not os.path.exists(out_pa):
+                print(f"[!] Error compiling {stub_c}")
+                sys.exit(1)
             os.system(f"cp '{out_pa}' '{os.path.join(staging_usr, 'lib', 'libportaudio.so')}'")
 
         # 2. GTK Android IME Bridge Module
@@ -712,7 +717,10 @@ def main():
         os.makedirs(gtk_mod_dir, exist_ok=True)
         if os.path.exists(ime_c):
             print("[*] Compiling GTK IME bridge module (libgtk-android-ime.so, 16KB aligned)...")
-            os.system(f"{ndk_clang} -shared -fPIC {page_size_flags} -I'{staging_usr}/include' -I'{staging_usr}/include/gtk-3.0' -I'{staging_usr}/include/glib-2.0' -I'{staging_usr}/lib/glib-2.0/include' -L'{staging_usr}/lib' -lgtk-3 -lgobject-2.0 -lglib-2.0 -Wl,-soname,libgtk-android-ime.so -o '{out_ime}' '{ime_c}' -ldl")
+            res = os.system(f"{ndk_clang} -shared -fPIC {page_size_flags} -I'{staging_usr}/include' -I'{staging_usr}/include/gtk-3.0' -I'{staging_usr}/include/glib-2.0' -I'{staging_usr}/lib/glib-2.0/include' -L'{staging_usr}/lib' -lgtk-3 -lgobject-2.0 -lglib-2.0 -Wl,-soname,libgtk-android-ime.so -o '{out_ime}' '{ime_c}' -ldl")
+            if res != 0 or not os.path.exists(out_ime):
+                print(f"[!] Error compiling {ime_c}")
+                sys.exit(1)
             os.system(f"cp '{out_ime}' '{os.path.join(gtk_mod_dir, 'libgtk-android-ime.so')}'")
 
         # 3. xopp-title-watcher Binary
@@ -722,8 +730,10 @@ def main():
             print("[*] Compiling xopp-title-watcher binary (16KB aligned)...")
             os.makedirs(os.path.join(staging_usr, "bin"), exist_ok=True)
             res = os.system(f"{ndk_clang} -O2 {page_size_flags} -I'{staging_usr}/include' -L'{staging_usr}/lib' -lX11 -o '{out_watcher}' '{watcher_c}'")
-            if res == 0 and os.path.exists(out_watcher):
-                os.chmod(out_watcher, 0o755)
+            if res != 0 or not os.path.exists(out_watcher):
+                print(f"[!] Error compiling {watcher_c}")
+                sys.exit(1)
+            os.chmod(out_watcher, 0o755)
 
         # 4. xopp-wallpaper Binary
         wallpaper_c = os.path.join(scripts_dir, "xopp-wallpaper.c")
@@ -732,15 +742,20 @@ def main():
             print("[*] Compiling xopp-wallpaper binary (16KB aligned)...")
             os.makedirs(os.path.join(staging_usr, "bin"), exist_ok=True)
             res = os.system(f"{ndk_clang} -O2 {page_size_flags} -I'{staging_usr}/include' -L'{staging_usr}/lib' -lX11 -o '{out_wallpaper}' '{wallpaper_c}'")
-            if res == 0 and os.path.exists(out_wallpaper):
-                os.chmod(out_wallpaper, 0o755)
+            if res != 0 or not os.path.exists(out_wallpaper):
+                print(f"[!] Error compiling {wallpaper_c}")
+                sys.exit(1)
+            os.chmod(out_wallpaper, 0o755)
 
         # 5. Lightweight /proc/self/exe translation shim (LD_PRELOAD)
         shim_c = os.path.join(scripts_dir, "xopp-shim.c")
         out_shim = os.path.join(staging_usr, "lib", "libxopp-shim.so")
         if os.path.exists(shim_c):
             print("[*] Compiling xopp-shim library (libxopp-shim.so, 16KB aligned)...")
-            os.system(f"{ndk_clang} -shared -fPIC {page_size_flags} -Wl,-soname,libxopp_shim.so -o '{out_shim}' '{shim_c}' -ldl")
+            res = os.system(f"{ndk_clang} -shared -fPIC {page_size_flags} -Wl,-soname,libxopp_shim.so -o '{out_shim}' '{shim_c}' -ldl")
+            if res != 0 or not os.path.exists(out_shim):
+                print(f"[!] Error compiling {shim_c}")
+                sys.exit(1)
 
     # Clean unneeded headers, docs, and static archives to keep payload lean
     print("[*] Stripping documentation, headers, and static archives...")
@@ -832,25 +847,31 @@ def main():
         ]
         for bin_name, so_name in bin_mappings:
             src_bin = os.path.join(staging_usr, "bin", bin_name)
-            if os.path.exists(src_bin):
-                dest_so = os.path.join(target_abi_dir, so_name)
-                shutil.copy2(src_bin, dest_so)
-                os.chmod(dest_so, 0o755)
-                print(f"[*] Exported native executable: {bin_name} -> {dest_so}")
+            if not os.path.exists(src_bin):
+                print(f"[!] Error: Required binary '{bin_name}' not found in {staging_usr}/bin")
+                sys.exit(1)
+            dest_so = os.path.join(target_abi_dir, so_name)
+            shutil.copy2(src_bin, dest_so)
+            os.chmod(dest_so, 0o755)
+            print(f"[*] Exported native executable: {bin_name} -> {dest_so}")
 
         src_ime = os.path.join(staging_usr, "lib", "libgtk-android-ime.so")
-        if os.path.exists(src_ime):
-            dest_ime = os.path.join(target_abi_dir, "libgtk-android-ime.so")
-            shutil.copy2(src_ime, dest_ime)
-            os.chmod(dest_ime, 0o755)
-            print(f"[*] Exported native module: libgtk-android-ime.so -> {dest_ime}")
+        if not os.path.exists(src_ime):
+            print(f"[!] Error: Required module libgtk-android-ime.so not found")
+            sys.exit(1)
+        dest_ime = os.path.join(target_abi_dir, "libgtk-android-ime.so")
+        shutil.copy2(src_ime, dest_ime)
+        os.chmod(dest_ime, 0o755)
+        print(f"[*] Exported native module: libgtk-android-ime.so -> {dest_ime}")
 
         src_shim = os.path.join(staging_usr, "lib", "libxopp-shim.so")
-        if os.path.exists(src_shim):
-            dest_shim = os.path.join(target_abi_dir, "libxopp_shim.so")
-            shutil.copy2(src_shim, dest_shim)
-            os.chmod(dest_shim, 0o755)
-            print(f"[*] Exported native shim: libxopp-shim.so -> {dest_shim}")
+        if not os.path.exists(src_shim):
+            print(f"[!] Error: Required module libxopp-shim.so not found")
+            sys.exit(1)
+        dest_shim = os.path.join(target_abi_dir, "libxopp_shim.so")
+        shutil.copy2(src_shim, dest_shim)
+        os.chmod(dest_shim, 0o755)
+        print(f"[*] Exported native shim: libxopp-shim.so -> {dest_shim}")
 
     print(f"[*] Packaging final archive to {args.output}...")
     out_dir = os.path.dirname(os.path.abspath(args.output))

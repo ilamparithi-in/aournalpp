@@ -215,7 +215,7 @@ jobs:
           cp x11-core/build/outputs/aar/x11-core-release.aar libs/x11-core-release.aar
 
       - name: Cache Prebuilt x11-core AAR (Fallback)
-        if: steps.x11-cache.outputs.cache-hit != 'true'
+        if: steps.x11-cache.outputs.cache-hit != 'true' && matrix.flavor == 'arm64'
         uses: actions/cache/save@v4
         continue-on-error: true
         with:

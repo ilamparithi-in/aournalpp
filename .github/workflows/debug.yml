@@ -5,8 +5,14 @@ on:
     branches:
       - '**'
     tags-ignore:
-      - 'v*'
+      - '**'
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish build to releases/tag/debug'
+        required: false
+        type: boolean
+        default: true
 
 concurrency:
   group: debug-ci-${{ github.ref }}
@@ -85,7 +91,8 @@ jobs:
           cp x11-core/build/outputs/aar/x11-core-release.aar libs/x11-core-release.aar
 
       - name: Cache Prebuilt x11-core AAR (Fallback)
-        if: steps.x11-cache.outputs.cache-hit != 'true'
+        # Always multi arch so we check only for arm64
+        if: steps.x11-cache.outputs.cache-hit != 'true' && matrix.flavor == 'arm64' 
         uses: actions/cache/save@v4
         continue-on-error: true
         with:
@@ -106,3 +113,50 @@ jobs:
           archive: false
           compression-level: 0
           retention-days: 7
+
+  publish-debug-release:
+    name: Publish Latest Debug Release
+    needs: build-debug
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.publish_release != false)
+    permissions:
+      contents: write
+      actions: read
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Download Debug APKs
+        uses: actions/download-artifact@v7
+        with:
+          path: release-dist
+          merge-multiple: true
+
+      - name: Stage Release Artifacts
+        run: |
+          cd release-dist
+          ls -la
+          sha256sum *.apk > checksums.txt
+          cat checksums.txt
+
+      - name: Publish to GitHub Debug Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: debug
+          target_commitish: ${{ github.sha }}
+          name: "Aournal++ Latest Debug"
+          draft: false
+          prerelease: true
+          make_latest: true
+          generate_release_notes: true
+          body: |
+            The app will see its first beta and release builds once I pay the fee to unc google to get play publishing privileges. Until then, please enjoy this debug build!
+
+            As CI debug builds expire after 7 days, this release will regularly be updated with the latest commits. Pleeeease feel free to report bugs in the issues tab!
+          files: |
+            release-dist/*.apk
+            release-dist/checksums.txt
+

@@ -40,6 +40,13 @@ jobs:
           CORE_SHA=$(git rev-parse HEAD:x11-core)
           echo "key=x11-core-aar-${SUBMODULE_SHA}-${CORE_SHA}" >> "$GITHUB_OUTPUT"
 
+      - name: Cache Prebuilt x11-core AAR
+        id: x11-cache
+        uses: actions/cache@v4
+        with:
+          path: libs/x11-core-release.aar
+          key: ${{ steps.cache-key.outputs.key }}
+
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
@@ -59,16 +66,11 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build x11-core AAR
+        if: steps.x11-cache.outputs.cache-hit != 'true'
         run: |
           ./gradlew :x11-core:assembleRelease -PusePrebuiltX11=false --stacktrace
           mkdir -p libs
           cp x11-core/build/outputs/aar/x11-core-release.aar libs/x11-core-release.aar
-
-      - name: Cache Prebuilt x11-core AAR
-        uses: actions/cache/save@v4
-        with:
-          path: libs/x11-core-release.aar
-          key: ${{ steps.cache-key.outputs.key }}
 
       - name: Upload x11-core AAR Artifact
         uses: actions/upload-artifact@v7
