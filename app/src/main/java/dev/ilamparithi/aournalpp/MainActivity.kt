@@ -249,6 +249,12 @@ class MainActivity : ComponentActivity() {
                 var hasBootstrapRevealed by rememberSaveable { mutableStateOf(false) }
                 var isRevealingOnboarding by rememberSaveable { mutableStateOf(false) }
 
+                LaunchedEffect(state) {
+                    if (state is BootstrapState.Installing || state is BootstrapState.Checking) {
+                        hasBootstrapRevealed = false
+                    }
+                }
+
                 Box(modifier = Modifier.fillMaxSize()) {
                     if (state is BootstrapState.Ready && (isOnboardingCompleted || isRevealingOnboarding)) {
                         LaunchedEffect(state) {
