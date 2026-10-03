@@ -48,6 +48,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -379,12 +381,18 @@ fun DisplaySettingsScreen(
 
             // Canvas Layout & Insets Behavior
             Text("Canvas Layout & System Insets", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                Column(modifier = Modifier.padding(8.dp)) {
+            OutlinedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     SettingsSwitchListItem(
                         headline = "Adjust Resolution for Orientation",
                         supporting = "Automatically swap width and height when device orientation rotates.",
                         checked = adjustRes,
+                        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
                         onCheckedChange = {
                             adjustRes = it
                             x11Prefs.edit().putBoolean(X11Preferences.KEY_ADJUST_RESOLUTION, it).apply()
@@ -398,6 +406,7 @@ fun DisplaySettingsScreen(
                         headline = "Stretch to Fit Display",
                         supporting = "Scale canvas image non-proportionally to eliminate black letterbox bars.",
                         checked = displayStretch,
+                        shape = RectangleShape,
                         onCheckedChange = {
                             displayStretch = it
                             x11Prefs.edit().putBoolean(X11Preferences.KEY_DISPLAY_STRETCH, it).apply()
@@ -411,6 +420,7 @@ fun DisplaySettingsScreen(
                         headline = "Reseed Screen with Soft Keyboard",
                         supporting = "Dynamically adjust X11 screen dimensions when on-screen keyboard appears.",
                         checked = reseedIme,
+                        shape = RectangleShape,
                         onCheckedChange = {
                             reseedIme = it
                             x11Prefs.edit().putBoolean(X11Preferences.KEY_RESEED, it).apply()
@@ -424,6 +434,7 @@ fun DisplaySettingsScreen(
                         headline = "Fullscreen Canvas",
                         supporting = "Hide status and navigation bars. Disabling allows Android's floating rotation button to appear.",
                         checked = fullscreenCanvas,
+                        shape = RectangleShape,
                         onCheckedChange = {
                             fullscreenCanvas = it
                             x11Prefs.edit().putBoolean(X11Preferences.KEY_FULLSCREEN, it).apply()

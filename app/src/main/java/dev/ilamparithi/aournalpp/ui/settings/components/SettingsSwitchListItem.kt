@@ -36,7 +36,8 @@ fun SettingsSwitchListItem(
     enabled: Boolean = true,
     leadingContent: (@Composable () -> Unit)? = null,
     onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    shape: androidx.compose.ui.graphics.Shape = androidx.compose.ui.graphics.RectangleShape
 ) {
     ListItem(
         checked = checked,
@@ -72,7 +73,15 @@ fun SettingsSwitchListItem(
                 } else null
             )
         },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        shapes = ListItemDefaults.shapes(
+            shape = shape,
+            selectedShape = shape,
+            pressedShape = shape,
+            focusedShape = shape,
+            hoveredShape = shape,
+            draggedShape = shape
+        )
     ) {
         Text(
             text = headline,

@@ -468,8 +468,9 @@ private fun DetailPaneContent(
         }
         SettingsCategory.TOOLBAR -> {
             ToolbarSettingsScreen(
+                showTopBar = showTopBar,
                 onNavigateToPositionEditor = { onNavigateDialog(SettingsSubpage.TOOLBAR_POSITION_EDITOR) },
-                onBack = { onBack?.invoke() ?: onSelectCategory(SettingsCategory.FILES_STORAGE) }
+                onBack = onBack
             )
         }
         SettingsCategory.INPUT_STYLUS -> {

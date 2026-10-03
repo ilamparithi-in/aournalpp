@@ -24,6 +24,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -68,12 +70,18 @@ fun KeyboardSettingsScreen(onBack: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                Column(modifier = Modifier.padding(8.dp)) {
+            OutlinedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     SettingsSwitchListItem(
                         headline = "Auto-toggle Keyboard on Focus",
                         supporting = "Automatically open the soft keyboard when tapping into text boxes or canvas annotations.",
                         checked = autoShowIme,
+                        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
                         onCheckedChange = {
                             autoShowIme = it
                             prefs.edit().putBoolean("pref_auto_show_ime_on_focus", it).apply()
@@ -86,6 +94,7 @@ fun KeyboardSettingsScreen(onBack: () -> Unit) {
                         headline = "Enforce Character-Based Input",
                         supporting = "Directly dispatch committed Unicode characters rather than synthesized hardware key scancodes.",
                         checked = enforceCharBasedInput,
+                        shape = RectangleShape,
                         onCheckedChange = {
                             enforceCharBasedInput = it
                             x11Prefs.edit().putBoolean(X11Preferences.KEY_ENFORCE_CHAR_BASED_INPUT, it).apply()
@@ -99,6 +108,7 @@ fun KeyboardSettingsScreen(onBack: () -> Unit) {
                         headline = "Triple-Tap Close Force Close",
                         supporting = "Tapping the Close button on the floating toolbar or Save All & Close 3 times rapidly brings up a force-close dialog if X11 becomes unresponsive.",
                         checked = tripleBackForceClose,
+                        shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
                         onCheckedChange = {
                             tripleBackForceClose = it
                             prefs.edit().putBoolean("pref_triple_back_force_close", it).apply()

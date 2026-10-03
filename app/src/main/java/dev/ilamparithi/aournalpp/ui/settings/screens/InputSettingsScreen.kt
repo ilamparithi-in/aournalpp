@@ -43,6 +43,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -151,12 +153,18 @@ fun InputSettingsScreen(
 
             // Finger as Stylus Section
             Text("Finger as Stylus", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                Column(modifier = Modifier.padding(8.dp)) {
+            OutlinedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     SettingsSwitchListItem(
                         headline = "Show Finger as Stylus Toggle in Toolbar",
                         supporting = "Displays a toggle button in the floating toolbar to quickly switch between drawing with your finger as a stylus and standard touch navigation.",
                         checked = showTouchStylus,
+                        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
                         onCheckedChange = {
                             showTouchStylus = it
                             x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_SHOW_TOUCH_STYLUS, it).apply()
@@ -170,6 +178,7 @@ fun InputSettingsScreen(
                         headline = "Turn off Touch as Stylus on Stylus Hover",
                         supporting = "Automatically disables finger drawing and restores touch navigation as soon as a physical stylus pen hovers over or touches the screen.",
                         checked = disableTouchStylusOnStylusHover,
+                        shape = RectangleShape,
                         onCheckedChange = {
                             disableTouchStylusOnStylusHover = it
                             x11Prefs.edit().putBoolean(X11Preferences.KEY_DISABLE_TOUCH_STYLUS_ON_STYLUS_HOVER, it).apply()
@@ -183,6 +192,7 @@ fun InputSettingsScreen(
                         headline = "Remember Last Toggled State",
                         supporting = "Preserves whether Finger as Stylus was active across app launches. When disabled, Finger as Stylus resets to off on startup.",
                         checked = rememberFingerAsStylusState,
+                        shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
                         onCheckedChange = {
                             rememberFingerAsStylusState = it
                             x11Prefs.edit().putBoolean(X11Preferences.KEY_REMEMBER_FINGER_AS_STYLUS_STATE, it).apply()
@@ -194,12 +204,18 @@ fun InputSettingsScreen(
 
             // Stylus Controls
             Text("Stylus & Pointer Options", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                Column(modifier = Modifier.padding(8.dp)) {
+            OutlinedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     SettingsSwitchListItem(
                         headline = "Show Stylus Click Mode in Toolbar",
                         supporting = "Displays Left / Middle / Right click toggle capsule directly in the floating toolbar (also configurable in Floating Toolbar settings).",
                         checked = showStylusClickOverride,
+                        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
                         onCheckedChange = {
                             showStylusClickOverride = it
                             x11Prefs.edit().putBoolean(X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE, it).apply()
@@ -213,6 +229,7 @@ fun InputSettingsScreen(
                         headline = "Expand Toolbar on Stylus Hover",
                         supporting = "Automatically expand the collapsed floating toolbar when hovering over it with a stylus pen.",
                         checked = stylusHoverExpands,
+                        shape = RectangleShape,
                         onCheckedChange = {
                             stylusHoverExpands = it
                             x11Prefs.edit().putBoolean(X11Preferences.KEY_TOOLBAR_STYLUS_HOVER_EXPANDS, it).apply()
@@ -226,6 +243,7 @@ fun InputSettingsScreen(
                         headline = "Enable Stylus Mouse Mode",
                         supporting = "Treat hardware stylus touch events as desktop mouse pointer clicks.",
                         checked = stylusIsMouse,
+                        shape = RectangleShape,
                         onCheckedChange = {
                             stylusIsMouse = it
                             x11Prefs.edit().putBoolean(X11Preferences.KEY_STYLUS_IS_MOUSE, it).apply()
@@ -239,6 +257,7 @@ fun InputSettingsScreen(
                         headline = "Stylus Button Contact Modifier Mode",
                         supporting = "Modify contact properties when the stylus side barrel button is depressed.",
                         checked = stylusButtonContactModifier,
+                        shape = RectangleShape,
                         onCheckedChange = {
                             stylusButtonContactModifier = it
                             x11Prefs.edit().putBoolean(X11Preferences.KEY_STYLUS_BUTTON_CONTACT_MODIFIER, it).apply()
@@ -252,6 +271,7 @@ fun InputSettingsScreen(
                             headline = "Show Mouse Click Helper Overlay",
                             supporting = "On-screen Left / Middle / Right floating mouse buttons for trackpad mode.",
                             checked = showMouseHelper,
+                            shape = RectangleShape,
                             onCheckedChange = {
                                 showMouseHelper = it
                                 x11Prefs.edit().putBoolean(X11Preferences.KEY_SHOW_MOUSE_HELPER, it).apply()
@@ -264,6 +284,7 @@ fun InputSettingsScreen(
                             headline = "Scale Trackpad to Display Factor",
                             supporting = "Scale cursor movement speed according to display resolution.",
                             checked = scaleTouchpad,
+                            shape = RectangleShape,
                             onCheckedChange = {
                                 scaleTouchpad = it
                                 x11Prefs.edit().putBoolean(X11Preferences.KEY_SCALE_TOUCHPAD, it).apply()
@@ -276,6 +297,7 @@ fun InputSettingsScreen(
                             headline = "Enable Tap-to-Move",
                             supporting = "Tap and drag to move pointer without holding physical clicks.",
                             checked = tapToMove,
+                            shape = RectangleShape,
                             onCheckedChange = {
                                 tapToMove = it
                                 x11Prefs.edit().putBoolean(X11Preferences.KEY_TAP_TO_MOVE, it).apply()
@@ -289,6 +311,7 @@ fun InputSettingsScreen(
                         headline = "Ignore Gamepad Events",
                         supporting = "Suppress controller joystick and button input events from driving pointer.",
                         checked = ignoreGamepad,
+                        shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
                         onCheckedChange = {
                             ignoreGamepad = it
                             x11Prefs.edit().putBoolean(X11Preferences.KEY_IGNORE_GAMEPAD_EVENTS, it).apply()

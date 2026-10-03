@@ -621,11 +621,13 @@ fun FilesStorageSettingsScreen(
             )
 
             Surface(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp)),
                 shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
-                Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     var showHiddenFilesPref by remember {
                         mutableStateOf(prefs.getBoolean("pref_show_hidden_files", false))
                     }
@@ -633,6 +635,7 @@ fun FilesStorageSettingsScreen(
                         headline = stringResource(R.string.pref_show_hidden_files_title),
                         supporting = stringResource(R.string.pref_show_hidden_files_desc),
                         checked = showHiddenFilesPref,
+                        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
                         onCheckedChange = {
                             showHiddenFilesPref = it
                             prefs.edit().putBoolean("pref_show_hidden_files", it).apply()
@@ -651,6 +654,7 @@ fun FilesStorageSettingsScreen(
                         headline = stringResource(R.string.pref_intelligent_recovery_title),
                         supporting = stringResource(R.string.pref_intelligent_recovery_desc),
                         checked = intelligentRecoveryPref,
+                        shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
                         onCheckedChange = {
                             intelligentRecoveryPref = it
                             prefs.edit().putBoolean("pref_intelligent_emergency_recovery", it).apply()

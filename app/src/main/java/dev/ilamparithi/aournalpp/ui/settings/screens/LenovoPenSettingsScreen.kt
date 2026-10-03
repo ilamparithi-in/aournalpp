@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -77,12 +78,18 @@ fun LenovoPenSettingsScreen(onBack: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                Column(modifier = Modifier.padding(8.dp)) {
+            OutlinedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     SettingsSwitchListItem(
                         headline = "Show Detection Toasts",
                         supporting = "Display transient toast messages when barrel button gestures are detected.",
                         checked = showDetections,
+                        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
                         onCheckedChange = {
                             showDetections = it
                             x11Prefs.edit().putBoolean(X11Preferences.KEY_LENOVO_PEN_SHOW_DETECTIONS, it).apply()
@@ -94,6 +101,7 @@ fun LenovoPenSettingsScreen(onBack: () -> Unit) {
                         headline = "Show Toggle Debug Toasts",
                         supporting = "Display state toasts when toggle mode button states change.",
                         checked = showToggleDebug,
+                        shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
                         onCheckedChange = {
                             showToggleDebug = it
                             x11Prefs.edit().putBoolean(X11Preferences.KEY_LENOVO_PEN_DEBUG_TOGGLE_TOASTS, it).apply()

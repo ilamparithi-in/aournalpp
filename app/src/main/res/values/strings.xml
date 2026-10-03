@@ -1234,6 +1234,141 @@
     <string name="msg_reduce_animations_disabled">Reduce Animations disabled</string>
 
     <!-- ======================================================================= -->
+    <!-- Floating Toolbar Settings (Section 3)                                   -->
+    <!-- ======================================================================= -->
+    <string name="pref_cat_toolbar">Floating Toolbar</string>
+    <string name="pref_cat_toolbar_desc">Placement, auto-collapse &amp; toolbar controls</string>
+
+    <!-- Placement & Anchors -->
+    <string name="pref_toolbar_placement_title">Placement &amp; Anchors</string>
+    <string name="pref_toolbar_placement_desc">Canvas dock anchor, safe area bounds, and calibration</string>
+    <string name="pref_toolbar_preset_title">Default Anchor Position</string>
+    <string name="pref_toolbar_preset_desc">Position anchor: %1$s</string>
+    <string name="pref_toolbar_open_visual_editor">Visual Editor</string>
+    <string name="pref_toolbar_configure">Configure</string>
+    <string name="pref_toolbar_confine_safe_area">Confine to Screen Safe Area</string>
+    <string name="pref_toolbar_confine_safe_area_desc">Align and keep the floating toolbar within calibrated display corner margins and cutout safe zones.</string>
+
+    <!-- Anchor presets -->
+    <string name="pref_toolbar_group_top_anchors">Top Dock Anchors</string>
+    <string name="pref_toolbar_group_bottom_anchors">Bottom Dock Anchors</string>
+    <string name="pref_toolbar_anchor_top_left">Top Left</string>
+    <string name="pref_toolbar_anchor_top_center">Top Center</string>
+    <string name="pref_toolbar_anchor_top_right">Top Right</string>
+    <string name="pref_toolbar_anchor_bottom_left">Bottom Left</string>
+    <string name="pref_toolbar_anchor_bottom_center">Bottom Center</string>
+    <string name="pref_toolbar_anchor_bottom_right">Bottom Right</string>
+    <string name="pref_toolbar_anchor_custom">Custom (%1$d%%, %2$d%%)</string>
+    <string name="pref_toolbar_sample_filename">Physics_Lecture.xopp</string>
+
+    <!-- Collapse & Pin Behavior -->
+    <string name="pref_toolbar_collapse_title">Startup &amp; Collapse Behavior</string>
+    <string name="pref_toolbar_collapse_desc">Startup state, inactivity timer collapse, and stylus hover expansion</string>
+    <string name="pref_toolbar_start_collapsed">Start Collapsed</string>
+    <string name="pref_toolbar_start_collapsed_desc">Automatically launch the canvas with the toolbar minimized into a compact pill.</string>
+    <string name="pref_toolbar_always_show_filename">Always Show File Name</string>
+    <string name="pref_toolbar_always_show_filename_desc">Keep the active note file name in the toolbar at all times instead of switching to dialog names.</string>
+    <string name="pref_toolbar_pin_mode">Replace Collapse with Pin / Unpin</string>
+    <string name="pref_toolbar_pin_mode_desc">Tap collapsed toolbar to expand. Unpinned toolbar auto-collapses after inactivity; pin button holds it open.</string>
+    <string name="pref_toolbar_timeout_title">Auto-Collapse Inactivity Timeout</string>
+    <string name="pref_toolbar_timeout_desc">Duration of inactivity before the unpinned toolbar collapses.</string>
+    <string name="pref_toolbar_timeout_ms_title">Exact Timeout (ms)</string>
+    <string name="pref_toolbar_timeout_ms_desc">1s = 1000ms (valid range: 500ms – 60,000ms)</string>
+    <string name="pref_toolbar_hover_expand">Expand on Stylus Hover</string>
+    <string name="pref_toolbar_hover_expand_desc">Automatically expand the collapsed toolbar when hovering over it with a stylus pen.</string>
+
+    <!-- Toolbar Items & Actions -->
+    <string name="pref_toolbar_items_title">Visible Elements &amp; Actions</string>
+    <string name="pref_toolbar_items_desc">Toggle toolbar action icons and customize interactive shortcut buttons.</string>
+    <string name="pref_toolbar_preview_title">Live Toolbar Preview</string>
+    <string name="pref_toolbar_preview_desc">Real-time interactive layout of enabled floating controls</string>
+    <string name="pref_toolbar_active_items_count">%1$d of %2$d items enabled</string>
+    <string name="pref_toolbar_reset_items">Reset to Defaults</string>
+    <string name="pref_toolbar_enable_all">Enable All</string>
+
+    <!-- Chips -->
+    <string name="pref_toolbar_chip_title">Title</string>
+    <string name="pref_toolbar_chip_back">Back</string>
+    <string name="pref_toolbar_chip_close">Close</string>
+    <string name="pref_toolbar_chip_switcher">Switcher</string>
+    <string name="pref_toolbar_chip_snap">Snap</string>
+    <string name="pref_toolbar_chip_keyboard">Keyboard</string>
+    <string name="pref_toolbar_chip_drag">Drag</string>
+    <string name="pref_toolbar_chip_finger_stylus">Finger Stylus</string>
+    <string name="pref_toolbar_chip_stylus_click">L/M/R Click</string>
+    <string name="pref_toolbar_chip_cut">Cut</string>
+    <string name="pref_toolbar_chip_copy">Copy</string>
+    <string name="pref_toolbar_chip_paste">Paste</string>
+    <string name="pref_toolbar_chip_image">Image</string>
+
+    <!-- Groups -->
+    <string name="pref_toolbar_group_window">Navigation &amp; Window Controls</string>
+    <string name="pref_toolbar_group_stylus">Stylus &amp; Touch Navigation</string>
+    <string name="pref_toolbar_group_tools">Clipboard &amp; Quick Actions</string>
+
+    <!-- Specific Items -->
+    <string name="pref_toolbar_item_title">Window Title &amp; Document Icon</string>
+    <string name="pref_toolbar_item_title_desc">Displays note title and dynamic window type icon.</string>
+    <string name="pref_toolbar_item_back">Back Button</string>
+    <string name="pref_toolbar_item_back_desc">Displays back arrow button to gracefully save and exit canvas.</string>
+    <string name="pref_toolbar_item_close">Close Button (Ctrl+Q)</string>
+    <string name="pref_toolbar_item_close_desc">Displays a close button on the floating toolbar to trigger Xournal++ quit / save prompt.</string>
+    <string name="pref_toolbar_close_action">Close Button Action</string>
+    <string name="pref_toolbar_close_foreground">Foreground</string>
+    <string name="pref_toolbar_close_foreground_desc">Closes active/foreground window only</string>
+    <string name="pref_toolbar_close_all">All Windows</string>
+    <string name="pref_toolbar_close_all_desc">Sequentially closes all open windows</string>
+
+    <string name="pref_toolbar_item_switcher">Window Switcher</string>
+    <string name="pref_toolbar_item_switcher_desc">Displays Alt+Tab window switcher button. Long press to open the Window Gallery.</string>
+    <string name="pref_toolbar_item_snap">Snap Layouts</string>
+    <string name="pref_toolbar_item_snap_desc">Displays the snap layouts dropdown button on the floating toolbar.</string>
+    <string name="pref_toolbar_item_keyboard">Soft Keyboard Toggle</string>
+    <string name="pref_toolbar_item_keyboard_desc">Displays soft keyboard show/hide action button.</string>
+    <string name="pref_toolbar_item_drag">Movable Drag Handle</string>
+    <string name="pref_toolbar_item_drag_desc">Displays handle to long-press and drag toolbar anywhere on screen.</string>
+
+    <string name="pref_toolbar_item_stylus_click">Stylus Click Mode Switcher (L/M/R)</string>
+    <string name="pref_toolbar_item_stylus_click_desc">Displays Left / Middle / Right click toggle buttons directly in the floating toolbar.</string>
+    <string name="pref_toolbar_item_touch_stylus">Finger as Stylus Toggle</string>
+    <string name="pref_toolbar_item_touch_stylus_desc">Displays a toolbar button to quickly switch between drawing with finger and standard touch navigation.</string>
+    <string name="pref_toolbar_item_disable_touch_on_hover">Turn off Touch as Stylus on Stylus Hover</string>
+    <string name="pref_toolbar_item_disable_touch_on_hover_desc">Automatically disables finger drawing and restores touch navigation when a physical stylus is detected.</string>
+    <string name="pref_toolbar_item_remember_finger_state">Remember Last Toggled State</string>
+    <string name="pref_toolbar_item_remember_finger_state_desc">Preserves whether Finger as Stylus was active across app launches.</string>
+
+    <string name="pref_toolbar_item_cut">Cut Action (Ctrl+X)</string>
+    <string name="pref_toolbar_item_cut_desc">Displays Cut clipboard action button.</string>
+    <string name="pref_toolbar_item_copy">Copy Action (Ctrl+C)</string>
+    <string name="pref_toolbar_item_copy_desc">Displays Copy clipboard action button.</string>
+    <string name="pref_toolbar_item_paste">Paste Action (Ctrl+V)</string>
+    <string name="pref_toolbar_item_paste_desc">Displays Paste clipboard action button.</string>
+    <string name="pref_toolbar_item_image">Insert Image Action</string>
+    <string name="pref_toolbar_item_image_desc">Displays Image action button on the toolbar to insert pictures from Camera, Gallery, or Files.</string>
+
+    <!-- Toolbar Content Descriptions & Accessibility -->
+    <string name="pref_toolbar_timeout_seconds">%1$ss</string>
+    <string name="pref_toolbar_timeout_seconds_decimal">%1$.1fs</string>
+    <string name="pref_toolbar_timeout_ms_placeholder">5000</string>
+    <string name="toolbar_cd_back">Return to Home</string>
+    <string name="toolbar_cd_close">Close Note (Ctrl+Q)</string>
+    <string name="toolbar_cd_switcher">Switch Note Window (Tap to cycle, Long press for gallery)</string>
+    <string name="toolbar_cd_snap">Snap Layouts</string>
+    <string name="toolbar_cd_touch_stylus_enabled">Finger as Stylus (Enabled)</string>
+    <string name="toolbar_cd_touch_stylus_disabled">Finger as Stylus (Disabled)</string>
+    <string name="toolbar_cd_cut">Cut (Ctrl+X)</string>
+    <string name="toolbar_cd_copy">Copy (Ctrl+C)</string>
+    <string name="toolbar_cd_paste">Paste (Ctrl+V)</string>
+    <string name="toolbar_cd_image">Insert Image (Camera, Gallery, Files)</string>
+    <string name="toolbar_cd_keyboard_show">Show Keyboard</string>
+    <string name="toolbar_cd_keyboard_hide">Hide Keyboard</string>
+    <string name="toolbar_cd_pin">Pin Toolbar</string>
+    <string name="toolbar_cd_unpin">Unpin Toolbar</string>
+    <string name="toolbar_cd_collapse">Collapse Toolbar</string>
+    <string name="toolbar_cd_drag_handle">Drag Toolbar</string>
+    <string name="toolbar_cd_reset_position">Reset Toolbar Position</string>
+
+    <!-- ======================================================================= -->
     <!-- Language & Localization                                                 -->
     <!-- ======================================================================= -->
     <string name="pref_cat_language">Language &amp; Localization</string>
