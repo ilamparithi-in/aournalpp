@@ -37,9 +37,10 @@ import androidx.compose.material.icons.filled.Mouse
 import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.TouchApp
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenu
+import dev.ilamparithi.aournalpp.ui.common.AppDropdownMenuItem
+import dev.ilamparithi.aournalpp.ui.common.AppExposedDropdownMenu
+import dev.ilamparithi.aournalpp.ui.settings.components.SettingsIconBadge
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
@@ -334,20 +335,11 @@ fun InputSettingsScreen(
                         checked = showTouchStylus,
                         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
                         leadingContent = {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Draw,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.Draw,
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                iconTint = MaterialTheme.colorScheme.primary
+                            )
                         },
                         onCheckedChange = {
                             showTouchStylus = it
@@ -413,20 +405,11 @@ fun InputSettingsScreen(
                         checked = showStylusClickOverride,
                         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
                         leadingContent = {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.secondaryContainer,
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Edit,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.secondary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.Edit,
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                iconTint = MaterialTheme.colorScheme.secondary
+                            )
                         },
                         onCheckedChange = {
                             showStylusClickOverride = it
@@ -461,20 +444,11 @@ fun InputSettingsScreen(
                         checked = stylusIsMouse,
                         shape = RectangleShape,
                         leadingContent = {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Mouse,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.Mouse,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         },
                         onCheckedChange = {
                             stylusIsMouse = it
@@ -737,13 +711,14 @@ fun InputSettingsScreen(
                                 .fillMaxWidth(),
                             shape = RoundedCornerShape(16.dp)
                         )
-                        ExposedDropdownMenu(
+                        AppExposedDropdownMenu(
                             expanded = transformExpanded,
                             onDismissRequest = { transformExpanded = false }
                         ) {
                             transformOptions.forEach { (value, label) ->
-                                DropdownMenuItem(
+                                AppDropdownMenuItem(
                                     text = { Text(label) },
+                                    selected = value == transformCaptured,
                                     onClick = {
                                         transformCaptured = value
                                         transformExpanded = false
@@ -789,20 +764,11 @@ fun InputSettingsScreen(
                                 .padding(horizontal = 16.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Gesture,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.Gesture,
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                iconTint = MaterialTheme.colorScheme.primary
+                            )
 
                             Spacer(modifier = Modifier.width(14.dp))
 

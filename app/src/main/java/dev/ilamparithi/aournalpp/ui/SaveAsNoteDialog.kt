@@ -26,9 +26,9 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
+import dev.ilamparithi.aournalpp.ui.common.AppDropdownMenu
+import dev.ilamparithi.aournalpp.ui.common.AppDropdownMenuItem
+import dev.ilamparithi.aournalpp.ui.common.AppMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -271,7 +271,7 @@ fun SaveAsNoteDialog(
                             }
                         }
 
-                        DropdownMenu(
+                        AppDropdownMenu(
                             expanded = isFolderDropdownExpanded,
                             onDismissRequest = { isFolderDropdownExpanded = false },
                             modifier = if (anchorWidthPx > 0) {
@@ -282,7 +282,7 @@ fun SaveAsNoteDialog(
                         ) {
                             // Option: Create New Folder on the spot
                             if (onCreateFolder != null) {
-                                DropdownMenuItem(
+                                AppDropdownMenuItem(
                                     text = {
                                         Text(
                                             text = "+ New Folder",
@@ -302,11 +302,12 @@ fun SaveAsNoteDialog(
                                         showCreateFolderDialog = true
                                     }
                                 )
-                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                AppMenuDefaults.InsetDivider()
                             }
 
                             // Option: Notes Home (Root)
-                            DropdownMenuItem(
+                            val isRootSelected = selectedFolder?.canonicalPath == rootFolder.canonicalPath
+                            AppDropdownMenuItem(
                                 text = { Text("Notes Home (Root)") },
                                 leadingIcon = {
                                     Icon(
@@ -315,6 +316,7 @@ fun SaveAsNoteDialog(
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 },
+                                selected = isRootSelected,
                                 onClick = {
                                     selectedFolder = rootFolder
                                     isFolderDropdownExpanded = false
@@ -323,7 +325,8 @@ fun SaveAsNoteDialog(
 
                             // List of all other folders
                             currentFolders.forEach { folder ->
-                                DropdownMenuItem(
+                                val isFolderSelected = selectedFolder?.canonicalPath == folder.file.canonicalPath
+                                AppDropdownMenuItem(
                                     text = {
                                         Text(
                                             text = folder.name,
@@ -331,6 +334,7 @@ fun SaveAsNoteDialog(
                                             overflow = TextOverflow.Ellipsis
                                         )
                                     },
+                                    selected = isFolderSelected,
                                     leadingIcon = {
                                         Box(
                                             modifier = Modifier.size(24.dp),

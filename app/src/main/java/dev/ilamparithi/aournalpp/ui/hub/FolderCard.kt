@@ -28,9 +28,9 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
+import dev.ilamparithi.aournalpp.ui.common.AppDropdownMenu
+import dev.ilamparithi.aournalpp.ui.common.AppDropdownMenuItem
+import dev.ilamparithi.aournalpp.ui.common.AppMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -259,11 +259,11 @@ fun FolderCard(
                             )
                         }
 
-                        DropdownMenu(
+                        AppDropdownMenu(
                             expanded = showFolderMenu,
                             onDismissRequest = { showFolderMenu = false }
                         ) {
-                        DropdownMenuItem(
+                        AppDropdownMenuItem(
                             text = { Text(if (folder.isPinned) "Unpin Folder" else "Pin Folder") },
                             leadingIcon = {
                                 Icon(
@@ -277,7 +277,7 @@ fun FolderCard(
                                 onTogglePin()
                             }
                         )
-                        DropdownMenuItem(
+                        AppDropdownMenuItem(
                             text = { Text(if (folder.isExcludedFromRecents) "Include in Recents" else "Exclude from Recents") },
                             leadingIcon = {
                                 Icon(
@@ -291,7 +291,7 @@ fun FolderCard(
                                 onToggleExcludeRecents()
                             }
                         )
-                        DropdownMenuItem(
+                        AppDropdownMenuItem(
                             text = { Text("Rename Folder") },
                             leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null) },
                             onClick = {
@@ -299,7 +299,7 @@ fun FolderCard(
                                 onRename()
                             }
                         )
-                        DropdownMenuItem(
+                        AppDropdownMenuItem(
                             text = { Text("Map to Cloud...") },
                             leadingIcon = { Icon(Icons.Default.CloudSync, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                             onClick = {
@@ -307,7 +307,7 @@ fun FolderCard(
                                 onMapToCloud()
                             }
                         )
-                        DropdownMenuItem(
+                        AppDropdownMenuItem(
                             text = { Text("Customize Icon & Color") },
                             leadingIcon = { Icon(Icons.Default.ColorLens, contentDescription = null) },
                             onClick = {
@@ -315,7 +315,7 @@ fun FolderCard(
                                 onCustomize()
                             }
                         )
-                        DropdownMenuItem(
+                        AppDropdownMenuItem(
                             text = { Text("Share / Export...") },
                             leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
                             onClick = {
@@ -323,8 +323,8 @@ fun FolderCard(
                                 onShare()
                             }
                         )
-                        HorizontalDivider()
-                        DropdownMenuItem(
+                        AppMenuDefaults.InsetDivider()
+                        AppDropdownMenuItem(
                             text = { Text("Delete Folder", color = MaterialTheme.colorScheme.error) },
                             leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                             onClick = {

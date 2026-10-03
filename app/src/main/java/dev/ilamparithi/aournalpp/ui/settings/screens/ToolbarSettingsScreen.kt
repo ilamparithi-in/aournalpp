@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import dev.ilamparithi.aournalpp.ui.settings.components.SettingsIconBadge
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AspectRatio
@@ -411,20 +412,11 @@ fun ToolbarSettingsScreen(
                         checked = pinButtonMode,
                         shape = RectangleShape,
                         leadingContent = {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.PushPin,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.PushPin,
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                iconTint = MaterialTheme.colorScheme.primary
+                            )
                         },
                         onCheckedChange = {
                             pinButtonMode = it
@@ -561,22 +553,12 @@ fun ToolbarSettingsScreen(
                         checked = stylusHoverExpands,
                         shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
                         leadingContent = {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .alpha(if (stylusHoverExpands) 1f else 0.4f)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Edit,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.Edit,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                iconTint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.alpha(if (stylusHoverExpands) 1f else 0.4f)
+                            )
                         },
                         onCheckedChange = {
                             stylusHoverExpands = it
@@ -839,20 +821,11 @@ fun ToolbarSettingsScreen(
                         checked = showTitle,
                         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
                         leadingContent = {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Description,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.Description,
+                                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+                                iconTint = MaterialTheme.colorScheme.primary
+                            )
                         },
                         onCheckedChange = {
                             showTitle = it
@@ -872,20 +845,11 @@ fun ToolbarSettingsScreen(
                         checked = showBack,
                         shape = RectangleShape,
                         leadingContent = {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurface,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
+                            SettingsIconBadge(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                iconTint = MaterialTheme.colorScheme.onSurface
+                            )
                         },
                         onCheckedChange = {
                             showBack = it
@@ -905,20 +869,11 @@ fun ToolbarSettingsScreen(
                         checked = showClose,
                         shape = RectangleShape,
                         leadingContent = {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.Close,
+                                containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
+                                iconTint = MaterialTheme.colorScheme.error
+                            )
                         },
                         onCheckedChange = {
                             showClose = it
@@ -987,20 +942,11 @@ fun ToolbarSettingsScreen(
                         checked = showWindowSwitcher,
                         shape = RectangleShape,
                         leadingContent = {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Layers,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.Layers,
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                                iconTint = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
                         },
                         onCheckedChange = {
                             showWindowSwitcher = it
@@ -1020,20 +966,11 @@ fun ToolbarSettingsScreen(
                         checked = showSnapLayouts,
                         shape = RectangleShape,
                         leadingContent = {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.GridView,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.GridView,
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                                iconTint = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
                         },
                         onCheckedChange = {
                             showSnapLayouts = it
@@ -1053,20 +990,11 @@ fun ToolbarSettingsScreen(
                         checked = showKeyboard,
                         shape = RectangleShape,
                         leadingContent = {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Keyboard,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.Keyboard,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         },
                         onCheckedChange = {
                             showKeyboard = it
@@ -1086,20 +1014,11 @@ fun ToolbarSettingsScreen(
                         checked = showDragHandle,
                         shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
                         leadingContent = {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.DragIndicator,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.DragIndicator,
+                                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+                                iconTint = MaterialTheme.colorScheme.primary
+                            )
                         },
                         onCheckedChange = {
                             showDragHandle = it
@@ -1133,7 +1052,7 @@ fun ToolbarSettingsScreen(
                         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
                         leadingContent = {
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
                                 modifier = Modifier.alpha(if (showStylusMode) 1f else 0.4f)
                             ) {
@@ -1181,20 +1100,11 @@ fun ToolbarSettingsScreen(
                         checked = showTouchStylus,
                         shape = RectangleShape,
                         leadingContent = {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Draw,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.Draw,
+                                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+                                iconTint = MaterialTheme.colorScheme.primary
+                            )
                         },
                         onCheckedChange = {
                             showTouchStylus = it
@@ -1261,20 +1171,11 @@ fun ToolbarSettingsScreen(
                         checked = showCut,
                         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
                         leadingContent = {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.ContentCut,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.ContentCut,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         },
                         onCheckedChange = {
                             showCut = it
@@ -1294,20 +1195,11 @@ fun ToolbarSettingsScreen(
                         checked = showCopy,
                         shape = RectangleShape,
                         leadingContent = {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.ContentCopy,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.ContentCopy,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         },
                         onCheckedChange = {
                             showCopy = it
@@ -1327,20 +1219,11 @@ fun ToolbarSettingsScreen(
                         checked = showPaste,
                         shape = RectangleShape,
                         leadingContent = {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.ContentPaste,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.ContentPaste,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         },
                         onCheckedChange = {
                             showPaste = it
@@ -1360,20 +1243,11 @@ fun ToolbarSettingsScreen(
                         checked = showImage,
                         shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
                         leadingContent = {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Image,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.Image,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         },
                         onCheckedChange = {
                             showImage = it

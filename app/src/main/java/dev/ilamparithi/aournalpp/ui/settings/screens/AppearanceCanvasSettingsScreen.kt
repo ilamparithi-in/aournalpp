@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import dev.ilamparithi.aournalpp.ui.settings.components.SettingsIconBadge
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Animation
@@ -203,20 +204,11 @@ fun AppearanceCanvasSettingsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.weight(1f, fill = false)
                         ) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                modifier = Modifier.size(44.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Palette,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier
-                                        .padding(10.dp)
-                                        .size(24.dp)
-                                )
-                            }
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.Palette,
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                iconTint = MaterialTheme.colorScheme.primary
+                            )
                             Spacer(modifier = Modifier.width(14.dp))
                             Column {
                                 Text(
@@ -297,20 +289,11 @@ fun AppearanceCanvasSettingsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.weight(1f, fill = false)
                         ) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.secondaryContainer,
-                                modifier = Modifier.size(44.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Brush,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.secondary,
-                                    modifier = Modifier
-                                        .padding(10.dp)
-                                        .size(24.dp)
-                                )
-                            }
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.Brush,
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                iconTint = MaterialTheme.colorScheme.secondary
+                            )
                             Spacer(modifier = Modifier.width(14.dp))
                             Column {
                                 Text(
@@ -400,20 +383,11 @@ fun AppearanceCanvasSettingsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.weight(1f, fill = false)
                         ) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.tertiaryContainer,
-                                modifier = Modifier.size(44.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Wallpaper,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.tertiary,
-                                    modifier = Modifier
-                                        .padding(10.dp)
-                                        .size(24.dp)
-                                )
-                            }
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.Wallpaper,
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                iconTint = MaterialTheme.colorScheme.tertiary
+                            )
                             Spacer(modifier = Modifier.width(14.dp))
                             Column {
                                 Text(

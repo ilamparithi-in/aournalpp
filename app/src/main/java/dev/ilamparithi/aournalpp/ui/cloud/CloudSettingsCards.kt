@@ -14,10 +14,11 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenuItem
+import dev.ilamparithi.aournalpp.ui.common.AppDropdownMenuItem
+import dev.ilamparithi.aournalpp.ui.common.AppExposedDropdownMenu
+import dev.ilamparithi.aournalpp.ui.common.AppMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -84,22 +85,24 @@ fun ConflictPolicyCard(
                     readOnly = true,
                     supportingText = { Text(selectedPolicy.description) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                    shape = AppMenuDefaults.anchorFieldShape,
                     modifier = Modifier
                         .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                         .fillMaxWidth()
                 )
-                ExposedDropdownMenu(
+                AppExposedDropdownMenu(
                     expanded = expanded,
                     onDismissRequest = { expanded = false }
                 ) {
                     ConflictResolutionPolicy.entries.forEach { policy ->
-                        DropdownMenuItem(
+                        AppDropdownMenuItem(
                             text = {
                                 Column {
                                     Text(policy.displayName, fontWeight = FontWeight.SemiBold)
                                     Text(policy.description, style = MaterialTheme.typography.bodySmall)
                                 }
                             },
+                            selected = selectedPolicy == policy,
                             onClick = {
                                 onPolicySelected(policy)
                                 expanded = false
@@ -326,17 +329,19 @@ fun AutomationCard(
                         onValueChange = {},
                         readOnly = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isFrequencyDropdownExpanded) },
+                        shape = AppMenuDefaults.anchorFieldShape,
                         modifier = Modifier
                             .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                             .fillMaxWidth()
                     )
-                    ExposedDropdownMenu(
+                    AppExposedDropdownMenu(
                         expanded = isFrequencyDropdownExpanded,
                         onDismissRequest = { isFrequencyDropdownExpanded = false }
                     ) {
                         intervalOptions.forEach { (mins, label) ->
-                            DropdownMenuItem(
+                            AppDropdownMenuItem(
                                 text = { Text(label) },
+                                selected = periodicIntervalMinutes == mins,
                                 onClick = {
                                     onPeriodicIntervalChange(mins)
                                     isFrequencyDropdownExpanded = false

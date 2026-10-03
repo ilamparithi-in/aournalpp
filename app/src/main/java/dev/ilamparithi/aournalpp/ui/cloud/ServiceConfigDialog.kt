@@ -25,9 +25,10 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
+import dev.ilamparithi.aournalpp.ui.common.AppDropdownMenuItem
+import dev.ilamparithi.aournalpp.ui.common.AppExposedDropdownMenu
+import dev.ilamparithi.aournalpp.ui.common.AppMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -208,11 +209,12 @@ fun ServiceConfigDialog(
                             CloudProviderIcon(providerType = selectedType, modifier = Modifier.size(24.dp))
                         },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isTypeDropdownExpanded) },
+                        shape = AppMenuDefaults.anchorFieldShape,
                         modifier = Modifier
                             .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                             .fillMaxWidth()
                     )
-                    ExposedDropdownMenu(
+                    AppExposedDropdownMenu(
                         expanded = isTypeDropdownExpanded,
                         onDismissRequest = { isTypeDropdownExpanded = false }
                     ) {
@@ -230,11 +232,12 @@ fun ServiceConfigDialog(
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                                 )
                             }
-                            DropdownMenuItem(
+                            AppDropdownMenuItem(
                                 text = { Text(type.displayName) },
                                 leadingIcon = {
                                     CloudProviderIcon(providerType = type, modifier = Modifier.size(22.dp))
                                 },
+                                selected = selectedType == type,
                                 onClick = {
                                     selectedType = type
                                     port = type.defaultPort ?: 443

@@ -26,10 +26,10 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import dev.ilamparithi.aournalpp.ui.common.AppDropdownMenu
+import dev.ilamparithi.aournalpp.ui.common.AppDropdownMenuItem
+import dev.ilamparithi.aournalpp.ui.common.AppMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -279,14 +279,14 @@ fun DocumentHubTopBar(
                     Icon(imageVector = Icons.Default.MoreVert, contentDescription = detailsLabel)
                 }
 
-                DropdownMenu(
+                AppDropdownMenu(
                     expanded = showTopMenu,
                     onDismissRequest = { showTopMenu = false }
                 ) {
                     if (!isViewingTrash) {
                         if (isSubfolder && currentFolderItem != null) {
                             val isPinned = currentFolderItem.isPinned
-                            DropdownMenuItem(
+                            AppDropdownMenuItem(
                                 text = { Text(if (isPinned) "Unpin Folder" else "Pin Folder") },
                                 leadingIcon = {
                                     Icon(
@@ -300,7 +300,7 @@ fun DocumentHubTopBar(
                                     onTogglePinSubfolder?.invoke()
                                 }
                             )
-                            DropdownMenuItem(
+                            AppDropdownMenuItem(
                                 text = { Text(if (currentFolderItem.isExcludedFromRecents) "Include in Recents" else "Exclude from Recents") },
                                 leadingIcon = {
                                     Icon(
@@ -314,7 +314,7 @@ fun DocumentHubTopBar(
                                     onToggleExcludeRecentsSubfolder?.invoke()
                                 }
                             )
-                            DropdownMenuItem(
+                            AppDropdownMenuItem(
                                 text = { Text("Rename Folder") },
                                 leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null) },
                                 onClick = {
@@ -322,7 +322,7 @@ fun DocumentHubTopBar(
                                     onRenameSubfolder?.invoke()
                                 }
                             )
-                            DropdownMenuItem(
+                            AppDropdownMenuItem(
                                 text = { Text("Map to Cloud...") },
                                 leadingIcon = { Icon(Icons.Default.CloudSync, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                                 onClick = {
@@ -330,7 +330,7 @@ fun DocumentHubTopBar(
                                     onMapToCloudSubfolder?.invoke()
                                 }
                             )
-                            DropdownMenuItem(
+                            AppDropdownMenuItem(
                                 text = { Text("Customize Icon & Color") },
                                 leadingIcon = { Icon(Icons.Default.ColorLens, contentDescription = null) },
                                 onClick = {
@@ -338,7 +338,7 @@ fun DocumentHubTopBar(
                                     onCustomizeSubfolder?.invoke()
                                 }
                             )
-                            DropdownMenuItem(
+                            AppDropdownMenuItem(
                                 text = { Text("Delete Folder", color = MaterialTheme.colorScheme.error) },
                                 leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                                 onClick = {
@@ -346,10 +346,10 @@ fun DocumentHubTopBar(
                                     onDeleteSubfolder?.invoke()
                                 }
                             )
-                            HorizontalDivider()
+                            AppMenuDefaults.InsetDivider()
                         }
 
-                        DropdownMenuItem(
+                        AppDropdownMenuItem(
                             text = { Text(stringResource(R.string.hub_menu_select_notes)) },
                             leadingIcon = { Icon(Icons.Default.SelectAll, contentDescription = null) },
                             onClick = {
@@ -357,7 +357,7 @@ fun DocumentHubTopBar(
                                 onStartSelectionMode()
                             }
                         )
-                        DropdownMenuItem(
+                        AppDropdownMenuItem(
                             text = { Text(stringResource(R.string.hub_menu_new_folder)) },
                             leadingIcon = { Icon(Icons.Default.CreateNewFolder, contentDescription = null) },
                             onClick = {
@@ -365,7 +365,7 @@ fun DocumentHubTopBar(
                                 onNewFolderClick()
                             }
                         )
-                        DropdownMenuItem(
+                        AppDropdownMenuItem(
                             text = {
                                 Text(
                                     if (showHiddenFiles) stringResource(R.string.hub_menu_hide_hidden)
@@ -383,7 +383,7 @@ fun DocumentHubTopBar(
                                 onToggleShowHiddenFiles()
                             }
                         )
-                        DropdownMenuItem(
+                        AppDropdownMenuItem(
                             text = { Text(stringResource(R.string.hub_menu_trash)) },
                             leadingIcon = { Icon(Icons.Default.DeleteSweep, contentDescription = null) },
                             onClick = {
@@ -391,10 +391,10 @@ fun DocumentHubTopBar(
                                 onOpenTrash()
                             }
                         )
-                        HorizontalDivider()
+                        AppMenuDefaults.InsetDivider()
                     } else {
                         if (currentDisplayNotes.isNotEmpty() || currentDisplayFolders.isNotEmpty()) {
-                            DropdownMenuItem(
+                            AppDropdownMenuItem(
                                 text = { Text(stringResource(R.string.hub_menu_select_notes)) },
                                 leadingIcon = { Icon(Icons.Default.SelectAll, contentDescription = null) },
                                 onClick = {
@@ -403,7 +403,7 @@ fun DocumentHubTopBar(
                                 }
                             )
                         }
-                        DropdownMenuItem(
+                        AppDropdownMenuItem(
                             text = { Text(stringResource(R.string.hub_menu_empty_trash), color = MaterialTheme.colorScheme.error) },
                             leadingIcon = { Icon(Icons.Default.DeleteSweep, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                             onClick = {
@@ -411,10 +411,10 @@ fun DocumentHubTopBar(
                                 onEmptyTrashClick()
                             }
                         )
-                        HorizontalDivider()
+                        AppMenuDefaults.InsetDivider()
                     }
 
-                    DropdownMenuItem(
+                    AppDropdownMenuItem(
                         text = { Text(stringResource(R.string.pref_category_licenses)) },
                         leadingIcon = { Icon(Icons.Default.Gavel, contentDescription = null) },
                         onClick = {
@@ -422,7 +422,7 @@ fun DocumentHubTopBar(
                             onNavigateToLicenses()
                         }
                     )
-                    DropdownMenuItem(
+                    AppDropdownMenuItem(
                         text = { Text(stringResource(R.string.tab_settings)) },
                         leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
                         onClick = {

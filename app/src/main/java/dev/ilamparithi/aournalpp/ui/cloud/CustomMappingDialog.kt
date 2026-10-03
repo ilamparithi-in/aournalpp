@@ -17,9 +17,10 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenuItem
+import dev.ilamparithi.aournalpp.ui.common.AppDropdownMenuItem
+import dev.ilamparithi.aournalpp.ui.common.AppExposedDropdownMenu
+import dev.ilamparithi.aournalpp.ui.common.AppMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
@@ -122,15 +123,17 @@ fun CustomMappingDialog(
                             label = { Text("Target Cloud Service") },
                             leadingIcon = { Icon(Icons.Default.Cloud, contentDescription = null) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isServiceDropdownExpanded) },
+                            shape = AppMenuDefaults.anchorFieldShape,
                             modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth()
                         )
-                        ExposedDropdownMenu(
+                        AppExposedDropdownMenu(
                             expanded = isServiceDropdownExpanded,
                             onDismissRequest = { isServiceDropdownExpanded = false }
                         ) {
                             services.forEach { srv ->
-                                DropdownMenuItem(
+                                AppDropdownMenuItem(
                                     text = { Text("${srv.name} (${srv.providerType.displayName})") },
+                                    selected = selectedServiceId == srv.id,
                                     onClick = {
                                         selectedServiceId = srv.id
                                         isServiceDropdownExpanded = false

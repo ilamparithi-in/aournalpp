@@ -38,9 +38,10 @@ import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenu
+import dev.ilamparithi.aournalpp.ui.common.AppDropdownMenuItem
+import dev.ilamparithi.aournalpp.ui.common.AppExposedDropdownMenu
+import dev.ilamparithi.aournalpp.ui.settings.components.SettingsIconBadge
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
@@ -241,20 +242,11 @@ fun DisplaySettingsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.weight(1f)
                         ) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.FormatSize,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-                            }
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.FormatSize,
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                iconTint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
                             Spacer(modifier = Modifier.width(14.dp))
                             Column {
                                 Text(
@@ -395,20 +387,11 @@ fun DisplaySettingsScreen(
                     Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.AspectRatio,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
+                        SettingsIconBadge(
+                            imageVector = Icons.Default.AspectRatio,
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            iconTint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
                         Spacer(modifier = Modifier.width(14.dp))
                         Column {
                             Text(
@@ -623,13 +606,14 @@ fun DisplaySettingsScreen(
                                         .fillMaxWidth(),
                                     shape = RoundedCornerShape(12.dp)
                                 )
-                                ExposedDropdownMenu(
+                                AppExposedDropdownMenu(
                                     expanded = exactExpanded,
                                     onDismissRequest = { exactExpanded = false }
                                 ) {
                                     exactOptions.forEach { option ->
-                                        DropdownMenuItem(
+                                        AppDropdownMenuItem(
                                             text = { Text(option) },
+                                            selected = option == exactRes,
                                             onClick = {
                                                 exactRes = option
                                                 exactExpanded = false
@@ -820,13 +804,14 @@ fun DisplaySettingsScreen(
                                     .fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp)
                             )
-                            ExposedDropdownMenu(
+                            AppExposedDropdownMenu(
                                 expanded = timeoutExpanded,
                                 onDismissRequest = { timeoutExpanded = false }
                             ) {
                                 timeoutOptions.forEach { (value, label) ->
-                                    DropdownMenuItem(
+                                    AppDropdownMenuItem(
                                         text = { Text(label) },
+                                        selected = value == idleTimeout,
                                         onClick = {
                                             idleTimeout = value
                                             timeoutExpanded = false

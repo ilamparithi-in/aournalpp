@@ -3,6 +3,7 @@ package dev.ilamparithi.aournalpp.ui.settings.components
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,6 +13,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -80,7 +82,10 @@ fun ValueEditPill(
     Surface(
         shape = RoundedCornerShape(8.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        border = BorderStroke(
+            width = if (isFocused) 1.5.dp else 1.dp,
+            color = if (isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+        ),
         modifier = modifier
     ) {
         Row(
@@ -148,7 +153,7 @@ fun ValueEditPill(
                 textStyle = MaterialTheme.typography.labelMedium.copy(
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Start
+                    textAlign = TextAlign.Center
                 ),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 keyboardOptions = KeyboardOptions(
@@ -162,13 +167,21 @@ fun ValueEditPill(
                 ),
                 singleLine = true
             )
-            Text(
-                text = unitSuffix,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 1.dp)
-            )
+            if (unitSuffix.isNotEmpty()) {
+                VerticalDivider(
+                    modifier = Modifier
+                        .height(14.dp)
+                        .padding(horizontal = 4.dp),
+                    thickness = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+                Text(
+                    text = unitSuffix,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
@@ -219,7 +232,10 @@ fun DecimalValueEditPill(
     Surface(
         shape = RoundedCornerShape(8.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        border = BorderStroke(
+            width = if (isFocused) 1.5.dp else 1.dp,
+            color = if (isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+        ),
         modifier = modifier
     ) {
         Row(
@@ -300,7 +316,7 @@ fun DecimalValueEditPill(
                 textStyle = MaterialTheme.typography.labelMedium.copy(
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Start
+                    textAlign = TextAlign.Center
                 ),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 keyboardOptions = KeyboardOptions(
@@ -314,13 +330,21 @@ fun DecimalValueEditPill(
                 ),
                 singleLine = true
             )
-            Text(
-                text = unitSuffix,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 1.dp)
-            )
+            if (unitSuffix.isNotEmpty()) {
+                VerticalDivider(
+                    modifier = Modifier
+                        .height(14.dp)
+                        .padding(horizontal = 4.dp),
+                    thickness = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+                Text(
+                    text = unitSuffix,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
