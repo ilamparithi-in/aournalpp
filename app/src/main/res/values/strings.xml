@@ -1479,6 +1479,35 @@
     <string name="msg_linux_language_updated">Xournal++ language set to %1$s. Takes effect on next editor start.</string>
 
     <!-- ======================================================================= -->
+    <!-- System & Maintenance Settings                                           -->
+    <!-- ======================================================================= -->
+    <string name="pref_cat_system_maintenance">System &amp; Maintenance</string>
+    <string name="pref_cat_system_maintenance_desc">Language, config backups &amp; diagnostics</string>
+    <string name="pref_cat_config_backup">Configuration Backup &amp; Restore</string>
+    <string name="pref_cat_config_backup_desc">Create ZIP backups, import configuration archives, or export individual components</string>
+    <string name="pref_config_files_title">Xournal++ Configuration Files</string>
+    <string name="pref_config_files_desc">Backup and restore your tools, palettes, print presets, and core preferences across devices.</string>
+    <string name="pref_btn_create_full_backup">Create Full Backup (.zip)</string>
+    <string name="pref_btn_create_full_backup_desc">Packages settings.xml, toolbars, color palettes, and print profiles into a single archive</string>
+    <string name="pref_btn_restore_backup">Restore from Backup</string>
+    <string name="pref_btn_restore_backup_desc">Import a .zip archive or individual XML / INI / GPL configuration files</string>
+    <string name="pref_btn_export_specific">Export Specific File…</string>
+    <string name="pref_btn_export_specific_desc">Select a single config component to export individually</string>
+    <string name="pref_dialog_export_specific_title">Export Specific Config File</string>
+    <string name="pref_dialog_export_specific_desc">Select a specific configuration component to export individually:</string>
+    <string name="pref_cat_advanced_diagnostics">Advanced Diagnostic Tools</string>
+    <string name="pref_cat_advanced_diagnostics_desc">Direct configuration inspection, native preferences, and system recovery</string>
+    <string name="pref_inspect_settings_title">Configuration File Inspector</string>
+    <string name="pref_inspect_settings_desc">View, inspect, and copy live XML and INI configuration files (settings.xml, toolbar.ini, etc.)</string>
+    <string name="pref_btn_inspect_settings">Inspect settings.xml</string>
+    <string name="pref_native_gtk_prefs_title">Native GTK Preferences</string>
+    <string name="pref_native_gtk_prefs_desc">Launch Xournal++ directly to access desktop GTK settings inside the display server</string>
+    <string name="pref_btn_native_gtk_prefs">Open Native GTK Preferences</string>
+    <string name="pref_autoload_safeguard_title">Workspace Session Safeguard Active</string>
+    <string name="pref_autoload_safeguard_desc">Xournal++\'s native \"Autoload most recent file on startup\" option in Load/Save is automatically managed by Aournal++ to ensure seamless Android workspace restoration without session conflicts.</string>
+    <string name="msg_autoload_override_cleared">Xournal++ startup autoload was cleared to preserve \'Continue where you left off\'.</string>
+
+    <!-- ======================================================================= -->
     <!-- Open Source Licenses & Credits                                          -->
     <!-- ======================================================================= -->
     <!-- Licenses screen title -->

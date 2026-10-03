@@ -61,7 +61,7 @@ import dev.ilamparithi.aournalpp.ui.settings.screens.FilesStorageSettingsScreen
 import dev.ilamparithi.aournalpp.ui.settings.screens.InputSettingsScreen
 import dev.ilamparithi.aournalpp.ui.settings.screens.KeyboardSettingsScreen
 import dev.ilamparithi.aournalpp.ui.settings.screens.LenovoPenSettingsScreen
-import dev.ilamparithi.aournalpp.ui.settings.screens.MainSettingsScreen
+import dev.ilamparithi.aournalpp.ui.settings.screens.SystemMaintenanceSettingsScreen
 import dev.ilamparithi.aournalpp.ui.settings.screens.ToolbarSettingsScreen
 import dev.ilamparithi.aournalpp.utils.a11yHeading
 import dev.ilamparithi.aournalpp.utils.minTouchTarget
@@ -485,7 +485,7 @@ private fun DetailPaneContent(
             DisplaySettingsScreen(
                 showTopBar = showTopBar,
                 onNavigateToSafeAreaEditor = { onNavigateDialog(SettingsSubpage.SAFE_AREA_EDITOR) },
-                onBack = { onBack?.invoke() ?: onSelectCategory(SettingsCategory.FILES_STORAGE) }
+                onBack = onBack
             )
         }
         SettingsCategory.APPEARANCE_CANVAS -> {
@@ -495,17 +495,9 @@ private fun DetailPaneContent(
             )
         }
         SettingsCategory.SYSTEM_MAINTENANCE -> {
-            MainSettingsScreen(
-                onNavigate = { subpage ->
-                    when (subpage) {
-                        SettingsSubpage.TOOLBAR -> onSelectCategory(SettingsCategory.TOOLBAR)
-                        SettingsSubpage.INPUT -> onSelectCategory(SettingsCategory.INPUT_STYLUS)
-                        SettingsSubpage.DISPLAY -> onSelectCategory(SettingsCategory.DISPLAY_KEYBOARD)
-                        SettingsSubpage.KEYBOARD -> onSelectCategory(SettingsCategory.DISPLAY_KEYBOARD)
-                        else -> onNavigateDialog(subpage)
-                    }
-                },
-                onBack = { onBack?.invoke() ?: onSelectCategory(SettingsCategory.FILES_STORAGE) }
+            SystemMaintenanceSettingsScreen(
+                showTopBar = showTopBar,
+                onBack = onBack
             )
         }
         SettingsCategory.ABOUT -> {
