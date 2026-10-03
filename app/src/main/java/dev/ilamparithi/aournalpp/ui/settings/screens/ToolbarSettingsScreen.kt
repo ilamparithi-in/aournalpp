@@ -1,10 +1,15 @@
 package dev.ilamparithi.aournalpp.ui.settings.screens
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,9 +23,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -41,6 +48,7 @@ import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -51,7 +59,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -60,6 +67,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -72,10 +80,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.ilamparithi.aournalpp.R
 import dev.ilamparithi.aournalpp.data.X11Preferences
@@ -84,6 +101,7 @@ import dev.ilamparithi.aournalpp.ui.STANDARD_TOOLBAR_PRESETS
 import dev.ilamparithi.aournalpp.ui.settings.components.ConnectedButtonGroup
 import dev.ilamparithi.aournalpp.ui.settings.components.ConnectedButtonItem
 import dev.ilamparithi.aournalpp.ui.settings.components.SettingsSwitchListItem
+import dev.ilamparithi.aournalpp.ui.settings.components.ValueEditPill
 import dev.ilamparithi.aournalpp.utils.a11yHeading
 import dev.ilamparithi.aournalpp.utils.minTouchTarget
 import kotlin.math.roundToInt
@@ -147,9 +165,6 @@ fun ToolbarSettingsScreen(
     }
     var autoCollapseTimeoutMs by remember {
         mutableIntStateOf(x11Prefs.getInt(X11Preferences.KEY_TOOLBAR_AUTO_COLLAPSE_TIMEOUT_MS, 5000))
-    }
-    var autoCollapseMsText by remember {
-        mutableStateOf(autoCollapseTimeoutMs.toString())
     }
     var stylusHoverExpands by remember {
         mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_STYLUS_HOVER_EXPANDS, true))
@@ -451,27 +466,69 @@ fun ToolbarSettingsScreen(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    val seconds = (autoCollapseTimeoutMs / 1000f)
-                                    val formatted = if (seconds % 1f == 0f) {
-                                        stringResource(R.string.pref_toolbar_timeout_seconds, seconds.toInt().toString())
-                                    } else {
-                                        stringResource(R.string.pref_toolbar_timeout_seconds_decimal, seconds)
+                                    val isDefault = autoCollapseTimeoutMs == 5000
+                                    val haptic = LocalHapticFeedback.current
+                                    val resetPrompt = stringResource(R.string.toast_long_press_to_reset)
+
+                                    AnimatedVisibility(
+                                        visible = !isDefault,
+                                        enter = fadeIn() + expandHorizontally(),
+                                        exit = fadeOut() + shrinkHorizontally()
+                                    ) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = MaterialTheme.colorScheme.surfaceVariant,
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .pointerInput(Unit) {
+                                                    detectTapGestures(
+                                                        onTap = {
+                                                            Toast.makeText(
+                                                                context,
+                                                                resetPrompt,
+                                                                Toast.LENGTH_SHORT
+                                                            ).show()
+                                                        },
+                                                        onLongPress = {
+                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            autoCollapseTimeoutMs = 5000
+                                                            saveIntPref(X11Preferences.KEY_TOOLBAR_AUTO_COLLAPSE_TIMEOUT_MS, 5000)
+                                                        }
+                                                    )
+                                                }
+                                                .semantics {
+                                                    role = Role.Button
+                                                },
+                                            tonalElevation = 1.dp
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(
+                                                    imageVector = Icons.Default.RestartAlt,
+                                                    contentDescription = stringResource(R.string.pref_toolbar_timeout_reset_desc),
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
                                     }
-                                    Text(
-                                        text = formatted,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+
+                                    ValueEditPill(
+                                        value = autoCollapseTimeoutMs,
+                                        onValueChange = { newMs ->
+                                            autoCollapseTimeoutMs = newMs
+                                            saveIntPref(X11Preferences.KEY_TOOLBAR_AUTO_COLLAPSE_TIMEOUT_MS, newMs)
+                                        },
+                                        valueRange = 500..60000,
+                                        unitSuffix = stringResource(R.string.unit_milliseconds),
+                                        limitToastMessage = stringResource(R.string.toast_toolbar_timeout_limit)
                                     )
                                 }
                             }
 
-                            // Standard M3 Slider: 1s to 30s
                             var sliderSeconds by remember(autoCollapseTimeoutMs) {
                                 mutableFloatStateOf((autoCollapseTimeoutMs / 1000f).coerceIn(1f, 30f))
                             }
@@ -483,51 +540,12 @@ fun ToolbarSettingsScreen(
                                     sliderSeconds = roundedSec.toFloat()
                                     val newMs = roundedSec * 1000
                                     autoCollapseTimeoutMs = newMs
-                                    autoCollapseMsText = newMs.toString()
                                     saveIntPref(X11Preferences.KEY_TOOLBAR_AUTO_COLLAPSE_TIMEOUT_MS, newMs)
                                 },
                                 valueRange = 1f..30f,
-                                steps = 28
+                                steps = 28,
+                                modifier = Modifier.fillMaxWidth()
                             )
-
-                            // Exact millisecond input field
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column(modifier = Modifier.weight(1f, fill = false)) {
-                                    Text(
-                                        text = stringResource(R.string.pref_toolbar_timeout_ms_title),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = stringResource(R.string.pref_toolbar_timeout_ms_desc),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(16.dp))
-                                OutlinedTextField(
-                                    value = autoCollapseMsText,
-                                    onValueChange = { input ->
-                                        autoCollapseMsText = input
-                                        val parsed = input.toIntOrNull()
-                                        if (parsed != null && parsed in 500..60000) {
-                                            autoCollapseTimeoutMs = parsed
-                                            sliderSeconds = (parsed / 1000f).coerceIn(1f, 30f)
-                                            saveIntPref(X11Preferences.KEY_TOOLBAR_AUTO_COLLAPSE_TIMEOUT_MS, parsed)
-                                        }
-                                    },
-                                    modifier = Modifier.width(110.dp),
-                                    singleLine = true,
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    shape = RoundedCornerShape(12.dp),
-                                    placeholder = { Text(stringResource(R.string.pref_toolbar_timeout_ms_placeholder)) }
-                                )
-                            }
                         }
                     }
 
@@ -1125,19 +1143,19 @@ fun ToolbarSettingsScreen(
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     Text(
-                                        text = "L",
+                                        text = stringResource(R.string.pref_toolbar_stylus_btn_left),
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.primary
                                     )
                                     Text(
-                                        text = "M",
+                                        text = stringResource(R.string.pref_toolbar_stylus_btn_middle),
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Medium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Text(
-                                        text = "R",
+                                        text = stringResource(R.string.pref_toolbar_stylus_btn_right),
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Medium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant

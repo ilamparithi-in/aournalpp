@@ -1274,6 +1274,15 @@
     <string name="pref_toolbar_timeout_desc">Duration of inactivity before the unpinned toolbar collapses.</string>
     <string name="pref_toolbar_timeout_ms_title">Exact Timeout (ms)</string>
     <string name="pref_toolbar_timeout_ms_desc">1s = 1000ms (valid range: 500ms – 60,000ms)</string>
+    <string name="pref_toolbar_timeout_reset_desc">Long-press to reset auto-collapse timeout to 5000ms</string>
+    <string name="toast_long_press_to_reset">Long press to reset</string>
+    <string name="toast_pointer_speed_limit">Pointer speed must be between 1% and 300%</string>
+    <string name="toast_toolbar_timeout_limit">Timeout must be between 500ms and 60,000ms</string>
+    <string name="unit_milliseconds">ms</string>
+    <string name="unit_percent">%</string>
+    <string name="pref_toolbar_stylus_btn_left">L</string>
+    <string name="pref_toolbar_stylus_btn_middle">M</string>
+    <string name="pref_toolbar_stylus_btn_right">R</string>
     <string name="pref_toolbar_hover_expand">Expand on Stylus Hover</string>
     <string name="pref_toolbar_hover_expand_desc">Automatically expand the collapsed toolbar when hovering over it with a stylus pen.</string>
 
@@ -1367,6 +1376,89 @@
     <string name="toolbar_cd_collapse">Collapse Toolbar</string>
     <string name="toolbar_cd_drag_handle">Drag Toolbar</string>
     <string name="toolbar_cd_reset_position">Reset Toolbar Position</string>
+
+    <!-- ======================================================================= -->
+    <!-- Stylus & Input Settings (Section 4)                                     -->
+    <!-- ======================================================================= -->
+    <string name="pref_cat_input_stylus">Stylus &amp; Input</string>
+    <string name="pref_cat_input_stylus_desc">Touch mode, finger-as-stylus &amp; pen gestures</string>
+
+    <!-- 1. Touch Mode -->
+    <string name="pref_input_touch_mode_title">Touch Mode</string>
+    <string name="pref_input_touch_mode_desc">Direct 1:1 touch mapping, virtual trackpad cursor, or simulated gestures</string>
+    <string name="pref_input_touch_mode_direct">Direct (1:1)</string>
+    <string name="pref_input_touch_mode_trackpad">Trackpad</string>
+    <string name="pref_input_touch_mode_simulated">Simulated</string>
+
+    <!-- 2. Finger-as-Stylus Behavior -->
+    <string name="pref_input_finger_stylus_title">Finger-as-Stylus Behavior</string>
+    <string name="pref_input_show_finger_stylus">Show Finger as Stylus Toggle in Toolbar</string>
+    <string name="pref_input_show_finger_stylus_desc">Displays a toggle button in the floating toolbar to quickly switch between drawing with your finger as a stylus and standard touch navigation.</string>
+    <string name="pref_input_disable_touch_hover">Turn off Touch as Stylus on Stylus Hover</string>
+    <string name="pref_input_disable_touch_hover_desc">Automatically disables finger drawing and restores touch navigation as soon as a physical stylus pen hovers over or touches the screen.</string>
+    <string name="pref_input_remember_finger_state">Remember Last Toggled State</string>
+    <string name="pref_input_remember_finger_state_desc">Preserves whether Finger as Stylus was active across app launches. When disabled, Finger as Stylus resets to off on startup.</string>
+
+    <!-- 3. Hardware Stylus & Hover -->
+    <string name="pref_input_hardware_stylus_title">Hardware Stylus &amp; Hover</string>
+    <string name="pref_input_show_stylus_click">Show Stylus Click Mode in Toolbar</string>
+    <string name="pref_input_show_stylus_click_desc">Displays Left / Middle / Right click toggle capsule directly in the floating toolbar.</string>
+    <string name="pref_input_hover_expand">Expand Toolbar on Stylus Hover</string>
+    <string name="pref_input_hover_expand_desc">Automatically expand the collapsed floating toolbar when hovering over it with a stylus pen.</string>
+    <string name="pref_input_stylus_is_mouse">Enable Stylus Mouse Mode</string>
+    <string name="pref_input_stylus_is_mouse_desc">Treat hardware stylus touch events as desktop mouse pointer clicks.</string>
+    <string name="pref_input_contact_modifier">Stylus Button Contact Modifier Mode</string>
+    <string name="pref_input_contact_modifier_desc">Modify contact properties when the stylus side barrel button is depressed.</string>
+    <string name="pref_input_mouse_helper">Show Mouse Click Helper Overlay</string>
+    <string name="pref_input_mouse_helper_desc">On-screen Left / Middle / Right floating mouse buttons for trackpad mode.</string>
+    <string name="pref_input_scale_trackpad">Scale Trackpad to Display Factor</string>
+    <string name="pref_input_scale_trackpad_desc">Scale cursor movement speed according to display resolution.</string>
+    <string name="pref_input_tap_to_move">Enable Tap-to-Move</string>
+    <string name="pref_input_tap_to_move_desc">Tap and drag to move pointer without holding physical clicks.</string>
+    <string name="pref_input_ignore_gamepad">Ignore Gamepad Events</string>
+    <string name="pref_input_ignore_gamepad_desc">Suppress controller joystick and button input events from driving pointer.</string>
+
+    <!-- 4. External Pointer -->
+    <string name="pref_input_external_pointer_title">External Pointer</string>
+    <string name="pref_input_pointer_speed_title">Pointer Speed Factor</string>
+    <string name="pref_input_pointer_speed_desc">Sensitivity for captured USB or Bluetooth mice</string>
+    <string name="pref_input_pointer_speed_percent">%1$d%%</string>
+    <string name="pref_input_pointer_speed_reset_desc">Long-press to reset pointer speed to 100%</string>
+    <string name="pref_input_pointer_rotation_title">Pointer Movement Rotation</string>
+    <string name="pref_input_rotation_none">No Rotation</string>
+    <string name="pref_input_rotation_cw90">Clockwise 90°</string>
+    <string name="pref_input_rotation_ccw90">Counter-Clockwise 90°</string>
+    <string name="pref_input_rotation_ud180">Upside Down 180°</string>
+    <string name="pref_input_rotation_touchpad">Automatic for Touchpad</string>
+
+    <!-- 5. OEM-Specific Pen Settings -->
+    <string name="pref_input_oem_pens_title">OEM-Specific Pen Settings</string>
+    <string name="pref_input_lenovo_pen_title">Lenovo Precision Pen / Pen Plus</string>
+    <string name="pref_input_lenovo_pen_desc">Single, double, triple, and long-click gesture actions for Lenovo stylus barrel buttons</string>
+    <string name="pref_lenovo_pen_diagnostics_title">Diagnostics &amp; Feedback</string>
+    <string name="pref_lenovo_pen_show_detections_title">Show Detection Toasts</string>
+    <string name="pref_lenovo_pen_show_detections_desc">Display transient toast messages when barrel button gestures are detected.</string>
+    <string name="pref_lenovo_pen_debug_toggle_title">Show Toggle Debug Toasts</string>
+    <string name="pref_lenovo_pen_debug_toggle_desc">Display state toasts when toggle mode button states change.</string>
+    <string name="pref_lenovo_pen_gestures_title">Barrel Button Gestures</string>
+    <string name="pref_lenovo_pen_gesture_single">Single Press (Keycode 600)</string>
+    <string name="pref_lenovo_pen_gesture_double">Double Press (Keycode 601)</string>
+    <string name="pref_lenovo_pen_gesture_triple">Triple Press (Keycode 602)</string>
+    <string name="pref_lenovo_pen_gesture_long">Long Press (Keycode 603)</string>
+    <string name="pref_lenovo_pen_gesture_long_click">Long Press and Click (Keycode 604)</string>
+    <string name="pref_lenovo_pen_map_action">Map To Action:</string>
+    <string name="pref_lenovo_pen_action_disabled">Disabled</string>
+    <string name="pref_lenovo_pen_action_btn2">Primary (Btn 2)</string>
+    <string name="pref_lenovo_pen_action_btn3">Secondary (Btn 3)</string>
+    <string name="pref_lenovo_pen_toggle_title">Toggle Target Button</string>
+    <string name="pref_lenovo_pen_toggle_on_desc">On: toggle mode — gesture once for down and again for up.</string>
+    <string name="pref_lenovo_pen_toggle_off_desc">Off: momentary mode — press and hold target for specified duration.</string>
+    <string name="pref_lenovo_pen_off_on_lift_title">Toggle OFF on Lift</string>
+    <string name="pref_lenovo_pen_off_on_lift_desc">When toggled ON and pen lifts after contact, release the mapped button automatically.</string>
+    <string name="pref_lenovo_pen_duration_title">Hold Duration (ms)</string>
+    <string name="pref_lenovo_pen_duration_desc">Applied when Toggle mode is OFF (10 - 8192 ms).</string>
+    <string name="pref_lenovo_pen_duration_preset">%1$sms</string>
+
 
     <!-- ======================================================================= -->
     <!-- Language & Localization                                                 -->

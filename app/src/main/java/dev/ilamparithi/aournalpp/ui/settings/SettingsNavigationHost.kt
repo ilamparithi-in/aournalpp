@@ -475,9 +475,10 @@ private fun DetailPaneContent(
         }
         SettingsCategory.INPUT_STYLUS -> {
             InputSettingsScreen(
+                showTopBar = showTopBar,
                 onNavigateToLenovoPen = { onNavigateDialog(SettingsSubpage.LENOVO_PEN) },
                 onNavigateToToolbar = { onSelectCategory(SettingsCategory.TOOLBAR) },
-                onBack = { onBack?.invoke() ?: onSelectCategory(SettingsCategory.FILES_STORAGE) }
+                onBack = onBack
             )
         }
         SettingsCategory.DISPLAY_KEYBOARD -> {
