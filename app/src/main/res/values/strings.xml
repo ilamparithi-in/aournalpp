@@ -1278,6 +1278,10 @@
     <string name="toast_long_press_to_reset">Long press to reset</string>
     <string name="toast_pointer_speed_limit">Pointer speed must be between 1% and 300%</string>
     <string name="toast_toolbar_timeout_limit">Timeout must be between 500ms and 60,000ms</string>
+    <string name="toast_ui_scale_limit">Scale must be between 0.50x and 3.00x</string>
+    <string name="toast_display_scale_limit">Display scale must be between 30% and 300%</string>
+    <string name="pref_ui_scale_reset_desc">Long-press to reset UI scale to 1.00x</string>
+    <string name="pref_display_scale_reset_desc">Long-press to reset display scale to 100%</string>
     <string name="unit_milliseconds">ms</string>
     <string name="unit_percent">%</string>
     <string name="pref_toolbar_stylus_btn_left">L</string>

@@ -172,3 +172,182 @@ fun ValueEditPill(
         }
     }
 }
+
+/**
+ * Decimal variant of [ValueEditPill] for fractional values (e.g. scales, multipliers).
+ */
+@Composable
+fun DecimalValueEditPill(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    valueRange: ClosedFloatingPointRange<Float>,
+    unitSuffix: String,
+    limitToastMessage: String,
+    modifier: Modifier = Modifier,
+    decimalPlaces: Int = 2,
+    enabled: Boolean = true
+) {
+    val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
+    var isFocused by remember { mutableStateOf(false) }
+
+    fun formatValue(v: Float): String {
+        return String.format(java.util.Locale.US, "%.${decimalPlaces}f", v)
+    }
+
+    var textFieldValue by remember {
+        val initialText = formatValue(value)
+        mutableStateOf(TextFieldValue(initialText, TextRange(initialText.length)))
+    }
+
+    var activeToast by remember { mutableStateOf<Toast?>(null) }
+
+    fun showLimitToast() {
+        activeToast?.cancel()
+        activeToast = Toast.makeText(context, limitToastMessage, Toast.LENGTH_SHORT).apply {
+            show()
+        }
+    }
+
+    LaunchedEffect(value) {
+        if (!isFocused) {
+            val text = formatValue(value)
+            textFieldValue = TextFieldValue(text, TextRange(text.length))
+        }
+    }
+
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = modifier
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            BasicTextField(
+                value = textFieldValue,
+                onValueChange = { tfv ->
+                    val filtered = buildString {
+                        var hasDot = false
+                        for (ch in tfv.text) {
+                            if (ch.isDigit()) {
+                                append(ch)
+                            } else if (ch == '.' && !hasDot) {
+                                hasDot = true
+                                append(ch)
+                            }
+                        }
+                    }
+
+                    val parsedFloat = filtered.toFloatOrNull()
+
+                    when {
+                        filtered.isEmpty() -> {
+                            textFieldValue = tfv.copy(text = "", selection = TextRange(0))
+                        }
+                        parsedFloat != null && parsedFloat > valueRange.endInclusive -> {
+                            showLimitToast()
+                            val clampedStr = formatValue(valueRange.endInclusive)
+                            textFieldValue = tfv.copy(
+                                text = clampedStr,
+                                selection = TextRange(clampedStr.length)
+                            )
+                            onValueChange(valueRange.endInclusive)
+                        }
+                        parsedFloat != null && parsedFloat in valueRange -> {
+                            textFieldValue = tfv.copy(
+                                text = filtered,
+                                selection = TextRange(filtered.length.coerceAtMost(tfv.selection.end))
+                            )
+                            onValueChange(parsedFloat)
+                        }
+                        else -> {
+                            textFieldValue = tfv.copy(
+                                text = filtered,
+                                selection = TextRange(filtered.length.coerceAtMost(tfv.selection.end))
+                            )
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .widthIn(min = 32.dp, max = 56.dp)
+                    .onFocusChanged { focusState ->
+                        isFocused = focusState.isFocused
+                        if (!focusState.isFocused) {
+                            val parsed = textFieldValue.text.toFloatOrNull()
+                            if (parsed == null || parsed < valueRange.start) {
+                                showLimitToast()
+                                val minVal = valueRange.start
+                                val minStr = formatValue(minVal)
+                                textFieldValue = TextFieldValue(minStr, TextRange(minStr.length))
+                                onValueChange(minVal)
+                            } else if (parsed > valueRange.endInclusive) {
+                                showLimitToast()
+                                val maxVal = valueRange.endInclusive
+                                val maxStr = formatValue(maxVal)
+                                textFieldValue = TextFieldValue(maxStr, TextRange(maxStr.length))
+                                onValueChange(maxVal)
+                            } else {
+                                val normStr = formatValue(parsed)
+                                textFieldValue = TextFieldValue(normStr, TextRange(normStr.length))
+                                onValueChange(parsed)
+                            }
+                        }
+                    },
+                enabled = enabled,
+                textStyle = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Start
+                ),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Decimal,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        focusManager.clearFocus()
+                    }
+                ),
+                singleLine = true
+            )
+            Text(
+                text = unitSuffix,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 1.dp)
+            )
+        }
+    }
+}
+
+/**
+ * Standardized Material 3 editable value pill overload for floating-point / decimal values.
+ */
+@Composable
+fun ValueEditPill(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    valueRange: ClosedFloatingPointRange<Float>,
+    unitSuffix: String,
+    limitToastMessage: String,
+    modifier: Modifier = Modifier,
+    decimalPlaces: Int = 2,
+    enabled: Boolean = true
+) {
+    DecimalValueEditPill(
+        value = value,
+        onValueChange = onValueChange,
+        valueRange = valueRange,
+        unitSuffix = unitSuffix,
+        limitToastMessage = limitToastMessage,
+        modifier = modifier,
+        decimalPlaces = decimalPlaces,
+        enabled = enabled
+    )
+}
+

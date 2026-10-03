@@ -483,6 +483,7 @@ private fun DetailPaneContent(
         }
         SettingsCategory.DISPLAY_KEYBOARD -> {
             DisplaySettingsScreen(
+                showTopBar = showTopBar,
                 onNavigateToSafeAreaEditor = { onNavigateDialog(SettingsSubpage.SAFE_AREA_EDITOR) },
                 onBack = { onBack?.invoke() ?: onSelectCategory(SettingsCategory.FILES_STORAGE) }
             )
