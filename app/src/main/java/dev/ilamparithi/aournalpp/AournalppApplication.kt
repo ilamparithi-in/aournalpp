@@ -18,6 +18,7 @@ class AournalppApplication : Application() {
         instance = this
         X11Preferences.initDefaults(this)
         DocumentRepository.init(this)
+        dev.ilamparithi.aournalpp.logging.CrashHandler.install(this)
         try {
             java.io.File(cacheDir, "sync_active.flag").delete()
         } catch (_: Exception) {}

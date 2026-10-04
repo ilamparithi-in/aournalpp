@@ -1505,12 +1505,54 @@
     <string name="pref_inspect_settings_title">Configuration File Inspector</string>
     <string name="pref_inspect_settings_desc">View, inspect, and copy live XML and INI configuration files (settings.xml, toolbar.ini, etc.)</string>
     <string name="pref_btn_inspect_settings">Inspect settings.xml</string>
-    <string name="pref_native_gtk_prefs_title">Native GTK Preferences</string>
+    <string name="pref_cat_xournal_prefs">Xournal++ Preferences</string>
+    <string name="pref_native_gtk_prefs_title">Open Xournal++ Preferences Page</string>
     <string name="pref_native_gtk_prefs_desc">Launch Xournal++ directly to access desktop GTK settings inside the display server</string>
-    <string name="pref_btn_native_gtk_prefs">Open Native GTK Preferences</string>
+    <string name="pref_btn_native_gtk_prefs">Open Xournal++ Preferences Page</string>
     <string name="pref_autoload_safeguard_title">Workspace Session Safeguard Active</string>
     <string name="pref_autoload_safeguard_desc">Xournal++\'s native \"Autoload most recent file on startup\" option in Load/Save is automatically managed by Aournal++ to ensure seamless Android workspace restoration without session conflicts.</string>
     <string name="msg_autoload_override_cleared">Xournal++ startup autoload was cleared to preserve \'Continue where you left off\'.</string>
+
+    <!-- ======================================================================= -->
+    <!-- Log Manager & Crash Collector                                           -->
+    <!-- ======================================================================= -->
+    <string name="pref_log_manager_title">Logs &amp; Crash Reports</string>
+    <string name="pref_log_manager_desc">Inspect live application logs, review recorded crashes, and export diagnostics</string>
+    <string name="log_manager_badge_healthy">Healthy</string>
+    <string name="log_manager_tab_crashes">Crash Reports</string>
+    <string name="log_manager_tab_live_logs">Live Application Logs</string>
+    <string name="log_manager_no_crashes_title">No Crashes Recorded</string>
+    <string name="log_manager_no_crashes_desc">All systems and processes are running smoothly. In the event of an unexpected crash, diagnostic logs will appear here automatically.</string>
+    <string name="log_manager_clear_all_crashes">Clear All Crash Reports</string>
+    <string name="log_manager_clear_dialog_title">Clear All Crash Reports?</string>
+    <string name="log_manager_clear_dialog_desc">This will permanently remove all stored crash logs from your device.</string>
+    <string name="log_manager_delete_crash">Delete</string>
+    <string name="log_manager_view_details">View Details</string>
+    <string name="log_manager_copy_report">Copy</string>
+    <string name="log_manager_share_report">Share Report</string>
+    <string name="log_manager_copied_toast">Crash report copied to clipboard</string>
+    <string name="log_manager_logs_copied_toast">Logs copied to clipboard</string>
+    <string name="log_manager_search_hint">Search logs or tags…</string>
+    <string name="log_manager_filter_all">All</string>
+    <string name="log_manager_filter_debug">Debug</string>
+    <string name="log_manager_filter_info">Info</string>
+    <string name="log_manager_filter_warn">Warn</string>
+    <string name="log_manager_filter_error">Error</string>
+    <string name="log_manager_refresh">Refresh</string>
+    <string name="log_manager_copy_all">Copy All</string>
+    <string name="log_manager_share_all">Share Logs</string>
+    <string name="log_manager_no_logs">No log entries match your filter or search query.</string>
+    <string name="log_manager_crash_details_title">Crash Report Details</string>
+    <string name="log_manager_section_environment">Device &amp; Environment</string>
+    <string name="log_manager_section_stacktrace">Stack Trace &amp; Diagnostic Output</string>
+    <string name="log_manager_section_logcat_tail">Recent Context Logcat Tail</string>
+    <string name="cd_clear_search">Clear search query</string>
+    <string name="cd_log_level">Log level indicator</string>
+    <string name="cd_scroll_to_bottom">Scroll to bottom</string>
+    <string name="cd_pause_auto_refresh">Pause auto-refresh</string>
+    <string name="cd_resume_auto_refresh">Resume auto-refresh</string>
+    <string name="log_manager_clear_logs">Clear logs</string>
+    <string name="log_manager_logs_cleared">Application logs cleared</string>
 
     <!-- ======================================================================= -->
     <!-- Open Source Licenses & Credits                                          -->

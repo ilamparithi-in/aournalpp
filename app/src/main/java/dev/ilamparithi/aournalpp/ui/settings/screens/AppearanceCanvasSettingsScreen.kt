@@ -16,16 +16,26 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import android.content.Intent
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import dev.ilamparithi.aournalpp.ui.settings.components.SettingsIconBadge
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Animation
 import androidx.compose.material.icons.filled.Brush
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -52,10 +62,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import dev.ilamparithi.aournalpp.CanvasActivity
 import dev.ilamparithi.aournalpp.R
 import dev.ilamparithi.aournalpp.data.AppPreferences
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.runtime.WallpaperHelper
+import dev.ilamparithi.aournalpp.runtime.XournalConfigManager
+import dev.ilamparithi.aournalpp.ui.ConfigViewerDialog
 import dev.ilamparithi.aournalpp.ui.settings.components.ConnectedButtonGroup
 import dev.ilamparithi.aournalpp.ui.settings.components.ConnectedButtonItem
 import dev.ilamparithi.aournalpp.ui.settings.components.SettingsSwitchListItem
@@ -83,6 +96,8 @@ fun AppearanceCanvasSettingsScreen(
     val generalPrefs = remember { AppPreferences.getGeneralPrefs(context) }
     val legacyPrefs = remember { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
     val env = remember { LinuxEnvironment(context) }
+    val configManager = remember { XournalConfigManager(env) }
+    var showConfigViewerDialog by remember { mutableStateOf(false) }
 
     fun saveStringPref(key: String, value: String) {
         generalPrefs.edit().putString(key, value).apply()
@@ -134,6 +149,13 @@ fun AppearanceCanvasSettingsScreen(
                 }
             }
         }
+    }
+
+    if (showConfigViewerDialog) {
+        ConfigViewerDialog(
+            configManager = configManager,
+            onDismiss = { showConfigViewerDialog = false }
+        )
     }
 
     Scaffold(
@@ -459,7 +481,124 @@ fun AppearanceCanvasSettingsScreen(
                 }
             }
 
+            // =================================================================
+            // 5. Xournal++ Preferences Group
+            // =================================================================
+            Text(
+                text = stringResource(R.string.pref_cat_xournal_prefs),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp)),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // Item 1: Configuration File Inspector
+                    AppearanceActionRow(
+                        icon = Icons.Default.Code,
+                        title = stringResource(R.string.pref_inspect_settings_title),
+                        description = stringResource(R.string.pref_inspect_settings_desc),
+                        onClick = { showConfigViewerDialog = true }
+                    )
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+
+                    // Item 2: Open Xournal++ Preferences Page
+                    AppearanceActionRow(
+                        icon = Icons.Default.Tune,
+                        title = stringResource(R.string.pref_native_gtk_prefs_title),
+                        description = stringResource(R.string.pref_native_gtk_prefs_desc),
+                        onClick = {
+                            val intent = Intent(context, CanvasActivity::class.java).apply {
+                                putExtra(CanvasActivity.EXTRA_OPEN_PREFERENCES, true)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(intent)
+                        }
+                    )
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+
+                    // Footnote: Workspace Autoload Safeguard Message
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = stringResource(R.string.pref_autoload_safeguard_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
+
+/**
+ * Reusable setting row for Appearance & Canvas subpage actions.
+ */
+@Composable
+private fun AppearanceActionRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    description: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .semantics { role = Role.Button }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        SettingsIconBadge(icon = icon)
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp)
+        )
+    }
+}
+

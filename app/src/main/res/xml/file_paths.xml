@@ -4,5 +4,6 @@
     <cache-path name="shared_pdfs" path="shared_pdfs/" />
     <cache-path name="shared_notes" path="shared_notes/" />
     <cache-path name="clipboard" path="clipboard/" />
+    <cache-path name="shared_logs" path="shared_logs/" />
     <external-path name="external_documents" path="Documents/Notes/" />
 </paths>

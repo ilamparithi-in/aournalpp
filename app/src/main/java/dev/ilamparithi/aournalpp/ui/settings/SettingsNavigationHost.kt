@@ -63,6 +63,7 @@ import dev.ilamparithi.aournalpp.ui.settings.screens.FilesStorageSettingsScreen
 import dev.ilamparithi.aournalpp.ui.settings.screens.InputSettingsScreen
 import dev.ilamparithi.aournalpp.ui.settings.screens.KeyboardSettingsScreen
 import dev.ilamparithi.aournalpp.ui.settings.screens.LenovoPenSettingsScreen
+import dev.ilamparithi.aournalpp.ui.settings.screens.LogManagerScreen
 import dev.ilamparithi.aournalpp.ui.settings.screens.SystemMaintenanceSettingsScreen
 import dev.ilamparithi.aournalpp.ui.settings.screens.ToolbarSettingsScreen
 import dev.ilamparithi.aournalpp.utils.a11yHeading
@@ -140,119 +141,41 @@ fun SettingsNavigationHost(onFinish: () -> Unit) {
         }
     }
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val isTwoPane = maxWidth >= 720.dp
+    val fullPageSubpage = activeDialogSubpage?.takeIf { it.isFullPage }
 
-        if (isTwoPane) {
-            // =================================================================
-            // Wide Screen: Two-Pane Adaptive Scaffold
-            // =================================================================
-            Row(modifier = Modifier.fillMaxSize()) {
-                // Left Master Pane: Categories List
-                Column(
-                    modifier = Modifier
-                        .width(320.dp)
-                        .fillMaxHeight()
-                        .padding(horizontal = 8.dp)
-                ) {
-                    TopAppBar(
-                        title = {
-                            Text(
-                                text = stringResource(R.string.settings_title),
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.a11yHeading()
-                            )
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = onFinish, modifier = Modifier.minTouchTarget()) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = stringResource(R.string.action_back)
-                                )
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        )
-                    )
+    val fullPageTransitionSpec: androidx.compose.animation.AnimatedContentTransitionScope<SettingsSubpage?>.() -> androidx.compose.animation.ContentTransform = {
+        val initial = initialState
+        val target = targetState
+        val isForward = (initial == null && target != null) ||
+            (initial != null && target != null && target.ordinal > initial.ordinal)
+        SpringSlideTransition.createSpec<SettingsSubpage?>(
+            isForward = isForward,
+            reduceAnimations = reduceAnimations
+        )(this)
+    }
 
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(vertical = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        SettingsCategory.entries.forEach { category ->
-                            val isSelected = selectedCategory == category
-                            CategoryNavTile(
-                                category = category,
-                                isSelected = isSelected,
-                                onClick = { onCategorySelect(category) }
-                            )
-                        }
-                    }
-                }
+    AnimatedContent(
+        targetState = fullPageSubpage,
+        transitionSpec = fullPageTransitionSpec,
+        label = "FullPageSettingsTransition",
+        modifier = Modifier.fillMaxSize()
+    ) { currentSubpage ->
+        if (currentSubpage == null) {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val isTwoPane = maxWidth >= 720.dp
 
-                VerticalDivider(
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.fillMaxHeight()
-                )
-
-                // Right Detail Pane
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                ) {
-                    val detailTransitionSpec: androidx.compose.animation.AnimatedContentTransitionScope<SettingsCategory>.() -> androidx.compose.animation.ContentTransform = {
-                        val isForward = SettingsTransitionHelper.isForwardCategoryTransition(initialState, targetState)
-                        SpringSlideTransition.createSpec<SettingsCategory>(
-                            isForward = isForward,
-                            reduceAnimations = reduceAnimations,
-                            isRapid = isRapidCategorySwitch
-                        )(this)
-                    }
-
-                    AnimatedContent(
-                        targetState = selectedCategory,
-                        transitionSpec = detailTransitionSpec,
-                        label = "SettingsDetailTransition"
-                    ) { targetCategory ->
-                        DetailPaneContent(
-                            category = targetCategory,
-                            showTopBar = true,
-                            onBack = null,
-                            onNavigateDialog = { activeDialogSubpage = it },
-                            onSelectCategory = onCategorySelect
-                        )
-                    }
-                }
-            }
-        } else {
-            // =================================================================
-            // Compact Screen: Single-Pane Push-Pop Navigation
-            // =================================================================
-            val compactTransitionSpec: androidx.compose.animation.AnimatedContentTransitionScope<SettingsCategory?>.() -> androidx.compose.animation.ContentTransform = {
-                val isForward = SettingsTransitionHelper.isForwardCompactTransition(initialState, targetState)
-                SpringSlideTransition.createSpec<SettingsCategory?>(
-                    isForward = isForward,
-                    reduceAnimations = reduceAnimations,
-                    isRapid = isRapidCompactSwitch
-                )(this)
-            }
-
-            AnimatedContent(
-                targetState = activeCompactCategory,
-                transitionSpec = compactTransitionSpec,
-                label = "CompactSettingsTransition"
-            ) { currentCategory ->
-                if (currentCategory == null) {
-                    // Category Selection List
-                    Scaffold(
-                        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-                        topBar = {
+                if (isTwoPane) {
+                    // =================================================================
+                    // Wide Screen: Two-Pane Adaptive Scaffold
+                    // =================================================================
+                    Row(modifier = Modifier.fillMaxSize()) {
+                        // Left Master Pane: Categories List
+                        Column(
+                            modifier = Modifier
+                                .width(320.dp)
+                                .fillMaxHeight()
+                                .padding(horizontal = 8.dp)
+                        ) {
                             TopAppBar(
                                 title = {
                                     Text(
@@ -274,39 +197,153 @@ fun SettingsNavigationHost(onFinish: () -> Unit) {
                                     containerColor = MaterialTheme.colorScheme.surface
                                 )
                             )
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(vertical = 4.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                SettingsCategory.entries.forEach { category ->
+                                    val isSelected = selectedCategory == category
+                                    CategoryNavTile(
+                                        category = category,
+                                        isSelected = isSelected,
+                                        onClick = { onCategorySelect(category) }
+                                    )
+                                }
+                            }
                         }
-                    ) { padding ->
-                        Column(
+
+                        VerticalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxHeight()
+                        )
+
+                        // Right Detail Pane
+                        Box(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .padding(padding)
-                                .verticalScroll(rememberScrollState())
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                .weight(1f)
+                                .fillMaxHeight()
                         ) {
-                            SettingsCategory.entries.forEach { category ->
-                                CompactCategoryRow(
-                                    category = category,
-                                    onClick = { onCompactCategorySelect(category) }
+                            val detailTransitionSpec: androidx.compose.animation.AnimatedContentTransitionScope<SettingsCategory>.() -> androidx.compose.animation.ContentTransform = {
+                                val isForward = SettingsTransitionHelper.isForwardCategoryTransition(initialState, targetState)
+                                SpringSlideTransition.createSpec<SettingsCategory>(
+                                    isForward = isForward,
+                                    reduceAnimations = reduceAnimations,
+                                    isRapid = isRapidCategorySwitch
+                                )(this)
+                            }
+
+                            AnimatedContent(
+                                targetState = selectedCategory,
+                                transitionSpec = detailTransitionSpec,
+                                label = "SettingsDetailTransition"
+                            ) { targetCategory ->
+                                DetailPaneContent(
+                                    category = targetCategory,
+                                    showTopBar = true,
+                                    onBack = null,
+                                    onNavigateDialog = { activeDialogSubpage = it },
+                                    onSelectCategory = onCategorySelect
                                 )
                             }
                         }
                     }
                 } else {
-                    // Category Detail Screen
-                    DetailPaneContent(
-                        category = currentCategory,
-                        showTopBar = true,
-                        onBack = { onCompactCategorySelect(null) },
-                        onNavigateDialog = { activeDialogSubpage = it },
-                        onSelectCategory = { onCompactCategorySelect(it) }
+                    // =================================================================
+                    // Compact Screen: Single-Pane Push-Pop Navigation
+                    // =================================================================
+                    val compactTransitionSpec: androidx.compose.animation.AnimatedContentTransitionScope<SettingsCategory?>.() -> androidx.compose.animation.ContentTransform = {
+                        val isForward = SettingsTransitionHelper.isForwardCompactTransition(initialState, targetState)
+                        SpringSlideTransition.createSpec<SettingsCategory?>(
+                            isForward = isForward,
+                            reduceAnimations = reduceAnimations,
+                            isRapid = isRapidCompactSwitch
+                        )(this)
+                    }
+
+                    AnimatedContent(
+                        targetState = activeCompactCategory,
+                        transitionSpec = compactTransitionSpec,
+                        label = "CompactSettingsTransition"
+                    ) { currentCategory ->
+                        if (currentCategory == null) {
+                            // Category Selection List
+                            Scaffold(
+                                contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                                topBar = {
+                                    TopAppBar(
+                                        title = {
+                                            Text(
+                                                text = stringResource(R.string.settings_title),
+                                                style = MaterialTheme.typography.titleLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.a11yHeading()
+                                            )
+                                        },
+                                        navigationIcon = {
+                                            IconButton(onClick = onFinish, modifier = Modifier.minTouchTarget()) {
+                                                Icon(
+                                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                                    contentDescription = stringResource(R.string.action_back)
+                                                )
+                                            }
+                                        },
+                                        colors = TopAppBarDefaults.topAppBarColors(
+                                            containerColor = MaterialTheme.colorScheme.surface
+                                        )
+                                    )
+                                }
+                            ) { padding ->
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(padding)
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    SettingsCategory.entries.forEach { category ->
+                                        CompactCategoryRow(
+                                            category = category,
+                                            onClick = { onCompactCategorySelect(category) }
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            // Category Detail Screen
+                            DetailPaneContent(
+                                category = currentCategory,
+                                showTopBar = true,
+                                onBack = { onCompactCategorySelect(null) },
+                                onNavigateDialog = { activeDialogSubpage = it },
+                                onSelectCategory = { onCompactCategorySelect(it) }
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            when (currentSubpage) {
+                SettingsSubpage.LOG_MANAGER -> {
+                    LogManagerScreen(
+                        onBack = { activeDialogSubpage = null }
                     )
                 }
+                SettingsSubpage.LENOVO_PEN -> {
+                    LenovoPenSettingsScreen(
+                        onBack = { activeDialogSubpage = null }
+                    )
+                }
+                else -> {}
             }
         }
     }
 
-    // Modal Fullscreen Editors
+    // Modal Fullscreen Dialog Editors
     when (activeDialogSubpage) {
         SettingsSubpage.TOOLBAR_POSITION_EDITOR -> {
             Dialog(
@@ -333,11 +370,6 @@ fun SettingsNavigationHost(onFinish: () -> Unit) {
                     onNavigateBack = { activeDialogSubpage = null }
                 )
             }
-        }
-        SettingsSubpage.LENOVO_PEN -> {
-            LenovoPenSettingsScreen(
-                onBack = { activeDialogSubpage = null }
-            )
         }
         else -> {}
     }
@@ -490,7 +522,8 @@ private fun DetailPaneContent(
         SettingsCategory.SYSTEM_MAINTENANCE -> {
             SystemMaintenanceSettingsScreen(
                 showTopBar = showTopBar,
-                onBack = onBack
+                onBack = onBack,
+                onNavigateToLogManager = { onNavigateDialog(SettingsSubpage.LOG_MANAGER) }
             )
         }
         SettingsCategory.ABOUT -> {

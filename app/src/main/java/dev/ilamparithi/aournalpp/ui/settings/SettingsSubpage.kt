@@ -8,5 +8,12 @@ enum class SettingsSubpage {
     INPUT,
     LENOVO_PEN,
     DISPLAY,
-    SAFE_AREA_EDITOR
+    SAFE_AREA_EDITOR,
+    LOG_MANAGER;
+
+    val isFullPage: Boolean
+        get() = when (this) {
+            LOG_MANAGER, LENOVO_PEN -> true
+            else -> false
+        }
 }

@@ -364,7 +364,16 @@ class CanvasActivity : ComponentActivity() {
 
         env = LinuxEnvironment(this)
         env.checkAndQuarantineEmergencySave()
-        supervisor = ProcessSupervisor(env)
+        supervisor = ProcessSupervisor(env).apply {
+            onNativeProcessCrashListener = { binaryName, exitCode, outputTail ->
+                dev.ilamparithi.aournalpp.logging.CrashHandler.recordNativeCrash(
+                    this@CanvasActivity,
+                    binaryName,
+                    exitCode,
+                    outputTail
+                )
+            }
+        }
         sessionManager = CanvasSessionManager(
             context = this,
             env = env,

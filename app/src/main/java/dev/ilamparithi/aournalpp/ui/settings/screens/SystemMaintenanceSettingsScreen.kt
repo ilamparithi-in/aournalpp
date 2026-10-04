@@ -25,13 +25,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -67,14 +65,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import dev.ilamparithi.aournalpp.CanvasActivity
 import dev.ilamparithi.aournalpp.R
 import dev.ilamparithi.aournalpp.runtime.ConfigFileType
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.runtime.LinuxLocaleManager
 import dev.ilamparithi.aournalpp.runtime.XournalConfigManager
 import dev.ilamparithi.aournalpp.ui.AppDialogDefaults
-import dev.ilamparithi.aournalpp.ui.ConfigViewerDialog
 import dev.ilamparithi.aournalpp.ui.promptWidth
 import dev.ilamparithi.aournalpp.ui.settings.dialogs.AppLanguagePickerDialog
 import dev.ilamparithi.aournalpp.ui.settings.dialogs.XournalppLanguagePickerDialog
@@ -82,6 +78,10 @@ import dev.ilamparithi.aournalpp.utils.AppLocaleHelper
 import dev.ilamparithi.aournalpp.utils.a11yHeading
 import dev.ilamparithi.aournalpp.utils.minTouchTarget
 import kotlinx.coroutines.launch
+
+import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.runtime.mutableIntStateOf
+import dev.ilamparithi.aournalpp.logging.CrashLogStorage
 
 /**
  * Section 6: System & Maintenance Settings Screen.
@@ -91,19 +91,22 @@ import kotlinx.coroutines.launch
  *
  * 1. Language & Localization (Android app language & Linux editor locale)
  * 2. Configuration Backup & Restore (Full ZIP backup, XML import, component export)
- * 3. Advanced Diagnostic Tools (settings.xml inspector, Native GTK Preferences, session safeguard)
+ * 3. Advanced Diagnostic Tools (settings.xml inspector, Native GTK Preferences, session safeguard, log manager)
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SystemMaintenanceSettingsScreen(
     showTopBar: Boolean = true,
-    onBack: (() -> Unit)? = null
+    onBack: (() -> Unit)? = null,
+    onNavigateToLogManager: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val env = remember { LinuxEnvironment(context) }
     val configManager = remember { XournalConfigManager(env) }
+    val crashStorage = remember { CrashLogStorage(context) }
+    var crashCount by remember { mutableIntStateOf(crashStorage.getCrashCount()) }
 
     // 1. Language & Localization State
     var showAppLanguageDialog by remember { mutableStateOf(false) }
@@ -112,7 +115,6 @@ fun SystemMaintenanceSettingsScreen(
     var appLanguageDisplayName by remember { mutableStateOf(AppLocaleHelper.getCurrentAppLanguageDisplayName()) }
 
     // 2. Configuration Backup & Diagnostics State
-    var showConfigViewerDialog by remember { mutableStateOf(false) }
     var showAdvancedExportDialog by remember { mutableStateOf(false) }
     var exportTargetType by remember { mutableStateOf(ConfigFileType.SETTINGS_XML) }
 
@@ -123,6 +125,7 @@ fun SystemMaintenanceSettingsScreen(
             if (event == Lifecycle.Event.ON_RESUME) {
                 currentLinuxLocaleTag = LinuxLocaleManager.getSavedLocale(context)
                 appLanguageDisplayName = AppLocaleHelper.getCurrentAppLanguageDisplayName()
+                crashCount = crashStorage.getCrashCount()
                 if (env.checkAndOverrideAutoloadPreference() || env.hasPendingAutoloadOverrideNotification()) {
                     env.clearPendingAutoloadOverrideNotification()
                     scope.launch {
@@ -238,14 +241,6 @@ fun SystemMaintenanceSettingsScreen(
                     Toast.LENGTH_LONG
                 ).show()
             }
-        )
-    }
-
-    // Dialog: Live Configuration Inspector
-    if (showConfigViewerDialog) {
-        ConfigViewerDialog(
-            configManager = configManager,
-            onDismiss = { showConfigViewerDialog = false }
         )
     }
 
@@ -522,7 +517,7 @@ fun SystemMaintenanceSettingsScreen(
             }
 
             // =================================================================
-            // 3. Advanced Diagnostic Tools Group
+            // 3. Diagnostics & Logs Group
             // =================================================================
             Text(
                 text = stringResource(R.string.pref_cat_advanced_diagnostics),
@@ -537,58 +532,18 @@ fun SystemMaintenanceSettingsScreen(
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    // Tool 3A: Live Configuration Inspector
+                    // Log Manager & Crash Collector
                     MaintenanceActionRow(
-                        icon = Icons.Default.Code,
-                        title = stringResource(R.string.pref_inspect_settings_title),
-                        description = stringResource(R.string.pref_inspect_settings_desc),
-                        onClick = { showConfigViewerDialog = true }
+                        icon = Icons.Default.Terminal,
+                        title = stringResource(R.string.pref_log_manager_title),
+                        description = stringResource(R.string.pref_log_manager_desc),
+                        badgeText = if (crashCount > 0) {
+                            "$crashCount"
+                        } else {
+                            stringResource(R.string.log_manager_badge_healthy)
+                        },
+                        onClick = onNavigateToLogManager
                     )
-
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                    )
-
-                    // Tool 3B: Native GTK Preferences Launch
-                    MaintenanceActionRow(
-                        icon = Icons.Default.Tune,
-                        title = stringResource(R.string.pref_native_gtk_prefs_title),
-                        description = stringResource(R.string.pref_native_gtk_prefs_desc),
-                        onClick = {
-                            val intent = Intent(context, CanvasActivity::class.java).apply {
-                                putExtra(CanvasActivity.EXTRA_OPEN_PREFERENCES, true)
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            context.startActivity(intent)
-                        }
-                    )
-
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                    )
-
-                    // Workspace Autoload Safeguard Footnote
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = stringResource(R.string.pref_autoload_safeguard_desc),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                 }
             }
 

@@ -16,6 +16,10 @@ import java.util.concurrent.CopyOnWriteArrayList
 class ProcessSupervisor(val env: LinuxEnvironment) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val activeProcesses = CopyOnWriteArrayList<Process>()
+    private val isTerminatingAll = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val recentOutputTail = java.util.concurrent.ConcurrentLinkedQueue<String>()
+
+    var onNativeProcessCrashListener: ((binaryName: String, exitCode: Int, outputTail: List<String>) -> Unit)? = null
 
     fun startKioskWindowManager(): Process? {
         val openboxFile = env.resolveExecutable("openbox")
@@ -36,6 +40,7 @@ class ProcessSupervisor(val env: LinuxEnvironment) {
         }
         val tag = if (wmFile.name.contains("matchbox")) "NativeProcess:MatchboxWM" else "NativeProcess:WindowManager"
         Log.i("ProcessSupervisor", "Starting WM with command: $command (tag=$tag)")
+        isTerminatingAll.set(false)
         val process = ProcessBuilder(command)
             .directory(env.homeDir)
             .redirectErrorStream(true)
@@ -95,6 +100,7 @@ class ProcessSupervisor(val env: LinuxEnvironment) {
             command.add(targetFilePath)
         }
         
+        isTerminatingAll.set(false)
         val process = ProcessBuilder(command)
             .directory(env.homeDir)
             .redirectErrorStream(true)
@@ -107,8 +113,14 @@ class ProcessSupervisor(val env: LinuxEnvironment) {
 
         scope.launch {
             try {
-                process.waitFor()
-                Log.i("ProcessSupervisor", "A Xournal++ process instance terminated cleanly.")
+                val exitCode = process.waitFor()
+                val wasTerminatedIntentionally = isTerminatingAll.get()
+                if (exitCode != 0 && !wasTerminatedIntentionally) {
+                    Log.w("ProcessSupervisor", "A Xournal++ process instance terminated abnormally with exit code $exitCode")
+                    onNativeProcessCrashListener?.invoke("xournalpp", exitCode, recentOutputTail.toList())
+                } else {
+                    Log.i("ProcessSupervisor", "A Xournal++ process instance terminated cleanly.")
+                }
                 xournalProcesses.remove(process)
                 val remaining = xournalProcesses.count { it.isAlive }
                 onSingleProcessExitListener?.invoke(remaining)
@@ -512,6 +524,7 @@ class ProcessSupervisor(val env: LinuxEnvironment) {
     )
 
     companion object {
+        private const val MAX_OUTPUT_TAIL_SIZE = 100
         private val APP_SUFFIX_REGEX = Regex("\\s*-\\s*Xournal\\+\\+.*$", RegexOption.IGNORE_CASE)
         private val AUTOSAVED_REGEX = Regex("\\[autosaved\\]", RegexOption.IGNORE_CASE)
 
@@ -686,6 +699,10 @@ class ProcessSupervisor(val env: LinuxEnvironment) {
                     var line: String? = reader.readLine()
                     while (line != null) {
                         Log.d(tag, line)
+                        recentOutputTail.add("[$tag] $line")
+                        while (recentOutputTail.size > MAX_OUTPUT_TAIL_SIZE) {
+                            recentOutputTail.poll()
+                        }
                         line = reader.readLine()
                     }
                 }
@@ -760,6 +777,7 @@ class ProcessSupervisor(val env: LinuxEnvironment) {
     }
 
     fun terminateAll() {
+        isTerminatingAll.set(true)
         val processesToKill = activeProcesses.toList()
         activeProcesses.clear()
         xournalProcesses.clear()
