@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -176,6 +179,11 @@ fun ExclusionFilterDialog(
                         onValueChange = { newRegexInput = it },
                         placeholder = { Text("^.*\\.draft$") },
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Ascii,
+                            autoCorrectEnabled = false,
+                            imeAction = ImeAction.Done
+                        ),
                         modifier = Modifier.weight(1f)
                     )
                     FilledTonalIconButton(
@@ -228,6 +236,11 @@ fun ExclusionFilterDialog(
                         onValueChange = { newExtInput = it },
                         placeholder = { Text(if (isWhitelistMode) "xopp, pdf" else "bak, tmp, log") },
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Ascii,
+                            autoCorrectEnabled = false,
+                            imeAction = ImeAction.Done
+                        ),
                         modifier = Modifier.weight(1f)
                     )
                     FilledTonalIconButton(
@@ -281,6 +294,11 @@ fun ExclusionFilterDialog(
                         onValueChange = { newFolderInput = it },
                         placeholder = { Text(if (isWhitelistMode) "/path/to/include" else "/path/to/ignore") },
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Ascii,
+                            autoCorrectEnabled = false,
+                            imeAction = ImeAction.Done
+                        ),
                         modifier = Modifier.weight(1f)
                     )
                     FilledTonalIconButton(

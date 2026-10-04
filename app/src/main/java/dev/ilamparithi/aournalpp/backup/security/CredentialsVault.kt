@@ -147,6 +147,13 @@ class CredentialsVault private constructor(context: Context) {
     }
 
     @Synchronized
+    fun reloadServices(): List<ServiceConfig> {
+        val loaded = loadServicesFromDisk()
+        _servicesFlow.value = loaded
+        return loaded
+    }
+
+    @Synchronized
     fun getAllServices(): List<ServiceConfig> {
         return _servicesFlow.value
     }

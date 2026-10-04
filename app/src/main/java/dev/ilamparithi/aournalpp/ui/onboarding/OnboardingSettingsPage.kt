@@ -238,13 +238,14 @@ fun OnboardingSettingsPage(
                                 )
                             }
 
-                            DropdownMenu(
+                            dev.ilamparithi.aournalpp.ui.common.AppDropdownMenu(
                                 expanded = showTimeoutMenu,
                                 onDismissRequest = { showTimeoutMenu = false }
                             ) {
                                 timeoutOptions.forEach { (key, label) ->
-                                    DropdownMenuItem(
+                                    dev.ilamparithi.aournalpp.ui.common.AppDropdownMenuItem(
                                         text = { Text(label) },
+                                        selected = idleTimeout == key,
                                         onClick = {
                                             idleTimeout = key
                                             x11Prefs.edit().putString(X11Preferences.KEY_SCREEN_IDLE_TIMEOUT, key).apply()

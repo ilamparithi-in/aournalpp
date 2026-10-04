@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Folder
@@ -323,6 +325,10 @@ fun CustomEmojiInputDialog(
                     label = { Text("Emoji (1 Character)") },
                     placeholder = { Text("e.g. 🐼") },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        autoCorrectEnabled = false,
+                        imeAction = ImeAction.Done
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )

@@ -4,6 +4,7 @@ import android.graphics.BitmapFactory
 import android.os.SystemClock
 import android.view.KeyEvent
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
 import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -64,9 +65,14 @@ import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.res.stringResource
+import dev.ilamparithi.aournalpp.R
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -295,13 +301,16 @@ fun FloatingToolbarOverlay(
     showCopy: Boolean,
     showPaste: Boolean,
     showImage: Boolean,
+    showSync: Boolean = true,
     onOpenImageSelector: () -> Unit,
+    onSyncNow: () -> Unit = {},
     stylusHoverExpands: Boolean,
     onSmartBackPress: () -> Unit,
     onCloseWindow: () -> Unit,
     onToggleKeyboard: () -> Unit,
     onInjectShortcut: (Int, String) -> Unit,
-    isKeyboardOpen: Boolean
+    isKeyboardOpen: Boolean,
+    isSyncing: Boolean = false
 ) {
     val m3MorphEasing = remember { CubicBezierEasing(0.2f, 0.0f, 0.0f, 1.0f) }
     val cutoutPlacement = rememberCutoutPlacement()
@@ -919,6 +928,64 @@ fun FloatingToolbarOverlay(
                                                     imageVector = Icons.Default.Image,
                                                     contentDescription = "Insert Image (Camera, Gallery, Files)",
                                                     modifier = Modifier.size(16.dp),
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (showSync) {
+                                val syncBgColor by animateColorAsState(
+                                    targetValue = if (isSyncing) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    animationSpec = AppAnimationSpecs.springColor(),
+                                    label = "SyncBgColor"
+                                )
+
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = syncBgColor,
+                                    modifier = Modifier
+                                        .padding(horizontal = 2.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .then(
+                                            if (!isSyncing) {
+                                                Modifier.clickable(
+                                                    interactionSource = remember { MutableInteractionSource() },
+                                                    indication = null
+                                                ) {
+                                                    interactionSignal.tryEmit(Unit)
+                                                    try {
+                                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    } catch (_: Exception) {
+                                                    }
+                                                    onSyncNow()
+                                                }
+                                            } else Modifier
+                                        )
+                                ) {
+                                    Box(
+                                        modifier = Modifier.size(32.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Crossfade(
+                                            targetState = isSyncing,
+                                            animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+                                            label = "CanvasSyncButtonState"
+                                        ) { syncing ->
+                                            if (syncing) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(16.dp),
+                                                    strokeWidth = 2.dp,
+                                                    strokeCap = StrokeCap.Round,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            } else {
+                                                Icon(
+                                                    imageVector = Icons.Default.Sync,
+                                                    contentDescription = stringResource(R.string.toolbar_cd_sync),
+                                                    modifier = Modifier.size(17.dp),
                                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                             }

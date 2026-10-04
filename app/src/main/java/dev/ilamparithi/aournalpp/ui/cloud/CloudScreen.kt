@@ -83,6 +83,8 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.mutableStateListOf
@@ -126,8 +128,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
@@ -135,8 +135,6 @@ import dev.ilamparithi.aournalpp.utils.NetworkUtils
 import java.io.File
 import java.util.UUID
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
@@ -578,7 +576,7 @@ fun CloudScreen(
                                 )
                             } else {
                                 Icon(
-                                    imageVector = Icons.Default.Refresh,
+                                    imageVector = Icons.Default.Sync,
                                     contentDescription = stringResource(R.string.cloud_sync_all_button)
                                 )
                             }
@@ -616,7 +614,7 @@ fun CloudScreen(
                                 )
                             } else {
                                 Icon(
-                                    imageVector = Icons.Default.Tune,
+                                    imageVector = Icons.AutoMirrored.Filled.CompareArrows,
                                     contentDescription = stringResource(R.string.cd_cloud_check_conflicts)
                                 )
                             }
@@ -646,7 +644,7 @@ fun CloudScreen(
                                 }
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.CloudSync,
+                                    imageVector = Icons.Default.SwapVert,
                                     contentDescription = stringResource(R.string.cloud_tab_queue)
                                 )
                             }

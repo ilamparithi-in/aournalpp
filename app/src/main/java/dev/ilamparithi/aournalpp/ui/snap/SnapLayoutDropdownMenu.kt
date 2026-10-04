@@ -19,12 +19,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CropSquare
 import androidx.compose.material.icons.filled.Flip
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.HorizontalDivider
+import dev.ilamparithi.aournalpp.ui.common.AppDropdownMenu
+import dev.ilamparithi.aournalpp.ui.common.AppMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -141,19 +142,11 @@ fun SnapLayoutDropdownMenu(
     onSelectMode: (SnapLayoutMode, Boolean) -> Unit,
     onToggleMirror: () -> Unit
 ) {
-    DropdownMenu(
+    AppDropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismissRequest,
         offset = DpOffset(0.dp, 8.dp),
-        shape = RoundedCornerShape(16.dp),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        modifier = Modifier
-            .width(260.dp)
-            .border(
-                1.dp,
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                RoundedCornerShape(16.dp)
-            )
+        modifier = Modifier.width(260.dp)
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
@@ -238,10 +231,7 @@ fun SnapLayoutDropdownMenu(
                 )
             }
 
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 4.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-            )
+            AppMenuDefaults.InsetDivider()
 
             // Unlock (Desktop Mode) Option
             SnapLayoutMenuItem(
@@ -297,7 +287,7 @@ private fun SnapLayoutMenuItem(
 ) {
     Surface(
         shape = RoundedCornerShape(10.dp),
-        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
         else Color.Transparent,
         modifier = Modifier
             .fillMaxWidth()
@@ -324,16 +314,23 @@ private fun SnapLayoutMenuItem(
                     text = title,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                 )
             }
             if (trailingAction != null) {
                 trailingAction()
+            } else if (isSelected) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(18.dp)
+                )
             }
         }
     }

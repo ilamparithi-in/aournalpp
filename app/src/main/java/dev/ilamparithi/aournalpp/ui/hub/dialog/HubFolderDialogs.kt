@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Add
@@ -138,6 +141,11 @@ fun RenameFolderDialog(
                     onValueChange = { renameFolderNameInput = it },
                     label = { Text(stringResource(R.string.dialog_folder_name_hint)) },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Words,
+                        autoCorrectEnabled = true,
+                        imeAction = ImeAction.Done
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -202,6 +210,11 @@ fun MoveToFolderDialog(
                         onValueChange = { inlineFolderName = it },
                         label = { Text(stringResource(R.string.dialog_new_folder_title)) },
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Words,
+                            autoCorrectEnabled = true,
+                            imeAction = ImeAction.Done
+                        ),
                         modifier = Modifier.fillMaxWidth()
                     )
                     FolderColorPickerRow(

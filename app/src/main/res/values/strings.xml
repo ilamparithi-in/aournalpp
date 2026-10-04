@@ -92,6 +92,7 @@
     <string name="toast_conflict_detected">Conflict in \"%1$s\". Opening canvas to resolve.</string>
     <string name="toast_dialog_blocking">Action needed: please confirm open dialog in canvas.</string>
     <string name="toast_all_saved_closed">All notes saved and closed</string>
+    <string name="toast_no_cloud_configured">No cloud storage configured</string>
     <string name="stashed_windows">Background Notes</string>
     <string name="active_session_empty">No active notes open</string>
     <string name="action_return_to_canvas">Return to Canvas</string>
@@ -1124,6 +1125,351 @@
     <string name="pref_reset_defaults">Reset All Settings</string>
 
     <!-- ======================================================================= -->
+    <!-- Files & Storage Settings (Section 1)                                    -->
+    <!-- ======================================================================= -->
+    <string name="pref_cat_files_storage">Files &amp; Storage</string>
+    <string name="pref_cat_files_storage_desc">Notes folder, templates, open actions &amp; recovery</string>
+
+    <!-- Storage Location & Presets -->
+    <string name="pref_storage_location_title">Storage Location</string>
+    <string name="pref_notes_storage_folder">Notes Storage Folder</string>
+    <string name="pref_folder_presets_title">Documents Folder Presets</string>
+    <string name="pref_preset_notes">Notes</string>
+    <string name="pref_preset_xournal">Xournal++</string>
+    <string name="pref_preset_notebooks">Notebooks</string>
+    <string name="action_browse_system">Browse System…</string>
+    <string name="action_custom_path">Custom Path…</string>
+
+    <!-- Dialog: Custom Notes Folder -->
+    <string name="dialog_custom_folder_title">Custom Notes Folder</string>
+    <string name="dialog_custom_folder_desc">Enter an absolute path on device storage where notes will be stored:</string>
+    <string name="pref_directory_path">Directory Path</string>
+
+    <!-- Dialog: Switch Notes Directory -->
+    <string name="dialog_switch_dir_title">Switch Notes Directory?</string>
+    <string name="dialog_switch_dir_question">Do you want to switch your active notes storage location to:</string>
+    <string name="dialog_switch_dir_warning">Xournal++ will save and organize new notes in this folder. Any notes in your previous folder will remain untouched.</string>
+    <string name="action_switch_directory">Switch Directory</string>
+
+    <!-- Default Note Open Action -->
+    <string name="pref_default_note_action_title">Default Note Action</string>
+    <string name="pref_notebook_files_title">Notebook Files (.xopp, .xoj)</string>
+    <string name="pref_action_ask">Ask</string>
+    <string name="pref_action_edit_canvas">Edit (Canvas)</string>
+    <string name="pref_action_view_pdf">View (PDF)</string>
+    <string name="pref_notebook_action_edit_desc">Notes open directly in Xournal++ Canvas editor.</string>
+    <string name="pref_notebook_action_view_desc">Notes convert and open in external PDF viewer.</string>
+    <string name="pref_notebook_action_ask_desc">A prompt asks whether to View or Edit every time.</string>
+
+    <string name="pref_pdf_documents_title">PDF Documents (.pdf)</string>
+    <string name="pref_action_annotate">Annotate</string>
+    <string name="pref_action_view_system">View (System)</string>
+    <string name="pref_pdf_action_annotate_desc">PDF files open for annotation in Xournal++ Canvas.</string>
+    <string name="pref_pdf_action_view_desc">PDF files open in your default system PDF reader.</string>
+    <string name="pref_pdf_action_ask_desc">A prompt asks whether to Annotate or View every time.</string>
+
+    <!-- File Name Templates -->
+    <string name="pref_filename_templates_title">File Name Templates</string>
+    <string name="pref_filename_templates_desc">Automated file naming patterns for new notes, exports, and shares.</string>
+    <string name="template_target_new_note">New Note</string>
+    <string name="template_target_save_as">Save As</string>
+    <string name="template_target_export_pdf">Export PDF</string>
+    <string name="template_target_share_pdf">Share PDF</string>
+    <string name="template_target_share_xopp">Share XOPP</string>
+    <string name="template_live_preview_badge">LIVE PREVIEW</string>
+    <string name="template_live_preview_sample_context">Evaluated with sample note \'Mechanics_Lecture\' in \'Physics_101\'</string>
+    <string name="template_invalid_syntax">Invalid template syntax</string>
+    <string name="template_pattern_field_label">%1$s Pattern</string>
+    <string name="action_reset_pattern_desc">Reset pattern to default</string>
+    <string name="msg_pattern_reset_default">Reset pattern to default</string>
+    <string name="template_insert_tokens_title">Insert Placeholder Tokens:</string>
+    <string name="template_token_group_datetime">Date &amp; Time</string>
+    <string name="template_token_group_context">Note Context</string>
+    <string name="template_token_group_metadata">Metadata</string>
+
+    <!-- File Management & Recovery -->
+    <string name="pref_file_management_recovery_title">File Management &amp; Recovery</string>
+    <string name="pref_show_hidden_files_title">Show Hidden &amp; Backup Files</string>
+    <string name="pref_show_hidden_files_desc">Display hidden dotfiles (.note.xopp) and emergency backup copies in Document Hub.</string>
+    <string name="pref_intelligent_recovery_title">Intelligent Session Recovery</string>
+    <string name="pref_intelligent_recovery_desc">Detect interrupted sessions or crashed notes upon launch and offer restoration.</string>
+
+    <!-- ======================================================================= -->
+    <!-- Appearance & Canvas Settings                                            -->
+    <!-- ======================================================================= -->
+    <string name="pref_cat_appearance_canvas">Appearance &amp; Canvas</string>
+    <string name="pref_cat_appearance_canvas_desc">App theme, GTK canvas theme, wallpaper &amp; animations</string>
+    <string name="pref_app_theme_title">Android App Theme</string>
+    <string name="pref_app_theme_desc">Material You dynamic theming and color styling</string>
+    <string name="pref_theme_system">System</string>
+    <string name="pref_theme_light">Light</string>
+    <string name="pref_theme_dark">Dark</string>
+    <string name="pref_theme_system_default">System Default</string>
+
+    <string name="pref_gtk_theme_title">Xournal++ GTK Canvas Theme</string>
+    <string name="pref_gtk_theme_desc">Desktop interface theme for native toolbars and menus</string>
+    <string name="pref_gtk_theme_adwaita_light">Adwaita Light</string>
+    <string name="pref_gtk_theme_adwaita_dark">Adwaita Dark</string>
+    <string name="pref_gtk_theme_follow_system">Follow System</string>
+    <string name="msg_gtk_theme_updated">Xournal++ GTK canvas theme updated to %1$s</string>
+
+    <string name="pref_wallpaper_title">Canvas Backdrop &amp; Wallpaper</string>
+    <string name="pref_wallpaper_desc">Backdrop painted behind X11 note windows</string>
+    <string name="pref_wallpaper_custom">Custom</string>
+    <string name="pref_wallpaper_theme">Theme</string>
+    <string name="pref_wallpaper_system_label">System Wallpaper</string>
+    <string name="pref_wallpaper_custom_label">Custom Image</string>
+    <string name="pref_wallpaper_theme_label">Theme Gradient</string>
+    <string name="pref_wallpaper_select_image">Select Image…</string>
+    <string name="pref_wallpaper_change_image">Change Image…</string>
+    <string name="pref_wallpaper_reset">Reset</string>
+    <string name="msg_custom_wallpaper_applied">Custom wallpaper applied for Canvas</string>
+    <string name="msg_wallpaper_set">Canvas backdrop set to %1$s</string>
+    <string name="msg_wallpaper_reset">Reset to System Wallpaper</string>
+    <string name="msg_wallpaper_error">Failed to set wallpaper: %1$s</string>
+
+    <string name="pref_motion_title">Motion &amp; Animations</string>
+    <string name="pref_reduce_animations_title">Reduce Animations</string>
+    <string name="pref_reduce_animations_desc">Disable expressive motion effects and sunburst spinners for improved performance on lower-end devices.</string>
+    <string name="msg_reduce_animations_enabled">Reduce Animations enabled</string>
+    <string name="msg_reduce_animations_disabled">Reduce Animations disabled</string>
+
+    <!-- ======================================================================= -->
+    <!-- Floating Toolbar Settings (Section 3)                                   -->
+    <!-- ======================================================================= -->
+    <string name="pref_cat_toolbar">Floating Toolbar</string>
+    <string name="pref_cat_toolbar_desc">Placement, auto-collapse &amp; toolbar controls</string>
+
+    <!-- Placement & Anchors -->
+    <string name="pref_toolbar_placement_title">Placement &amp; Anchors</string>
+    <string name="pref_toolbar_placement_desc">Canvas dock anchor, safe area bounds, and calibration</string>
+    <string name="pref_toolbar_preset_title">Default Anchor Position</string>
+    <string name="pref_toolbar_preset_desc">Position anchor: %1$s</string>
+    <string name="pref_toolbar_open_visual_editor">Visual Editor</string>
+    <string name="pref_toolbar_configure">Configure</string>
+    <string name="pref_toolbar_confine_safe_area">Confine to Screen Safe Area</string>
+    <string name="pref_toolbar_confine_safe_area_desc">Align and keep the floating toolbar within calibrated display corner margins and cutout safe zones.</string>
+
+    <!-- Anchor presets -->
+    <string name="pref_toolbar_group_top_anchors">Top Dock Anchors</string>
+    <string name="pref_toolbar_group_bottom_anchors">Bottom Dock Anchors</string>
+    <string name="pref_toolbar_anchor_top_left">Top Left</string>
+    <string name="pref_toolbar_anchor_top_center">Top Center</string>
+    <string name="pref_toolbar_anchor_top_right">Top Right</string>
+    <string name="pref_toolbar_anchor_bottom_left">Bottom Left</string>
+    <string name="pref_toolbar_anchor_bottom_center">Bottom Center</string>
+    <string name="pref_toolbar_anchor_bottom_right">Bottom Right</string>
+    <string name="pref_toolbar_anchor_custom">Custom (%1$d%%, %2$d%%)</string>
+    <string name="pref_toolbar_sample_filename">Physics_Lecture.xopp</string>
+
+    <!-- Collapse & Pin Behavior -->
+    <string name="pref_toolbar_collapse_title">Startup &amp; Collapse Behavior</string>
+    <string name="pref_toolbar_collapse_desc">Startup state, inactivity timer collapse, and stylus hover expansion</string>
+    <string name="pref_toolbar_start_collapsed">Start Collapsed</string>
+    <string name="pref_toolbar_start_collapsed_desc">Automatically launch the canvas with the toolbar minimized into a compact pill.</string>
+    <string name="pref_toolbar_always_show_filename">Always Show File Name</string>
+    <string name="pref_toolbar_always_show_filename_desc">Keep the active note file name in the toolbar at all times instead of switching to dialog names.</string>
+    <string name="pref_toolbar_pin_mode">Replace Collapse with Pin / Unpin</string>
+    <string name="pref_toolbar_pin_mode_desc">Tap collapsed toolbar to expand. Unpinned toolbar auto-collapses after inactivity; pin button holds it open.</string>
+    <string name="pref_toolbar_timeout_title">Auto-Collapse Inactivity Timeout</string>
+    <string name="pref_toolbar_timeout_desc">Duration of inactivity before the unpinned toolbar collapses.</string>
+    <string name="pref_toolbar_timeout_ms_title">Exact Timeout (ms)</string>
+    <string name="pref_toolbar_timeout_ms_desc">1s = 1000ms (valid range: 500ms – 60,000ms)</string>
+    <string name="pref_toolbar_timeout_reset_desc">Long-press to reset auto-collapse timeout to 5000ms</string>
+    <string name="toast_long_press_to_reset">Long press to reset</string>
+    <string name="toast_pointer_speed_limit">Pointer speed must be between 1% and 300%</string>
+    <string name="toast_toolbar_timeout_limit">Timeout must be between 500ms and 60,000ms</string>
+    <string name="toast_ui_scale_limit">Scale must be between 0.50x and 3.00x</string>
+    <string name="toast_display_scale_limit">Display scale must be between 30% and 300%</string>
+    <string name="pref_ui_scale_reset_desc">Long-press to reset UI scale to 1.00x</string>
+    <string name="pref_display_scale_reset_desc">Long-press to reset display scale to 100%</string>
+    <string name="unit_milliseconds">ms</string>
+    <string name="unit_percent">%</string>
+    <string name="pref_toolbar_stylus_btn_left">L</string>
+    <string name="pref_toolbar_stylus_btn_middle">M</string>
+    <string name="pref_toolbar_stylus_btn_right">R</string>
+    <string name="pref_toolbar_hover_expand">Expand on Stylus Hover</string>
+    <string name="pref_toolbar_hover_expand_desc">Automatically expand the collapsed toolbar when hovering over it with a stylus pen.</string>
+
+    <!-- Toolbar Items & Actions -->
+    <string name="pref_toolbar_items_title">Visible Elements &amp; Actions</string>
+    <string name="pref_toolbar_items_desc">Toggle toolbar action icons and customize interactive shortcut buttons.</string>
+    <string name="pref_toolbar_preview_title">Live Toolbar Preview</string>
+    <string name="pref_toolbar_preview_desc">Real-time interactive layout of enabled floating controls</string>
+    <string name="pref_toolbar_active_items_count">%1$d of %2$d items enabled</string>
+    <string name="pref_toolbar_reset_items">Reset to Defaults</string>
+    <string name="pref_toolbar_enable_all">Enable All</string>
+
+    <!-- Chips -->
+    <string name="pref_toolbar_chip_title">Title</string>
+    <string name="pref_toolbar_chip_back">Back</string>
+    <string name="pref_toolbar_chip_close">Close</string>
+    <string name="pref_toolbar_chip_switcher">Switcher</string>
+    <string name="pref_toolbar_chip_snap">Snap</string>
+    <string name="pref_toolbar_chip_keyboard">Keyboard</string>
+    <string name="pref_toolbar_chip_drag">Drag</string>
+    <string name="pref_toolbar_chip_finger_stylus">Finger Stylus</string>
+    <string name="pref_toolbar_chip_stylus_click">L/M/R Click</string>
+    <string name="pref_toolbar_chip_cut">Cut</string>
+    <string name="pref_toolbar_chip_copy">Copy</string>
+    <string name="pref_toolbar_chip_paste">Paste</string>
+    <string name="pref_toolbar_chip_image">Image</string>
+    <string name="pref_toolbar_chip_sync">Sync</string>
+
+    <!-- Groups -->
+    <string name="pref_toolbar_group_window">Navigation &amp; Window Controls</string>
+    <string name="pref_toolbar_group_stylus">Stylus &amp; Touch Navigation</string>
+    <string name="pref_toolbar_group_tools">Clipboard &amp; Quick Actions</string>
+
+    <!-- Specific Items -->
+    <string name="pref_toolbar_item_title">Window Title &amp; Document Icon</string>
+    <string name="pref_toolbar_item_title_desc">Displays note title and dynamic window type icon.</string>
+    <string name="pref_toolbar_item_back">Back Button</string>
+    <string name="pref_toolbar_item_back_desc">Displays back arrow button to gracefully save and exit canvas.</string>
+    <string name="pref_toolbar_item_close">Close Button (Ctrl+Q)</string>
+    <string name="pref_toolbar_item_close_desc">Displays a close button on the floating toolbar to trigger Xournal++ quit / save prompt.</string>
+    <string name="pref_toolbar_close_action">Close Button Action</string>
+    <string name="pref_toolbar_close_foreground">Foreground</string>
+    <string name="pref_toolbar_close_foreground_desc">Closes active/foreground window only</string>
+    <string name="pref_toolbar_close_all">All Windows</string>
+    <string name="pref_toolbar_close_all_desc">Sequentially closes all open windows</string>
+
+    <string name="pref_toolbar_item_switcher">Window Switcher</string>
+    <string name="pref_toolbar_item_switcher_desc">Displays Alt+Tab window switcher button. Long press to open the Window Gallery.</string>
+    <string name="pref_toolbar_item_snap">Snap Layouts</string>
+    <string name="pref_toolbar_item_snap_desc">Displays the snap layouts dropdown button on the floating toolbar.</string>
+    <string name="pref_toolbar_item_keyboard">Soft Keyboard Toggle</string>
+    <string name="pref_toolbar_item_keyboard_desc">Displays soft keyboard show/hide action button.</string>
+    <string name="pref_toolbar_item_drag">Movable Drag Handle</string>
+    <string name="pref_toolbar_item_drag_desc">Displays handle to long-press and drag toolbar anywhere on screen.</string>
+
+    <string name="pref_toolbar_item_stylus_click">Stylus Click Mode Switcher (L/M/R)</string>
+    <string name="pref_toolbar_item_stylus_click_desc">Displays Left / Middle / Right click toggle buttons directly in the floating toolbar.</string>
+    <string name="pref_toolbar_item_touch_stylus">Finger as Stylus Toggle</string>
+    <string name="pref_toolbar_item_touch_stylus_desc">Displays a toolbar button to quickly switch between drawing with finger and standard touch navigation.</string>
+    <string name="pref_toolbar_item_disable_touch_on_hover">Turn off Touch as Stylus on Stylus Hover</string>
+    <string name="pref_toolbar_item_disable_touch_on_hover_desc">Automatically disables finger drawing and restores touch navigation when a physical stylus is detected.</string>
+    <string name="pref_toolbar_item_remember_finger_state">Remember Last Toggled State</string>
+    <string name="pref_toolbar_item_remember_finger_state_desc">Preserves whether Finger as Stylus was active across app launches.</string>
+
+    <string name="pref_toolbar_item_cut">Cut Action (Ctrl+X)</string>
+    <string name="pref_toolbar_item_cut_desc">Displays Cut clipboard action button.</string>
+    <string name="pref_toolbar_item_copy">Copy Action (Ctrl+C)</string>
+    <string name="pref_toolbar_item_copy_desc">Displays Copy clipboard action button.</string>
+    <string name="pref_toolbar_item_paste">Paste Action (Ctrl+V)</string>
+    <string name="pref_toolbar_item_paste_desc">Displays Paste clipboard action button.</string>
+    <string name="pref_toolbar_item_image">Insert Image Action</string>
+    <string name="pref_toolbar_item_image_desc">Displays Image action button on the toolbar to insert pictures from Camera, Gallery, or Files.</string>
+    <string name="pref_toolbar_item_sync">Sync Now Button</string>
+    <string name="pref_toolbar_item_sync_desc">Displays a button to trigger immediate background cloud synchronization.</string>
+
+    <!-- Toolbar Content Descriptions & Accessibility -->
+    <string name="pref_toolbar_timeout_seconds">%1$ss</string>
+    <string name="pref_toolbar_timeout_seconds_decimal">%1$.1fs</string>
+    <string name="pref_toolbar_timeout_ms_placeholder">5000</string>
+    <string name="toolbar_cd_back">Return to Home</string>
+    <string name="toolbar_cd_close">Close Note (Ctrl+Q)</string>
+    <string name="toolbar_cd_switcher">Switch Note Window (Tap to cycle, Long press for gallery)</string>
+    <string name="toolbar_cd_snap">Snap Layouts</string>
+    <string name="toolbar_cd_touch_stylus_enabled">Finger as Stylus (Enabled)</string>
+    <string name="toolbar_cd_touch_stylus_disabled">Finger as Stylus (Disabled)</string>
+    <string name="toolbar_cd_cut">Cut (Ctrl+X)</string>
+    <string name="toolbar_cd_copy">Copy (Ctrl+C)</string>
+    <string name="toolbar_cd_paste">Paste (Ctrl+V)</string>
+    <string name="toolbar_cd_image">Insert Image (Camera, Gallery, Files)</string>
+    <string name="toolbar_cd_sync">Sync Now</string>
+    <string name="toolbar_cd_keyboard_show">Show Keyboard</string>
+    <string name="toolbar_cd_keyboard_hide">Hide Keyboard</string>
+    <string name="toolbar_cd_pin">Pin Toolbar</string>
+    <string name="toolbar_cd_unpin">Unpin Toolbar</string>
+    <string name="toolbar_cd_collapse">Collapse Toolbar</string>
+    <string name="toolbar_cd_drag_handle">Drag Toolbar</string>
+    <string name="toolbar_cd_reset_position">Reset Toolbar Position</string>
+
+    <!-- ======================================================================= -->
+    <!-- Stylus & Input Settings (Section 4)                                     -->
+    <!-- ======================================================================= -->
+    <string name="pref_cat_input_stylus">Stylus &amp; Input</string>
+    <string name="pref_cat_input_stylus_desc">Touch mode, finger-as-stylus &amp; pen gestures</string>
+
+    <!-- 1. Touch Mode -->
+    <string name="pref_input_touch_mode_title">Touch Mode</string>
+    <string name="pref_input_touch_mode_desc">Direct 1:1 touch mapping, virtual trackpad cursor, or simulated gestures</string>
+    <string name="pref_input_touch_mode_direct">Direct (1:1)</string>
+    <string name="pref_input_touch_mode_trackpad">Trackpad</string>
+    <string name="pref_input_touch_mode_simulated">Simulated</string>
+
+    <!-- 2. Finger-as-Stylus Behavior -->
+    <string name="pref_input_finger_stylus_title">Finger-as-Stylus Behavior</string>
+    <string name="pref_input_show_finger_stylus">Show Finger as Stylus Toggle in Toolbar</string>
+    <string name="pref_input_show_finger_stylus_desc">Displays a toggle button in the floating toolbar to quickly switch between drawing with your finger as a stylus and standard touch navigation.</string>
+    <string name="pref_input_disable_touch_hover">Turn off Touch as Stylus on Stylus Hover</string>
+    <string name="pref_input_disable_touch_hover_desc">Automatically disables finger drawing and restores touch navigation as soon as a physical stylus pen hovers over or touches the screen.</string>
+    <string name="pref_input_remember_finger_state">Remember Last Toggled State</string>
+    <string name="pref_input_remember_finger_state_desc">Preserves whether Finger as Stylus was active across app launches. When disabled, Finger as Stylus resets to off on startup.</string>
+
+    <!-- 3. Hardware Stylus & Hover -->
+    <string name="pref_input_hardware_stylus_title">Hardware Stylus &amp; Hover</string>
+    <string name="pref_input_show_stylus_click">Show Stylus Click Mode in Toolbar</string>
+    <string name="pref_input_show_stylus_click_desc">Displays Left / Middle / Right click toggle capsule directly in the floating toolbar.</string>
+    <string name="pref_input_hover_expand">Expand Toolbar on Stylus Hover</string>
+    <string name="pref_input_hover_expand_desc">Automatically expand the collapsed floating toolbar when hovering over it with a stylus pen.</string>
+    <string name="pref_input_stylus_is_mouse">Enable Stylus Mouse Mode</string>
+    <string name="pref_input_stylus_is_mouse_desc">Treat hardware stylus touch events as desktop mouse pointer clicks.</string>
+    <string name="pref_input_contact_modifier">Stylus Button Contact Modifier Mode</string>
+    <string name="pref_input_contact_modifier_desc">Modify contact properties when the stylus side barrel button is depressed.</string>
+    <string name="pref_input_mouse_helper">Show Mouse Click Helper Overlay</string>
+    <string name="pref_input_mouse_helper_desc">On-screen Left / Middle / Right floating mouse buttons for trackpad mode.</string>
+    <string name="pref_input_scale_trackpad">Scale Trackpad to Display Factor</string>
+    <string name="pref_input_scale_trackpad_desc">Scale cursor movement speed according to display resolution.</string>
+    <string name="pref_input_tap_to_move">Enable Tap-to-Move</string>
+    <string name="pref_input_tap_to_move_desc">Tap and drag to move pointer without holding physical clicks.</string>
+    <string name="pref_input_ignore_gamepad">Ignore Gamepad Events</string>
+    <string name="pref_input_ignore_gamepad_desc">Suppress controller joystick and button input events from driving pointer.</string>
+
+    <!-- 4. External Pointer -->
+    <string name="pref_input_external_pointer_title">External Pointer</string>
+    <string name="pref_input_pointer_speed_title">Pointer Speed Factor</string>
+    <string name="pref_input_pointer_speed_desc">Sensitivity for captured USB or Bluetooth mice</string>
+    <string name="pref_input_pointer_speed_percent">%1$d%%</string>
+    <string name="pref_input_pointer_speed_reset_desc">Long-press to reset pointer speed to 100%</string>
+    <string name="pref_input_pointer_rotation_title">Pointer Movement Rotation</string>
+    <string name="pref_input_rotation_none">No Rotation</string>
+    <string name="pref_input_rotation_cw90">Clockwise 90°</string>
+    <string name="pref_input_rotation_ccw90">Counter-Clockwise 90°</string>
+    <string name="pref_input_rotation_ud180">Upside Down 180°</string>
+    <string name="pref_input_rotation_touchpad">Automatic for Touchpad</string>
+
+    <!-- 5. OEM-Specific Pen Settings -->
+    <string name="pref_input_oem_pens_title">OEM-Specific Pen Settings</string>
+    <string name="pref_input_lenovo_pen_title">Lenovo Precision Pen / Pen Plus</string>
+    <string name="pref_input_lenovo_pen_desc">Single, double, triple, and long-click gesture actions for Lenovo stylus barrel buttons</string>
+    <string name="pref_lenovo_pen_diagnostics_title">Diagnostics &amp; Feedback</string>
+    <string name="pref_lenovo_pen_show_detections_title">Show Detection Toasts</string>
+    <string name="pref_lenovo_pen_show_detections_desc">Display transient toast messages when barrel button gestures are detected.</string>
+    <string name="pref_lenovo_pen_debug_toggle_title">Show Toggle Debug Toasts</string>
+    <string name="pref_lenovo_pen_debug_toggle_desc">Display state toasts when toggle mode button states change.</string>
+    <string name="pref_lenovo_pen_gestures_title">Barrel Button Gestures</string>
+    <string name="pref_lenovo_pen_gesture_single">Single Press (Keycode 600)</string>
+    <string name="pref_lenovo_pen_gesture_double">Double Press (Keycode 601)</string>
+    <string name="pref_lenovo_pen_gesture_triple">Triple Press (Keycode 602)</string>
+    <string name="pref_lenovo_pen_gesture_long">Long Press (Keycode 603)</string>
+    <string name="pref_lenovo_pen_gesture_long_click">Long Press and Click (Keycode 604)</string>
+    <string name="pref_lenovo_pen_map_action">Map To Action:</string>
+    <string name="pref_lenovo_pen_action_disabled">Disabled</string>
+    <string name="pref_lenovo_pen_action_btn2">Primary (Btn 2)</string>
+    <string name="pref_lenovo_pen_action_btn3">Secondary (Btn 3)</string>
+    <string name="pref_lenovo_pen_toggle_title">Toggle Target Button</string>
+    <string name="pref_lenovo_pen_toggle_on_desc">On: toggle mode — gesture once for down and again for up.</string>
+    <string name="pref_lenovo_pen_toggle_off_desc">Off: momentary mode — press and hold target for specified duration.</string>
+    <string name="pref_lenovo_pen_off_on_lift_title">Toggle OFF on Lift</string>
+    <string name="pref_lenovo_pen_off_on_lift_desc">When toggled ON and pen lifts after contact, release the mapped button automatically.</string>
+    <string name="pref_lenovo_pen_duration_title">Hold Duration (ms)</string>
+    <string name="pref_lenovo_pen_duration_desc">Applied when Toggle mode is OFF (10 - 8192 ms).</string>
+    <string name="pref_lenovo_pen_duration_preset">%1$sms</string>
+
+
+    <!-- ======================================================================= -->
     <!-- Language & Localization                                                 -->
     <!-- ======================================================================= -->
     <string name="pref_cat_language">Language &amp; Localization</string>
@@ -1136,6 +1482,35 @@
     <string name="pref_language_search_placeholder">Search languages…</string>
     <string name="pref_language_footnote">Xournal++ runs in an isolated Linux environment and can be localized independently from your Android device language.</string>
     <string name="msg_linux_language_updated">Xournal++ language set to %1$s. Takes effect on next editor start.</string>
+
+    <!-- ======================================================================= -->
+    <!-- System & Maintenance Settings                                           -->
+    <!-- ======================================================================= -->
+    <string name="pref_cat_system_maintenance">System &amp; Maintenance</string>
+    <string name="pref_cat_system_maintenance_desc">Language, config backups &amp; diagnostics</string>
+    <string name="pref_cat_config_backup">Configuration Backup &amp; Restore</string>
+    <string name="pref_cat_config_backup_desc">Create ZIP backups, import configuration archives, or export individual components</string>
+    <string name="pref_config_files_title">Xournal++ Configuration Files</string>
+    <string name="pref_config_files_desc">Backup and restore your tools, palettes, print presets, and core preferences across devices.</string>
+    <string name="pref_btn_create_full_backup">Create Full Backup (.zip)</string>
+    <string name="pref_btn_create_full_backup_desc">Packages settings.xml, toolbars, color palettes, and print profiles into a single archive</string>
+    <string name="pref_btn_restore_backup">Restore from Backup</string>
+    <string name="pref_btn_restore_backup_desc">Import a .zip archive or individual XML / INI / GPL configuration files</string>
+    <string name="pref_btn_export_specific">Export Specific File…</string>
+    <string name="pref_btn_export_specific_desc">Select a single config component to export individually</string>
+    <string name="pref_dialog_export_specific_title">Export Specific Config File</string>
+    <string name="pref_dialog_export_specific_desc">Select a specific configuration component to export individually:</string>
+    <string name="pref_cat_advanced_diagnostics">Advanced Diagnostic Tools</string>
+    <string name="pref_cat_advanced_diagnostics_desc">Direct configuration inspection, native preferences, and system recovery</string>
+    <string name="pref_inspect_settings_title">Configuration File Inspector</string>
+    <string name="pref_inspect_settings_desc">View, inspect, and copy live XML and INI configuration files (settings.xml, toolbar.ini, etc.)</string>
+    <string name="pref_btn_inspect_settings">Inspect settings.xml</string>
+    <string name="pref_native_gtk_prefs_title">Native GTK Preferences</string>
+    <string name="pref_native_gtk_prefs_desc">Launch Xournal++ directly to access desktop GTK settings inside the display server</string>
+    <string name="pref_btn_native_gtk_prefs">Open Native GTK Preferences</string>
+    <string name="pref_autoload_safeguard_title">Workspace Session Safeguard Active</string>
+    <string name="pref_autoload_safeguard_desc">Xournal++\'s native \"Autoload most recent file on startup\" option in Load/Save is automatically managed by Aournal++ to ensure seamless Android workspace restoration without session conflicts.</string>
+    <string name="msg_autoload_override_cleared">Xournal++ startup autoload was cleared to preserve \'Continue where you left off\'.</string>
 
     <!-- ======================================================================= -->
     <!-- Open Source Licenses & Credits                                          -->

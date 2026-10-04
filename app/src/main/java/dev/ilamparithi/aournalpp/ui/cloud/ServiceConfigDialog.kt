@@ -25,7 +25,9 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
+import dev.ilamparithi.aournalpp.ui.common.AppDropdownMenuItem
+import dev.ilamparithi.aournalpp.ui.common.AppExposedDropdownMenu
+import dev.ilamparithi.aournalpp.ui.common.AppMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
@@ -33,7 +35,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
@@ -57,6 +59,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -207,11 +211,12 @@ fun ServiceConfigDialog(
                             CloudProviderIcon(providerType = selectedType, modifier = Modifier.size(24.dp))
                         },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isTypeDropdownExpanded) },
+                        shape = AppMenuDefaults.anchorFieldShape,
                         modifier = Modifier
-                            .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                             .fillMaxWidth()
                     )
-                    ExposedDropdownMenu(
+                    AppExposedDropdownMenu(
                         expanded = isTypeDropdownExpanded,
                         onDismissRequest = { isTypeDropdownExpanded = false }
                     ) {
@@ -229,11 +234,12 @@ fun ServiceConfigDialog(
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                                 )
                             }
-                            DropdownMenuItem(
+                            AppDropdownMenuItem(
                                 text = { Text(type.displayName) },
                                 leadingIcon = {
                                     CloudProviderIcon(providerType = type, modifier = Modifier.size(22.dp))
                                 },
+                                selected = selectedType == type,
                                 onClick = {
                                     selectedType = type
                                     port = type.defaultPort ?: 443
@@ -254,6 +260,11 @@ fun ServiceConfigDialog(
                     label = { Text("Service Name") },
                     placeholder = { Text(selectedType.displayName) },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Words,
+                        autoCorrectEnabled = true,
+                        imeAction = ImeAction.Next
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -291,6 +302,11 @@ fun ServiceConfigDialog(
                             label = { Text("Nextcloud Server URL") },
                             placeholder = { Text("https://cloud.example.com") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Uri,
+                                autoCorrectEnabled = false,
+                                imeAction = ImeAction.Next
+                            ),
                             modifier = Modifier.fillMaxWidth()
                         )
                         OutlinedTextField(
@@ -298,6 +314,11 @@ fun ServiceConfigDialog(
                             onValueChange = { username = it },
                             label = { Text("Username") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Email,
+                                autoCorrectEnabled = false,
+                                imeAction = ImeAction.Next
+                            ),
                             modifier = Modifier.fillMaxWidth()
                         )
                         OutlinedTextField(
@@ -305,6 +326,11 @@ fun ServiceConfigDialog(
                             onValueChange = { passwordOrSecret = it },
                             label = { Text("Password or App Password") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                autoCorrectEnabled = false,
+                                imeAction = ImeAction.Done
+                            ),
                             visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                             trailingIcon = {
                                 IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
@@ -325,6 +351,11 @@ fun ServiceConfigDialog(
                             label = { Text("WebDAV Server URL") },
                             placeholder = { Text("https://dav.example.com/remote.php/webdav") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Uri,
+                                autoCorrectEnabled = false,
+                                imeAction = ImeAction.Next
+                            ),
                             modifier = Modifier.fillMaxWidth()
                         )
                         OutlinedTextField(
@@ -332,6 +363,11 @@ fun ServiceConfigDialog(
                             onValueChange = { username = it },
                             label = { Text("Username (Optional if Bearer Token used)") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Email,
+                                autoCorrectEnabled = false,
+                                imeAction = ImeAction.Next
+                            ),
                             modifier = Modifier.fillMaxWidth()
                         )
                         OutlinedTextField(
@@ -339,6 +375,11 @@ fun ServiceConfigDialog(
                             onValueChange = { passwordOrSecret = it },
                             label = { Text("Password") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                autoCorrectEnabled = false,
+                                imeAction = ImeAction.Next
+                            ),
                             visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                             trailingIcon = {
                                 IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
@@ -355,6 +396,11 @@ fun ServiceConfigDialog(
                             onValueChange = { authToken = it },
                             label = { Text("Bearer Auth Token (Optional)") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Ascii,
+                                autoCorrectEnabled = false,
+                                imeAction = ImeAction.Done
+                            ),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -477,6 +523,11 @@ fun ServiceConfigDialog(
                                 },
                                 label = { Text("Access Token / Token String") },
                                 placeholder = { Text("ya29.a0...") },
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Ascii,
+                                    autoCorrectEnabled = false,
+                                    imeAction = ImeAction.Done
+                                ),
                                 supportingText = { Text("Sign in above or paste an OAuth token") },
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -494,13 +545,21 @@ fun ServiceConfigDialog(
                                 label = { Text("Host") },
                                 placeholder = { Text("192.168.1.100") },
                                 singleLine = true,
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Uri,
+                                    autoCorrectEnabled = false,
+                                    imeAction = ImeAction.Next
+                                ),
                                 modifier = Modifier.weight(0.7f)
                             )
                             OutlinedTextField(
                                 value = if (port == 0) "" else port.toString(),
                                 onValueChange = { port = it.toIntOrNull() ?: 22 },
                                 label = { Text("Port") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Number,
+                                    imeAction = ImeAction.Next
+                                ),
                                 singleLine = true,
                                 modifier = Modifier.weight(0.3f)
                             )
@@ -511,6 +570,11 @@ fun ServiceConfigDialog(
                             onValueChange = { username = it },
                             label = { Text("Username") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Ascii,
+                                autoCorrectEnabled = false,
+                                imeAction = ImeAction.Next
+                            ),
                             modifier = Modifier.fillMaxWidth()
                         )
 
@@ -537,6 +601,11 @@ fun ServiceConfigDialog(
                                 onValueChange = { passwordOrSecret = it },
                                 label = { Text("Password") },
                                 singleLine = true,
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Password,
+                                    autoCorrectEnabled = false,
+                                    imeAction = ImeAction.Next
+                                ),
                                 visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                                 trailingIcon = {
                                     IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
@@ -554,6 +623,10 @@ fun ServiceConfigDialog(
                                 onValueChange = { privateKey = it },
                                 label = { Text("Private Key (PEM format)") },
                                 placeholder = { Text("-----BEGIN OPENSSH PRIVATE KEY-----...") },
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Ascii,
+                                    autoCorrectEnabled = false
+                                ),
                                 minLines = 3,
                                 maxLines = 5,
                                 modifier = Modifier.fillMaxWidth()
@@ -563,6 +636,11 @@ fun ServiceConfigDialog(
                                 onValueChange = { privateKeyPassphrase = it },
                                 label = { Text("Key Passphrase (Optional)") },
                                 singleLine = true,
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Password,
+                                    autoCorrectEnabled = false,
+                                    imeAction = ImeAction.Next
+                                ),
                                 visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -574,6 +652,11 @@ fun ServiceConfigDialog(
                             label = { Text("Remote Base Path (Optional)") },
                             placeholder = { Text("/home/user/backups") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Ascii,
+                                autoCorrectEnabled = false,
+                                imeAction = ImeAction.Done
+                            ),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -589,13 +672,21 @@ fun ServiceConfigDialog(
                                 label = { Text("Host") },
                                 placeholder = { Text("192.168.1.100") },
                                 singleLine = true,
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Uri,
+                                    autoCorrectEnabled = false,
+                                    imeAction = ImeAction.Next
+                                ),
                                 modifier = Modifier.weight(0.7f)
                             )
                             OutlinedTextField(
                                 value = if (port == 0) "" else port.toString(),
                                 onValueChange = { port = it.toIntOrNull() ?: 445 },
                                 label = { Text("Port") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Number,
+                                    imeAction = ImeAction.Next
+                                ),
                                 singleLine = true,
                                 modifier = Modifier.weight(0.3f)
                             )
@@ -607,6 +698,11 @@ fun ServiceConfigDialog(
                             label = { Text("Share Name") },
                             placeholder = { Text("Backups") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Ascii,
+                                autoCorrectEnabled = false,
+                                imeAction = ImeAction.Next
+                            ),
                             modifier = Modifier.fillMaxWidth()
                         )
 
@@ -616,6 +712,12 @@ fun ServiceConfigDialog(
                             label = { Text("Domain / Workgroup (Optional)") },
                             placeholder = { Text("WORKGROUP") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Ascii,
+                                capitalization = KeyboardCapitalization.Characters,
+                                autoCorrectEnabled = false,
+                                imeAction = ImeAction.Next
+                            ),
                             modifier = Modifier.fillMaxWidth()
                         )
 
@@ -624,6 +726,11 @@ fun ServiceConfigDialog(
                             onValueChange = { username = it },
                             label = { Text("Username") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Ascii,
+                                autoCorrectEnabled = false,
+                                imeAction = ImeAction.Next
+                            ),
                             modifier = Modifier.fillMaxWidth()
                         )
 
@@ -632,6 +739,11 @@ fun ServiceConfigDialog(
                             onValueChange = { passwordOrSecret = it },
                             label = { Text("Password") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                autoCorrectEnabled = false,
+                                imeAction = ImeAction.Next
+                            ),
                             visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                             trailingIcon = {
                                 IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
@@ -650,6 +762,11 @@ fun ServiceConfigDialog(
                             label = { Text("Remote Subfolder (Optional)") },
                             placeholder = { Text("Aournalpp") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Ascii,
+                                autoCorrectEnabled = false,
+                                imeAction = ImeAction.Done
+                            ),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -665,13 +782,21 @@ fun ServiceConfigDialog(
                                 label = { Text("Host") },
                                 placeholder = { Text("ftp.example.com") },
                                 singleLine = true,
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Uri,
+                                    autoCorrectEnabled = false,
+                                    imeAction = ImeAction.Next
+                                ),
                                 modifier = Modifier.weight(0.7f)
                             )
                             OutlinedTextField(
                                 value = if (port == 0) "" else port.toString(),
                                 onValueChange = { port = it.toIntOrNull() ?: 21 },
                                 label = { Text("Port") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Number,
+                                    imeAction = ImeAction.Next
+                                ),
                                 singleLine = true,
                                 modifier = Modifier.weight(0.3f)
                             )
@@ -723,6 +848,11 @@ fun ServiceConfigDialog(
                             onValueChange = { username = it },
                             label = { Text("Username") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Ascii,
+                                autoCorrectEnabled = false,
+                                imeAction = ImeAction.Next
+                            ),
                             modifier = Modifier.fillMaxWidth()
                         )
 
@@ -731,6 +861,11 @@ fun ServiceConfigDialog(
                             onValueChange = { passwordOrSecret = it },
                             label = { Text("Password") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                autoCorrectEnabled = false,
+                                imeAction = ImeAction.Next
+                            ),
                             visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                             trailingIcon = {
                                 IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
@@ -748,6 +883,11 @@ fun ServiceConfigDialog(
                             onValueChange = { remoteBasePath = it },
                             label = { Text("Remote Base Directory (Optional)") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Ascii,
+                                autoCorrectEnabled = false,
+                                imeAction = ImeAction.Done
+                            ),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }

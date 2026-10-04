@@ -5,6 +5,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -991,6 +994,11 @@ fun FolderBrowserDialog(
                     onValueChange = { newFolderName = it },
                     label = { Text("Folder Name") },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Words,
+                        autoCorrectEnabled = true,
+                        imeAction = ImeAction.Done
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
             },

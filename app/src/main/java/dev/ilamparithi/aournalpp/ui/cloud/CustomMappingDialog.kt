@@ -2,6 +2,10 @@ package dev.ilamparithi.aournalpp.ui.cloud
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,14 +21,16 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenuItem
+import dev.ilamparithi.aournalpp.ui.common.AppDropdownMenuItem
+import dev.ilamparithi.aournalpp.ui.common.AppExposedDropdownMenu
+import dev.ilamparithi.aournalpp.ui.common.AppMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -105,6 +111,11 @@ fun CustomMappingDialog(
                     label = { Text(stringResource(dev.ilamparithi.aournalpp.R.string.label_mapping_name)) },
                     placeholder = { Text(stringResource(dev.ilamparithi.aournalpp.R.string.hint_mapping_name)) },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Words,
+                        autoCorrectEnabled = true,
+                        imeAction = ImeAction.Next
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -121,15 +132,17 @@ fun CustomMappingDialog(
                             label = { Text("Target Cloud Service") },
                             leadingIcon = { Icon(Icons.Default.Cloud, contentDescription = null) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isServiceDropdownExpanded) },
-                            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth()
+                            shape = AppMenuDefaults.anchorFieldShape,
+                            modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth()
                         )
-                        ExposedDropdownMenu(
+                        AppExposedDropdownMenu(
                             expanded = isServiceDropdownExpanded,
                             onDismissRequest = { isServiceDropdownExpanded = false }
                         ) {
                             services.forEach { srv ->
-                                DropdownMenuItem(
+                                AppDropdownMenuItem(
                                     text = { Text("${srv.name} (${srv.providerType.displayName})") },
+                                    selected = selectedServiceId == srv.id,
                                     onClick = {
                                         selectedServiceId = srv.id
                                         isServiceDropdownExpanded = false
@@ -157,6 +170,11 @@ fun CustomMappingDialog(
                         label = { Text("Local Folder Path") },
                         placeholder = { Text(notesDir.absolutePath) },
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Ascii,
+                            autoCorrectEnabled = false,
+                            imeAction = ImeAction.Next
+                        ),
                         modifier = Modifier.weight(1f)
                     )
                     IconButton(
@@ -183,6 +201,11 @@ fun CustomMappingDialog(
                         label = { Text("Remote Destination Folder") },
                         placeholder = { Text("Notes/Math") },
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Ascii,
+                            autoCorrectEnabled = false,
+                            imeAction = ImeAction.Done
+                        ),
                         modifier = Modifier.weight(1f)
                     )
                     IconButton(

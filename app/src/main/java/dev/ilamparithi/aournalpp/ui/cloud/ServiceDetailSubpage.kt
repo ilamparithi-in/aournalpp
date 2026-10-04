@@ -13,6 +13,9 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -283,7 +286,7 @@ fun ServiceDetailSubpage(
                             if (isServiceSyncing) {
                                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                             } else {
-                                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.cloud_sync_now))
+                                Icon(Icons.Default.Sync, contentDescription = stringResource(R.string.cloud_sync_now))
                             }
                         }
 
@@ -525,6 +528,10 @@ fun ServiceDetailSubpage(
                             }
                         },
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            imeAction = ImeAction.Search,
+                            autoCorrectEnabled = false
+                        ),
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -890,12 +897,21 @@ fun ServiceDetailSubpage(
                             label = { Text("Set Name") },
                             placeholder = { Text("e.g. Work Folders") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                capitalization = KeyboardCapitalization.Words,
+                                autoCorrectEnabled = true,
+                                imeAction = ImeAction.Next
+                            ),
                             modifier = Modifier.fillMaxWidth()
                         )
                         OutlinedTextField(
                             value = setDesc,
                             onValueChange = { setDesc = it },
                             label = { Text("Description (Optional)") },
+                            keyboardOptions = KeyboardOptions(
+                                capitalization = KeyboardCapitalization.Sentences,
+                                autoCorrectEnabled = true
+                            ),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }

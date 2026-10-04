@@ -115,7 +115,7 @@ fun AournalppTheme(
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
+    val baseColorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (useDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
@@ -123,12 +123,18 @@ fun AournalppTheme(
         useDarkTheme -> DarkColors
         else -> LightColors
     }
+
+    // Harmonize background and surface across OEM dynamic color engines (e.g. Samsung OneUI AMOLED pure black vs navy surface)
+    val colorScheme = baseColorScheme.copy(
+        background = baseColorScheme.surface
+    )
+
     val view = LocalView.current
     if (!view.isInEditMode && view.context is Activity) {
         SideEffect {
             val window = (view.context as Activity).window
             @Suppress("DEPRECATION")
-            window.statusBarColor = colorScheme.background.toArgb()
+            window.statusBarColor = colorScheme.surface.toArgb()
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !useDarkTheme
         }
     }

@@ -3,8 +3,10 @@ package dev.ilamparithi.aournalpp.ui.settings.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -13,22 +15,18 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,18 +35,45 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.core.content.edit
+import dev.ilamparithi.aournalpp.R
 import dev.ilamparithi.aournalpp.data.X11Preferences
+import dev.ilamparithi.aournalpp.ui.settings.components.ConnectedButtonGroup
+import dev.ilamparithi.aournalpp.ui.settings.components.ConnectedButtonItem
 import dev.ilamparithi.aournalpp.ui.settings.components.SettingsSwitchListItem
+import dev.ilamparithi.aournalpp.utils.a11yHeading
+import dev.ilamparithi.aournalpp.utils.minTouchTarget
 
+/**
+ * OEM-Specific Sub-page: Lenovo Precision Pen / Pen Plus Gesture Mapping.
+ *
+ * Implements Material 3 Expressive guidelines for:
+ * - Diagnostic toast toggles in 24.dp curved containers with corner morphing.
+ * - Hardware keycode mapping actions (Single, Double, Triple, Long, Long+Click) via ConnectedButtonGroup.
+ * - Momentary hold duration vs Toggle mode bindings with spring recoil.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LenovoPenSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val x11Prefs = remember { X11Preferences.getPrefs(context) }
+
+    fun saveBooleanPref(key: String, value: Boolean) {
+        x11Prefs.edit { putBoolean(key, value) }
+        X11Preferences.notifyChanged(context, key)
+    }
+
+    fun saveStringPref(key: String, value: String) {
+        x11Prefs.edit { putString(key, value) }
+        X11Preferences.notifyChanged(context, key)
+    }
 
     var showDetections by remember {
         mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_LENOVO_PEN_SHOW_DETECTIONS, false))
@@ -60,12 +85,25 @@ fun LenovoPenSettingsScreen(onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Lenovo Pen Mapping", fontWeight = FontWeight.Bold) },
+                title = {
+                    Text(
+                        text = stringResource(R.string.pref_input_lenovo_pen_title),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.a11yHeading()
+                    )
+                },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    IconButton(onClick = onBack, modifier = Modifier.minTouchTarget()) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back)
+                        )
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
             )
         }
     ) { padding ->
@@ -74,41 +112,68 @@ fun LenovoPenSettingsScreen(onBack: () -> Unit) {
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                Column(modifier = Modifier.padding(8.dp)) {
+            // Diagnostics & Toasts Group
+            Text(
+                text = stringResource(R.string.pref_lenovo_pen_diagnostics_title),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp)),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     SettingsSwitchListItem(
-                        headline = "Show Detection Toasts",
-                        supporting = "Display transient toast messages when barrel button gestures are detected.",
+                        headline = stringResource(R.string.pref_lenovo_pen_show_detections_title),
+                        supporting = stringResource(R.string.pref_lenovo_pen_show_detections_desc),
                         checked = showDetections,
+                        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
                         onCheckedChange = {
                             showDetections = it
-                            x11Prefs.edit().putBoolean(X11Preferences.KEY_LENOVO_PEN_SHOW_DETECTIONS, it).apply()
-                            X11Preferences.notifyChanged(context, X11Preferences.KEY_LENOVO_PEN_SHOW_DETECTIONS)
+                            saveBooleanPref(X11Preferences.KEY_LENOVO_PEN_SHOW_DETECTIONS, it)
                         }
                     )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                    )
+
                     SettingsSwitchListItem(
-                        headline = "Show Toggle Debug Toasts",
-                        supporting = "Display state toasts when toggle mode button states change.",
+                        headline = stringResource(R.string.pref_lenovo_pen_debug_toggle_title),
+                        supporting = stringResource(R.string.pref_lenovo_pen_debug_toggle_desc),
                         checked = showToggleDebug,
+                        shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
                         onCheckedChange = {
                             showToggleDebug = it
-                            x11Prefs.edit().putBoolean(X11Preferences.KEY_LENOVO_PEN_DEBUG_TOGGLE_TOASTS, it).apply()
-                            X11Preferences.notifyChanged(context, X11Preferences.KEY_LENOVO_PEN_DEBUG_TOGGLE_TOASTS)
+                            saveBooleanPref(X11Preferences.KEY_LENOVO_PEN_DEBUG_TOGGLE_TOASTS, it)
                         }
                     )
                 }
             }
 
+            // Gesture Mappings Group
+            Text(
+                text = stringResource(R.string.pref_lenovo_pen_gestures_title),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+
             val gestures = listOf(
-                "Single Press (Keycode 600)" to (X11Preferences.KEY_LENOVO_PEN_SINGLE_ACTION to Triple(X11Preferences.KEY_LENOVO_PEN_SINGLE_TOGGLE, X11Preferences.KEY_LENOVO_PEN_SINGLE_OFF_ON_LIFT, X11Preferences.KEY_LENOVO_PEN_SINGLE_DURATION)),
-                "Double Press (Keycode 601)" to (X11Preferences.KEY_LENOVO_PEN_DOUBLE_ACTION to Triple(X11Preferences.KEY_LENOVO_PEN_DOUBLE_TOGGLE, X11Preferences.KEY_LENOVO_PEN_DOUBLE_OFF_ON_LIFT, X11Preferences.KEY_LENOVO_PEN_DOUBLE_DURATION)),
-                "Triple Press (Keycode 602)" to (X11Preferences.KEY_LENOVO_PEN_TRIPLE_ACTION to Triple(X11Preferences.KEY_LENOVO_PEN_TRIPLE_TOGGLE, X11Preferences.KEY_LENOVO_PEN_TRIPLE_OFF_ON_LIFT, X11Preferences.KEY_LENOVO_PEN_TRIPLE_DURATION)),
-                "Long Press (Keycode 603)" to (X11Preferences.KEY_LENOVO_PEN_LONG_ACTION to Triple(X11Preferences.KEY_LENOVO_PEN_LONG_TOGGLE, X11Preferences.KEY_LENOVO_PEN_LONG_OFF_ON_LIFT, X11Preferences.KEY_LENOVO_PEN_LONG_DURATION)),
-                "Long Press and Click (Keycode 604)" to (X11Preferences.KEY_LENOVO_PEN_LONG_CLICK_ACTION to Triple(X11Preferences.KEY_LENOVO_PEN_LONG_CLICK_TOGGLE, X11Preferences.KEY_LENOVO_PEN_LONG_CLICK_OFF_ON_LIFT, X11Preferences.KEY_LENOVO_PEN_LONG_CLICK_DURATION))
+                stringResource(R.string.pref_lenovo_pen_gesture_single) to (X11Preferences.KEY_LENOVO_PEN_SINGLE_ACTION to Triple(X11Preferences.KEY_LENOVO_PEN_SINGLE_TOGGLE, X11Preferences.KEY_LENOVO_PEN_SINGLE_OFF_ON_LIFT, X11Preferences.KEY_LENOVO_PEN_SINGLE_DURATION)),
+                stringResource(R.string.pref_lenovo_pen_gesture_double) to (X11Preferences.KEY_LENOVO_PEN_DOUBLE_ACTION to Triple(X11Preferences.KEY_LENOVO_PEN_DOUBLE_TOGGLE, X11Preferences.KEY_LENOVO_PEN_DOUBLE_OFF_ON_LIFT, X11Preferences.KEY_LENOVO_PEN_DOUBLE_DURATION)),
+                stringResource(R.string.pref_lenovo_pen_gesture_triple) to (X11Preferences.KEY_LENOVO_PEN_TRIPLE_ACTION to Triple(X11Preferences.KEY_LENOVO_PEN_TRIPLE_TOGGLE, X11Preferences.KEY_LENOVO_PEN_TRIPLE_OFF_ON_LIFT, X11Preferences.KEY_LENOVO_PEN_TRIPLE_DURATION)),
+                stringResource(R.string.pref_lenovo_pen_gesture_long) to (X11Preferences.KEY_LENOVO_PEN_LONG_ACTION to Triple(X11Preferences.KEY_LENOVO_PEN_LONG_TOGGLE, X11Preferences.KEY_LENOVO_PEN_LONG_OFF_ON_LIFT, X11Preferences.KEY_LENOVO_PEN_LONG_DURATION)),
+                stringResource(R.string.pref_lenovo_pen_gesture_long_click) to (X11Preferences.KEY_LENOVO_PEN_LONG_CLICK_ACTION to Triple(X11Preferences.KEY_LENOVO_PEN_LONG_CLICK_TOGGLE, X11Preferences.KEY_LENOVO_PEN_LONG_CLICK_OFF_ON_LIFT, X11Preferences.KEY_LENOVO_PEN_LONG_CLICK_DURATION))
             )
 
             gestures.forEach { (title, keys) ->
@@ -128,14 +193,15 @@ fun LenovoPenSettingsScreen(onBack: () -> Unit) {
                     mutableStateOf(x11Prefs.getString(durationKey, "150") ?: "150")
                 }
 
-                Card(
+                Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-                    )
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow
                 ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
                         Text(
                             text = title,
                             style = MaterialTheme.typography.titleMedium,
@@ -144,69 +210,71 @@ fun LenovoPenSettingsScreen(onBack: () -> Unit) {
                         )
 
                         Text(
-                            text = "Map To Action:",
+                            text = stringResource(R.string.pref_lenovo_pen_map_action),
                             style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
                         val actionOptions = listOf(
-                            "disabled" to "Disabled",
-                            "2" to "Primary (Button 2)",
-                            "3" to "Secondary (Button 3)"
+                            ConnectedButtonItem("disabled", stringResource(R.string.pref_lenovo_pen_action_disabled)),
+                            ConnectedButtonItem("2", stringResource(R.string.pref_lenovo_pen_action_btn2)),
+                            ConnectedButtonItem("3", stringResource(R.string.pref_lenovo_pen_action_btn3))
                         )
-                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                            actionOptions.forEachIndexed { index, (value, label) ->
-                                SegmentedButton(
-                                    selected = actionVal == value,
-                                    onClick = {
-                                        actionVal = value
-                                        x11Prefs.edit().putString(actionKey, value).apply()
-                                        X11Preferences.notifyChanged(context, actionKey)
-                                    },
-                                    shape = SegmentedButtonDefaults.itemShape(index, actionOptions.size),
-                                    label = { Text(label, style = MaterialTheme.typography.bodySmall) }
-                                )
-                            }
-                        }
+                        ConnectedButtonGroup(
+                            items = actionOptions,
+                            selectedItem = actionVal,
+                            onItemSelected = { value ->
+                                actionVal = value
+                                saveStringPref(actionKey, value)
+                            },
+                            showCheckmark = true
+                        )
 
                         val isActionEnabled = actionVal != "disabled"
                         val isHoldDurationEnabled = isActionEnabled && !toggleVal
                         val isOffOnLiftEnabled = isActionEnabled && toggleVal
 
-                        HorizontalDivider()
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                        )
 
                         SettingsSwitchListItem(
-                            headline = "Toggle Target Button",
+                            headline = stringResource(R.string.pref_lenovo_pen_toggle_title),
                             supporting = if (toggleVal)
-                                "On: toggle mode — gesture once for down and again for up."
+                                stringResource(R.string.pref_lenovo_pen_toggle_on_desc)
                             else
-                                "Off: momentary mode — press and hold target for specified duration.",
+                                stringResource(R.string.pref_lenovo_pen_toggle_off_desc),
                             checked = toggleVal,
                             enabled = isActionEnabled,
+                            shape = RoundedCornerShape(12.dp),
                             onCheckedChange = {
                                 toggleVal = it
-                                x11Prefs.edit().putBoolean(toggleKey, it).apply()
-                                X11Preferences.notifyChanged(context, toggleKey)
+                                saveBooleanPref(toggleKey, it)
                             },
                             modifier = Modifier.alpha(if (isActionEnabled) 1f else 0.38f)
                         )
 
-                        HorizontalDivider()
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                        )
 
                         SettingsSwitchListItem(
-                            headline = "Toggle OFF on Lift",
-                            supporting = "When toggled ON and pen lifts after contact, release the mapped button automatically.",
+                            headline = stringResource(R.string.pref_lenovo_pen_off_on_lift_title),
+                            supporting = stringResource(R.string.pref_lenovo_pen_off_on_lift_desc),
                             checked = offOnLiftVal,
                             enabled = isOffOnLiftEnabled,
+                            shape = RoundedCornerShape(12.dp),
                             onCheckedChange = {
                                 offOnLiftVal = it
-                                x11Prefs.edit().putBoolean(offOnLiftKey, it).apply()
-                                X11Preferences.notifyChanged(context, offOnLiftKey)
+                                saveBooleanPref(offOnLiftKey, it)
                             },
                             modifier = Modifier.alpha(if (isOffOnLiftEnabled) 1f else 0.38f)
                         )
 
-                        HorizontalDivider()
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                        )
 
                         Column(
                             modifier = Modifier
@@ -220,9 +288,13 @@ fun LenovoPenSettingsScreen(onBack: () -> Unit) {
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text("Hold Duration (ms)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                                     Text(
-                                        "Applied when Toggle mode is OFF (10 - 8192 ms).",
+                                        text = stringResource(R.string.pref_lenovo_pen_duration_title),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.pref_lenovo_pen_duration_desc),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -234,12 +306,12 @@ fun LenovoPenSettingsScreen(onBack: () -> Unit) {
                                         durationVal = input
                                         val num = input.toLongOrNull()
                                         if (num != null && num in 10..8192) {
-                                            x11Prefs.edit().putString(durationKey, input).apply()
-                                            X11Preferences.notifyChanged(context, durationKey)
+                                            saveStringPref(durationKey, input)
                                         }
                                     },
                                     modifier = Modifier.width(110.dp),
                                     singleLine = true,
+                                    shape = RoundedCornerShape(12.dp),
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                                 )
                             }
@@ -254,15 +326,14 @@ fun LenovoPenSettingsScreen(onBack: () -> Unit) {
                                     OutlinedButton(
                                         onClick = {
                                             durationVal = preset
-                                            x11Prefs.edit().putString(durationKey, preset).apply()
-                                            X11Preferences.notifyChanged(context, durationKey)
+                                            saveStringPref(durationKey, preset)
                                         },
                                         enabled = isHoldDurationEnabled,
                                         modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(8.dp)
+                                        shape = RoundedCornerShape(12.dp)
                                     ) {
                                         Text(
-                                            text = "${preset}ms",
+                                            text = stringResource(R.string.pref_lenovo_pen_duration_preset, preset),
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                             color = if (isSelected && isHoldDurationEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
@@ -274,6 +345,8 @@ fun LenovoPenSettingsScreen(onBack: () -> Unit) {
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }

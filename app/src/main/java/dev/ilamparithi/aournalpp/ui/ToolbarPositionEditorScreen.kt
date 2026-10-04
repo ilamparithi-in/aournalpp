@@ -234,6 +234,7 @@ fun ToolbarPositionEditorScreen(
         val showCopy = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_COPY, true) }
         val showPaste = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_PASTE, true) }
         val showImage = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_IMAGE, true) }
+        val showSync = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_SYNC, true) }
         val pinButtonMode = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_PIN_BUTTON_MODE, true) }
 
         var measuredToolbarWPx by remember { mutableFloatStateOf(0f) }
@@ -416,304 +417,25 @@ fun ToolbarPositionEditorScreen(
                     )
                 }
         ) {
-            Surface(
-                modifier = Modifier
-                    .shadow(elevation = 8.dp, shape = RoundedCornerShape(24.dp))
-                    .clip(RoundedCornerShape(24.dp))
-                    .border(
-                        width = 1.5.dp,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(24.dp)
-                    ),
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-                tonalElevation = 6.dp
-            ) {
-                FloatingToolbarLayout(
-                    modifier = Modifier
-                        .widthIn(max = with(density) { (screenWPx - 16.dp.toPx()).toDp() })
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    mainContent = {
-                        if (showBack) {
-                            IconButton(
-                                onClick = {},
-                                modifier = Modifier.size(36.dp),
-                                enabled = false
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                    tint = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
-
-                        if (showClose) {
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.85f),
-                                modifier = Modifier
-                                    .padding(horizontal = 2.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                            ) {
-                                Box(
-                                    modifier = Modifier.size(32.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp),
-                                        tint = MaterialTheme.colorScheme.error
-                                    )
-                                }
-                            }
-                        }
-
-                        if (showWindowSwitcher) {
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f),
-                                modifier = Modifier
-                                    .padding(horizontal = 2.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                            ) {
-                                Box(
-                                    modifier = Modifier.size(32.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Layers,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp),
-                                        tint = MaterialTheme.colorScheme.onSecondaryContainer
-                                    )
-                                }
-                            }
-                        }
-
-                        if (showSnapLayouts) {
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f),
-                                modifier = Modifier
-                                    .padding(horizontal = 2.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                            ) {
-                                Box(
-                                    modifier = Modifier.size(32.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.GridView,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp),
-                                        tint = MaterialTheme.colorScheme.onSecondaryContainer
-                                    )
-                                }
-                            }
-                        }
-
-                        if (showTitle) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center,
-                                modifier = Modifier
-                                    .height(36.dp)
-                                    .padding(horizontal = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Description,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                InteractiveMarqueeText(
-                                    text = "Physics_Lecture.xopp",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    minWidth = 90.dp,
-                                    maxWidth = 220.dp
-                                )
-                            }
-                        }
-
-                        if (showStylusClickOverride) {
-                            val modes = listOf("L", "M", "R")
-                            val itemWidth = 26.dp
-                            val itemHeight = 24.dp
-                            val spacing = 2.dp
-                            val padding = 2.dp
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier.padding(horizontal = 4.dp)
-                            ) {
-                                Box(modifier = Modifier.padding(padding)) {
-                                    Surface(
-                                        modifier = Modifier.size(itemWidth, itemHeight),
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = MaterialTheme.colorScheme.primary,
-                                        shadowElevation = 1.dp
-                                    ) {}
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(spacing),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        modes.forEachIndexed { idx, label ->
-                                            Box(
-                                                modifier = Modifier.size(itemWidth, itemHeight),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(
-                                                    text = label,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontWeight = if (idx == 0) FontWeight.Bold else FontWeight.Medium,
-                                                    color = if (idx == 0) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        if (showTouchStylus) {
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier.padding(horizontal = 2.dp)
-                            ) {
-                                Box(modifier = Modifier.size(32.dp), contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Draw,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(17.dp),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-
-                        if (showCut || showCopy || showPaste || showImage) {
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier.padding(horizontal = 2.dp)
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(0.dp)
-                                ) {
-                                    if (showCut) {
-                                        IconButton(onClick = {}, modifier = Modifier.size(32.dp), enabled = false) {
-                                            Icon(
-                                                imageVector = Icons.Default.ContentCut,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(16.dp),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                    if (showCopy) {
-                                        IconButton(onClick = {}, modifier = Modifier.size(32.dp), enabled = false) {
-                                            Icon(
-                                                imageVector = Icons.Default.ContentCopy,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(16.dp),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                    if (showPaste) {
-                                        IconButton(onClick = {}, modifier = Modifier.size(32.dp), enabled = false) {
-                                            Icon(
-                                                imageVector = Icons.Default.ContentPaste,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(16.dp),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                    if (showImage) {
-                                        IconButton(onClick = {}, modifier = Modifier.size(32.dp), enabled = false) {
-                                            Icon(
-                                                imageVector = Icons.Default.Image,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(16.dp),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        if (showKeyboard) {
-                            IconButton(
-                                onClick = {},
-                                modifier = Modifier.size(36.dp),
-                                enabled = false
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Keyboard,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    },
-                    trailingContent = {
-                        if (pinButtonMode) {
-                            IconButton(
-                                onClick = {},
-                                modifier = Modifier.size(36.dp),
-                                enabled = false
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.PushPin,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        } else {
-                            IconButton(
-                                onClick = {},
-                                modifier = Modifier.size(36.dp),
-                                enabled = false
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.ExpandLess,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        if (showDragHandle) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.DragIndicator,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
-                )
-            }
+            FloatingToolbarBar(
+                maxLayoutWidth = with(density) { (screenWPx - 16.dp.toPx()).toDp() },
+                borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                showBack = showBack,
+                showClose = showClose,
+                showWindowSwitcher = showWindowSwitcher,
+                showSnapLayouts = showSnapLayouts,
+                showTitle = showTitle,
+                showStylusClickOverride = showStylusClickOverride,
+                showTouchStylus = showTouchStylus,
+                showCut = showCut,
+                showCopy = showCopy,
+                showPaste = showPaste,
+                showImage = showImage,
+                showSync = showSync,
+                showKeyboard = showKeyboard,
+                pinButtonMode = pinButtonMode,
+                showDragHandle = showDragHandle
+            )
         }
 
         // 5. Floating Bottom Calibration HUD Control Panel

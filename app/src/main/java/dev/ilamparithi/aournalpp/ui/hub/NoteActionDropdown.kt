@@ -10,9 +10,9 @@ import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.PushPin
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
+import dev.ilamparithi.aournalpp.ui.common.AppDropdownMenu
+import dev.ilamparithi.aournalpp.ui.common.AppDropdownMenuItem
+import dev.ilamparithi.aournalpp.ui.common.AppMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -38,9 +38,9 @@ fun NoteActionDropdown(
     onDuplicate: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null
 ) {
-    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+    AppDropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         if (onOpenAs != null) {
-            DropdownMenuItem(
+            AppDropdownMenuItem(
                 text = { Text(stringResource(R.string.action_open_as)) },
                 leadingIcon = {
                     Icon(
@@ -51,10 +51,10 @@ fun NoteActionDropdown(
                 },
                 onClick = { onDismiss(); onOpenAs() }
             )
-            HorizontalDivider()
+            AppMenuDefaults.InsetDivider()
         }
         if (onTogglePin != null) {
-            DropdownMenuItem(
+            AppDropdownMenuItem(
                 text = {
                     Text(
                         if (isPinned) stringResource(R.string.action_unpin_note)
@@ -70,31 +70,31 @@ fun NoteActionDropdown(
                 },
                 onClick = { onDismiss(); onTogglePin() }
             )
-            HorizontalDivider()
+            AppMenuDefaults.InsetDivider()
         }
         if (onShareExport != null) {
-            DropdownMenuItem(
+            AppDropdownMenuItem(
                 text = { Text(stringResource(R.string.action_share_export)) },
                 leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
                 onClick = { onDismiss(); onShareExport() }
             )
         } else {
             if (onExportPdf != null) {
-                DropdownMenuItem(
+                AppDropdownMenuItem(
                     text = { Text(stringResource(R.string.action_export_pdf)) },
                     leadingIcon = { Icon(Icons.Default.FileDownload, contentDescription = null) },
                     onClick = { onDismiss(); onExportPdf() }
                 )
             }
             if (onSharePdf != null) {
-                DropdownMenuItem(
+                AppDropdownMenuItem(
                     text = { Text(stringResource(R.string.action_share)) },
                     leadingIcon = { Icon(Icons.Default.PictureAsPdf, contentDescription = null) },
                     onClick = { onDismiss(); onSharePdf() }
                 )
             }
             if (onShareXopp != null) {
-                DropdownMenuItem(
+                AppDropdownMenuItem(
                     text = { Text(stringResource(R.string.action_share_note)) },
                     leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
                     onClick = { onDismiss(); onShareXopp() }
@@ -102,23 +102,23 @@ fun NoteActionDropdown(
             }
         }
         if (onRename != null) {
-            HorizontalDivider()
-            DropdownMenuItem(
+            AppMenuDefaults.InsetDivider()
+            AppDropdownMenuItem(
                 text = { Text(stringResource(R.string.action_rename)) },
                 leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null) },
                 onClick = { onDismiss(); onRename() }
             )
         }
         if (onDuplicate != null) {
-            DropdownMenuItem(
+            AppDropdownMenuItem(
                 text = { Text(stringResource(R.string.action_duplicate)) },
                 leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
                 onClick = { onDismiss(); onDuplicate() }
             )
         }
         if (onDelete != null) {
-            HorizontalDivider()
-            DropdownMenuItem(
+            AppMenuDefaults.InsetDivider()
+            AppDropdownMenuItem(
                 text = { Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error) },
                 leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                 onClick = { onDismiss(); onDelete() }

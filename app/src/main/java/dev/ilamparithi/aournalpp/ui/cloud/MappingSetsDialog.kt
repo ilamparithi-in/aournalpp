@@ -1,6 +1,9 @@
 package dev.ilamparithi.aournalpp.ui.cloud
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -196,12 +199,21 @@ fun MappingSetsDialog(
                         label = { Text("Set Name") },
                         placeholder = { Text(stringResource(R.string.hint_set_name)) },
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Words,
+                            autoCorrectEnabled = true,
+                            imeAction = ImeAction.Next
+                        ),
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = setDesc,
                         onValueChange = { setDesc = it },
                         label = { Text("Description (Optional)") },
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Sentences,
+                            autoCorrectEnabled = true
+                        ),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }

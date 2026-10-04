@@ -11,6 +11,8 @@
         <item name="colorOnSecondary">@color/black</item>
         <!-- Status bar color. -->
         <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
+        <!-- Disable OEM algorithmic force-dark mutations -->
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
         <!-- Customize your theme here. -->
     </style>
     <style name="Theme.Aournal" parent="Theme.Aournalpp" />

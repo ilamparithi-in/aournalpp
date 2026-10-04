@@ -44,8 +44,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import dev.ilamparithi.aournalpp.ui.common.AppDropdownMenu
+import dev.ilamparithi.aournalpp.ui.common.AppDropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -210,11 +210,11 @@ fun ConflictResolutionScreen(
                                 contentDescription = stringResource(R.string.action_more_options)
                             )
                         }
-                        DropdownMenu(
+                        AppDropdownMenu(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false }
                         ) {
-                            DropdownMenuItem(
+                            AppDropdownMenuItem(
                                 text = { Text("Select All Newest") },
                                 onClick = {
                                     showMenu = false
@@ -225,7 +225,7 @@ fun ConflictResolutionScreen(
                                 },
                                 leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) }
                             )
-                            DropdownMenuItem(
+                            AppDropdownMenuItem(
                                 text = { Text("Keep All Local") },
                                 onClick = {
                                     showMenu = false
@@ -235,7 +235,7 @@ fun ConflictResolutionScreen(
                                 },
                                 leadingIcon = { Icon(Icons.Default.PhoneAndroid, contentDescription = null) }
                             )
-                            DropdownMenuItem(
+                            AppDropdownMenuItem(
                                 text = { Text("Keep All Cloud") },
                                 onClick = {
                                     showMenu = false

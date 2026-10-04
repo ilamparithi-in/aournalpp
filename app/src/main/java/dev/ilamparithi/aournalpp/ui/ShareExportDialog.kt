@@ -23,6 +23,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Description
@@ -178,6 +181,11 @@ fun SingleShareExportDialog(
                         .fillMaxWidth()
                         .focusRequester(focusRequester),
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences,
+                        autoCorrectEnabled = true,
+                        imeAction = ImeAction.Done
+                    ),
                     label = { Text(stringResource(R.string.dialog_note_name_hint)) },
                     suffix = {
                         Text(

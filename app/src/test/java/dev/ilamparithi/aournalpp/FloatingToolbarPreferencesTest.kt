@@ -13,6 +13,7 @@ class FloatingToolbarPreferencesTest {
         assertEquals("toolbarPinButtonMode", X11Preferences.KEY_TOOLBAR_PIN_BUTTON_MODE)
         assertEquals("toolbarAutoCollapseTimeoutMs", X11Preferences.KEY_TOOLBAR_AUTO_COLLAPSE_TIMEOUT_MS)
         assertEquals("toolbarStylusHoverExpands", X11Preferences.KEY_TOOLBAR_STYLUS_HOVER_EXPANDS)
+        assertEquals("toolbarShowSync", X11Preferences.KEY_TOOLBAR_SHOW_SYNC)
     }
 
     @Test

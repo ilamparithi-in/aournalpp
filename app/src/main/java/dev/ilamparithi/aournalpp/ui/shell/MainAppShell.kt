@@ -124,9 +124,9 @@ fun MainResponsiveAppShell(
 
     val visibleTabs = remember(isSessionRunning) {
         if (isSessionRunning) {
-            listOf(AppTab.WORKSPACE, AppTab.HOME, AppTab.FILES, AppTab.CLOUD, AppTab.SETTINGS, AppTab.ABOUT)
+            listOf(AppTab.WORKSPACE, AppTab.HOME, AppTab.FILES, AppTab.CLOUD, AppTab.SETTINGS)
         } else {
-            listOf(AppTab.HOME, AppTab.FILES, AppTab.CLOUD, AppTab.SETTINGS, AppTab.ABOUT)
+            listOf(AppTab.HOME, AppTab.FILES, AppTab.CLOUD, AppTab.SETTINGS)
         }
     }
 
@@ -275,6 +275,7 @@ fun MainResponsiveAppShell(
             // Mobile Portrait: Bottom Navigation Bar
             Scaffold(
                 contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                containerColor = MaterialTheme.colorScheme.surface,
                 bottomBar = {
                     NavigationBar(
                         containerColor = MaterialTheme.colorScheme.surface
