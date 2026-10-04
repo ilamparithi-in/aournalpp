@@ -36,6 +36,8 @@ fun FolderBreadcrumbsBar(
     rootDirectory: File,
     onNavigateTo: (File) -> Unit,
     enabled: Boolean = true,
+    showBackButton: Boolean = true,
+    backgroundColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.surfaceContainerHigh,
     modifier: Modifier = Modifier
 ) {
     val relativePath = remember(currentDirectory, rootDirectory) {
@@ -56,38 +58,40 @@ fun FolderBreadcrumbsBar(
     val isAtRoot = relativePath.isEmpty()
 
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = backgroundColor,
         modifier = modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = if (showBackButton) 16.dp else 4.dp, vertical = if (showBackButton) 8.dp else 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(
-                onClick = {
-                    if (enabled && !isAtRoot) {
-                        val parentFile = currentDirectory.parentFile
-                        if (parentFile != null && parentFile.absolutePath.startsWith(rootDirectory.absolutePath)) {
-                            onNavigateTo(parentFile)
-                        } else {
-                            onNavigateTo(rootDirectory)
+            if (showBackButton) {
+                IconButton(
+                    onClick = {
+                        if (enabled && !isAtRoot) {
+                            val parentFile = currentDirectory.parentFile
+                            if (parentFile != null && parentFile.absolutePath.startsWith(rootDirectory.absolutePath)) {
+                                onNavigateTo(parentFile)
+                            } else {
+                                onNavigateTo(rootDirectory)
+                            }
                         }
-                    }
-                },
-                enabled = enabled && !isAtRoot,
-                modifier = Modifier
-                    .size(32.dp)
-                    .padding(end = 6.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = stringResource(R.string.action_back),
-                    tint = if (enabled && !isAtRoot) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                    modifier = Modifier.size(18.dp)
-                )
+                    },
+                    enabled = enabled && !isAtRoot,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .padding(end = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.action_back),
+                        tint = if (enabled && !isAtRoot) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
 
             pathSegments.forEachIndexed { index, seg ->

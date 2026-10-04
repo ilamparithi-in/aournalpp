@@ -208,6 +208,7 @@ fun DocumentHubScreen(
     val quarantinedEmergencySave by viewModel.quarantinedEmergencySave.collectAsState()
     val showEmergencyDialog by viewModel.showEmergencyDialog.collectAsState()
     val showAutoloadOverrideDialog by viewModel.showAutoloadOverrideDialog.collectAsState()
+    val enabledFileTypes by viewModel.enabledFileTypes.collectAsState()
 
     var hasPermission by remember { mutableStateOf(hasStoragePermission(context)) }
     var showPermissionDialog by remember { mutableStateOf(!hasPermission) }
@@ -408,7 +409,7 @@ fun DocumentHubScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    LaunchedEffect(currentDirectory, showHiddenFiles, isViewingTrash, searchQuery) {
+    LaunchedEffect(currentDirectory, showHiddenFiles, isViewingTrash, searchQuery, enabledFileTypes) {
         if (!hasPermission) {
             hasPermission = hasStoragePermission(context)
             if (!hasPermission) return@LaunchedEffect
@@ -459,6 +460,11 @@ fun DocumentHubScreen(
                 searchQuery = searchQuery,
                 isGridView = isGridView,
                 showHiddenFiles = showHiddenFiles,
+                enabledFileTypes = enabledFileTypes,
+                onToggleFileType = { viewModel.toggleFileType(it) },
+                currentDirectory = currentDirectory,
+                rootDirectory = repository.getRootNotesDirectory(),
+                onNavigateToFolder = { viewModel.setCurrentDirectory(it) },
                 onSearchQueryChange = { viewModel.setSearchQuery(it) },
                 onCloseSelection = { viewModel.setSelectionMode(false) },
                 onSelectAllToggle = {
@@ -578,20 +584,6 @@ fun DocumentHubScreen(
                     .padding(innerPadding)
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // Breadcrumbs
-                    if (!isRootDirectory && !isViewingTrash) {
-                        dev.ilamparithi.aournalpp.ui.hub.FolderBreadcrumbsBar(
-                            currentDirectory = currentDirectory,
-                            rootDirectory = repository.getRootNotesDirectory(),
-                            enabled = !isSelectionMode,
-                            onNavigateTo = { targetFolder ->
-                                if (!isSelectionMode) {
-                                    viewModel.setCurrentDirectory(targetFolder)
-                                }
-                            }
-                        )
-                    }
-
                     val reduceAnimations = dev.ilamparithi.aournalpp.ui.animation.LocalMotionPreferences.current.reduceAnimations
                     AnimatedContent(
                         targetState = currentDirectory.canonicalPath to isViewingTrash,

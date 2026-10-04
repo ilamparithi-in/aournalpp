@@ -500,7 +500,8 @@ class LinuxEnvironment(private val context: Context) {
     }
 
     val quarantineRecoveryDir: File by lazy {
-        File(context.cacheDir, "recovery").apply { mkdirs() }
+        val baseCache = context.cacheDir ?: File(context.filesDir ?: File("."), "cache")
+        File(baseCache, "recovery").apply { mkdirs() }
     }
 
     fun isEmergencyRecoveryEnabled(): Boolean {

@@ -43,13 +43,27 @@ class DocumentCache {
         cachedOpenedNotesTimestamps = null
     }
 
-    fun getDirectory(targetDir: File, query: String = "", showHidden: Boolean = false): Pair<List<FolderItem>, List<NoteDocument>>? {
-        val key = "${targetDir.absolutePath}_${query.trim()}_$showHidden"
-        return directoryCache[key]
+    fun getDirectory(
+        targetDir: File,
+        query: String = "",
+        showHidden: Boolean = false,
+        enabledExtensions: Set<String> = DocumentRepository.SUPPORTED_EXTENSIONS
+    ): Pair<List<FolderItem>, List<NoteDocument>>? {
+        val extKey = enabledExtensions.sorted().joinToString(",")
+        val keyWithExt = "${targetDir.absolutePath}_${query.trim()}_${showHidden}_$extKey"
+        val fallbackKey = "${targetDir.absolutePath}_${query.trim()}_$showHidden"
+        return directoryCache[keyWithExt] ?: directoryCache[fallbackKey]
     }
 
-    fun putDirectory(targetDir: File, query: String = "", showHidden: Boolean = false, data: Pair<List<FolderItem>, List<NoteDocument>>) {
-        val key = "${targetDir.absolutePath}_${query.trim()}_$showHidden"
+    fun putDirectory(
+        targetDir: File,
+        query: String = "",
+        showHidden: Boolean = false,
+        enabledExtensions: Set<String> = DocumentRepository.SUPPORTED_EXTENSIONS,
+        data: Pair<List<FolderItem>, List<NoteDocument>>
+    ) {
+        val extKey = enabledExtensions.sorted().joinToString(",")
+        val key = "${targetDir.absolutePath}_${query.trim()}_${showHidden}_$extKey"
         directoryCache[key] = data
     }
 }

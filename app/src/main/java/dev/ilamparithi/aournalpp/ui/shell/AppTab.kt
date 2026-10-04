@@ -17,6 +17,9 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
 import dev.ilamparithi.aournalpp.R
 
+import androidx.compose.material.icons.filled.NoteAlt
+import androidx.compose.material.icons.outlined.NoteAlt
+
 /**
  * Top-level application navigation tabs.
  */
@@ -27,7 +30,7 @@ enum class AppTab(
 ) {
     WORKSPACE(R.string.tab_workspace, Icons.Filled.Dashboard, Icons.Outlined.Dashboard),
     HOME(R.string.tab_home, Icons.Filled.Home, Icons.Outlined.Home),
-    FILES(R.string.tab_files, Icons.Filled.FolderCopy, Icons.Outlined.FolderCopy),
+    FILES(R.string.tab_files, Icons.Filled.NoteAlt, Icons.Outlined.NoteAlt),
     CLOUD(R.string.tab_cloud, Icons.Filled.Cloud, Icons.Outlined.Cloud),
     SETTINGS(R.string.tab_settings, Icons.Filled.Settings, Icons.Outlined.Settings),
     ABOUT(R.string.tab_about, Icons.Filled.Info, Icons.Outlined.Info);

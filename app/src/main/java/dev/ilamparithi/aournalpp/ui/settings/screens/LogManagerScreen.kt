@@ -666,41 +666,12 @@ private fun LiveLogsTabContent(
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         // Search Input
-        OutlinedTextField(
-            value = uiState.searchQuery,
-            onValueChange = onSearchQueryChanged,
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text(stringResource(R.string.log_manager_search_hint)) },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = null
-                )
-            },
-            trailingIcon = {
-                if (uiState.searchQuery.isNotEmpty()) {
-                    IconButton(
-                        onClick = {
-                            onSearchQueryChanged("")
-                            focusManager.clearFocus()
-                        },
-                        modifier = Modifier.minTouchTarget()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Clear,
-                            contentDescription = stringResource(R.string.cd_clear_search)
-                        )
-                    }
-                }
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(16.dp),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow
-            )
+        dev.ilamparithi.aournalpp.ui.common.AppSearchBar(
+            query = uiState.searchQuery,
+            onQueryChange = onSearchQueryChanged,
+            onSearch = { focusManager.clearFocus() },
+            placeholderText = stringResource(R.string.log_manager_search_hint),
+            modifier = Modifier.fillMaxWidth()
         )
 
         Spacer(modifier = Modifier.height(8.dp))

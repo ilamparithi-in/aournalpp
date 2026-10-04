@@ -512,26 +512,13 @@ fun ServiceDetailSubpage(
                     }
 
                     // Real-time Search Field
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = {
+                    dev.ilamparithi.aournalpp.ui.common.AppSearchBar(
+                        query = searchQuery,
+                        onQueryChange = {
                             searchQuery = it
                             currentPage = 0
                         },
-                        placeholder = { Text(stringResource(R.string.hint_search_mappings)) },
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { searchQuery = ""; currentPage = 0 }) {
-                                    Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.action_clear))
-                                }
-                            }
-                        },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            imeAction = ImeAction.Search,
-                            autoCorrectEnabled = false
-                        ),
+                        placeholderText = stringResource(R.string.hint_search_mappings),
                         modifier = Modifier.fillMaxWidth()
                     )
 

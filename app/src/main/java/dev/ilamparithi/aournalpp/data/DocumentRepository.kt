@@ -26,8 +26,14 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.GZIPOutputStream
+import dev.ilamparithi.aournalpp.data.db.IndexedNoteEntity
+import dev.ilamparithi.aournalpp.data.db.NoteIndexDao
+import dev.ilamparithi.aournalpp.data.db.NoteIndexDatabase
 
-class DocumentRepository internal constructor(private val context: Context) {
+class DocumentRepository internal constructor(
+    private val context: Context,
+    dao: NoteIndexDao? = null
+) {
 
     companion object {
         val SUPPORTED_EXTENSIONS = setOf("xopp", "xoj", "pdf")
@@ -113,8 +119,9 @@ class DocumentRepository internal constructor(private val context: Context) {
     fun getCachedDirectory(
         targetDir: File,
         query: String = "",
-        showHidden: Boolean = false
-    ): Pair<List<FolderItem>, List<NoteDocument>>? = cache.getDirectory(targetDir, query, showHidden)
+        showHidden: Boolean = false,
+        enabledExtensions: Set<String> = SUPPORTED_EXTENSIONS
+    ): Pair<List<FolderItem>, List<NoteDocument>>? = cache.getDirectory(targetDir, query, showHidden, enabledExtensions)
 
     fun getCachedHomeNotes(limit: Int = 16): List<NoteDocument>? = cache.homeNotesCache[limit]
 
@@ -125,6 +132,10 @@ class DocumentRepository internal constructor(private val context: Context) {
     fun getCachedTotalNotesCount(): Int? = cache.cachedTotalNotesCount
 
     fun getCachedTotalFoldersCount(): Int? = cache.cachedTotalFoldersCount
+
+    val noteIndexDao: NoteIndexDao by lazy {
+        dao ?: NoteIndexDatabase.getInstance(context).noteIndexDao()
+    }
 
     private val env = LinuxEnvironment(context)
     private val prefs = AppPreferences.getDocumentHub(context)
@@ -390,13 +401,19 @@ class DocumentRepository internal constructor(private val context: Context) {
     suspend fun scanDirectory(
         targetDir: File,
         query: String = "",
-        showHidden: Boolean = false
+        showHidden: Boolean = false,
+        enabledExtensions: Set<String> = SUPPORTED_EXTENSIONS
     ): Pair<List<FolderItem>, List<NoteDocument>> = withContext(Dispatchers.IO) {
         if (!targetDir.exists()) targetDir.mkdirs()
 
-        val allFiles = targetDir.listFiles() ?: return@withContext Pair(emptyList(), emptyList())
         val cache = ScanCache()
         val trimmedQuery = query.trim()
+
+        if (trimmedQuery.isNotEmpty()) {
+            return@withContext scanRecursive(targetDir, trimmedQuery, showHidden, enabledExtensions, cache)
+        }
+
+        val allFiles = targetDir.listFiles() ?: return@withContext Pair(emptyList(), emptyList())
 
         // Single-pass partitioning of target directory entries
         val directories = mutableListOf<File>()
@@ -406,18 +423,40 @@ class DocumentRepository internal constructor(private val context: Context) {
 
         for (f in allFiles) {
             if (f.isDirectory) {
-                if (f.name != TRASH_DIR_NAME) {
+                if (!f.name.equals(TRASH_DIR_NAME, ignoreCase = true)) {
                     directories.add(f)
                 }
             } else if (f.isFile) {
                 fileMapByName[f.name] = f
                 val name = f.name
                 val isHiddenOrBackup = name.startsWith(".") || name.endsWith("~") || name.contains(".autosave.", ignoreCase = true)
-                if (!isHiddenOrBackup && isOpenableFile(f)) {
+                if (!isHiddenOrBackup && isOpenableFile(f) && enabledExtensions.contains(f.extension.lowercase())) {
                     mainFiles.add(f)
                 } else if (showHidden && isHiddenOrBackup && isOpenableCandidate(f)) {
-                    hiddenOrBackupFiles?.add(f)
+                    val baseExt = f.extension.lowercase().removeSuffix("~")
+                    if (enabledExtensions.contains(baseExt) || baseExt.isEmpty()) {
+                        hiddenOrBackupFiles?.add(f)
+                    }
                 }
+            }
+        }
+
+        // Asynchronously update Room FTS index for targetDir
+        if (mainFiles.isNotEmpty()) {
+            repoScope.launch {
+                try {
+                    val entities = mainFiles.map { f ->
+                        IndexedNoteEntity(
+                            path = f.canonicalPath,
+                            title = f.nameWithoutExtension,
+                            folderPath = targetDir.canonicalPath,
+                            extension = f.extension.lowercase(),
+                            lastModifiedMs = f.lastModified(),
+                            sizeBytes = f.length()
+                        )
+                    }
+                    noteIndexDao.upsertNotes(entities)
+                } catch (_: Exception) {}
             }
         }
 
@@ -428,16 +467,12 @@ class DocumentRepository internal constructor(private val context: Context) {
             val isHidden = dir.name.startsWith(".")
             if (isHidden && !showHidden) continue
 
-            if (trimmedQuery.isNotEmpty() && !dir.name.contains(trimmedQuery, ignoreCase = true)) {
-                continue
-            }
-
             val meta = cache.folderMeta(dir)
             val isEmergency = meta.role == "emergency" || isEmergencySavesFolder(dir)
             val role = meta.role
             val isPinned = meta.isPinned
             val itemCount = dir.list { _, name ->
-                !name.startsWith(".") && (name.endsWith(".xopp", ignoreCase = true) || name.endsWith(".xoj", ignoreCase = true) || name.endsWith(".pdf", ignoreCase = true))
+                !name.startsWith(".") && enabledExtensions.contains(File(name).extension.lowercase())
             }?.size ?: 0
 
             folderItems.add(
@@ -469,10 +504,6 @@ class DocumentRepository internal constructor(private val context: Context) {
         for (file in mainFiles) {
             if (!seenMainPaths.add(file.absolutePath)) continue
 
-            if (trimmedQuery.isNotEmpty() && !file.name.contains(trimmedQuery, ignoreCase = true)) {
-                continue
-            }
-
             val autosaveCandidate = findMatchingAutosave(fileMapByName, file)
             val autosaveInfo = autosaveCandidate?.let { autoFile ->
                 matchedAutosavePaths.add(autoFile.absolutePath)
@@ -486,7 +517,6 @@ class DocumentRepository internal constructor(private val context: Context) {
                 )
             }
 
-            val sizeKb = (file.length() + 1023) / 1024
             resultNotes.add(
                 NoteDocument(
                     file = file,
@@ -511,11 +541,6 @@ class DocumentRepository internal constructor(private val context: Context) {
                 val path = file.absolutePath
                 if (matchedAutosavePaths.contains(path) || seenMainPaths.contains(path)) continue
 
-                if (trimmedQuery.isNotEmpty() && !file.name.contains(trimmedQuery, ignoreCase = true)) {
-                    continue
-                }
-
-                val sizeKb = (file.length() + 1023) / 1024
                 resultNotes.add(
                     NoteDocument(
                         file = file,
@@ -534,10 +559,6 @@ class DocumentRepository internal constructor(private val context: Context) {
             }
         }
 
-        // Sort folder items:
-        // 1. User pinned folders in user pin order
-        // 2. Virtually pinned special folders in alphabetical order
-        // 3. Regular unpinned folders in alphabetical order
         val sortedFolders = folderItems.sortedWith { a, b ->
             val aPinned = a.isPinned
             val bPinned = b.isPinned
@@ -561,12 +582,148 @@ class DocumentRepository internal constructor(private val context: Context) {
             sortedFolders,
             resultNotes.sortedByDescending { it.lastModifiedMs }
         )
-        val cacheKey = "${targetDir.absolutePath}_${trimmedQuery}_$showHidden"
+        val extKey = enabledExtensions.sorted().joinToString(",")
+        val cacheKey = "${targetDir.absolutePath}_${trimmedQuery}_${showHidden}_$extKey"
         directoryCache[cacheKey] = result
         if (isRoot && trimmedQuery.isEmpty()) {
             cachedTotalFoldersCount = sortedFolders.size
         }
         result
+    }
+
+    private suspend fun scanRecursive(
+        targetDir: File,
+        trimmedQuery: String,
+        showHidden: Boolean,
+        enabledExtensions: Set<String>,
+        cache: ScanCache
+    ): Pair<List<FolderItem>, List<NoteDocument>> {
+        val folderPath = targetDir.canonicalPath
+        val folderPathPrefix = folderPath + File.separator
+
+        val discoveredEntities = mutableListOf<IndexedNoteEntity>()
+        val matchingFolders = mutableListOf<FolderItem>()
+        val resultNotes = mutableListOf<NoteDocument>()
+        val seenPaths = mutableSetOf<String>()
+
+        // 1. Recursive walk from targetDir into all subdirectories
+        targetDir.walkTopDown()
+            .onEnter { dir ->
+                if (dir.name.equals(TRASH_DIR_NAME, ignoreCase = true)) return@onEnter false
+                if (dir.name.startsWith(".") && !showHidden) return@onEnter false
+
+                if (dir.canonicalPath != targetDir.canonicalPath && dir.name.contains(trimmedQuery, ignoreCase = true)) {
+                    val meta = cache.folderMeta(dir)
+                    matchingFolders.add(
+                        FolderItem(
+                            file = dir,
+                            name = dir.name,
+                            colorHex = meta.colorHex,
+                            iconEmoji = meta.iconEmoji,
+                            iconType = meta.iconType,
+                            isEmergencyFolder = meta.role == "emergency" || isEmergencySavesFolder(dir),
+                            isPinned = meta.isPinned,
+                            role = meta.role,
+                            isExcludedFromRecents = meta.excludeFromRecents,
+                            itemCount = dir.list { _, name ->
+                                !name.startsWith(".") && enabledExtensions.contains(File(name).extension.lowercase())
+                            }?.size ?: 0,
+                            lastModifiedMs = dir.lastModified(),
+                            isHidden = dir.name.startsWith(".")
+                        )
+                    )
+                }
+                true
+            }
+            .forEach { file ->
+                if (file.isFile && isOpenableFile(file)) {
+                    val ext = file.extension.lowercase()
+                    val isHiddenOrBackup = file.name.startsWith(".") || file.name.endsWith("~") || file.name.contains(".autosave.", ignoreCase = true)
+                    if (!isHiddenOrBackup || showHidden) {
+                        discoveredEntities.add(
+                            IndexedNoteEntity(
+                                path = file.canonicalPath,
+                                title = file.nameWithoutExtension,
+                                folderPath = file.parentFile?.canonicalPath ?: folderPath,
+                                extension = ext,
+                                lastModifiedMs = file.lastModified(),
+                                sizeBytes = file.length()
+                            )
+                        )
+                    }
+                }
+            }
+
+        // Asynchronously upsert discovered notes to Room SQLite FTS index
+        if (discoveredEntities.isNotEmpty()) {
+            try {
+                noteIndexDao.upsertNotes(discoveredEntities)
+            } catch (_: Exception) {}
+        }
+
+        // 2. Query Room FTS index with fallback to LIKE search
+        val ftsResults = try {
+            val ftsQuery = "*${trimmedQuery.replace("\"", "\"\"")}*"
+            val res = noteIndexDao.searchNotesFts(folderPath, folderPathPrefix, ftsQuery, enabledExtensions)
+            if (res.isNotEmpty()) res else {
+                noteIndexDao.searchNotesLike(folderPath, folderPathPrefix, trimmedQuery, enabledExtensions)
+            }
+        } catch (_: Exception) {
+            noteIndexDao.searchNotesLike(folderPath, folderPathPrefix, trimmedQuery, enabledExtensions)
+        }
+
+        val candidateEntities = if (ftsResults.isNotEmpty()) ftsResults else {
+            discoveredEntities.filter { entity ->
+                enabledExtensions.contains(entity.extension.lowercase()) &&
+                (entity.title.contains(trimmedQuery, ignoreCase = true) || entity.tags.contains(trimmedQuery, ignoreCase = true))
+            }
+        }
+
+        for (entity in candidateEntities) {
+            val file = File(entity.path)
+            if (!file.exists()) {
+                repoScope.launch {
+                    try { noteIndexDao.deleteByPath(entity.path) } catch (_: Exception) {}
+                }
+                continue
+            }
+            if (!seenPaths.add(file.canonicalPath)) continue
+
+            val parentFile = file.parentFile
+            val relFolder = if (parentFile != null && parentFile.canonicalPath != targetDir.canonicalPath) {
+                parentFile.relativeToOrNull(targetDir)?.path ?: parentFile.name
+            } else {
+                if (cache.isRoot(targetDir)) "Notes Home" else targetDir.name
+            }
+
+            val meta = parentFile?.let { cache.folderMeta(it) } ?: FolderMetaData()
+
+            resultNotes.add(
+                NoteDocument(
+                    file = file,
+                    title = file.nameWithoutExtension,
+                    path = file.absolutePath,
+                    lastModifiedMs = file.lastModified(),
+                    sizeBytes = file.length(),
+                    autosaveInfo = null,
+                    isHidden = file.name.startsWith("."),
+                    isPinned = cache.pinnedPaths.contains(file.absolutePath),
+                    folder = relFolder,
+                    folderColorHex = meta.colorHex,
+                    folderIconEmoji = meta.iconEmoji,
+                    folderIconType = meta.iconType
+                )
+            )
+        }
+
+        val finalFolders = matchingFolders.distinctBy { it.file.canonicalPath }.sortedBy { it.name.lowercase() }
+        val finalNotes = resultNotes.sortedByDescending { it.lastModifiedMs }
+
+        val extKey = enabledExtensions.sorted().joinToString(",")
+        val cacheKey = "${targetDir.absolutePath}_${trimmedQuery}_${showHidden}_$extKey"
+        directoryCache[cacheKey] = Pair(finalFolders, finalNotes)
+
+        return Pair(finalFolders, finalNotes)
     }
 
     private fun isOpenableCandidate(file: File): Boolean {

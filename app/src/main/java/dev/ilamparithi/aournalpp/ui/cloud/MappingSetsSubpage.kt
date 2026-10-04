@@ -158,24 +158,10 @@ fun MappingSetsSubpage(
         ) {
             // Search Bar
             item {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = { Text(stringResource(R.string.hint_search_sets)) },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    trailingIcon = {
-                        if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { searchQuery = "" }) {
-                                Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.action_clear))
-                            }
-                        }
-                    },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        imeAction = ImeAction.Search,
-                        autoCorrectEnabled = false
-                    ),
-                    shape = RoundedCornerShape(12.dp),
+                dev.ilamparithi.aournalpp.ui.common.AppSearchBar(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    placeholderText = stringResource(R.string.hint_search_sets),
                     modifier = Modifier.fillMaxWidth()
                 )
             }

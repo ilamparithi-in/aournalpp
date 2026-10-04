@@ -7,6 +7,7 @@ import dev.ilamparithi.aournalpp.data.AppPreferences
 import dev.ilamparithi.aournalpp.data.DocumentRepository
 import dev.ilamparithi.aournalpp.model.FolderItem
 import dev.ilamparithi.aournalpp.model.NoteDocument
+import dev.ilamparithi.aournalpp.model.NoteFileType
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
 import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
@@ -100,10 +101,50 @@ class DocumentHubViewModel @JvmOverloads constructor(
     private val _showAutoloadOverrideDialog = MutableStateFlow(false)
     val showAutoloadOverrideDialog: StateFlow<Boolean> = _showAutoloadOverrideDialog.asStateFlow()
 
+    private val _enabledFileTypes = MutableStateFlow<Set<NoteFileType>>(loadEnabledFileTypes())
+    val enabledFileTypes: StateFlow<Set<NoteFileType>> = _enabledFileTypes.asStateFlow()
+
+    private fun loadEnabledFileTypes(): Set<NoteFileType> {
+        val raw = prefs.getStringSet(AppPreferences.PREF_VISIBLE_FILE_TYPES, AppPreferences.DEFAULT_FILE_TYPES)
+            ?: AppPreferences.DEFAULT_FILE_TYPES
+        val parsed = raw.mapNotNull { ext ->
+            when (ext.lowercase()) {
+                "xopp" -> NoteFileType.XOPP
+                "pdf" -> NoteFileType.PDF
+                "xoj" -> NoteFileType.XOJ
+                else -> null
+            }
+        }.toSet()
+        return if (parsed.isEmpty()) setOf(NoteFileType.XOPP, NoteFileType.PDF, NoteFileType.XOJ) else parsed
+    }
+
+    fun toggleFileType(type: NoteFileType) {
+        val current = _enabledFileTypes.value
+        if (current.contains(type)) {
+            // Invariant: allow unchecking at most 2 (at least 1 must remain checked)
+            if (current.size > 1) {
+                val updated = current - type
+                _enabledFileTypes.value = updated
+                prefs.edit().putStringSet(AppPreferences.PREF_VISIBLE_FILE_TYPES, updated.map { it.extension }.toSet()).apply()
+                loadContent()
+            }
+        } else {
+            val updated = current + type
+            _enabledFileTypes.value = updated
+            prefs.edit().putStringSet(AppPreferences.PREF_VISIBLE_FILE_TYPES, updated.map { it.extension }.toSet()).apply()
+            loadContent()
+        }
+    }
+
     fun setCurrentDirectory(directory: File) {
         if (_isSelectionMode.value) return
         _currentDirectory.value = directory
-        val cached = repository.getCachedDirectory(directory, _searchQuery.value, _showHiddenFiles.value)
+        val cached = repository.getCachedDirectory(
+            directory,
+            _searchQuery.value,
+            _showHiddenFiles.value,
+            _enabledFileTypes.value.map { it.extension }.toSet()
+        )
         _folders.value = cached?.first ?: emptyList()
         _notes.value = cached?.second ?: emptyList()
     }
@@ -184,7 +225,8 @@ class DocumentHubViewModel @JvmOverloads constructor(
             val (fList, nList) = repository.scanDirectory(
                 targetDir = _currentDirectory.value,
                 query = _searchQuery.value,
-                showHidden = _showHiddenFiles.value
+                showHidden = _showHiddenFiles.value,
+                enabledExtensions = _enabledFileTypes.value.map { it.extension }.toSet()
             )
             _folders.value = fList
             _notes.value = nList

@@ -185,14 +185,6 @@ fun SettingsNavigationHost(onFinish: () -> Unit) {
                                         modifier = Modifier.a11yHeading()
                                     )
                                 },
-                                navigationIcon = {
-                                    IconButton(onClick = onFinish, modifier = Modifier.minTouchTarget()) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                            contentDescription = stringResource(R.string.action_back)
-                                        )
-                                    }
-                                },
                                 colors = TopAppBarDefaults.topAppBarColors(
                                     containerColor = MaterialTheme.colorScheme.surface
                                 )
@@ -282,14 +274,6 @@ fun SettingsNavigationHost(onFinish: () -> Unit) {
                                                 fontWeight = FontWeight.Bold,
                                                 modifier = Modifier.a11yHeading()
                                             )
-                                        },
-                                        navigationIcon = {
-                                            IconButton(onClick = onFinish, modifier = Modifier.minTouchTarget()) {
-                                                Icon(
-                                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                                    contentDescription = stringResource(R.string.action_back)
-                                                )
-                                            }
                                         },
                                         colors = TopAppBarDefaults.topAppBarColors(
                                             containerColor = MaterialTheme.colorScheme.surface

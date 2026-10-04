@@ -69,7 +69,8 @@
     <!-- Primary bottom/rail navigation tab: Home dashboard -->
     <string name="tab_home">Home</string>
     <!-- Primary bottom/rail navigation tab: File manager and note browser -->
-    <string name="tab_files">Files</string>
+    <string name="tab_files">Notes</string>
+    <string name="title_notes_home">Notes Home</string>
     <!-- Dynamic bottom/rail navigation tab: Active workspace session return portal -->
     <string name="tab_workspace">Session</string>
     <!-- Primary bottom/rail navigation tab: Cloud backup and sync subsystem -->

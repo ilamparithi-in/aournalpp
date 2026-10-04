@@ -15,6 +15,8 @@ object AppPreferences {
     const val PREFS_DOCUMENT_HUB = "aournalpp_document_hub"
     const val PREFS_X11 = "aournalpp_x11"
     const val PREFS_BACKUP = "aournalpp_backup"
+    const val PREF_VISIBLE_FILE_TYPES = "pref_visible_file_types"
+    val DEFAULT_FILE_TYPES = setOf("xopp", "pdf", "xoj")
 
     fun getGeneral(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS_GENERAL, Context.MODE_PRIVATE)
