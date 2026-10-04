@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -325,64 +326,32 @@ fun FilesStorageSettingsScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    // Active Folder Display Row: Inline & right-aligned with strong emphasis on storage location
+                    // Active Folder Display Row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f, fill = false)
-                        ) {
-                            SettingsIconBadge(
-                                imageVector = Icons.Default.Folder,
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                iconTint = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(14.dp))
+                        SettingsIconBadge(
+                            imageVector = Icons.Default.Folder,
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            iconTint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = stringResource(R.string.pref_notes_storage_folder),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                        }
-
-                        val friendlyName = when {
-                            currentNotesDir.endsWith("Documents/Notes") -> "Documents / Notes"
-                            currentNotesDir.endsWith("Documents/Xournal++") -> "Documents / Xournal++"
-                            currentNotesDir.endsWith("Documents/Notebooks") -> "Documents / Notebooks"
-                            currentNotesDir.contains("Documents/") -> "Documents / " + currentNotesDir.substringAfter("Documents/")
-                            else -> currentNotesDir.substringAfterLast('/')
-                        }
-
-                        Column(
-                            horizontalAlignment = Alignment.End,
-                            modifier = Modifier.padding(start = 12.dp)
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                modifier = Modifier.padding(bottom = 2.dp)
-                            ) {
-                                Text(
-                                    text = friendlyName,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = currentNotesDir,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.End,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.basicMarquee()
                             )
                         }
                     }
@@ -441,7 +410,12 @@ fun FilesStorageSettingsScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(stringResource(R.string.action_browse_system), maxLines = 1)
+                            Text(
+                                text = stringResource(R.string.action_browse_system),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.basicMarquee()
+                            )
                         }
 
                         androidx.compose.material3.OutlinedButton(
@@ -458,7 +432,12 @@ fun FilesStorageSettingsScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(stringResource(R.string.action_custom_path), maxLines = 1)
+                            Text(
+                                text = stringResource(R.string.action_custom_path),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.basicMarquee()
+                            )
                         }
                     }
                 }
@@ -618,7 +597,11 @@ fun FilesStorageSettingsScreen(
                 shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                ) {
                     var showHiddenFilesPref by remember {
                         mutableStateOf(prefs.getBoolean("pref_show_hidden_files", false))
                     }

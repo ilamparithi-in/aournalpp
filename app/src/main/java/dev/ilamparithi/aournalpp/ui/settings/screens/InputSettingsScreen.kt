@@ -238,58 +238,25 @@ fun InputSettingsScreen(
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f, fill = false)
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                modifier = Modifier.size(44.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.TouchApp,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier
-                                        .padding(10.dp)
-                                        .size(24.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(14.dp))
-                            Column {
-                                Text(
-                                    text = stringResource(R.string.pref_input_touch_mode_title),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = stringResource(R.string.pref_input_touch_mode_desc),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        val activeModeLabel = when (touchMode) {
-                            "1" -> stringResource(R.string.pref_input_touch_mode_trackpad)
-                            "2" -> stringResource(R.string.pref_input_touch_mode_simulated)
-                            else -> stringResource(R.string.pref_input_touch_mode_direct)
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
-                        ) {
+                        SettingsIconBadge(
+                            imageVector = Icons.Default.TouchApp,
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            iconTint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = activeModeLabel,
-                                style = MaterialTheme.typography.labelSmall,
+                                text = stringResource(R.string.pref_input_touch_mode_title),
+                                style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = stringResource(R.string.pref_input_touch_mode_desc),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -328,7 +295,11 @@ fun InputSettingsScreen(
                 shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                ) {
                     SettingsSwitchListItem(
                         headline = stringResource(R.string.pref_input_show_finger_stylus),
                         supporting = stringResource(R.string.pref_input_show_finger_stylus_desc),
@@ -338,7 +309,7 @@ fun InputSettingsScreen(
                             SettingsIconBadge(
                                 imageVector = Icons.Default.Draw,
                                 containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                iconTint = MaterialTheme.colorScheme.primary
+                                iconTint = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         },
                         onCheckedChange = {
@@ -398,7 +369,11 @@ fun InputSettingsScreen(
                 shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                ) {
                     SettingsSwitchListItem(
                         headline = stringResource(R.string.pref_input_show_stylus_click),
                         supporting = stringResource(R.string.pref_input_show_stylus_click_desc),
@@ -408,7 +383,7 @@ fun InputSettingsScreen(
                             SettingsIconBadge(
                                 imageVector = Icons.Default.Edit,
                                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                iconTint = MaterialTheme.colorScheme.secondary
+                                iconTint = MaterialTheme.colorScheme.onSecondaryContainer
                             )
                         },
                         onCheckedChange = {

@@ -20,12 +20,16 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
+
 /**
  * Standard Material 3 Expressive Accessible Switch List Item.
  * Conforms to M3 Switch Accessibility standards:
  * - Thumb contains an affirmative checkmark icon when selected for non-color-only state indication.
  * - Entire container is a unified accessible toggleable target.
  * - Minimum 48dp touch target and clear state description for assistive technologies.
+ * - Balanced internal padding and uniform container colors across DPIs and orientations.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -43,10 +47,12 @@ fun SettingsSwitchListItem(
         checked = checked,
         onCheckedChange = onCheckedChange,
         enabled = enabled,
-        modifier = modifier.semantics {
-            role = Role.Switch
-            stateDescription = if (checked) "On" else "Off"
-        },
+        modifier = modifier
+            .semantics {
+                role = Role.Switch
+                stateDescription = if (checked) "On" else "Off"
+            }
+            .padding(horizontal = 4.dp, vertical = 2.dp),
         leadingContent = leadingContent,
         supportingContent = supporting?.let {
             {
@@ -73,7 +79,10 @@ fun SettingsSwitchListItem(
                 } else null
             )
         },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        colors = ListItemDefaults.colors(
+            containerColor = Color.Transparent,
+            selectedContainerColor = Color.Transparent
+        ),
         shapes = ListItemDefaults.shapes(
             shape = shape,
             selectedShape = shape,
