@@ -3,6 +3,9 @@ package dev.ilamparithi.aournalpp.ui.hub.dialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
@@ -158,6 +161,11 @@ fun RenameNoteDialog(
                 value = renameInputText,
                 onValueChange = { renameInputText = it },
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Sentences,
+                    autoCorrectEnabled = true,
+                    imeAction = ImeAction.Done
+                ),
                 label = { Text(stringResource(R.string.dialog_note_name_hint)) },
                 modifier = Modifier.fillMaxWidth()
             )

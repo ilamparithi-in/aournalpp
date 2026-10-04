@@ -2,6 +2,10 @@ package dev.ilamparithi.aournalpp.ui.cloud
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -107,6 +111,11 @@ fun CustomMappingDialog(
                     label = { Text(stringResource(dev.ilamparithi.aournalpp.R.string.label_mapping_name)) },
                     placeholder = { Text(stringResource(dev.ilamparithi.aournalpp.R.string.hint_mapping_name)) },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Words,
+                        autoCorrectEnabled = true,
+                        imeAction = ImeAction.Next
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -161,6 +170,11 @@ fun CustomMappingDialog(
                         label = { Text("Local Folder Path") },
                         placeholder = { Text(notesDir.absolutePath) },
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Ascii,
+                            autoCorrectEnabled = false,
+                            imeAction = ImeAction.Next
+                        ),
                         modifier = Modifier.weight(1f)
                     )
                     IconButton(
@@ -187,6 +201,11 @@ fun CustomMappingDialog(
                         label = { Text("Remote Destination Folder") },
                         placeholder = { Text("Notes/Math") },
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Ascii,
+                            autoCorrectEnabled = false,
+                            imeAction = ImeAction.Done
+                        ),
                         modifier = Modifier.weight(1f)
                     )
                     IconButton(
