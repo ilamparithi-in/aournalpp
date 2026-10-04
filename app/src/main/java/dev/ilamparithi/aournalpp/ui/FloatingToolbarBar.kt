@@ -32,14 +32,19 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -84,6 +89,7 @@ fun FloatingToolbarBar(
     showCopy: Boolean = false,
     showPaste: Boolean = false,
     showImage: Boolean = false,
+    showSync: Boolean = true,
     showKeyboard: Boolean = true,
     isKeyboardOpen: Boolean = false,
     onToggleKeyboard: (() -> Unit)? = null,
@@ -98,7 +104,9 @@ fun FloatingToolbarBar(
     onCloseWindow: (() -> Unit)? = null,
     onQuickSwitchWindow: (() -> Unit)? = null,
     onOpenImageSelector: (() -> Unit)? = null,
-    onInjectShortcut: ((Int, String) -> Unit)? = null
+    onInjectShortcut: ((Int, String) -> Unit)? = null,
+    onSyncNow: (() -> Unit)? = null,
+    isSyncing: Boolean = false
 ) {
     Surface(
         modifier = modifier
@@ -448,6 +456,57 @@ fun FloatingToolbarBar(
                                         imageVector = Icons.Default.Image,
                                         contentDescription = stringResource(R.string.toolbar_cd_image),
                                         modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (showSync) {
+                    val syncBgColor by animateColorAsState(
+                        targetValue = if (isSyncing) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        animationSpec = AppAnimationSpecs.springColor(),
+                        label = "SyncBgColor"
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = syncBgColor,
+                        modifier = Modifier
+                            .padding(horizontal = 2.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .then(
+                                if (onSyncNow != null && !isSyncing) {
+                                    Modifier.clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) { onSyncNow() }
+                                } else Modifier
+                            )
+                    ) {
+                        Box(
+                            modifier = Modifier.size(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Crossfade(
+                                targetState = isSyncing,
+                                animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+                                label = "SyncButtonState"
+                            ) { syncing ->
+                                if (syncing) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        strokeCap = StrokeCap.Round,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Sync,
+                                        contentDescription = stringResource(R.string.toolbar_cd_sync),
+                                        modifier = Modifier.size(17.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }

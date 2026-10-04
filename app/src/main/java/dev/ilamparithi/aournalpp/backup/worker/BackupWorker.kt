@@ -20,6 +20,7 @@ import dev.ilamparithi.aournalpp.backup.model.BackupResult
 import dev.ilamparithi.aournalpp.backup.queue.FileTransferQueueManager
 import dev.ilamparithi.aournalpp.backup.security.CredentialsVault
 import dev.ilamparithi.aournalpp.AppTab
+import dev.ilamparithi.aournalpp.CanvasCommandReceiver
 
 /**
  * Background WorkManager worker executing automated or on-demand multi-service sync
@@ -60,10 +61,12 @@ class BackupWorker(
         )
         if (!netCheck.canSync) {
             Log.i(TAG, "Network preconditions not met for background backup: ${netCheck.errorMessage}. Retrying later.")
+            notifySyncState(appContext, false)
             return Result.retry()
         }
 
         FileTransferQueueManager.setSyncActive(true)
+        notifySyncState(appContext, true)
         try {
             val foregroundInfo = getForegroundInfo()
             try {
@@ -221,6 +224,28 @@ class BackupWorker(
             return Result.success()
         } finally {
             FileTransferQueueManager.setSyncActive(false)
+            notifySyncState(appContext, false)
+        }
+    }
+
+    private fun notifySyncState(context: Context, isSyncing: Boolean) {
+        try {
+            val flagFile = java.io.File(context.cacheDir, "sync_active.flag")
+            if (isSyncing) {
+                flagFile.createNewFile()
+            } else {
+                flagFile.delete()
+            }
+        } catch (_: Exception) {}
+
+        try {
+            val intent = Intent(CanvasCommandReceiver.ACTION_SYNC_STATE_CHANGED).apply {
+                setPackage(context.packageName)
+                putExtra(CanvasCommandReceiver.EXTRA_IS_SYNCING, isSyncing)
+            }
+            context.sendBroadcast(intent)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to broadcast sync state: isSyncing=$isSyncing", e)
         }
     }
 

@@ -18,6 +18,9 @@ class AournalppApplication : Application() {
         instance = this
         X11Preferences.initDefaults(this)
         DocumentRepository.init(this)
+        try {
+            java.io.File(cacheDir, "sync_active.flag").delete()
+        } catch (_: Exception) {}
 
         // Pre-warm encrypted credential vault and execute pending service purges on IO
         applicationScope.launch {

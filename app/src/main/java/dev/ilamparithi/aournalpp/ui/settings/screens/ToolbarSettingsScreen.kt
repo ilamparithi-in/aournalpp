@@ -50,6 +50,7 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -227,6 +228,9 @@ fun ToolbarSettingsScreen(
     var showImage by remember {
         mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_IMAGE, true))
     }
+    var showSync by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_SYNC, true))
+    }
 
     fun applyPreset(id: String) {
         val preset = STANDARD_TOOLBAR_PRESETS.firstOrNull { it.id == id } ?: return
@@ -243,11 +247,11 @@ fun ToolbarSettingsScreen(
         X11Preferences.notifyChanged(context, X11Preferences.KEY_TOOLBAR_POS_Y_RATIO)
     }
 
-    val totalItems = 13
+    val totalItems = 14
     val enabledItemsCount = listOf(
         showTitle, showBack, showClose, showWindowSwitcher, showSnapLayouts,
         showKeyboard, showDragHandle, showStylusMode, showTouchStylus,
-        showCut, showCopy, showPaste, showImage
+        showCut, showCopy, showPaste, showImage, showSync
     ).count { it }
 
     Scaffold(
@@ -627,6 +631,7 @@ fun ToolbarSettingsScreen(
                                     showCopy = true; saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_COPY, true)
                                     showPaste = true; saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_PASTE, true)
                                     showImage = true; saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_IMAGE, true)
+                                    showSync = true; saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_SYNC, true)
                                 }
                             ) {
                                 Text(stringResource(R.string.pref_toolbar_reset_items), style = MaterialTheme.typography.labelSmall)
@@ -646,6 +651,7 @@ fun ToolbarSettingsScreen(
                                     showCopy = true; saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_COPY, true)
                                     showPaste = true; saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_PASTE, true)
                                     showImage = true; saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_IMAGE, true)
+                                    showSync = true; saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_SYNC, true)
                                 }
                             ) {
                                 Text(stringResource(R.string.pref_toolbar_enable_all), style = MaterialTheme.typography.labelSmall)
@@ -666,6 +672,7 @@ fun ToolbarSettingsScreen(
                         showCopy = showCopy,
                         showPaste = showPaste,
                         showImage = showImage,
+                        showSync = showSync,
                         showKeyboard = showKeyboard,
                         pinButtonMode = pinButtonMode,
                         showDragHandle = showDragHandle
@@ -793,6 +800,15 @@ fun ToolbarSettingsScreen(
                             },
                             label = { Text(stringResource(R.string.pref_toolbar_chip_image)) },
                             leadingIcon = { Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                        )
+                        FilterChip(
+                            selected = showSync,
+                            onClick = {
+                                showSync = !showSync
+                                saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_SYNC, showSync)
+                            },
+                            label = { Text(stringResource(R.string.pref_toolbar_chip_sync)) },
+                            leadingIcon = { Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp)) }
                         )
                     }
                 }
@@ -1236,12 +1252,12 @@ fun ToolbarSettingsScreen(
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                     )
 
-                    // Insert Image Action (last element)
+                    // Insert Image Action
                     SettingsSwitchListItem(
                         headline = stringResource(R.string.pref_toolbar_item_image),
                         supporting = stringResource(R.string.pref_toolbar_item_image_desc),
                         checked = showImage,
-                        shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
+                        shape = RectangleShape,
                         leadingContent = {
                             SettingsIconBadge(
                                 imageVector = Icons.Default.Image,
@@ -1252,6 +1268,30 @@ fun ToolbarSettingsScreen(
                         onCheckedChange = {
                             showImage = it
                             saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_IMAGE, it)
+                        }
+                    )
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                    )
+
+                    // Sync Now Action (last element)
+                    SettingsSwitchListItem(
+                        headline = stringResource(R.string.pref_toolbar_item_sync),
+                        supporting = stringResource(R.string.pref_toolbar_item_sync_desc),
+                        checked = showSync,
+                        shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
+                        leadingContent = {
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.Sync,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        onCheckedChange = {
+                            showSync = it
+                            saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_SYNC, it)
                         }
                     )
                 }
@@ -1277,6 +1317,7 @@ private fun FloatingToolbarPreview(
     showCopy: Boolean,
     showPaste: Boolean,
     showImage: Boolean,
+    showSync: Boolean,
     showKeyboard: Boolean,
     pinButtonMode: Boolean,
     showDragHandle: Boolean
@@ -1301,6 +1342,7 @@ private fun FloatingToolbarPreview(
             showCopy = showCopy,
             showPaste = showPaste,
             showImage = showImage,
+            showSync = showSync,
             showKeyboard = showKeyboard,
             pinButtonMode = pinButtonMode,
             showDragHandle = showDragHandle

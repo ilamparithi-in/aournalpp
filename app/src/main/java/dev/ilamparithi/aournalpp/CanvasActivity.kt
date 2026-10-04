@@ -177,17 +177,38 @@ class CanvasActivity : ComponentActivity() {
         fun notifyPreferenceChanged(key: String) {
             instance?.onPreferenceChanged(key)
         }
+
+        fun notifySyncStateChanged(isSyncing: Boolean) {
+            instance?.let { act ->
+                act.runOnUiThread {
+                    act.isSyncRunningState.value = isSyncing
+                }
+            }
+        }
     }
 
     internal val preferenceUpdateVersionState = mutableIntStateOf(0)
+    internal val isSyncRunningState = mutableStateOf(false)
 
     fun onPreferenceChanged(key: String) {
         preferenceUpdateVersionState.intValue++
     }
 
+    fun triggerCloudSync() {
+        isSyncRunningState.value = true
+        val backupPrefs = dev.ilamparithi.aournalpp.backup.worker.BackupPreferences(this)
+        val intent = Intent(this, dev.ilamparithi.aournalpp.backup.worker.BackupRetryReceiver::class.java).apply {
+            action = dev.ilamparithi.aournalpp.backup.worker.BackupRetryReceiver.ACTION_TRIGGER_SYNC
+            putExtra(dev.ilamparithi.aournalpp.backup.worker.BackupRetryReceiver.EXTRA_WIFI_ONLY, backupPrefs.isWifiOnlyEnabled)
+            setPackage(packageName)
+        }
+        sendBroadcast(intent)
+    }
+
     override fun onResume() {
         super.onResume()
         preferenceUpdateVersionState.intValue++
+        isSyncRunningState.value = File(cacheDir, "sync_active.flag").exists()
     }
 
     override fun onPause() {

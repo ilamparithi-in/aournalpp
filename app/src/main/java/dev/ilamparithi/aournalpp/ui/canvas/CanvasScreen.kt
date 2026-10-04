@@ -2,6 +2,7 @@ package dev.ilamparithi.aournalpp.ui.canvas
 
 import android.content.Context
 import android.content.Intent
+import dev.ilamparithi.aournalpp.R
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.os.Build
@@ -351,6 +352,9 @@ fun CanvasScreen(
                 var showImage by remember {
                     mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_IMAGE, true))
                 }
+                var showSync by remember {
+                    mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_SYNC, true))
+                }
                 var showImageSourceDialog by viewModel.showImageSourceDialog
                 var showWindowSwitcherGallery by viewModel.showWindowSwitcherGallery
                 var stylusHoverExpands by remember {
@@ -392,6 +396,8 @@ fun CanvasScreen(
                                 showPaste = prefs.getBoolean(key, true)
                             X11Preferences.KEY_TOOLBAR_SHOW_IMAGE ->
                                 showImage = prefs.getBoolean(key, true)
+                            X11Preferences.KEY_TOOLBAR_SHOW_SYNC ->
+                                showSync = prefs.getBoolean(key, true)
                             X11Preferences.KEY_TOOLBAR_POS_X_RATIO ->
                                 defaultNormX = prefs.getFloat(key, 0.5f)
                             X11Preferences.KEY_TOOLBAR_POS_Y_RATIO ->
@@ -430,6 +436,7 @@ fun CanvasScreen(
                         showCopy = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_COPY, true)
                         showPaste = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_PASTE, true)
                         showImage = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_IMAGE, true)
+                        showSync = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_SYNC, true)
                         defaultNormX = x11Prefs.getFloat(X11Preferences.KEY_TOOLBAR_POS_X_RATIO, 0.5f)
                         defaultNormY = x11Prefs.getFloat(X11Preferences.KEY_TOOLBAR_POS_Y_RATIO, 0.0f)
                         showStylusClickOverride = x11Prefs.getBoolean(X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE, false)
@@ -1339,6 +1346,30 @@ fun CanvasScreen(
                             showCopy = showCopy,
                             showPaste = showPaste,
                             showImage = showImage,
+                            showSync = showSync,
+                            isSyncing = activity.isSyncRunningState.value,
+                            onSyncNow = {
+                                val vault = dev.ilamparithi.aournalpp.backup.security.CredentialsVault.getInstance(activity)
+                                val configuredServices = vault.reloadServices().filter { it.isEnabled }
+                                if (configuredServices.isEmpty()) {
+                                    Toast.makeText(
+                                        activity,
+                                        activity.getString(R.string.toast_no_cloud_configured),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    val backupPrefs = dev.ilamparithi.aournalpp.backup.worker.BackupPreferences(activity)
+                                    val netCheck = dev.ilamparithi.aournalpp.utils.NetworkUtils.checkSyncNetworkPreconditions(
+                                        activity,
+                                        wifiOnly = backupPrefs.isWifiOnlyEnabled
+                                    )
+                                    if (!netCheck.canSync) {
+                                        Toast.makeText(activity, netCheck.errorMessage ?: "Network not available", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        activity.triggerCloudSync()
+                                    }
+                                }
+                            },
                             onOpenImageSelector = {
                                 activity.lifecycleScope.launch {
                                     if (activity.sessionManager.isModalOrDialogOpen()) {

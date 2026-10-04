@@ -115,6 +115,7 @@ class ToolbarSettingsTest {
             X11Preferences.KEY_TOOLBAR_SHOW_COPY,
             X11Preferences.KEY_TOOLBAR_SHOW_PASTE,
             X11Preferences.KEY_TOOLBAR_SHOW_IMAGE,
+            X11Preferences.KEY_TOOLBAR_SHOW_SYNC,
             X11Preferences.KEY_TOP_BAR_CENTER_WITHIN_BOUNDS,
             X11Preferences.KEY_TOOLBAR_START_COLLAPSED,
             X11Preferences.KEY_TOOLBAR_ALWAYS_SHOW_FILE_NAME,

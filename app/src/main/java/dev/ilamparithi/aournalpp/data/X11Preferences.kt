@@ -52,6 +52,7 @@ object X11Preferences {
     const val KEY_TOOLBAR_SHOW_WINDOW_SWITCHER = "toolbarShowWindowSwitcher"
     const val KEY_TOOLBAR_SHOW_SNAP_LAYOUTS = "toolbarShowSnapLayouts"
     const val KEY_TOOLBAR_SHOW_DRAG_HANDLE = "toolbarShowDragHandle"
+    const val KEY_TOOLBAR_SHOW_SYNC = "toolbarShowSync"
     const val KEY_TOOLBAR_CENTER_WITHIN_SAFE_AREA = "topBarCenterWithinBounds"
 
     // Snap Layout Preferences

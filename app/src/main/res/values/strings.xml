@@ -92,6 +92,7 @@
     <string name="toast_conflict_detected">Conflict in \"%1$s\". Opening canvas to resolve.</string>
     <string name="toast_dialog_blocking">Action needed: please confirm open dialog in canvas.</string>
     <string name="toast_all_saved_closed">All notes saved and closed</string>
+    <string name="toast_no_cloud_configured">No cloud storage configured</string>
     <string name="stashed_windows">Background Notes</string>
     <string name="active_session_empty">No active notes open</string>
     <string name="action_return_to_canvas">Return to Canvas</string>
@@ -1313,6 +1314,7 @@
     <string name="pref_toolbar_chip_copy">Copy</string>
     <string name="pref_toolbar_chip_paste">Paste</string>
     <string name="pref_toolbar_chip_image">Image</string>
+    <string name="pref_toolbar_chip_sync">Sync</string>
 
     <!-- Groups -->
     <string name="pref_toolbar_group_window">Navigation &amp; Window Controls</string>
@@ -1358,6 +1360,8 @@
     <string name="pref_toolbar_item_paste_desc">Displays Paste clipboard action button.</string>
     <string name="pref_toolbar_item_image">Insert Image Action</string>
     <string name="pref_toolbar_item_image_desc">Displays Image action button on the toolbar to insert pictures from Camera, Gallery, or Files.</string>
+    <string name="pref_toolbar_item_sync">Sync Now Button</string>
+    <string name="pref_toolbar_item_sync_desc">Displays a button to trigger immediate background cloud synchronization.</string>
 
     <!-- Toolbar Content Descriptions & Accessibility -->
     <string name="pref_toolbar_timeout_seconds">%1$ss</string>
@@ -1373,6 +1377,7 @@
     <string name="toolbar_cd_copy">Copy (Ctrl+C)</string>
     <string name="toolbar_cd_paste">Paste (Ctrl+V)</string>
     <string name="toolbar_cd_image">Insert Image (Camera, Gallery, Files)</string>
+    <string name="toolbar_cd_sync">Sync Now</string>
     <string name="toolbar_cd_keyboard_show">Show Keyboard</string>
     <string name="toolbar_cd_keyboard_hide">Hide Keyboard</string>
     <string name="toolbar_cd_pin">Pin Toolbar</string>

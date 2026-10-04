@@ -22,6 +22,8 @@ class CanvasCommandReceiver : BroadcastReceiver() {
         const val ACTION_SAVE_WINDOW_UNABLE_TO_SEND = "dev.ilamparithi.aournalpp.ACTION_SAVE_WINDOW_UNABLE_TO_SEND"
         const val ACTION_REQUEST_CLOSE_WINDOW = "dev.ilamparithi.aournalpp.ACTION_REQUEST_CLOSE_WINDOW"
         const val ACTION_REQUEST_FORCE_CLOSE = "dev.ilamparithi.aournalpp.ACTION_REQUEST_FORCE_CLOSE"
+        const val ACTION_SYNC_STATE_CHANGED = "dev.ilamparithi.aournalpp.ACTION_SYNC_STATE_CHANGED"
+        const val EXTRA_IS_SYNCING = "extra_is_syncing"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -67,6 +69,11 @@ class CanvasCommandReceiver : BroadcastReceiver() {
                 if (key != null) {
                     CanvasActivity.notifyPreferenceChanged(key)
                 }
+            }
+            ACTION_SYNC_STATE_CHANGED -> {
+                val isSyncing = intent.getBooleanExtra(EXTRA_IS_SYNCING, false)
+                Log.d("CanvasCommandReceiver", "Received ACTION_SYNC_STATE_CHANGED in :canvas process: isSyncing=$isSyncing")
+                CanvasActivity.notifySyncStateChanged(isSyncing)
             }
         }
     }

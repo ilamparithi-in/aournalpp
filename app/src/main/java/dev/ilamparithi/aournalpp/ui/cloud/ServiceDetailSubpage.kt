@@ -286,7 +286,7 @@ fun ServiceDetailSubpage(
                             if (isServiceSyncing) {
                                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                             } else {
-                                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.cloud_sync_now))
+                                Icon(Icons.Default.Sync, contentDescription = stringResource(R.string.cloud_sync_now))
                             }
                         }
 

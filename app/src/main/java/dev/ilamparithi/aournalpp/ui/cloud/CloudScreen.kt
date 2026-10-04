@@ -83,6 +83,8 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.mutableStateListOf
@@ -574,7 +576,7 @@ fun CloudScreen(
                                 )
                             } else {
                                 Icon(
-                                    imageVector = Icons.Default.Refresh,
+                                    imageVector = Icons.Default.Sync,
                                     contentDescription = stringResource(R.string.cloud_sync_all_button)
                                 )
                             }
@@ -612,7 +614,7 @@ fun CloudScreen(
                                 )
                             } else {
                                 Icon(
-                                    imageVector = Icons.Default.Tune,
+                                    imageVector = Icons.AutoMirrored.Filled.CompareArrows,
                                     contentDescription = stringResource(R.string.cd_cloud_check_conflicts)
                                 )
                             }
@@ -642,7 +644,7 @@ fun CloudScreen(
                                 }
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.CloudSync,
+                                    imageVector = Icons.Default.SwapVert,
                                     contentDescription = stringResource(R.string.cloud_tab_queue)
                                 )
                             }
