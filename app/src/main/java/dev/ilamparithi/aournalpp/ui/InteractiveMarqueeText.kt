@@ -4,7 +4,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.LocalTextStyle
@@ -148,29 +147,18 @@ fun InteractiveMarqueeText(
                 }
             }
             .pointerInput(text) {
-                // Stylus / Mouse Hover Detection
+                // Stylus / Mouse Hover or Touch Detection (non-consuming so parent Card clicks/gestures fire)
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
-                        if (event.type == PointerEventType.Enter || event.type == PointerEventType.Move) {
-                            val isHover = event.changes.any { !it.pressed }
-                            if (isHover && !isInteracted) {
+                        val hasTouch = event.changes.any { it.pressed || it.positionChanged() }
+                        if (hasTouch || event.type == PointerEventType.Enter || event.type == PointerEventType.Move) {
+                            if (!isInteracted) {
                                 startMarqueeSequence()
                             }
                         }
                     }
                 }
-            }
-            .pointerInput(text) {
-                // Touch / Tap Gesture Detection (consumes tap on the text so parent Card doesn't trigger onClick)
-                detectTapGestures(
-                    onPress = {
-                        startMarqueeSequence()
-                    },
-                    onTap = {
-                        startMarqueeSequence()
-                    }
-                )
             },
         contentAlignment = Alignment.CenterStart
     ) {
