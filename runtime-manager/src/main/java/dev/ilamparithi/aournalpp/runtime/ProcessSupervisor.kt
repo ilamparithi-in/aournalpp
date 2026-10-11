@@ -593,12 +593,19 @@ class ProcessSupervisor(val env: LinuxEnvironment) {
             val trimmed = title.trim()
             if (trimmed.isEmpty()) return true
 
+            val lower = trimmed.lowercase()
+
+            // Document windows and notes with file extensions are documents and must never be dropped as dialogs
+            if (lower.endsWith(".xopp") || lower.endsWith(".xoj") || lower.endsWith(".pdf") ||
+                ((lower.contains(".xopp") || lower.contains(".xoj") || lower.contains(".pdf")) && lower.contains("- xournal++"))
+            ) {
+                return false
+            }
+
             // Exact match ignoring case
             if (ignoredWindowTitles.any { it.equals(trimmed, ignoreCase = true) }) {
                 return true
             }
-
-            val lower = trimmed.lowercase()
 
             // Substring checks for dialogs (unless it's an actual note with that name ending in .xopp)
             if (lower.contains("preferences") && !lower.contains(".xopp")) return true

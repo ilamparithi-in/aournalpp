@@ -306,8 +306,8 @@ fun CanvasScreen(
                     }
                 }
 
-                val windowIcon = remember(displayTitle) {
-                    WindowTitleHelper.resolveWindowIcon(displayTitle)
+                val windowIcon = remember(displayTitle, activePromptTitle) {
+                    WindowTitleHelper.resolveWindowIcon(displayTitle, activePromptTitle)
                 }
 
                 var defaultNormX by remember {

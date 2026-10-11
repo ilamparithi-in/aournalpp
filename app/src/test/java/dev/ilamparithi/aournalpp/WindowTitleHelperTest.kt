@@ -64,4 +64,43 @@ class WindowTitleHelperTest {
         assertEquals(Icons.Default.Description, WindowTitleHelper.resolveWindowIcon(null))
         assertEquals(Icons.Default.Description, WindowTitleHelper.resolveWindowIcon(""))
     }
+
+    @Test
+    fun testNotesContainingDialogKeywordsRetainDescriptionIcon() {
+        assertEquals(Icons.Default.Description, WindowTitleHelper.resolveWindowIcon("13. U2 Question Clarification"))
+        assertEquals(Icons.Default.Description, WindowTitleHelper.resolveWindowIcon("*13. U2 Question Clarification"))
+        assertEquals(Icons.Default.Description, WindowTitleHelper.resolveWindowIcon("13. U2 Question Clarification.xopp"))
+        assertEquals(Icons.Default.Description, WindowTitleHelper.resolveWindowIcon("13 - U2 Question Clarification"))
+        assertEquals(Icons.Default.Description, WindowTitleHelper.resolveWindowIcon("Confirmation Bias"))
+        assertEquals(Icons.Default.Description, WindowTitleHelper.resolveWindowIcon("Error Analysis"))
+        assertEquals(Icons.Default.Description, WindowTitleHelper.resolveWindowIcon("Early Warning Signs"))
+        assertEquals(Icons.Default.Description, WindowTitleHelper.resolveWindowIcon("Printmaking 101"))
+        assertEquals(Icons.Default.Description, WindowTitleHelper.resolveWindowIcon("Color Theory"))
+        assertEquals(Icons.Default.Description, WindowTitleHelper.resolveWindowIcon("Favorite Fonts"))
+        assertEquals(Icons.Default.Description, WindowTitleHelper.resolveWindowIcon("Saving Money"))
+        assertEquals(Icons.Default.Description, WindowTitleHelper.resolveWindowIcon("Open Discussion"))
+        assertEquals(Icons.Default.Description, WindowTitleHelper.resolveWindowIcon("About History"))
+        assertEquals(Icons.Default.Description, WindowTitleHelper.resolveWindowIcon("Camera Settings"))
+        assertEquals(Icons.Default.Description, WindowTitleHelper.resolveWindowIcon("Historical Background"))
+        assertEquals(Icons.Default.Description, WindowTitleHelper.resolveWindowIcon("Image Processing"))
+        assertEquals(Icons.Default.Description, WindowTitleHelper.resolveWindowIcon("Plugin Architecture"))
+        assertEquals(Icons.Default.Description, WindowTitleHelper.resolveWindowIcon("Export Economics"))
+    }
+
+    @Test
+    fun testNotesWithDialogPromptsResolvePromptIcon() {
+        assertEquals(Icons.AutoMirrored.Filled.Help, WindowTitleHelper.resolveWindowIcon("13. U2 Question Clarification - Question"))
+        assertEquals(Icons.Default.Save, WindowTitleHelper.resolveWindowIcon("13. U2 Question Clarification - Save As"))
+        assertEquals(Icons.Default.FontDownload, WindowTitleHelper.resolveWindowIcon("13. U2 Question Clarification - Select Font"))
+        assertEquals(Icons.Default.Print, WindowTitleHelper.resolveWindowIcon("13. U2 Question Clarification - Print"))
+        assertEquals(Icons.Default.Image, WindowTitleHelper.resolveWindowIcon("13. U2 Question Clarification - Choose image file"))
+    }
+
+    @Test
+    fun testExplicitPromptTitleParameter() {
+        assertEquals(Icons.AutoMirrored.Filled.Help, WindowTitleHelper.resolveWindowIcon("13. U2 Question Clarification", "Question"))
+        assertEquals(Icons.Default.Description, WindowTitleHelper.resolveWindowIcon("13. U2 Question Clarification", null))
+        assertEquals(Icons.Default.Description, WindowTitleHelper.resolveWindowIcon("13. U2 Question Clarification", ""))
+        assertEquals(Icons.Default.Save, WindowTitleHelper.resolveWindowIcon("13. U2 Question Clarification", "Save As"))
+    }
 }

@@ -86,6 +86,15 @@ class ProcessSupervisorTitleTest {
 
         val result3 = ProcessSupervisor.sanitizeWindowTitle("Export_Settings.xopp - Xournal++")
         assertEquals("Export_Settings.xopp", result3)
+
+        val result4 = ProcessSupervisor.sanitizeWindowTitle("13. U2 Question Clarification.xopp - Xournal++")
+        assertEquals("13. U2 Question Clarification.xopp", result4)
+
+        val result5 = ProcessSupervisor.sanitizeWindowTitle("Save File Protocol.xopp - Xournal++")
+        assertEquals("Save File Protocol.xopp", result5)
+
+        val result6 = ProcessSupervisor.sanitizeWindowTitle("Open File Research.xopp - Xournal++")
+        assertEquals("Open File Research.xopp", result6)
     }
 
     @Test
