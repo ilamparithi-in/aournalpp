@@ -132,13 +132,34 @@ fun SettingsNavigationHost(onFinish: () -> Unit) {
         }
     }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var showRestartNoticeDialog by rememberSaveable { mutableStateOf(false) }
+
+    val handleFinish: () -> Unit = {
+        if (dev.ilamparithi.aournalpp.data.CanvasRestartNoticeManager.hasPendingNotice(context)) {
+            showRestartNoticeDialog = true
+        } else {
+            onFinish()
+        }
+    }
+
     // Back handling
     BackHandler(enabled = true) {
         when {
             activeDialogSubpage != null -> activeDialogSubpage = null
             activeCompactCategory != null -> onCompactCategorySelect(null)
-            else -> onFinish()
+            else -> handleFinish()
         }
+    }
+
+    if (showRestartNoticeDialog) {
+        dev.ilamparithi.aournalpp.ui.settings.dialogs.CanvasRestartNoticeDialog(
+            onDismiss = {
+                dev.ilamparithi.aournalpp.data.CanvasRestartNoticeManager.clearPendingNotice(context)
+                showRestartNoticeDialog = false
+                onFinish()
+            }
+        )
     }
 
     val fullPageSubpage = activeDialogSubpage?.takeIf { it.isFullPage }

@@ -1868,4 +1868,9 @@
 
     <!-- Window Orientation Advisory -->
     <string name="dialog_best_viewed_in_landscape">This window is best viewed in landscape mode</string>
+
+    <!-- Canvas Restart Required Notice -->
+    <string name="title_canvas_restart_required">Canvas Restart Required</string>
+    <string name="msg_canvas_restart_required">Changes to Canvas UI Scale, Xournal++ Language, GTK Theme, or Notes Directory will take effect when the canvas is restarted.</string>
+    <string name="action_ok">OK</string>
 </resources>

@@ -65,6 +65,31 @@ class ActiveSessionTrackerTest {
     }
 
     @Test
+    fun `test setActiveSession writes baseline settings and reads back`() {
+        val currentPid = getCurrentProcessPid()
+        val info = ActiveSessionInfo(
+            isRunning = true,
+            pid = currentPid,
+            activeNotePath = "/test/path/note.xopp",
+            documentTitle = "Physics 101",
+            openWindowCount = 1,
+            baseUiScale = "1.25",
+            baseLocale = "en_US.UTF-8",
+            baseGtkTheme = "Adwaita-dark",
+            baseNotesDir = "/storage/emulated/0/Notes"
+        )
+
+        ActiveSessionTracker.setActiveSession(tempDir, info)
+
+        val readBack = ActiveSessionTracker.getActiveSession(tempDir)
+        assertNotNull(readBack)
+        assertEquals("1.25", readBack!!.baseUiScale)
+        assertEquals("en_US.UTF-8", readBack.baseLocale)
+        assertEquals("Adwaita-dark", readBack.baseGtkTheme)
+        assertEquals("/storage/emulated/0/Notes", readBack.baseNotesDir)
+    }
+
+    @Test
     fun `test updateTitle updates document title in active session`() {
         val currentPid = getCurrentProcessPid()
         val info = ActiveSessionInfo(

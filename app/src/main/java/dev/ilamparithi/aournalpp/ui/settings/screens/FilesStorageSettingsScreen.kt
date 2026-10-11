@@ -254,6 +254,7 @@ fun FilesStorageSettingsScreen(
                     onClick = {
                         val path = pending.path
                         env.setNotesDirectory(path)
+                        AppPreferences.notifyChanged(context, LinuxEnvironment.PREF_KEY_NOTES_DIR)
                         currentNotesDir = path
                         val label = pending.label
                         pendingFolderChange = null

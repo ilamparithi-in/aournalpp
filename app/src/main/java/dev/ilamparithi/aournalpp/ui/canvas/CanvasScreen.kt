@@ -142,9 +142,11 @@ fun CanvasScreen(
         }
     }
 
-    val isFullscreen = x11Prefs.getBoolean(X11Preferences.KEY_FULLSCREEN, false)
-                val showEmergencyForceCloseDialog by remember { activity.showEmergencyForceCloseDialogState }
-                val preferenceVersion by remember { activity.preferenceUpdateVersionState }
+    var isFullscreen by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_FULLSCREEN, false))
+    }
+    val showEmergencyForceCloseDialog by remember { activity.showEmergencyForceCloseDialogState }
+    val preferenceVersion by remember { activity.preferenceUpdateVersionState }
 
                 var toolbarEnabled by remember {
                     mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_ENABLED, true))
@@ -496,6 +498,11 @@ fun CanvasScreen(
                         showTouchStylus = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_TOUCH_STYLUS, true)
                         disableTouchStylusOnStylusHover = x11Prefs.getBoolean(X11Preferences.KEY_DISABLE_TOUCH_STYLUS_ON_STYLUS_HOVER, true)
                         rememberFingerAsStylusState = x11Prefs.getBoolean(X11Preferences.KEY_REMEMBER_FINGER_AS_STYLUS_STATE, false)
+                        isFullscreen = x11Prefs.getBoolean(X11Preferences.KEY_FULLSCREEN, false)
+                        activity.inputHandler?.let { handler ->
+                            handler.isDisableTouchStylusOnStylusHover = disableTouchStylusOnStylusHover
+                            handler.isFingerAsStylusEnabled = isFingerAsStylus
+                        }
                     }
                 }
 
@@ -962,7 +969,7 @@ fun CanvasScreen(
                     }
                 }
 
-                val wallpaperBitmap = remember {
+                val wallpaperBitmap = remember(preferenceVersion) {
                     WallpaperHelper.resolveWallpaperBitmap(activity).asImageBitmap()
                 }
 
@@ -1138,14 +1145,14 @@ fun CanvasScreen(
                             activity.windowManager.defaultDisplay.rotation
                         }
 
-                        val safeCustom = remember { x11Prefs.getBoolean(X11Preferences.KEY_SAFE_AREA_CUSTOM_EDGES, false) }
-                        val safeAll = remember { x11Prefs.getInt(X11Preferences.KEY_SAFE_AREA_MARGIN_ALL, 0) }
-                        val rawLeft = remember(safeCustom, safeAll) { if (safeCustom) x11Prefs.getInt(X11Preferences.KEY_SAFE_AREA_LEFT, 0) else safeAll }
-                        val rawTop = remember(safeCustom, safeAll) { if (safeCustom) x11Prefs.getInt(X11Preferences.KEY_SAFE_AREA_TOP, 0) else safeAll }
-                        val rawRight = remember(safeCustom, safeAll) { if (safeCustom) x11Prefs.getInt(X11Preferences.KEY_SAFE_AREA_RIGHT, 0) else safeAll }
-                        val rawBottom = remember(safeCustom, safeAll) { if (safeCustom) x11Prefs.getInt(X11Preferences.KEY_SAFE_AREA_BOTTOM, 0) else safeAll }
-                        val refRotation = remember { x11Prefs.getInt(X11Preferences.KEY_SAFE_AREA_REF_ROTATION, Surface.ROTATION_0) }
-                        val disableInMulti = remember { x11Prefs.getBoolean(X11Preferences.KEY_SAFE_AREA_DISABLE_IN_MULTIWINDOW, true) }
+                        val safeCustom = remember(preferenceVersion) { x11Prefs.getBoolean(X11Preferences.KEY_SAFE_AREA_CUSTOM_EDGES, false) }
+                        val safeAll = remember(preferenceVersion) { x11Prefs.getInt(X11Preferences.KEY_SAFE_AREA_MARGIN_ALL, 0) }
+                        val rawLeft = remember(safeCustom, safeAll, preferenceVersion) { if (safeCustom) x11Prefs.getInt(X11Preferences.KEY_SAFE_AREA_LEFT, 0) else safeAll }
+                        val rawTop = remember(safeCustom, safeAll, preferenceVersion) { if (safeCustom) x11Prefs.getInt(X11Preferences.KEY_SAFE_AREA_TOP, 0) else safeAll }
+                        val rawRight = remember(safeCustom, safeAll, preferenceVersion) { if (safeCustom) x11Prefs.getInt(X11Preferences.KEY_SAFE_AREA_RIGHT, 0) else safeAll }
+                        val rawBottom = remember(safeCustom, safeAll, preferenceVersion) { if (safeCustom) x11Prefs.getInt(X11Preferences.KEY_SAFE_AREA_BOTTOM, 0) else safeAll }
+                        val refRotation = remember(preferenceVersion) { x11Prefs.getInt(X11Preferences.KEY_SAFE_AREA_REF_ROTATION, Surface.ROTATION_0) }
+                        val disableInMulti = remember(preferenceVersion) { x11Prefs.getBoolean(X11Preferences.KEY_SAFE_AREA_DISABLE_IN_MULTIWINDOW, true) }
                         var centerTopBarWithinBounds by remember {
                             mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOP_BAR_CENTER_WITHIN_BOUNDS, false))
                         }

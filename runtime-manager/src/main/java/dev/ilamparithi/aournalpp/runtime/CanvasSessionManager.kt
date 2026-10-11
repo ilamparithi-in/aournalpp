@@ -143,6 +143,15 @@ class CanvasSessionManager @JvmOverloads constructor(
                     supervisor.startXournal(targetFilePath)
                 }
 
+                val aournalPrefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+                val baseUiScale = aournalPrefs.getString("pref_ui_scale", "1.0") ?: "1.0"
+                val baseLocale = LinuxLocaleManager.getSavedLocale(context)
+                val baseGtkTheme = aournalPrefs.getString(LinuxEnvironment.PREF_KEY_GTK_THEME, "system") ?: "system"
+                val baseNotesDir = env.getNotesDirectory().absolutePath
+
+                // Clear any pending restart notice from a prior session
+                aournalPrefs.edit().remove("pref_pending_canvas_restart_notice").apply()
+
                 // Record active session in multi-process tracker
                 ActiveSessionTracker.setActiveSession(
                     context = context,
@@ -152,7 +161,11 @@ class CanvasSessionManager @JvmOverloads constructor(
                         pid = android.os.Process.myPid(),
                         activeNotePath = targetFilePath,
                         documentTitle = initialDocTitle,
-                        openWindowCount = supervisor.getActiveXournalCount().coerceAtLeast(1)
+                        openWindowCount = supervisor.getActiveXournalCount().coerceAtLeast(1),
+                        baseUiScale = baseUiScale,
+                        baseLocale = baseLocale,
+                        baseGtkTheme = baseGtkTheme,
+                        baseNotesDir = baseNotesDir
                     )
                 )
 

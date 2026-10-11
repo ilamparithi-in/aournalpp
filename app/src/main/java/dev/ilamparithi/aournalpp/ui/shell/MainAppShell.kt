@@ -91,7 +91,10 @@ fun MainResponsiveAppShell(
     var lastTabSwitchTime by remember { mutableLongStateOf(0L) }
     var isRapidSwitch by remember { mutableStateOf(false) }
 
-    val onTabSelect: (Int) -> Unit = { tabId ->
+    var pendingTargetTab by rememberSaveable { mutableStateOf<Int?>(null) }
+    var showRestartNoticeDialog by rememberSaveable { mutableStateOf(false) }
+
+    val executeTabSwitch: (Int) -> Unit = { tabId ->
         val currentTime = System.currentTimeMillis()
         val isDoubleTap = (lastClickedTab == tabId) && (currentTime - lastClickTime < 400L)
 
@@ -116,6 +119,48 @@ fun MainResponsiveAppShell(
             lastClickTime = currentTime
             lastClickedTab = tabId
         }
+    }
+
+    val onTabSelect: (Int) -> Unit = { tabId ->
+        if (selectedTab == AppTab.SETTINGS.id && tabId != AppTab.SETTINGS.id &&
+            dev.ilamparithi.aournalpp.data.CanvasRestartNoticeManager.hasPendingNotice(context)
+        ) {
+            pendingTargetTab = tabId
+            showRestartNoticeDialog = true
+        } else {
+            executeTabSwitch(tabId)
+        }
+    }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                if (selectedTab != AppTab.SETTINGS.id && dev.ilamparithi.aournalpp.data.CanvasRestartNoticeManager.hasPendingNotice(context)) {
+                    showRestartNoticeDialog = true
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        if (selectedTab != AppTab.SETTINGS.id && dev.ilamparithi.aournalpp.data.CanvasRestartNoticeManager.hasPendingNotice(context)) {
+            showRestartNoticeDialog = true
+        }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    if (showRestartNoticeDialog) {
+        dev.ilamparithi.aournalpp.ui.settings.dialogs.CanvasRestartNoticeDialog(
+            onDismiss = {
+                dev.ilamparithi.aournalpp.data.CanvasRestartNoticeManager.clearPendingNotice(context)
+                showRestartNoticeDialog = false
+                pendingTargetTab?.let { target ->
+                    pendingTargetTab = null
+                    executeTabSwitch(target)
+                }
+            }
+        )
     }
 
     val isCanvasSessionActive by ActiveSessionTracker.activeSessionFlow(context)

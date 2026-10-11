@@ -52,6 +52,7 @@ object AppPreferences {
     }
 
     fun notifyChanged(context: Context, key: String) {
+        CanvasRestartNoticeManager.onPreferenceChanged(context, key)
         try {
             val prefs = getGeneral(context)
             val value = prefs.all[key]

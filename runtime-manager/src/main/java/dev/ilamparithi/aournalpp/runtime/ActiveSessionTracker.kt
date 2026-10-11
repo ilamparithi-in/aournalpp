@@ -25,7 +25,11 @@ data class ActiveSessionInfo(
     val activeNotePath: String?,
     val documentTitle: String?,
     val openWindowCount: Int = 1,
-    val lastTimestamp: Long = System.currentTimeMillis()
+    val lastTimestamp: Long = System.currentTimeMillis(),
+    val baseUiScale: String? = null,
+    val baseLocale: String? = null,
+    val baseGtkTheme: String? = null,
+    val baseNotesDir: String? = null
 )
 
 /**
@@ -131,7 +135,11 @@ object ActiveSessionTracker {
                 append("  \"activeNotePath\": \"${info.activeNotePath?.let { escapeJson(it) } ?: ""}\",\n")
                 append("  \"documentTitle\": \"${info.documentTitle?.let { escapeJson(it) } ?: ""}\",\n")
                 append("  \"openWindowCount\": ${info.openWindowCount},\n")
-                append("  \"lastTimestamp\": ${info.lastTimestamp}\n")
+                append("  \"lastTimestamp\": ${info.lastTimestamp},\n")
+                append("  \"baseUiScale\": \"${info.baseUiScale?.let { escapeJson(it) } ?: ""}\",\n")
+                append("  \"baseLocale\": \"${info.baseLocale?.let { escapeJson(it) } ?: ""}\",\n")
+                append("  \"baseGtkTheme\": \"${info.baseGtkTheme?.let { escapeJson(it) } ?: ""}\",\n")
+                append("  \"baseNotesDir\": \"${info.baseNotesDir?.let { escapeJson(it) } ?: ""}\"\n")
                 append("}")
             }
             file.writeText(serialized)
@@ -217,6 +225,10 @@ object ActiveSessionTracker {
             val title = extractString(text, "documentTitle")
             val windowCount = extractInt(text, "openWindowCount", 1)
             val timestamp = extractLong(text, "lastTimestamp", System.currentTimeMillis())
+            val baseUiScale = extractString(text, "baseUiScale")
+            val baseLocale = extractString(text, "baseLocale")
+            val baseGtkTheme = extractString(text, "baseGtkTheme")
+            val baseNotesDir = extractString(text, "baseNotesDir")
 
             if (isRunning && pid > 0 && windowCount > 0) {
                 if (isPidAlive(pid)) {
@@ -226,7 +238,11 @@ object ActiveSessionTracker {
                         activeNotePath = notePath,
                         documentTitle = title,
                         openWindowCount = windowCount,
-                        lastTimestamp = timestamp
+                        lastTimestamp = timestamp,
+                        baseUiScale = baseUiScale,
+                        baseLocale = baseLocale,
+                        baseGtkTheme = baseGtkTheme,
+                        baseNotesDir = baseNotesDir
                     )
                 } else {
                     logWarn("Active session PID $pid is dead. Cleaning up stale session file.")

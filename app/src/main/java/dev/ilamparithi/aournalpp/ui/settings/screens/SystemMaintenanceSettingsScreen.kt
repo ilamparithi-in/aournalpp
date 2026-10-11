@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import dev.ilamparithi.aournalpp.data.AppPreferences
 import dev.ilamparithi.aournalpp.ui.settings.components.SettingsIconBadge
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -232,6 +233,7 @@ fun SystemMaintenanceSettingsScreen(
             onDismissRequest = { showLinuxLanguageDialog = false },
             onLanguageSelected = { info ->
                 LinuxLocaleManager.setSavedLocale(context, info.tag)
+                AppPreferences.notifyChanged(context, LinuxLocaleManager.PREF_KEY_LINUX_LOCALE)
                 currentLinuxLocaleTag = info.tag
                 env.ensureXournalppSettings()
                 showLinuxLanguageDialog = false

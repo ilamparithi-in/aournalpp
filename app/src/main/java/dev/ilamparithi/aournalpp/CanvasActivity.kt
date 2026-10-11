@@ -190,8 +190,64 @@ class CanvasActivity : ComponentActivity() {
     internal val preferenceUpdateVersionState = mutableIntStateOf(0)
     internal val isSyncRunningState = mutableStateOf(false)
 
+    fun applyFullscreenMode(isFullscreen: Boolean) {
+        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+        if (isFullscreen) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                window.attributes.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+            insetsController.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            insetsController.hide(WindowInsetsCompat.Type.systemBars())
+        } else {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                window.attributes.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT
+            }
+            insetsController.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    fun applyScreenIdleTimeout(idleTimeoutMode: String) {
+        when (idleTimeoutMode) {
+            "never" -> window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            "system" -> window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            else -> window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
     fun onPreferenceChanged(key: String) {
-        preferenceUpdateVersionState.intValue++
+        runOnUiThread {
+            preferenceUpdateVersionState.intValue++
+            val prefs = com.termux.x11.Prefs(this)
+            val x11Prefs = X11Preferences.getPrefs(this)
+
+            when (key) {
+                X11Preferences.KEY_FULLSCREEN -> {
+                    applyFullscreenMode(x11Prefs.getBoolean(X11Preferences.KEY_FULLSCREEN, false))
+                }
+                X11Preferences.KEY_SCREEN_IDLE_TIMEOUT -> {
+                    applyScreenIdleTimeout(x11Prefs.getString(X11Preferences.KEY_SCREEN_IDLE_TIMEOUT, "system") ?: "system")
+                }
+                "displayResolutionMode", "displayScale", "displayStretch", "adjustResolution" -> {
+                    activeLorieView?.reloadPreferences(prefs)
+                    activeLorieView?.requestLayout()
+                }
+                "displayFilteringMode", "clipboardEnable", "zoomFollowsCursor" -> {
+                    activeLorieView?.reloadPreferences(prefs)
+                }
+                "touchMode", "capturedPointerSpeedFactor", "transformCapturedPointer",
+                "tapToMove", "scaleTouchpad", "stylusIsMouse", "stylusButtonContactModifierMode" -> {
+                    inputHandler?.reloadPreferences(prefs)
+                }
+                else -> {
+                    if (key.startsWith("lenovo_pen_") || key.startsWith("pref_lenovo_pen_")) {
+                        penMapper?.reloadPreferences(prefs)
+                    }
+                }
+            }
+        }
     }
 
     fun triggerCloudSync() {
@@ -304,37 +360,15 @@ class CanvasActivity : ComponentActivity() {
         X11Preferences.initDefaults(this)
         val x11Prefs = X11Preferences.getPrefs(this)
 
-        val isFullscreen = x11Prefs.getBoolean(X11Preferences.KEY_FULLSCREEN, false)
-        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
-        if (isFullscreen) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                window.attributes.layoutInDisplayCutoutMode =
-                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-            }
-            insetsController.systemBarsBehavior =
-                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            insetsController.hide(WindowInsetsCompat.Type.systemBars())
-        } else {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                window.attributes.layoutInDisplayCutoutMode =
-                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT
-            }
-            insetsController.show(WindowInsetsCompat.Type.systemBars())
-        }
+        applyFullscreenMode(x11Prefs.getBoolean(X11Preferences.KEY_FULLSCREEN, false))
 
         // Ensure window manager does not pan or push the activity when keyboard appears
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
 
         // Screen idle timeout configuration
-        val idleTimeoutMode = x11Prefs.getString(X11Preferences.KEY_SCREEN_IDLE_TIMEOUT, "system") ?: "system"
-        when (idleTimeoutMode) {
-            "never" -> window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            "system" -> window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            else -> window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        }
+        applyScreenIdleTimeout(x11Prefs.getString(X11Preferences.KEY_SCREEN_IDLE_TIMEOUT, "system") ?: "system")
 
         // High-performance debounce-aware soft keyboard Reseed and state listener
-        val reseedEnabled = x11Prefs.getBoolean(X11Preferences.KEY_RESEED, false)
         var lastImeHeight = -1
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { _, insets ->
             val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
@@ -344,8 +378,9 @@ class CanvasActivity : ComponentActivity() {
 
             if (imeHeight != lastImeHeight) {
                 lastImeHeight = imeHeight
+                val currentReseed = X11Preferences.getPrefs(this).getBoolean(X11Preferences.KEY_RESEED, false)
                 activeLorieView?.let { view ->
-                    if (reseedEnabled) {
+                    if (currentReseed) {
                         view.setContentInsets(0, 0, 0, imeHeight)
                         view.setObscuredBottom(0)
                     } else {
@@ -1137,6 +1172,7 @@ class CanvasActivity : ComponentActivity() {
             instance = null
         }
         if (isFinishing) {
+            dev.ilamparithi.aournalpp.data.CanvasRestartNoticeManager.clearPendingNotice(this)
             sessionManager.stopSession()
             // Terminate isolated :canvas process so the next launch initializes a fresh native X11 instance
             android.os.Process.killProcess(android.os.Process.myPid())
