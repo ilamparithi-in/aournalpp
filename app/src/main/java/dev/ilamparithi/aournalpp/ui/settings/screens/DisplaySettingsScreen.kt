@@ -16,7 +16,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,23 +27,25 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.FitScreen
 import androidx.compose.material.icons.filled.FormatSize
+import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Spellcheck
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.filled.ViewCompact
 import androidx.compose.material3.ExperimentalMaterial3Api
-import dev.ilamparithi.aournalpp.ui.common.AppDropdownMenuItem
-import dev.ilamparithi.aournalpp.ui.common.AppExposedDropdownMenu
-import dev.ilamparithi.aournalpp.ui.settings.components.SettingsIconBadge
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
@@ -53,14 +54,14 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -81,16 +82,23 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import dev.ilamparithi.aournalpp.R
 import dev.ilamparithi.aournalpp.data.AppPreferences
 import dev.ilamparithi.aournalpp.data.X11Preferences
+import dev.ilamparithi.aournalpp.ui.common.AppDropdownMenuItem
+import dev.ilamparithi.aournalpp.ui.common.AppExposedDropdownMenu
 import dev.ilamparithi.aournalpp.ui.settings.components.ConnectedButtonGroup
 import dev.ilamparithi.aournalpp.ui.settings.components.ConnectedButtonItem
 import dev.ilamparithi.aournalpp.ui.settings.components.ExpressiveSlider
+import dev.ilamparithi.aournalpp.ui.settings.components.SettingsIconBadge
 import dev.ilamparithi.aournalpp.ui.settings.components.SettingsSwitchListItem
 import dev.ilamparithi.aournalpp.ui.settings.components.ValueEditPill
+import dev.ilamparithi.aournalpp.utils.a11yHeading
+import dev.ilamparithi.aournalpp.utils.minTouchTarget
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -199,17 +207,28 @@ fun DisplaySettingsScreen(
         topBar = {
             if (showTopBar) {
                 TopAppBar(
-                    title = { Text("Display & Keyboard", fontWeight = FontWeight.Bold) },
+                    title = {
+                        Text(
+                            text = stringResource(R.string.pref_cat_display_keyboard),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.a11yHeading()
+                        )
+                    },
                     navigationIcon = {
                         if (onBack != null) {
-                            IconButton(onClick = onBack) {
+                            IconButton(onClick = onBack, modifier = Modifier.minTouchTarget()) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = stringResource(R.string.action_back)
                                 )
                             }
                         }
-                    }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface
+                    )
                 )
             }
         }
@@ -219,20 +238,24 @@ fun DisplaySettingsScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             // =================================================================
             // 1. Canvas UI Scale Group (GTK Interface Scale)
             // =================================================================
             Text(
-                text = "Canvas UI Scale",
-                style = MaterialTheme.typography.titleMedium,
+                text = stringResource(R.string.pref_display_ui_scale_section),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold
             )
-            OutlinedCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp)),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -255,13 +278,13 @@ fun DisplaySettingsScreen(
                             Spacer(modifier = Modifier.width(14.dp))
                             Column {
                                 Text(
-                                    text = "GTK Interface Scale",
+                                    text = stringResource(R.string.pref_display_gtk_scale_title),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "Scales toolbars, menus, and canvas controls. Takes effect on canvas restart.",
+                                    text = stringResource(R.string.pref_display_gtk_scale_desc),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -377,13 +400,17 @@ fun DisplaySettingsScreen(
             // 2. Resolution Mode & Filtering Group
             // =================================================================
             Text(
-                text = "Resolution Mode",
-                style = MaterialTheme.typography.titleMedium,
+                text = stringResource(R.string.pref_display_res_mode_section),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold
             )
-            OutlinedCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp)),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -400,13 +427,13 @@ fun DisplaySettingsScreen(
                         Spacer(modifier = Modifier.width(14.dp))
                         Column {
                             Text(
-                                text = "Display Resolution Mode",
+                                text = stringResource(R.string.pref_display_res_mode_title),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "Virtual canvas resolution and rendering scale.",
+                                text = stringResource(R.string.pref_display_res_mode_desc),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -447,11 +474,11 @@ fun DisplaySettingsScreen(
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Text(
                                     text = when (mode) {
-                                        "native" -> "Native: Uses the device's full 1:1 physical pixel resolution for maximum clarity and detail."
-                                        "scaled" -> "Scaled: Adjusts resolution by a custom percentage factor relative to display size, optimizing performance."
-                                        "exact" -> "Exact: Renders at an industry-standard fixed resolution preset (e.g. 1080p, 1440p) with aspect fitting."
-                                        "custom" -> "Custom: Enter exact arbitrary pixel dimensions (Width × Height) for custom or virtual display setups."
-                                        else -> "Select how canvas pixel resolution is rendered."
+                                        "native" -> stringResource(R.string.pref_display_res_mode_native_desc)
+                                        "scaled" -> stringResource(R.string.pref_display_res_mode_scaled_desc)
+                                        "exact" -> stringResource(R.string.pref_display_res_mode_exact_desc)
+                                        "custom" -> stringResource(R.string.pref_display_res_mode_custom_desc)
+                                        else -> stringResource(R.string.pref_display_res_mode_default_desc)
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -462,10 +489,10 @@ fun DisplaySettingsScreen(
 
                     // Button Group right below the explanation
                     val resOptions = listOf(
-                        ConnectedButtonItem("native", "Native"),
-                        ConnectedButtonItem("scaled", "Scaled"),
-                        ConnectedButtonItem("exact", "Exact"),
-                        ConnectedButtonItem("custom", "Custom")
+                        ConnectedButtonItem("native", stringResource(R.string.pref_display_res_native)),
+                        ConnectedButtonItem("scaled", stringResource(R.string.pref_display_res_scaled)),
+                        ConnectedButtonItem("exact", stringResource(R.string.pref_display_res_exact)),
+                        ConnectedButtonItem("custom", stringResource(R.string.pref_display_res_custom))
                     )
                     ConnectedButtonGroup(
                         items = resOptions,
@@ -494,12 +521,12 @@ fun DisplaySettingsScreen(
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "Display Scale Factor",
+                                        text = stringResource(R.string.pref_display_scale_factor_title),
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.SemiBold
                                     )
                                     Text(
-                                        text = "Scale percentage relative to physical resolution",
+                                        text = stringResource(R.string.pref_display_scale_factor_desc),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -592,7 +619,7 @@ fun DisplaySettingsScreen(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = "Preset Resolution",
+                                text = stringResource(R.string.pref_display_exact_preset_title),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -641,7 +668,7 @@ fun DisplaySettingsScreen(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = "Custom Resolution (WxH)",
+                                text = stringResource(R.string.pref_display_custom_res_title),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -661,7 +688,7 @@ fun DisplaySettingsScreen(
                                     imeAction = ImeAction.Done
                                 ),
                                 shape = RoundedCornerShape(12.dp),
-                                placeholder = { Text("e.g. 1920x1080") }
+                                placeholder = { Text(stringResource(R.string.pref_display_custom_res_placeholder)) }
                             )
                         }
                     }
@@ -674,18 +701,18 @@ fun DisplaySettingsScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = "Display Filtering Mode",
+                            text = stringResource(R.string.pref_display_filtering_title),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            text = "Texture interpolation filter applied during canvas scaling.",
+                            text = stringResource(R.string.pref_display_filtering_desc),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         val filterOptions = listOf(
-                            ConnectedButtonItem("nearest", "Nearest (Sharp)"),
-                            ConnectedButtonItem("bilinear", "Bilinear (Smooth)")
+                            ConnectedButtonItem("nearest", stringResource(R.string.pref_display_filtering_nearest)),
+                            ConnectedButtonItem("bilinear", stringResource(R.string.pref_display_filtering_bilinear))
                         )
                         ConnectedButtonGroup(
                             items = filterOptions,
@@ -703,8 +730,9 @@ fun DisplaySettingsScreen(
             // 3. Safe Area Insets & Calibration
             // =================================================================
             Text(
-                text = "Safe Area Insets & Calibration",
-                style = MaterialTheme.typography.titleMedium,
+                text = stringResource(R.string.pref_display_safe_area_section),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold
             )
 
@@ -716,21 +744,31 @@ fun DisplaySettingsScreen(
             val safeBottom = if (safeCustom) x11Prefs.getInt(X11Preferences.KEY_SAFE_AREA_BOTTOM, 0) else safeAll
 
             val summaryText = if (safeCustom) {
-                "Custom: L:${safeLeft}dp T:${safeTop}dp R:${safeRight}dp B:${safeBottom}dp"
+                stringResource(R.string.pref_display_safe_area_custom_summary, safeLeft, safeTop, safeRight, safeBottom)
             } else if (safeAll > 0) {
-                "Uniform: $safeAll dp on all edges"
+                stringResource(R.string.pref_display_safe_area_uniform_summary, safeAll)
             } else {
-                "Full Screen (0 dp)"
+                stringResource(R.string.pref_display_safe_area_fullscreen_summary)
             }
 
-            OutlinedCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp)),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 ListItem(
+                    leadingContent = {
+                        SettingsIconBadge(
+                            imageVector = Icons.Default.AspectRatio,
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            iconTint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    },
                     supportingContent = {
                         Text(
-                            text = "Adjust margin insets to prevent UI clipping from rounded display corners and camera cutouts ($summaryText).",
+                            text = stringResource(R.string.pref_display_safe_area_desc, summaryText),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -742,17 +780,18 @@ fun DisplaySettingsScreen(
                         ) {
                             Icon(imageVector = Icons.Default.AspectRatio, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Calibrate")
+                            Text(stringResource(R.string.pref_display_safe_area_calibrate_btn))
                         }
                     },
-                    colors = androidx.compose.material3.ListItemDefaults.colors(
+                    colors = ListItemDefaults.colors(
                         containerColor = Color.Transparent
                     )
                 ) {
                     Text(
-                        text = "Screen Safe Area Calibration",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold
+                        text = stringResource(R.string.pref_display_safe_area_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -761,43 +800,60 @@ fun DisplaySettingsScreen(
             // 4. Screen Idle Timeout & Fullscreen Mode
             // =================================================================
             Text(
-                text = "Screen Idle Timeout & Fullscreen",
-                style = MaterialTheme.typography.titleMedium,
+                text = stringResource(R.string.pref_display_idle_fullscreen_section),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold
             )
-            OutlinedCard(
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp)),
-                shape = RoundedCornerShape(16.dp)
+                    .clip(RoundedCornerShape(24.dp)),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Column(
                         modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         val timeoutOptions = listOf(
-                            "never" to "Never (Keep screen on)",
-                            "1" to "1 minute",
-                            "5" to "5 minutes",
-                            "10" to "10 minutes",
-                            "20" to "20 minutes",
-                            "60" to "1 hour",
-                            "system" to "System default"
+                            "never" to stringResource(R.string.pref_display_timeout_never),
+                            "1" to stringResource(R.string.pref_display_timeout_1m),
+                            "5" to stringResource(R.string.pref_display_timeout_5m),
+                            "10" to stringResource(R.string.pref_display_timeout_10m),
+                            "20" to stringResource(R.string.pref_display_timeout_20m),
+                            "60" to stringResource(R.string.pref_display_timeout_1h),
+                            "system" to stringResource(R.string.pref_display_timeout_system)
                         )
                         var timeoutExpanded by remember { mutableStateOf(false) }
-                        val currentTimeoutLabel = timeoutOptions.firstOrNull { it.first == idleTimeout }?.second ?: "System default"
+                        val currentTimeoutLabel = timeoutOptions.firstOrNull { it.first == idleTimeout }?.second
+                            ?: stringResource(R.string.pref_display_timeout_system)
 
-                        Text(
-                            text = "Screen Idle Timeout",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "Duration of screen inactivity before the display goes to sleep while taking notes.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.Timer,
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                iconTint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.pref_display_idle_timeout_title),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = stringResource(R.string.pref_display_idle_timeout_desc),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
 
                         ExposedDropdownMenuBox(
                             expanded = timeoutExpanded,
@@ -833,39 +889,69 @@ fun DisplaySettingsScreen(
                         }
                     }
 
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                    )
 
                     SettingsSwitchListItem(
-                        headline = "Fullscreen Canvas",
-                        supporting = "Hide status and navigation bars. Disabling allows Android's floating rotation button to appear.",
+                        headline = stringResource(R.string.pref_display_fullscreen_title),
+                        supporting = stringResource(R.string.pref_display_fullscreen_desc),
                         checked = fullscreenCanvas,
                         shape = RectangleShape,
+                        leadingContent = {
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.Fullscreen,
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                iconTint = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        },
                         onCheckedChange = {
                             fullscreenCanvas = it
                             saveX11Boolean(X11Preferences.KEY_FULLSCREEN, it)
                         }
                     )
 
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                    )
 
                     SettingsSwitchListItem(
-                        headline = "Adjust Resolution for Orientation",
-                        supporting = "Automatically swap width and height when device orientation rotates.",
+                        headline = stringResource(R.string.pref_display_adjust_res_title),
+                        supporting = stringResource(R.string.pref_display_adjust_res_desc),
                         checked = adjustRes,
                         shape = RectangleShape,
+                        leadingContent = {
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.ScreenRotation,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
                         onCheckedChange = {
                             adjustRes = it
                             saveX11Boolean(X11Preferences.KEY_ADJUST_RESOLUTION, it)
                         }
                     )
 
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                    )
 
                     SettingsSwitchListItem(
-                        headline = "Stretch to Fit Display",
-                        supporting = "Scale canvas image non-proportionally to eliminate black letterbox bars.",
+                        headline = stringResource(R.string.pref_display_stretch_title),
+                        supporting = stringResource(R.string.pref_display_stretch_desc),
                         checked = displayStretch,
-                        shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
+                        shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
+                        leadingContent = {
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.FitScreen,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
                         onCheckedChange = {
                             displayStretch = it
                             saveX11Boolean(X11Preferences.KEY_DISPLAY_STRETCH, it)
@@ -878,61 +964,100 @@ fun DisplaySettingsScreen(
             // 5. Soft Keyboard & IME Group
             // =================================================================
             Text(
-                text = "Soft Keyboard & IME",
-                style = MaterialTheme.typography.titleMedium,
+                text = stringResource(R.string.pref_display_keyboard_ime_section),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold
             )
-            OutlinedCard(
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp)),
-                shape = RoundedCornerShape(16.dp)
+                    .clip(RoundedCornerShape(24.dp)),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     SettingsSwitchListItem(
-                        headline = "Auto-toggle Keyboard on Focus",
-                        supporting = "Automatically open the soft keyboard when tapping into text boxes or canvas annotations.",
+                        headline = stringResource(R.string.pref_keyboard_auto_show_title),
+                        supporting = stringResource(R.string.pref_keyboard_auto_show_desc),
                         checked = autoShowIme,
-                        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                        leadingContent = {
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.Keyboard,
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                iconTint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        },
                         onCheckedChange = {
                             autoShowIme = it
                             saveAournalBoolean("pref_auto_show_ime_on_focus", it)
                         }
                     )
 
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                    )
 
                     SettingsSwitchListItem(
-                        headline = "Enforce Character-Based Input",
-                        supporting = "Directly dispatch committed Unicode characters rather than synthesized hardware key scancodes.",
+                        headline = stringResource(R.string.pref_keyboard_char_input_title),
+                        supporting = stringResource(R.string.pref_keyboard_char_input_desc),
                         checked = enforceCharBasedInput,
                         shape = RectangleShape,
+                        leadingContent = {
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.Spellcheck,
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                iconTint = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        },
                         onCheckedChange = {
                             enforceCharBasedInput = it
                             saveX11Boolean(X11Preferences.KEY_ENFORCE_CHAR_BASED_INPUT, it)
                         }
                     )
 
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                    )
 
                     SettingsSwitchListItem(
-                        headline = "Reseed Screen with Soft Keyboard",
-                        supporting = "Dynamically adjust X11 screen dimensions when on-screen keyboard appears.",
+                        headline = stringResource(R.string.pref_keyboard_reseed_title),
+                        supporting = stringResource(R.string.pref_keyboard_reseed_desc),
                         checked = reseedIme,
                         shape = RectangleShape,
+                        leadingContent = {
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.ViewCompact,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
                         onCheckedChange = {
                             reseedIme = it
                             saveX11Boolean(X11Preferences.KEY_RESEED, it)
                         }
                     )
 
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                    )
 
                     SettingsSwitchListItem(
-                        headline = "Triple-Tap Close Force Close",
-                        supporting = "Tapping the Close button on the floating toolbar or Save All & Close 3 times rapidly brings up a force-close dialog if X11 becomes unresponsive.",
+                        headline = stringResource(R.string.pref_keyboard_triple_close_title),
+                        supporting = stringResource(R.string.pref_keyboard_triple_close_desc),
                         checked = tripleBackForceClose,
-                        shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
+                        shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
+                        leadingContent = {
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.PowerSettingsNew,
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                iconTint = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        },
                         onCheckedChange = {
                             tripleBackForceClose = it
                             saveAournalBoolean("pref_triple_back_force_close", it)

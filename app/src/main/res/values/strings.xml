@@ -1448,8 +1448,8 @@
 
     <!-- 5. OEM-Specific Pen Settings -->
     <string name="pref_input_oem_pens_title">OEM-Specific Pen Settings</string>
-    <string name="pref_input_lenovo_pen_title">Lenovo Precision Pen / Pen Plus</string>
-    <string name="pref_input_lenovo_pen_desc">Single, double, triple, and long-click gesture actions for Lenovo stylus barrel buttons</string>
+    <string name="pref_input_lenovo_pen_title">Lenovo Tab Pen Plus / Moto Pen Pro</string>
+    <string name="pref_input_lenovo_pen_desc">Single, double, triple, and long-click gesture actions for Lenovo/Moto stylus barrel buttons</string>
     <string name="pref_lenovo_pen_diagnostics_title">Diagnostics &amp; Feedback</string>
     <string name="pref_lenovo_pen_show_detections_title">Show Detection Toasts</string>
     <string name="pref_lenovo_pen_show_detections_desc">Display transient toast messages when barrel button gestures are detected.</string>
@@ -1474,6 +1474,77 @@
     <string name="pref_lenovo_pen_duration_desc">Applied when Toggle mode is OFF (10 - 8192 ms).</string>
     <string name="pref_lenovo_pen_duration_preset">%1$sms</string>
 
+    <!-- ======================================================================= -->
+    <!-- Display & Keyboard Settings (Section 5)                                 -->
+    <!-- ======================================================================= -->
+    <string name="pref_cat_display_keyboard">Display &amp; Keyboard</string>
+    <string name="pref_cat_display_keyboard_desc">Canvas UI scale, resolution, safe area &amp; keyboard</string>
+
+    <!-- Canvas UI Scale -->
+    <string name="pref_display_ui_scale_section">Canvas UI Scale</string>
+    <string name="pref_display_gtk_scale_title">GTK Interface Scale</string>
+    <string name="pref_display_gtk_scale_desc">Scales toolbars, menus, and canvas controls. Takes effect on canvas restart.</string>
+
+    <!-- Resolution Mode & Filtering -->
+    <string name="pref_display_res_mode_section">Resolution Mode</string>
+    <string name="pref_display_res_mode_title">Display Resolution Mode</string>
+    <string name="pref_display_res_mode_desc">Virtual canvas resolution and rendering scale.</string>
+    <string name="pref_display_res_mode_native_desc">Native: Uses the device\'s full 1:1 physical pixel resolution for maximum clarity and detail.</string>
+    <string name="pref_display_res_mode_scaled_desc">Scaled: Adjusts resolution by a custom percentage factor relative to display size, optimizing performance.</string>
+    <string name="pref_display_res_mode_exact_desc">Exact: Renders at an industry-standard fixed resolution preset (e.g. 1080p, 1440p) with aspect fitting.</string>
+    <string name="pref_display_res_mode_custom_desc">Custom: Enter exact arbitrary pixel dimensions (Width × Height) for custom or virtual display setups.</string>
+    <string name="pref_display_res_mode_default_desc">Select how canvas pixel resolution is rendered.</string>
+    <string name="pref_display_res_native">Native</string>
+    <string name="pref_display_res_scaled">Scaled</string>
+    <string name="pref_display_res_exact">Exact</string>
+    <string name="pref_display_res_custom">Custom</string>
+    <string name="pref_display_scale_factor_title">Display Scale Factor</string>
+    <string name="pref_display_scale_factor_desc">Scale percentage relative to physical resolution</string>
+    <string name="pref_display_exact_preset_title">Exact Resolution Preset</string>
+    <string name="pref_display_custom_res_title">Custom Resolution (WxH)</string>
+    <string name="pref_display_custom_res_placeholder">e.g. 1920x1080</string>
+    <string name="pref_display_filtering_title">Display Filtering Mode</string>
+    <string name="pref_display_filtering_desc">Texture interpolation filter applied during canvas scaling.</string>
+    <string name="pref_display_filtering_nearest">Nearest (Sharp)</string>
+    <string name="pref_display_filtering_bilinear">Bilinear (Smooth)</string>
+
+    <!-- Safe Area Insets & Calibration -->
+    <string name="pref_display_safe_area_section">Safe Area Insets &amp; Calibration</string>
+    <string name="pref_display_safe_area_title">Screen Safe Area Calibration</string>
+    <string name="pref_display_safe_area_desc">Adjust margin insets to prevent UI clipping from rounded display corners and camera cutouts (%1$s).</string>
+    <string name="pref_display_safe_area_calibrate_btn">Calibrate</string>
+    <string name="pref_display_safe_area_custom_summary">Custom: L:%1$ddp T:%2$ddp R:%3$ddp B:%4$ddp</string>
+    <string name="pref_display_safe_area_uniform_summary">Uniform: %1$d dp on all edges</string>
+    <string name="pref_display_safe_area_fullscreen_summary">Full Screen (0 dp)</string>
+
+    <!-- Screen Idle Timeout & Fullscreen Mode -->
+    <string name="pref_display_idle_fullscreen_section">Screen Idle Timeout &amp; Fullscreen</string>
+    <string name="pref_display_idle_timeout_title">Screen Idle Timeout</string>
+    <string name="pref_display_idle_timeout_desc">Duration of screen inactivity before the display goes to sleep while taking notes.</string>
+    <string name="pref_display_timeout_never">Never (Keep screen on)</string>
+    <string name="pref_display_timeout_1m">1 minute</string>
+    <string name="pref_display_timeout_5m">5 minutes</string>
+    <string name="pref_display_timeout_10m">10 minutes</string>
+    <string name="pref_display_timeout_20m">20 minutes</string>
+    <string name="pref_display_timeout_1h">1 hour</string>
+    <string name="pref_display_timeout_system">System default</string>
+    <string name="pref_display_fullscreen_title">Fullscreen Canvas</string>
+    <string name="pref_display_fullscreen_desc">Hide status and navigation bars. Disabling allows Android\'s floating rotation button to appear.</string>
+    <string name="pref_display_adjust_res_title">Adjust Resolution for Orientation</string>
+    <string name="pref_display_adjust_res_desc">Automatically swap width and height when device orientation rotates.</string>
+    <string name="pref_display_stretch_title">Stretch to Fit Display</string>
+    <string name="pref_display_stretch_desc">Scale canvas image non-proportionally to eliminate black letterbox bars.</string>
+
+    <!-- Soft Keyboard & IME -->
+    <string name="pref_display_keyboard_ime_section">Soft Keyboard &amp; IME</string>
+    <string name="pref_keyboard_auto_show_title">Auto-toggle Keyboard on Focus</string>
+    <string name="pref_keyboard_auto_show_desc">Automatically open the soft keyboard when tapping into text boxes or canvas annotations.</string>
+    <string name="pref_keyboard_char_input_title">Enforce Character-Based Input</string>
+    <string name="pref_keyboard_char_input_desc">Directly dispatch committed Unicode characters rather than synthesized hardware key scancodes.</string>
+    <string name="pref_keyboard_reseed_title">Reseed Screen with Soft Keyboard</string>
+    <string name="pref_keyboard_reseed_desc">Dynamically adjust X11 screen dimensions when on-screen keyboard appears.</string>
+    <string name="pref_keyboard_triple_close_title">Triple-Tap Close Force Close</string>
+    <string name="pref_keyboard_triple_close_desc">Tapping the Close button on the floating toolbar or Save All &amp; Close 3 times rapidly brings up a force-close dialog if X11 becomes unresponsive.</string>
 
     <!-- ======================================================================= -->
     <!-- Language & Localization                                                 -->

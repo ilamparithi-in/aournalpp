@@ -61,7 +61,6 @@ import dev.ilamparithi.aournalpp.ui.settings.screens.AppearanceCanvasSettingsScr
 import dev.ilamparithi.aournalpp.ui.settings.screens.DisplaySettingsScreen
 import dev.ilamparithi.aournalpp.ui.settings.screens.FilesStorageSettingsScreen
 import dev.ilamparithi.aournalpp.ui.settings.screens.InputSettingsScreen
-import dev.ilamparithi.aournalpp.ui.settings.screens.KeyboardSettingsScreen
 import dev.ilamparithi.aournalpp.ui.settings.screens.LenovoPenSettingsScreen
 import dev.ilamparithi.aournalpp.ui.settings.screens.LogManagerScreen
 import dev.ilamparithi.aournalpp.ui.settings.screens.SystemMaintenanceSettingsScreen
