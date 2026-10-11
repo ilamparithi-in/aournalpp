@@ -1,6 +1,8 @@
 package dev.ilamparithi.aournalpp
 
 import dev.ilamparithi.aournalpp.data.X11Preferences
+import dev.ilamparithi.aournalpp.ui.canvas.FloatingToolbarUtils
+import androidx.compose.ui.input.pointer.PointerType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -18,21 +20,94 @@ class FloatingToolbarPreferencesTest {
 
     @Test
     fun testStylusHoverCollapseCooldown() {
-        val cooldownMs = 600L
         val collapseTime = 10000L
 
-        fun canExpandOnStylusHover(currentTime: Long, lastCollapseTime: Long): Boolean {
-            return (currentTime - lastCollapseTime) > cooldownMs
-        }
-
         // Within cooldown (e.g. pen lifting immediately after tapping collapse button)
-        assertFalse(canExpandOnStylusHover(collapseTime + 50L, collapseTime))
-        assertFalse(canExpandOnStylusHover(collapseTime + 300L, collapseTime))
-        assertFalse(canExpandOnStylusHover(collapseTime + 600L, collapseTime))
+        assertFalse(FloatingToolbarUtils.canExpandOnHover(collapseTime + 50L, collapseTime))
+        assertFalse(FloatingToolbarUtils.canExpandOnHover(collapseTime + 300L, collapseTime))
+        assertFalse(FloatingToolbarUtils.canExpandOnHover(collapseTime + 600L, collapseTime))
 
         // After cooldown expires (user intentionally hovers pen over collapsed pill)
-        assertTrue(canExpandOnStylusHover(collapseTime + 601L, collapseTime))
-        assertTrue(canExpandOnStylusHover(collapseTime + 1500L, collapseTime))
+        assertTrue(FloatingToolbarUtils.canExpandOnHover(collapseTime + 601L, collapseTime))
+        assertTrue(FloatingToolbarUtils.canExpandOnHover(collapseTime + 1500L, collapseTime))
+    }
+
+    @Test
+    fun testHoverPointerTypes() {
+        assertTrue(FloatingToolbarUtils.isHoverPointerType(PointerType.Stylus))
+        assertTrue(FloatingToolbarUtils.isHoverPointerType(PointerType.Eraser))
+        assertTrue(FloatingToolbarUtils.isHoverPointerType(PointerType.Mouse))
+        assertFalse(FloatingToolbarUtils.isHoverPointerType(PointerType.Touch))
+        assertFalse(FloatingToolbarUtils.isHoverPointerType(PointerType.Unknown))
+    }
+
+    @Test
+    fun testShouldAutoCollapseInhibitedWhileHovered() {
+        // While hovered, auto-collapse must NEVER trigger
+        assertFalse(
+            FloatingToolbarUtils.shouldAutoCollapse(
+                pinButtonMode = true,
+                isHeaderExpanded = true,
+                isPinned = false,
+                isSnapDropdownOpen = false,
+                isHovered = true
+            )
+        )
+
+        // When unhovered, auto-collapse is enabled for unpinned expanded toolbar in pin mode
+        assertTrue(
+            FloatingToolbarUtils.shouldAutoCollapse(
+                pinButtonMode = true,
+                isHeaderExpanded = true,
+                isPinned = false,
+                isSnapDropdownOpen = false,
+                isHovered = false
+            )
+        )
+
+        // When pinned, auto-collapse is disabled even if unhovered
+        assertFalse(
+            FloatingToolbarUtils.shouldAutoCollapse(
+                pinButtonMode = true,
+                isHeaderExpanded = true,
+                isPinned = true,
+                isSnapDropdownOpen = false,
+                isHovered = false
+            )
+        )
+
+        // When collapsed, auto-collapse does not apply
+        assertFalse(
+            FloatingToolbarUtils.shouldAutoCollapse(
+                pinButtonMode = true,
+                isHeaderExpanded = false,
+                isPinned = false,
+                isSnapDropdownOpen = false,
+                isHovered = false
+            )
+        )
+
+        // When pinButtonMode is false, auto-collapse is disabled
+        assertFalse(
+            FloatingToolbarUtils.shouldAutoCollapse(
+                pinButtonMode = false,
+                isHeaderExpanded = true,
+                isPinned = false,
+                isSnapDropdownOpen = false,
+                isHovered = false
+            )
+        )
+
+        // When snap dropdown is open, auto-collapse is disabled
+        assertFalse(
+            FloatingToolbarUtils.shouldAutoCollapse(
+                pinButtonMode = true,
+                isHeaderExpanded = true,
+                isPinned = false,
+                isSnapDropdownOpen = true,
+                isHovered = false
+            )
+        )
     }
 
     @Test

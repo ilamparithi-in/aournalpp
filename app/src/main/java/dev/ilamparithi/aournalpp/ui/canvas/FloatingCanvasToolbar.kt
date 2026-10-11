@@ -420,21 +420,44 @@ fun FloatingToolbarOverlay(
     }
 
     var isSnapDropdownOpen by remember { mutableStateOf(false) }
+    var isToolbarHovered by remember { mutableStateOf(false) }
 
     LaunchedEffect(isHeaderExpanded) {
         if (!isHeaderExpanded) {
             isSnapDropdownOpen = false
+            isToolbarHovered = false
         }
     }
 
-    LaunchedEffect(isHeaderExpanded, isPinned, pinButtonMode, autoCollapseTimeoutMs, isSnapDropdownOpen) {
-        if (pinButtonMode && isHeaderExpanded && !isPinned && !isSnapDropdownOpen) {
+    LaunchedEffect(
+        isHeaderExpanded,
+        isPinned,
+        pinButtonMode,
+        autoCollapseTimeoutMs,
+        isSnapDropdownOpen,
+        isToolbarHovered
+    ) {
+        if (FloatingToolbarUtils.shouldAutoCollapse(
+                pinButtonMode = pinButtonMode,
+                isHeaderExpanded = isHeaderExpanded,
+                isPinned = isPinned,
+                isSnapDropdownOpen = isSnapDropdownOpen,
+                isHovered = isToolbarHovered
+            )
+        ) {
             while (isActive) {
                 val triggered = withTimeoutOrNull(autoCollapseTimeoutMs.milliseconds) {
                     interactionSignal.first()
                 }
                 if (triggered == null) {
-                    if (isHeaderExpanded && !isPinned && !isSnapDropdownOpen) {
+                    if (FloatingToolbarUtils.shouldAutoCollapse(
+                            pinButtonMode = pinButtonMode,
+                            isHeaderExpanded = isHeaderExpanded,
+                            isPinned = isPinned,
+                            isSnapDropdownOpen = isSnapDropdownOpen,
+                            isHovered = isToolbarHovered
+                        )
+                    ) {
                         lastCollapseTimeMs = SystemClock.uptimeMillis()
                         isHeaderExpanded = false
                     }
@@ -505,7 +528,47 @@ fun FloatingToolbarOverlay(
         Surface(
             modifier = Modifier
                 .shadow(elevation = 8.dp, shape = RoundedCornerShape(24.dp))
-                .clip(RoundedCornerShape(24.dp)),
+                .clip(RoundedCornerShape(24.dp))
+                .pointerInput(stylusHoverExpands) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            var hasHoverPointer = false
+                            var isAnyInside = false
+                            val changes = event.changes
+                            for (i in changes.indices) {
+                                val change = changes[i]
+                                if (FloatingToolbarUtils.isHoverPointerType(change.type)) {
+                                    hasHoverPointer = true
+                                    val pos = change.position
+                                    if (pos.x in 0f..size.width.toFloat() && pos.y in 0f..size.height.toFloat()) {
+                                        isAnyInside = true
+                                        break
+                                    }
+                                }
+                            }
+                            if (hasHoverPointer) {
+                                if (event.type == PointerEventType.Exit || !isAnyInside) {
+                                    if (isToolbarHovered) {
+                                        isToolbarHovered = false
+                                    }
+                                } else {
+                                    if (!isToolbarHovered) {
+                                        isToolbarHovered = true
+                                    }
+                                    if (!isHeaderExpanded && stylusHoverExpands &&
+                                        (event.type == PointerEventType.Enter || event.type == PointerEventType.Move)
+                                    ) {
+                                        val now = SystemClock.uptimeMillis()
+                                        if (FloatingToolbarUtils.canExpandOnHover(now, lastCollapseTimeMs)) {
+                                            isHeaderExpanded = true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
             tonalElevation = 6.dp
@@ -1153,6 +1216,7 @@ fun FloatingToolbarOverlay(
                                     onClick = {
                                         interactionSignal.tryEmit(Unit)
                                         lastCollapseTimeMs = SystemClock.uptimeMillis()
+                                        isToolbarHovered = false
                                         isHeaderExpanded = false
                                     },
                                     modifier = Modifier.size(36.dp)
@@ -1229,24 +1293,6 @@ fun FloatingToolbarOverlay(
                                         isHeaderExpanded = true
                                     }
                                 )
-                            }
-                            .pointerInput(stylusHoverExpands) {
-                                if (stylusHoverExpands) {
-                                    awaitPointerEventScope {
-                                        while (true) {
-                                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                                            val isStylus = event.changes.any {
-                                                it.type == PointerType.Stylus || it.type == PointerType.Eraser
-                                            }
-                                            if (isStylus && (event.type == PointerEventType.Move || event.type == PointerEventType.Enter)) {
-                                                if (SystemClock.uptimeMillis() - lastCollapseTimeMs > 600L) {
-                                                    interactionSignal.tryEmit(Unit)
-                                                    isHeaderExpanded = true
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
                             }
                             .pointerInput(Unit) {
                                 detectDragGesturesAfterLongPress(

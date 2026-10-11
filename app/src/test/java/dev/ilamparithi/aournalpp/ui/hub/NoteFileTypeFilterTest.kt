@@ -37,15 +37,19 @@ class NoteFileTypeFilterTest {
         prefs = TestSharedPreferences()
         prefs.putString(LinuxEnvironment.PREF_KEY_NOTES_DIR, notesDir.absolutePath)
 
+        val cacheDir = tempFolder.newFolder("cache")
+
         mockContext = mockk<Context>(relaxed = true)
         every { mockContext.getSharedPreferences(any(), any()) } returns prefs
         every { mockContext.filesDir } returns filesDir
+        every { mockContext.cacheDir } returns cacheDir
         every { mockContext.applicationContext } returns mockContext
 
         mockApp = mockk<Application>(relaxed = true)
         every { mockApp.applicationContext } returns mockApp
         every { mockApp.getSharedPreferences(any(), any()) } returns prefs
         every { mockApp.filesDir } returns filesDir
+        every { mockApp.cacheDir } returns cacheDir
 
         DocumentRepository.invalidateAllCaches()
         repository = DocumentRepository(mockContext)
