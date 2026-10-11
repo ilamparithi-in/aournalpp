@@ -30,7 +30,23 @@ Accepted
      - **Keep Both**: Backs up the autosave as a timestamped file (`{file}_autosave_{timestamp}.xopp`) and opens the note.
      - **Keep Existing**: Deletes the autosave and opens the original note.
 
+4. **Unified On-Open Dialog Precedence Hierarchy**:
+   To avoid conflicting or overlapping modal dialogs and prevent accidental data loss, every note/file opening pathway (Document Hub, Home screen, external file intents, and secondary window requests) must evaluate conditions in a strict 4-tier deterministic precedence order:
+   - **Tier 1 — Emergency Recovery (`EmergencyRecoveryDialog`)**:
+     - **Condition**: A genuine unhandled emergency recovery file (`quarantined_emergencysave.xopp`) exists in the cache quarantine directory from an unexpected crash or force-kill.
+     - **Action**: Intercepts and defers opening the target note. The user must resolve the emergency session (*"Open Now"*, *"Save to Notes"*, or *"Discard"*) before opening any other document.
+   - **Tier 2 — Active Note Conflict (`ActiveNoteOpenPromptDialog`)**:
+     - **Condition**: The target document is currently open in an active X11 window tracked by [ActiveNotesTracker.kt](file:///home/ilam_common/DevHome/GitHub/xopp-android/runtime-manager/src/main/java/dev/ilamparithi/aournalpp/runtime/ActiveNotesTracker.kt).
+     - **Action**: Presents a prompt offering to bring the existing window to focus (*"View Note"*) or open a separate concurrent instance (*"Open in New Window"*).
+   - **Tier 3 — Hidden Autosave Resolution (`AutosaveResolutionDialog`)**:
+     - **Condition**: The note is not actively open in canvas, and a paired hidden autosave file (`.{name}.autosave.xopp`, `.{name}.xopp~`, etc.) is detected on disk.
+     - **Action**: Halts navigation to present the comparative resolution dialog (*"Replace with Autosave"*, *"Keep Both"*, or *"Keep Existing"*). The note is never opened in Xournal++ until the autosave choice is explicitly made.
+   - **Tier 4 — Action Choice (`NoteOpenActionDialog`)**:
+     - **Condition**: None of Tiers 1–3 are triggered, and the user's default open action preference is set to `"ask"` (Ask every time).
+     - **Action**: Prompts the user to select whether to open the note for editing in Xournal++ Canvas or render it as a view-only PDF.
+
 ## Consequences
 - No legacy X11 modal recovery popups will ever block the canvas or startup.
 - Emergency crash data is safely captured, presented natively in Material 3, and can be saved or resumed with 1 tap.
 - Autosaves are seamlessly managed with zero clutter in the document list and complete protection against accidental overwrites.
+- Deterministic dialog precedence prevents race conditions, ensuring that active session window focus, emergency crash recovery, autosave pairing, and user action preferences are consistently and predictably resolved across all UI screens.

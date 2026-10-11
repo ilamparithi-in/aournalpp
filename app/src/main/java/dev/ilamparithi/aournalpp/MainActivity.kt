@@ -9,6 +9,9 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import dev.ilamparithi.aournalpp.backup.security.CredentialsVault
+import dev.ilamparithi.aournalpp.model.AutosaveInfo
+import dev.ilamparithi.aournalpp.model.NoteDocument
+import dev.ilamparithi.aournalpp.ui.dialog.AutosaveResolutionDialog
 import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -153,6 +156,7 @@ class MainActivity : ComponentActivity() {
     private var pendingIntentToProcess: Intent? = null
     private val externalFileToOpen = androidx.compose.runtime.mutableStateOf<Pair<File, Boolean>?>(null)
     private val externalActiveNoteToPrompt = androidx.compose.runtime.mutableStateOf<Pair<File, ActiveNotesTracker.ActiveNoteMatch>?>(null)
+    private val externalAutosaveToPrompt = androidx.compose.runtime.mutableStateOf<Pair<NoteDocument, AutosaveInfo>?>(null)
     private val pendingTabNavigation = androidx.compose.runtime.mutableStateOf<Int?>(null)
     private val pendingCloudSubpageNavigation = androidx.compose.runtime.mutableStateOf<CloudSubpage?>(null)
 
@@ -183,6 +187,9 @@ class MainActivity : ComponentActivity() {
             },
             onShowActiveNotePrompt = { targetFile, match ->
                 externalActiveNoteToPrompt.value = targetFile to match
+            },
+            onShowAutosavePrompt = { noteDoc, autoInfo ->
+                externalAutosaveToPrompt.value = noteDoc to autoInfo
             }
         )
     }
@@ -466,6 +473,30 @@ class MainActivity : ComponentActivity() {
                                         file = targetFile,
                                         repository = repo
                                     )
+                                }
+                            )
+                        }
+
+                        val autosavePrompt = externalAutosaveToPrompt.value
+                        if (autosavePrompt != null && isOnboardingCompleted) {
+                            AutosaveResolutionDialog(
+                                note = autosavePrompt.first,
+                                autosaveInfo = autosavePrompt.second,
+                                onDismiss = { externalAutosaveToPrompt.value = null },
+                                onReplaceWithAutosave = {
+                                    val target = repo.replaceWithAutosave(autosavePrompt.first)
+                                    externalAutosaveToPrompt.value = null
+                                    NoteOpenManager.openInCanvas(this@MainActivity, target, repo)
+                                },
+                                onKeepBoth = {
+                                    val target = repo.keepBoth(autosavePrompt.first)
+                                    externalAutosaveToPrompt.value = null
+                                    NoteOpenManager.openInCanvas(this@MainActivity, target, repo)
+                                },
+                                onKeepExisting = {
+                                    val target = repo.discardAutosave(autosavePrompt.first)
+                                    externalAutosaveToPrompt.value = null
+                                    NoteOpenManager.openInCanvas(this@MainActivity, target, repo)
                                 }
                             )
                         }

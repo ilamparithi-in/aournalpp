@@ -259,6 +259,9 @@ fun HomeScreen(
             onShowActiveNotePrompt = { targetFile, match ->
                 viewModel.setDialogState(HomeDialogState.ActiveSessionPrompt(targetFile, match))
             },
+            onShowAutosavePrompt = { noteDoc, _ ->
+                viewModel.setDialogState(HomeDialogState.AutosavePrompt(noteDoc))
+            },
             onConvertingState = { isConverting ->
                 if (isConverting) {
                     viewModel.setDialogState(
@@ -364,9 +367,9 @@ fun HomeScreen(
 
     fun startNewNote() {
         val intent = Intent(context, CanvasActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            if (context is android.app.Activity && context.isInMultiWindowMode) {
-                addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
+            addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            if (context !is android.app.Activity) {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
         }
         val options = ActivityOptionsCompat.makeCustomAnimation(context, 0, 0).toBundle()

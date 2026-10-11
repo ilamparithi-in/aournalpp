@@ -33,7 +33,8 @@ class MainActivityIntentHandler(
     private val emergencyManager: MainActivityEmergencyManager,
     private val onNavigateTab: (tabId: Int, subpage: CloudSubpage?) -> Unit,
     private val onShowPrompt: (file: File, isImport: Boolean) -> Unit,
-    private val onShowActiveNotePrompt: (targetFile: File, match: ActiveNotesTracker.ActiveNoteMatch) -> Unit
+    private val onShowActiveNotePrompt: (targetFile: File, match: ActiveNotesTracker.ActiveNoteMatch) -> Unit,
+    private val onShowAutosavePrompt: ((dev.ilamparithi.aournalpp.model.NoteDocument, dev.ilamparithi.aournalpp.model.AutosaveInfo) -> Unit)? = null
 ) {
     companion object {
         private const val TAG = "MainActivityIntentHandler"
@@ -130,7 +131,8 @@ class MainActivityIntentHandler(
                         onShowPrompt = { onShowPrompt(it, false) },
                         onShowActiveNotePrompt = { targetFile, match ->
                             onShowActiveNotePrompt(targetFile, match)
-                        }
+                        },
+                        onShowAutosavePrompt = onShowAutosavePrompt
                     )
                     return@launch
                 }
@@ -180,7 +182,8 @@ class MainActivityIntentHandler(
                         onShowPrompt = { onShowPrompt(it, true) },
                         onShowActiveNotePrompt = { targetFile, match ->
                             onShowActiveNotePrompt(targetFile, match)
-                        }
+                        },
+                        onShowAutosavePrompt = onShowAutosavePrompt
                     )
                 } else {
                     Log.e(TAG, "Failed to stage external file URI: $uri", result.exceptionOrNull())

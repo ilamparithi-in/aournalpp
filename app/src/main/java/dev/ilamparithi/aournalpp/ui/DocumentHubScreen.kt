@@ -282,6 +282,9 @@ fun DocumentHubScreen(
             onShowActiveNotePrompt = { targetFile, match ->
                 noteForActiveSessionDialog = targetFile to match
             },
+            onShowAutosavePrompt = { noteDoc, _ ->
+                pendingAutosaveNote = noteDoc
+            },
             onConvertingState = { isConverting ->
                 viewModel.setPdfConverting(
                     isConverting,
@@ -293,14 +296,7 @@ fun DocumentHubScreen(
     }
 
     fun openNoteWithPrecedence(note: NoteDocument) {
-        val activeMatch = ActiveNotesTracker.findActiveNote(context, note.file)
-        if (activeMatch != null) {
-            noteForActiveSessionDialog = note.file to activeMatch
-        } else if (note.autosaveInfo != null) {
-            pendingAutosaveNote = note
-        } else {
-            handleNoteOpen(note.file)
-        }
+        handleNoteOpen(note.file)
     }
 
     // Launchers
@@ -1416,9 +1412,9 @@ fun DocumentHubScreen(
                 onSkip = {
                     showNewNoteDialog = false
                     val intent = Intent(context, CanvasActivity::class.java).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        if (context is android.app.Activity && context.isInMultiWindowMode) {
-                            addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
+                        addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                        if (context !is android.app.Activity) {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         }
                     }
                     val options = androidx.core.app.ActivityOptionsCompat.makeCustomAnimation(context, 0, 0).toBundle()

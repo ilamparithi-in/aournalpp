@@ -13,6 +13,8 @@ import androidx.core.content.FileProvider
 import dev.ilamparithi.aournalpp.CanvasActivity
 import dev.ilamparithi.aournalpp.MainActivity
 import dev.ilamparithi.aournalpp.data.DocumentRepository
+import dev.ilamparithi.aournalpp.model.AutosaveInfo
+import dev.ilamparithi.aournalpp.model.NoteDocument
 import dev.ilamparithi.aournalpp.runtime.ActiveNotesTracker
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
@@ -36,6 +38,18 @@ enum class NoteOpenAction(val value: String, val displayName: String) {
 }
 
 /**
+ * Outcomes of evaluating the ADR 0006 4-tier on-open precedence hierarchy.
+ */
+enum class NoteOpenPrecedenceResult {
+    EMERGENCY_SAVE_DEFERRED,
+    ACTIVE_SESSION_MATCH,
+    AUTOSAVE_FOUND,
+    ACTION_EDIT,
+    ACTION_VIEW,
+    ACTION_ASK
+}
+
+/**
  * Centralized manager for handling file/note opening workflows,
  * default open actions, and PDF/Canvas dispatching.
  */
@@ -48,6 +62,29 @@ object NoteOpenManager {
 
     fun isPdf(file: File): Boolean = file.extension.equals("pdf", ignoreCase = true)
     fun isPdf(fileName: String): Boolean = fileName.endsWith(".pdf", ignoreCase = true)
+
+    /**
+     * Pure evaluator for ADR 0006 4-tier on-open dialog precedence hierarchy:
+     * Tier 1: Emergency Save Quarantine -> Defer
+     * Tier 2: Active Session Window Match -> Prompt
+     * Tier 3: Paired Autosave Detected -> Resolution Prompt
+     * Tier 4: User Default Action (Edit / View / Ask)
+     */
+    fun resolveNoteOpenPrecedence(
+        hasEmergencySave: Boolean,
+        hasActiveMatch: Boolean,
+        hasAutosave: Boolean,
+        defaultAction: NoteOpenAction
+    ): NoteOpenPrecedenceResult {
+        return when {
+            hasEmergencySave -> NoteOpenPrecedenceResult.EMERGENCY_SAVE_DEFERRED
+            hasActiveMatch -> NoteOpenPrecedenceResult.ACTIVE_SESSION_MATCH
+            hasAutosave -> NoteOpenPrecedenceResult.AUTOSAVE_FOUND
+            defaultAction == NoteOpenAction.EDIT -> NoteOpenPrecedenceResult.ACTION_EDIT
+            defaultAction == NoteOpenAction.VIEW -> NoteOpenPrecedenceResult.ACTION_VIEW
+            else -> NoteOpenPrecedenceResult.ACTION_ASK
+        }
+    }
 
     fun getDefaultAction(context: Context, isPdf: Boolean): NoteOpenAction {
         val prefs = dev.ilamparithi.aournalpp.data.AppPreferences.getGeneral(context)
@@ -97,8 +134,9 @@ object NoteOpenManager {
     }
 
     /**
-     * Checks if the note is already open in an active canvas session window.
-     * If an active session is found, invokes [onActiveSessionFound] so the UI can prompt the user.
+     * Checks if the note is already open in an active canvas session window or has an autosave.
+     * If an active session is found, invokes [onActiveSessionFound].
+     * If an autosave is found and [onAutosaveFound] is supplied, invokes [onAutosaveFound].
      * Otherwise, directly opens the note in the canvas editor.
      */
     fun openInCanvasWithActiveCheck(
@@ -106,23 +144,52 @@ object NoteOpenManager {
         file: File,
         repository: DocumentRepository? = null,
         localView: View? = null,
-        onActiveSessionFound: (targetFile: File, match: ActiveNotesTracker.ActiveNoteMatch) -> Unit
+        onActiveSessionFound: (targetFile: File, match: ActiveNotesTracker.ActiveNoteMatch) -> Unit,
+        onAutosaveFound: ((NoteDocument, AutosaveInfo) -> Unit)? = null
     ) {
         val activeMatch = ActiveNotesTracker.findActiveNote(context, file)
         if (activeMatch != null) {
             onActiveSessionFound(file, activeMatch)
-        } else {
-            openInCanvas(
-                context = context,
-                file = file,
-                repository = repository,
-                localView = localView
-            )
+            return
         }
+
+        if (onAutosaveFound != null) {
+            val repo = repository ?: DocumentRepository.getInstance(context)
+            val parentDir = file.parentFile ?: repo.getRootNotesDirectory()
+            val autosaveFile = repo.findMatchingAutosave(parentDir, file)
+            if (autosaveFile != null && autosaveFile.exists() && autosaveFile.length() > 0L) {
+                val autoInfo = AutosaveInfo(
+                    autosaveFile = autosaveFile,
+                    mainFile = file,
+                    mainLastModifiedMs = file.lastModified(),
+                    autosaveLastModifiedMs = autosaveFile.lastModified(),
+                    mainSizeBytes = file.length(),
+                    autosaveSizeBytes = autosaveFile.length()
+                )
+                    val noteDoc = NoteDocument(
+                        file = file,
+                        title = file.nameWithoutExtension,
+                        path = file.absolutePath,
+                        lastModifiedMs = file.lastModified(),
+                        sizeBytes = file.length(),
+                        autosaveInfo = autoInfo
+                    )
+                onAutosaveFound(noteDoc, autoInfo)
+                return
+            }
+        }
+
+        openInCanvas(
+            context = context,
+            file = file,
+            repository = repository,
+            localView = localView
+        )
     }
 
     /**
      * Directly launches the native Xournal++ canvas editor for the given note file.
+     * Ensures the canvas executes self-contained within the caller's task window.
      */
     fun openInCanvas(
         context: Context,
@@ -171,9 +238,9 @@ object NoteOpenManager {
             if (thumbFile != null && thumbFile.exists()) {
                 putExtra(CanvasActivity.EXTRA_ENTRY_SNAPSHOT_PATH, thumbFile.absolutePath)
             }
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-            if (context is android.app.Activity && context.isInMultiWindowMode) {
-                addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
+            addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            if (context !is android.app.Activity) {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
         }
 
@@ -282,7 +349,10 @@ object NoteOpenManager {
                     putExtra(CanvasActivity.EXTRA_ENTRY_SNAPSHOT_PATH, compositeFile.absolutePath)
                 }
             }
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            if (context !is android.app.Activity) {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
         }
         val options = ActivityOptionsCompat.makeCustomAnimation(context, 0, 0).toBundle()
         context.startActivity(intent, options)
@@ -298,12 +368,11 @@ object NoteOpenManager {
     }
 
     /**
-     * Core dispatcher for any file open event. Evaluates active session status and default action setting:
-     * - If the note is already open in an active canvas session and [onShowActiveNotePrompt] is supplied,
-     *   dispatches to [onShowActiveNotePrompt] to prompt whether to view existing window or open in new window.
-     * - If [NoteOpenAction.EDIT], directly launches CanvasActivity.
-     * - If [NoteOpenAction.VIEW], directly launches PDF viewer.
-     * - If [NoteOpenAction.ASK], triggers the [onShowPrompt] callback with the target file.
+     * Core dispatcher for any file open event. Evaluates the ADR 0006 4-tier precedence:
+     * - Tier 1: Emergency recovery check.
+     * - Tier 2: Active note conflict in running session.
+     * - Tier 3: Paired hidden autosave resolution.
+     * - Tier 4: User default action preference (Edit / View / Ask).
      */
     fun handleFileOpen(
         context: Context,
@@ -314,30 +383,67 @@ object NoteOpenManager {
         localView: View? = null,
         onShowPrompt: (File) -> Unit,
         onShowActiveNotePrompt: ((File, ActiveNotesTracker.ActiveNoteMatch) -> Unit)? = null,
+        onShowAutosavePrompt: ((NoteDocument, AutosaveInfo) -> Unit)? = null,
         onConvertingState: ((Boolean) -> Unit)? = null,
         onError: ((String) -> Unit)? = null
     ) {
         val mainActivity = findMainActivity(context)
         if (mainActivity != null) {
             mainActivity.checkEmergencySave()
-            if (mainActivity.hasPendingEmergencySave()) {
-                mainActivity.deferNoteOpenForEmergencySave(file)
-                return
-            }
         }
+        val hasEmergency = mainActivity?.hasPendingEmergencySave() == true
+        val activeMatch = if (onShowActiveNotePrompt != null) ActiveNotesTracker.findActiveNote(context, file) else null
+        val repo = repository ?: DocumentRepository.getInstance(context)
+        val parentDir = file.parentFile ?: repo.getRootNotesDirectory()
+        val autosaveFile = if (onShowAutosavePrompt != null) repo.findMatchingAutosave(parentDir, file) else null
+        val defaultAction = getDefaultAction(context, file)
 
-        if (onShowActiveNotePrompt != null) {
-            val activeMatch = ActiveNotesTracker.findActiveNote(context, file)
-            if (activeMatch != null) {
-                onShowActiveNotePrompt(file, activeMatch)
-                return
+        val decision = resolveNoteOpenPrecedence(
+            hasEmergencySave = hasEmergency,
+            hasActiveMatch = activeMatch != null,
+            hasAutosave = autosaveFile != null && autosaveFile.exists() && autosaveFile.length() > 0L,
+            defaultAction = defaultAction
+        )
+
+        when (decision) {
+            NoteOpenPrecedenceResult.EMERGENCY_SAVE_DEFERRED -> {
+                mainActivity?.deferNoteOpenForEmergencySave(file)
             }
-        }
-
-        when (getDefaultAction(context, file)) {
-            NoteOpenAction.EDIT -> openInCanvas(context, file, repository, localView)
-            NoteOpenAction.VIEW -> openAsPdf(context, file, pdfExportManager, scope, repository, onConvertingState, onError)
-            NoteOpenAction.ASK -> onShowPrompt(file)
+            NoteOpenPrecedenceResult.ACTIVE_SESSION_MATCH -> {
+                if (activeMatch != null) {
+                    onShowActiveNotePrompt?.invoke(file, activeMatch)
+                }
+            }
+            NoteOpenPrecedenceResult.AUTOSAVE_FOUND -> {
+                if (autosaveFile != null) {
+                    val autoInfo = AutosaveInfo(
+                        autosaveFile = autosaveFile,
+                        mainFile = file,
+                        mainLastModifiedMs = file.lastModified(),
+                        autosaveLastModifiedMs = autosaveFile.lastModified(),
+                        mainSizeBytes = file.length(),
+                        autosaveSizeBytes = autosaveFile.length()
+                    )
+                    val noteDoc = NoteDocument(
+                        file = file,
+                        title = file.nameWithoutExtension,
+                        path = file.absolutePath,
+                        lastModifiedMs = file.lastModified(),
+                        sizeBytes = file.length(),
+                        autosaveInfo = autoInfo
+                    )
+                    onShowAutosavePrompt?.invoke(noteDoc, autoInfo)
+                }
+            }
+            NoteOpenPrecedenceResult.ACTION_EDIT -> {
+                openInCanvas(context, file, repository, localView)
+            }
+            NoteOpenPrecedenceResult.ACTION_VIEW -> {
+                openAsPdf(context, file, pdfExportManager, scope, repository, onConvertingState, onError)
+            }
+            NoteOpenPrecedenceResult.ACTION_ASK -> {
+                onShowPrompt(file)
+            }
         }
     }
 }

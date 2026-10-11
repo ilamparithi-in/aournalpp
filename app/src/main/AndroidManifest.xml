@@ -188,5 +188,11 @@
         <service
             android:name=".runtime.MainProcessBridgeService"
             android:exported="false" />
+
+        <service
+            android:name=".runtime.CanvasSessionService"
+            android:process=":canvas"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
 </manifest>

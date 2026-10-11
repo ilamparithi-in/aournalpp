@@ -45,6 +45,7 @@ import dev.ilamparithi.aournalpp.data.AppPreferences
 import dev.ilamparithi.aournalpp.data.DocumentRepository
 import dev.ilamparithi.aournalpp.data.X11Preferences
 import dev.ilamparithi.aournalpp.runtime.CanvasSessionManager
+import dev.ilamparithi.aournalpp.runtime.CanvasSessionService
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.runtime.MainProcessBridgeService
 import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
@@ -462,6 +463,16 @@ class CanvasActivity : ComponentActivity() {
             targetPath != null -> File(targetPath).name
             openPreferences -> "Preferences"
             else -> "New Note"
+        }
+
+        CanvasSessionService.startSession(this, initialTitle)
+
+        lifecycleScope.launch {
+            supervisor.documentTitle.collect { title ->
+                if (!title.isNullOrBlank()) {
+                    CanvasSessionService.updateTitle(this@CanvasActivity, title)
+                }
+            }
         }
 
         if (intent.getBooleanExtra(EXTRA_TRIGGER_APP_EXIT, false)) {
@@ -1115,6 +1126,7 @@ class CanvasActivity : ComponentActivity() {
                     }
                 }
             }
+            CanvasSessionService.updateTitle(this, File(targetPath).name)
             sessionManager.openNoteInNewWindow(targetPath)
         }
 
@@ -1168,6 +1180,7 @@ class CanvasActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         unbindMainProcessBridge()
+        CanvasSessionService.stopSession(this)
         if (instance == this) {
             instance = null
         }
