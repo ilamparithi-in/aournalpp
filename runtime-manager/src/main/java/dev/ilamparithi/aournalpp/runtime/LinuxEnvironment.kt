@@ -252,11 +252,56 @@ class LinuxEnvironment(private val context: Context) {
         return prefs.getBoolean("toolbarEnabled", true)
     }
 
-    fun generateOpenboxConfig(snapLayoutActive: Boolean = false, toolbarEnabled: Boolean = isToolbarEnabled()): String =
-        DesktopConfigGenerator.generateOpenboxConfig(snapLayoutActive, toolbarEnabled)
+    fun generateOpenboxConfig(
+        snapLayoutActive: Boolean = false,
+        toolbarEnabled: Boolean = isToolbarEnabled(),
+        viewportWidth: Int = 0,
+        viewportHeight: Int = 0
+    ): String {
+        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        val selectedScale = prefs.getString("pref_ui_scale", "1.0") ?: "1.0"
+        val scaleFloat = (selectedScale.toFloatOrNull() ?: 1.0f).coerceIn(0.5f, 4.0f)
+        val localeDir = File(shareDir, "locale").takeIf { it.exists() }
+        val activeLocale = LinuxLocaleManager.getSavedLocale(context)
+        val effectiveWidth = if (viewportWidth > 0) viewportWidth else context.resources.displayMetrics.widthPixels
+        val effectiveHeight = if (viewportHeight > 0) viewportHeight else context.resources.displayMetrics.heightPixels
 
-    fun updateOpenboxSnapMode(snapLayoutActive: Boolean, toolbarEnabled: Boolean = isToolbarEnabled()) =
-        DesktopConfigGenerator.updateOpenboxSnapMode(openboxConfigDir, snapLayoutActive, toolbarEnabled)
+        return DesktopConfigGenerator.generateOpenboxConfig(
+            snapLayoutActive = snapLayoutActive,
+            toolbarEnabled = toolbarEnabled,
+            viewportWidth = effectiveWidth,
+            viewportHeight = effectiveHeight,
+            uiScale = scaleFloat,
+            localeDir = localeDir,
+            activeLocale = activeLocale
+        )
+    }
+
+    fun updateOpenboxSnapMode(
+        snapLayoutActive: Boolean,
+        toolbarEnabled: Boolean = isToolbarEnabled(),
+        viewportWidth: Int = 0,
+        viewportHeight: Int = 0
+    ) {
+        val prefs = context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE)
+        val selectedScale = prefs.getString("pref_ui_scale", "1.0") ?: "1.0"
+        val scaleFloat = (selectedScale.toFloatOrNull() ?: 1.0f).coerceIn(0.5f, 4.0f)
+        val localeDir = File(shareDir, "locale").takeIf { it.exists() }
+        val activeLocale = LinuxLocaleManager.getSavedLocale(context)
+        val effectiveWidth = if (viewportWidth > 0) viewportWidth else context.resources.displayMetrics.widthPixels
+        val effectiveHeight = if (viewportHeight > 0) viewportHeight else context.resources.displayMetrics.heightPixels
+
+        DesktopConfigGenerator.updateOpenboxSnapMode(
+            openboxConfigDir = openboxConfigDir,
+            snapLayoutActive = snapLayoutActive,
+            toolbarEnabled = toolbarEnabled,
+            viewportWidth = effectiveWidth,
+            viewportHeight = effectiveHeight,
+            uiScale = scaleFloat,
+            localeDir = localeDir,
+            activeLocale = activeLocale
+        )
+    }
 
     fun ensureDirectoryTree() {
         val dirs = listOf(

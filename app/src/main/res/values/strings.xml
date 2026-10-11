@@ -1865,4 +1865,7 @@
     <string name="open_with">Open with</string>
     <string name="unsupported_file_redirecting">Unsupported file type (%1$s). Redirecting…</string>
     <string name="unsupported_file_no_app">No app found to open this file (%1$s).</string>
+
+    <!-- Window Orientation Advisory -->
+    <string name="dialog_best_viewed_in_landscape">This window is best viewed in landscape mode</string>
 </resources>

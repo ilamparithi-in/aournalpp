@@ -61,6 +61,9 @@ class ProcessSupervisor(val env: LinuxEnvironment) {
     private val _activePromptTitle = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     val activePromptTitle: kotlinx.coroutines.flow.StateFlow<String?> = _activePromptTitle
 
+    private val _activeWindowId = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    val activeWindowId: kotlinx.coroutines.flow.StateFlow<String?> = _activeWindowId
+
     private val _openWindows = kotlinx.coroutines.flow.MutableStateFlow<List<X11WindowInfo>>(emptyList())
     val openWindows: kotlinx.coroutines.flow.StateFlow<List<X11WindowInfo>> = _openWindows
 
@@ -253,8 +256,13 @@ class ProcessSupervisor(val env: LinuxEnvironment) {
         return false
     }
 
-    fun updateOpenboxSnapMode(snapLayoutActive: Boolean, toolbarEnabled: Boolean = env.isToolbarEnabled()) {
-        env.updateOpenboxSnapMode(snapLayoutActive, toolbarEnabled)
+    fun updateOpenboxSnapMode(
+        snapLayoutActive: Boolean,
+        toolbarEnabled: Boolean = env.isToolbarEnabled(),
+        viewportWidth: Int = 0,
+        viewportHeight: Int = 0
+    ) {
+        env.updateOpenboxSnapMode(snapLayoutActive, toolbarEnabled, viewportWidth, viewportHeight)
         reconfigureOpenbox()
     }
 
@@ -447,6 +455,7 @@ class ProcessSupervisor(val env: LinuxEnvironment) {
                                 } else {
                                     pendingActivationWindowId ?: currentActiveId ?: ""
                                 }
+                                _activeWindowId.value = effectiveActiveId.takeIf { it.isNotBlank() && it != "0" && it != "None" }
                                 val windowList = mutableListOf<X11WindowInfo>()
                                 for (i in 1 until parts.size) {
                                     val entry = parts[i]
@@ -511,6 +520,7 @@ class ProcessSupervisor(val env: LinuxEnvironment) {
     fun resetDocumentTitle(title: String? = null) {
         _documentTitle.value = title
         _activePromptTitle.value = null
+        _activeWindowId.value = null
     }
 
     fun triggerXournalExit() {

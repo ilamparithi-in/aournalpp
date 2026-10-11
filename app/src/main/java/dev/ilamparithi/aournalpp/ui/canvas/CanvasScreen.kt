@@ -2,6 +2,7 @@ package dev.ilamparithi.aournalpp.ui.canvas
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import dev.ilamparithi.aournalpp.R
 import android.content.SharedPreferences
 import android.graphics.Bitmap
@@ -23,6 +24,7 @@ import androidx.lifecycle.lifecycleScope
 import android.view.MotionEvent
 import android.widget.FrameLayout
 import kotlinx.coroutines.isActive
+import dev.ilamparithi.aournalpp.runtime.DesktopConfigGenerator
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -76,6 +78,7 @@ import dev.ilamparithi.aournalpp.runtime.CanvasSessionManager
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
 import dev.ilamparithi.aournalpp.runtime.WallpaperHelper
+import dev.ilamparithi.aournalpp.runtime.WindowOrientationAdvisor
 import dev.ilamparithi.aournalpp.ui.AppDialogDefaults
 import dev.ilamparithi.aournalpp.ui.FloatingToolbarLayout
 import dev.ilamparithi.aournalpp.ui.InteractiveMarqueeText
@@ -120,6 +123,25 @@ fun CanvasScreen(
     viewModel: CanvasViewModel = viewModel()
 ) {
     val x11Prefs = remember(activity) { X11Preferences.getPrefs(activity) }
+    val aournalPrefs = remember(activity) { activity.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
+    var uiScaleFloat by remember {
+        mutableFloatStateOf(
+            (aournalPrefs.getString("pref_ui_scale", "1.0")?.toFloatOrNull() ?: 1.0f).coerceIn(0.5f, 4.0f)
+        )
+    }
+
+    DisposableEffect(aournalPrefs) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+            if (key == "pref_ui_scale") {
+                uiScaleFloat = (prefs.getString("pref_ui_scale", "1.0")?.toFloatOrNull() ?: 1.0f).coerceIn(0.5f, 4.0f)
+            }
+        }
+        aournalPrefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            aournalPrefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+
     val isFullscreen = x11Prefs.getBoolean(X11Preferences.KEY_FULLSCREEN, false)
                 val showEmergencyForceCloseDialog by remember { activity.showEmergencyForceCloseDialogState }
                 val preferenceVersion by remember { activity.preferenceUpdateVersionState }
@@ -142,6 +164,7 @@ fun CanvasScreen(
 
                 val liveTitle by activity.sessionManager.documentTitle.collectAsState()
                 val activePromptTitle by activity.sessionManager.activePromptTitle.collectAsState()
+                val activeWindowId by activity.sessionManager.activeWindowId.collectAsState()
                 val isModalOrDialogOpen by activity.sessionManager.isModalOrDialogOpenFlow.collectAsState()
                 val openWindows by activity.sessionManager.openWindows.collectAsState(initial = emptyList())
                 val windowPreviewCache = viewModel.windowPreviewCache
@@ -186,6 +209,7 @@ fun CanvasScreen(
                         transitionIncomingBitmap = null
                     }
                 }
+
 
                 val activeWindow by remember {
                     derivedStateOf { openWindows.find { it.isActive } }
@@ -606,7 +630,12 @@ fun CanvasScreen(
 
                     val isSnapActive = (mode != SnapLayoutMode.SINGLE)
                     activity.lifecycleScope.launch(Dispatchers.IO) {
-                        currentSupervisor.updateOpenboxSnapMode(isSnapActive, toolbarEnabled = toolbarEnabled)
+                        currentSupervisor.updateOpenboxSnapMode(
+                            snapLayoutActive = isSnapActive,
+                            toolbarEnabled = toolbarEnabled,
+                            viewportWidth = vpW,
+                            viewportHeight = vpH
+                        )
                     }
 
                     when (mode) {
@@ -972,6 +1001,104 @@ fun CanvasScreen(
                                             }
                                         }
                                     }
+                                }
+                            }
+                        }
+
+                        var lastToastedCandidate by remember { mutableStateOf<String?>(null) }
+                        var lastToastedOrientation by remember { mutableIntStateOf(-1) }
+
+                        val currentOrientation = if (canvasWidthPx > canvasHeightPx) {
+                            Configuration.ORIENTATION_LANDSCAPE
+                        } else {
+                            Configuration.ORIENTATION_PORTRAIT
+                        }
+
+                        // Dynamically reconfigure Openbox and adapt open dialogs (windowed vs fullscreen) on viewport/orientation changes
+                        LaunchedEffect(canvasWidthPx, canvasHeightPx, uiScaleFloat, activeSnapMode, toolbarEnabled, openWindows, activePromptTitle, activeWindowId) {
+                            val vpW = canvasWidthPx.toInt()
+                            val vpH = canvasHeightPx.toInt()
+                            if (vpW > 0 && vpH > 0 && activity.isSupervisorInitialized()) {
+                                val currentSupervisor = activity.supervisor
+                                val isSnapActive = (activeSnapMode != SnapLayoutMode.SINGLE)
+
+                                // 1. Re-generate rc.xml and reconfigure Openbox for new viewport dimensions
+                                withContext(Dispatchers.IO) {
+                                    currentSupervisor.updateOpenboxSnapMode(
+                                        snapLayoutActive = isSnapActive,
+                                        toolbarEnabled = toolbarEnabled,
+                                        viewportWidth = vpW,
+                                        viewportHeight = vpH
+                                    )
+                                }
+
+                                // 2. Dynamically flip open dialogs (e.g. Preferences) between windowed and fullscreen
+                                if (!isSnapActive) {
+                                    // In single-window mode, all main document windows MUST ALWAYS be borderless fullscreen
+                                    openWindows.forEach { doc ->
+                                        currentSupervisor.setWindowMaximized(doc.id, true)
+                                        currentSupervisor.setWindowDecorations(doc.id, false)
+                                    }
+
+                                    val customizeTitles = DesktopConfigGenerator.resolveCustomizeToolbarTitles()
+
+                                    fun adaptDialog(title: String, wid: String) {
+                                        val req = WindowOrientationAdvisor.getWindowMinimumRequisition(title) ?: return
+                                        val (reqW, reqH) = req
+                                        val fits = WindowOrientationAdvisor.canFitFullscreen(vpW, vpH, reqW, reqH, uiScaleFloat)
+                                        val isCustomizeToolbar = customizeTitles.any { title.contains(it, ignoreCase = true) }
+                                        // Customize Toolbar must ALWAYS remain windowed.
+                                        if (!isCustomizeToolbar) {
+                                            if (!fits) {
+                                                currentSupervisor.setWindowMaximized(wid, false)
+                                                currentSupervisor.setWindowDecorations(wid, true)
+                                            } else {
+                                                currentSupervisor.setWindowMaximized(wid, true)
+                                                currentSupervisor.setWindowDecorations(wid, false)
+                                            }
+                                        }
+                                    }
+
+                                    // Check activePromptTitle ONLY if activeWindowId is NOT one of the main document windows
+                                    val prompt = activePromptTitle?.trim()
+                                    val promptWid = activeWindowId
+                                    val isMainDoc = openWindows.any { it.id == promptWid }
+                                    if (!prompt.isNullOrBlank() && !promptWid.isNullOrBlank() && !isMainDoc) {
+                                        adaptDialog(prompt, promptWid)
+                                    }
+                                }
+                            }
+                        }
+
+                        // Recommend landscape orientation toast when dialog cannot fit in current orientation but fits in landscape
+                        LaunchedEffect(activePromptTitle, currentOrientation, canvasWidthPx, canvasHeightPx, uiScaleFloat) {
+                            val vpW = canvasWidthPx.toInt()
+                            val vpH = canvasHeightPx.toInt()
+                            val dispW = activity.resources.displayMetrics.widthPixels
+                            val dispH = activity.resources.displayMetrics.heightPixels
+
+                            val candidateTitle = activePromptTitle?.trim()?.takeIf { it.isNotBlank() }
+
+                            if (candidateTitle.isNullOrBlank()) {
+                                lastToastedCandidate = null
+                                lastToastedOrientation = -1
+                            } else {
+                                val shouldAdvise = WindowOrientationAdvisor.shouldRecommendLandscape(
+                                    windowTitle = candidateTitle,
+                                    currentWidth = vpW,
+                                    currentHeight = vpH,
+                                    displayWidth = dispW,
+                                    displayHeight = dispH,
+                                    uiScale = uiScaleFloat
+                                )
+                                if (shouldAdvise && (lastToastedCandidate != candidateTitle || lastToastedOrientation != currentOrientation)) {
+                                    lastToastedCandidate = candidateTitle
+                                    lastToastedOrientation = currentOrientation
+                                    Toast.makeText(
+                                        activity,
+                                        activity.getString(R.string.dialog_best_viewed_in_landscape),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
                                 }
                             }
                         }

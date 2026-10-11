@@ -219,6 +219,14 @@ static int is_dialog_or_ignored_title(const char *title) {
   if (*p == '\0')
     return 1;
 
+  // Invariant: In Xournal++, every valid document/notebook window title ends with or contains
+  // "- Xournal++" across all locales (e.g. "<filename> - Xournal++" or "[autosaved] <filename> - Xournal++").
+  // Any window whose title lacks "- xournal++" is an auxiliary/dialog window across all locales
+  // (e.g. Preferences, "Einstellungen", "Préférences", "設定", Customize Toolbars, About, etc.).
+  if (case_str_search(p, "- xournal++") == NULL) {
+    return 1;
+  }
+
   // Check exact matches
   const char *exact_ignored[] = {"openbox",
                                  "desktop",

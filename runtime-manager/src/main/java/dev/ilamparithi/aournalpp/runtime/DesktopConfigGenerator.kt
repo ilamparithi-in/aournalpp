@@ -13,7 +13,118 @@ object DesktopConfigGenerator {
 
     private const val TAG = "DesktopConfigGenerator"
 
-    fun generateOpenboxConfig(snapLayoutActive: Boolean = false, toolbarEnabled: Boolean = true): String {
+    private val FALLBACK_CUSTOMIZE_TOOLBAR_TITLES = setOf(
+        "Customize Toolbars", "Customize Toolbar",
+        "Werkzeugleisten anpassen", "Personnaliser les barres d'outils",
+        "Personalizar barras de herramientas", "Personalizar Barras de Ferramentas",
+        "Personalizar as barras de ferramentas", "Personalizza barra degli strumenti",
+        "Настройка панелей инструментов", "Налаштування панелі інструментів",
+        "Dostosuj Paski Narzędzi", "Upravit panely nástrojů",
+        "Werkbalken aanpassen", "Anpassa verktygsfält",
+        "Tilpas Værktøjslinjer", "Eszköztárak testreszabása",
+        "Araç Çubuklarını Özelleştir", "自定义工具栏", "自訂工具列",
+        "ツールバーをカスタマイズ", "툴바 사용자 정의"
+    )
+
+    internal val FALLBACK_PREFERENCES_TITLES = setOf(
+        "Preferences", "Xournal++ Preferences", "Settings",
+        "Einstellungen", "Xournal++ Einstellungen",
+        "Préférences", "Préférences de Xournal++",
+        "Preferencias", "Preferencias de Xournal++",
+        "Preferências", "Preferências Xournal++",
+        "Preferenze", "Preferenze Xournal++",
+        "Настройки", "Настройки Xournal++",
+        "Налаштування", "Налаштування Xournal++",
+        "Ustawienia Xournal++", "Preferencje",
+        "Nastavení Xournal++", "Voorkeuren", "Xournal++-voorkeuren",
+        "Inställningar", "Inställningar för Xournal++",
+        "Beállítások", "Xournal++ beállításai",
+        "Tercihler", "Xournal++ Tercihleri",
+        "首选项", "Xournal++ 首选项", "偏好設定", "Xournal++偏好設定",
+        "Xournal++の設定", "설정"
+    )
+
+    /**
+     * Resolves all known and dynamically discovered title strings for the Toolbar Customization dialog.
+     */
+    fun resolveCustomizeToolbarTitles(localeDir: File? = null, activeLocale: String? = null): Set<String> {
+        val titles = mutableSetOf<String>()
+        titles.addAll(FALLBACK_CUSTOMIZE_TOOLBAR_TITLES)
+
+        if (localeDir != null && localeDir.exists() && localeDir.isDirectory) {
+            val dynamic = MoReader.findTranslations(
+                localeDir = localeDir,
+                keys = listOf("Customize Toolbars", "Customize Toolbar"),
+                activeLocale = activeLocale
+            )
+            dynamic.values.forEach { titles.addAll(it) }
+        }
+
+        return titles
+    }
+
+    /**
+     * Resolves all known and dynamically discovered title strings for the Preferences dialog.
+     */
+    fun resolvePreferencesTitles(localeDir: File? = null, activeLocale: String? = null): Set<String> {
+        val titles = mutableSetOf<String>()
+        titles.addAll(FALLBACK_PREFERENCES_TITLES)
+
+        if (localeDir != null && localeDir.exists() && localeDir.isDirectory) {
+            val dynamic = MoReader.findTranslations(
+                localeDir = localeDir,
+                keys = listOf("Xournal++ Preferences", "Preferences"),
+                activeLocale = activeLocale
+            )
+            dynamic.values.forEach { titles.addAll(it) }
+        }
+
+        return titles
+    }
+
+    fun generateOpenboxConfig(
+        snapLayoutActive: Boolean = false,
+        toolbarEnabled: Boolean = true,
+        viewportWidth: Int = 0,
+        viewportHeight: Int = 0,
+        uiScale: Float = 1.0f,
+        localeDir: File? = null,
+        activeLocale: String? = null
+    ): String {
+        val customizeToolbarTitles = resolveCustomizeToolbarTitles(localeDir, activeLocale)
+        val preferencesTitles = resolvePreferencesTitles(localeDir, activeLocale)
+
+        // Evaluate whether Preferences can fit in fullscreen under current viewport and UI scale
+        val canFitPreferencesFullscreen = if (viewportWidth > 0 && viewportHeight > 0) {
+            WindowOrientationAdvisor.canFitPreferencesFullscreen(viewportWidth, viewportHeight, uiScale)
+        } else {
+            true // Default to fullscreen if viewport is not yet measured
+        }
+
+        val fullscreenPreferencesRules = if (canFitPreferencesFullscreen) {
+            buildString {
+                appendLine("    <application class=\"*\" title=\"*Preferences*\">")
+                appendLine("      <decor>no</decor>")
+                appendLine("      <maximized>true</maximized>")
+                appendLine("      <focus>yes</focus>")
+                appendLine("    </application>")
+                appendLine("    <application class=\"*\" title=\"*preferences*\">")
+                appendLine("      <decor>no</decor>")
+                appendLine("      <maximized>true</maximized>")
+                appendLine("      <focus>yes</focus>")
+                appendLine("    </application>")
+                for (t in preferencesTitles) {
+                    appendLine("    <application class=\"*\" title=\"*$t*\">")
+                    appendLine("      <decor>no</decor>")
+                    appendLine("      <maximized>true</maximized>")
+                    appendLine("      <focus>yes</focus>")
+                    appendLine("    </application>")
+                }
+            }.trimEnd()
+        } else {
+            ""
+        }
+
         val fullscreenRules = if (!snapLayoutActive) {
             val normalDecor = if (toolbarEnabled) "no" else "yes"
             """
@@ -103,16 +214,7 @@ object DesktopConfigGenerator {
       <maximized>true</maximized>
       <focus>yes</focus>
     </application>
-    <application class="*" title="*Preferences*">
-      <decor>no</decor>
-      <maximized>true</maximized>
-      <focus>yes</focus>
-    </application>
-    <application class="*" title="*preferences*">
-      <decor>no</decor>
-      <maximized>true</maximized>
-      <focus>yes</focus>
-    </application>
+$fullscreenPreferencesRules
     <application class="*" title="*Find*">
       <decor>no</decor>
       <maximized>true</maximized>
@@ -194,6 +296,96 @@ object DesktopConfigGenerator {
             """.trimIndent()
         }
 
+        // Windowed override rules: Must be placed at the VERY END of <applications> so
+        // Openbox applies them with final precedence over generic dialog/normal catch-alls!
+        val windowedOverrideRules = buildString {
+            appendLine("    <!-- Always center audio player -->")
+            appendLine("    <application class=\"*\" title=\"*Audio Player*\">")
+            appendLine("      <decor>yes</decor>")
+            appendLine("      <maximized>no</maximized>")
+            appendLine("      <focus>yes</focus>")
+            appendLine("      <position force=\"no\">")
+            appendLine("        <x>center</x>")
+            appendLine("        <y>center</y>")
+            appendLine("      </position>")
+            appendLine("    </application>")
+
+            appendLine("    <!-- Customize Toolbar: ALWAYS windowed with titlebar and centered across all locales -->")
+            appendLine("    <application class=\"*\" title=\"*Customize Toolbar*\">")
+            appendLine("      <decor>yes</decor>")
+            appendLine("      <maximized>no</maximized>")
+            appendLine("      <focus>yes</focus>")
+            appendLine("      <position force=\"no\">")
+            appendLine("        <x>center</x>")
+            appendLine("        <y>center</y>")
+            appendLine("      </position>")
+            appendLine("    </application>")
+            appendLine("    <application class=\"*\" title=\"*Customize Toolbars*\">")
+            appendLine("      <decor>yes</decor>")
+            appendLine("      <maximized>no</maximized>")
+            appendLine("      <focus>yes</focus>")
+            appendLine("      <position force=\"no\">")
+            appendLine("        <x>center</x>")
+            appendLine("        <y>center</y>")
+            appendLine("      </position>")
+            appendLine("    </application>")
+            for (t in customizeToolbarTitles) {
+                appendLine("    <application class=\"*\" title=\"*$t*\">")
+                appendLine("      <decor>yes</decor>")
+                appendLine("      <maximized>no</maximized>")
+                appendLine("      <focus>yes</focus>")
+                appendLine("      <position force=\"no\">")
+                appendLine("        <x>center</x>")
+                appendLine("        <y>center</y>")
+                appendLine("      </position>")
+                appendLine("    </application>")
+            }
+
+            // In single window mode, if viewport cannot fit Preferences in fullscreen,
+            // force Preferences into windowed mode with titlebar so user can drag and reach action buttons!
+            if (!snapLayoutActive && !canFitPreferencesFullscreen) {
+                appendLine("    <!-- Preferences: Windowed mode when viewport is insufficient for fullscreen -->")
+                appendLine("    <application class=\"*\" title=\"*Preferences*\">")
+                appendLine("      <decor>yes</decor>")
+                appendLine("      <maximized>no</maximized>")
+                appendLine("      <focus>yes</focus>")
+                appendLine("      <position force=\"no\">")
+                appendLine("        <x>center</x>")
+                appendLine("        <y>center</y>")
+                appendLine("      </position>")
+                appendLine("    </application>")
+                appendLine("    <application class=\"*\" title=\"*preferences*\">")
+                appendLine("      <decor>yes</decor>")
+                appendLine("      <maximized>no</maximized>")
+                appendLine("      <focus>yes</focus>")
+                appendLine("      <position force=\"no\">")
+                appendLine("        <x>center</x>")
+                appendLine("        <y>center</y>")
+                appendLine("      </position>")
+                appendLine("    </application>")
+                appendLine("    <application class=\"*\" title=\"*Settings*\">")
+                appendLine("      <decor>yes</decor>")
+                appendLine("      <maximized>no</maximized>")
+                appendLine("      <focus>yes</focus>")
+                appendLine("      <position force=\"no\">")
+                appendLine("        <x>center</x>")
+                appendLine("        <y>center</y>")
+                appendLine("      </position>")
+                appendLine("    </application>")
+                for (t in preferencesTitles) {
+                    appendLine("    <application class=\"*\" title=\"*$t*\">")
+                    appendLine("      <decor>yes</decor>")
+                    appendLine("      <maximized>no</maximized>")
+                    appendLine("      <focus>yes</focus>")
+                    appendLine("      <position force=\"no\">")
+                    appendLine("        <x>center</x>")
+                    appendLine("        <y>center</y>")
+                    appendLine("      </position>")
+                    appendLine("    </application>")
+                }
+            }
+        }.trimEnd()
+
         return """
 <?xml version="1.0" encoding="UTF-8"?>
 <openbox_config xmlns="http://openbox.org/3.4/rc">
@@ -216,37 +408,38 @@ object DesktopConfigGenerator {
     </context>
   </mouse>
   <applications>
-    <!-- Always center small popup dialogs and customize toolbar window -->
-    <application class="*" title="*Audio Player*">
-      <decor>yes</decor>
-      <maximized>no</maximized>
-      <focus>yes</focus>
-      <position force="no">
-        <x>center</x>
-        <y>center</y>
-      </position>
-    </application>
-    <application class="*" title="*Customize Toolbar*">
-      <decor>yes</decor>
-      <maximized>no</maximized>
-      <focus>yes</focus>
-      <position force="no">
-        <x>center</x>
-        <y>center</y>
-      </position>
-    </application>
     $fullscreenRules
+    $windowedOverrideRules
   </applications>
 </openbox_config>
 """.trimIndent()
     }
 
-    fun updateOpenboxSnapMode(openboxConfigDir: File, snapLayoutActive: Boolean, toolbarEnabled: Boolean = true) {
+    fun updateOpenboxSnapMode(
+        openboxConfigDir: File,
+        snapLayoutActive: Boolean,
+        toolbarEnabled: Boolean = true,
+        viewportWidth: Int = 0,
+        viewportHeight: Int = 0,
+        uiScale: Float = 1.0f,
+        localeDir: File? = null,
+        activeLocale: String? = null
+    ) {
         if (!openboxConfigDir.exists()) {
             openboxConfigDir.mkdirs()
         }
         val rcFile = File(openboxConfigDir, "rc.xml")
-        rcFile.writeText(generateOpenboxConfig(snapLayoutActive, toolbarEnabled))
+        rcFile.writeText(
+            generateOpenboxConfig(
+                snapLayoutActive = snapLayoutActive,
+                toolbarEnabled = toolbarEnabled,
+                viewportWidth = viewportWidth,
+                viewportHeight = viewportHeight,
+                uiScale = uiScale,
+                localeDir = localeDir,
+                activeLocale = activeLocale
+            )
+        )
     }
 
     fun generateGtkSettings(isDark: Boolean): String = buildString {

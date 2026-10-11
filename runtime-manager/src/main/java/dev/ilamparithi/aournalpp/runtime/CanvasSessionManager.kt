@@ -386,6 +386,9 @@ class CanvasSessionManager @JvmOverloads constructor(
     val activePromptTitle: kotlinx.coroutines.flow.StateFlow<String?>
         get() = supervisor.activePromptTitle
 
+    val activeWindowId: kotlinx.coroutines.flow.StateFlow<String?>
+        get() = supervisor.activeWindowId
+
     val openWindows: kotlinx.coroutines.flow.StateFlow<List<ProcessSupervisor.X11WindowInfo>>
         get() = supervisor.openWindows
 
