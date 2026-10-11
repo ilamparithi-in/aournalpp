@@ -124,6 +124,9 @@ fun CanvasScreen(
                 val showEmergencyForceCloseDialog by remember { activity.showEmergencyForceCloseDialogState }
                 val preferenceVersion by remember { activity.preferenceUpdateVersionState }
 
+                var toolbarEnabled by remember {
+                    mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_ENABLED, true))
+                }
                 var alwaysShowFileName by remember {
                     mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_ALWAYS_SHOW_FILE_NAME, false))
                 }
@@ -364,6 +367,19 @@ fun CanvasScreen(
                 DisposableEffect(x11Prefs) {
                     val listener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
                         when (key) {
+                            X11Preferences.KEY_TOOLBAR_ENABLED -> {
+                                val enabled = prefs.getBoolean(key, true)
+                                toolbarEnabled = enabled
+                                if (activeSnapMode == SnapLayoutMode.SINGLE && activity.isSupervisorInitialized()) {
+                                    activity.lifecycleScope.launch(Dispatchers.IO) {
+                                        activity.supervisor.updateOpenboxSnapMode(snapLayoutActive = false, toolbarEnabled = enabled)
+                                    }
+                                    val wins = openWindows.ifEmpty { activity.supervisor.queryOpenWindows() }
+                                    wins.forEach { win ->
+                                        activity.supervisor.setWindowDecorations(win.id, decorated = !enabled)
+                                    }
+                                }
+                            }
                             X11Preferences.KEY_TOOLBAR_PIN_BUTTON_MODE ->
                                 pinButtonMode = prefs.getBoolean(key, true)
                             X11Preferences.KEY_TOOLBAR_AUTO_COLLAPSE_TIMEOUT_MS ->
@@ -420,6 +436,19 @@ fun CanvasScreen(
 
                 LaunchedEffect(preferenceVersion) {
                     if (preferenceVersion > 0) {
+                        val newToolbarEnabled = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_ENABLED, true)
+                        if (toolbarEnabled != newToolbarEnabled) {
+                            toolbarEnabled = newToolbarEnabled
+                            if (activeSnapMode == SnapLayoutMode.SINGLE && activity.isSupervisorInitialized()) {
+                                activity.lifecycleScope.launch(Dispatchers.IO) {
+                                    activity.supervisor.updateOpenboxSnapMode(snapLayoutActive = false, toolbarEnabled = newToolbarEnabled)
+                                }
+                                val wins = openWindows.ifEmpty { activity.supervisor.queryOpenWindows() }
+                                wins.forEach { win ->
+                                    activity.supervisor.setWindowDecorations(win.id, decorated = !newToolbarEnabled)
+                                }
+                            }
+                        }
                         pinButtonMode = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_PIN_BUTTON_MODE, true)
                         autoCollapseTimeoutMs = x11Prefs.getInt(X11Preferences.KEY_TOOLBAR_AUTO_COLLAPSE_TIMEOUT_MS, 5000)
                         alwaysShowFileName = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_ALWAYS_SHOW_FILE_NAME, false)
@@ -577,7 +606,7 @@ fun CanvasScreen(
 
                     val isSnapActive = (mode != SnapLayoutMode.SINGLE)
                     activity.lifecycleScope.launch(Dispatchers.IO) {
-                        currentSupervisor.updateOpenboxSnapMode(isSnapActive)
+                        currentSupervisor.updateOpenboxSnapMode(isSnapActive, toolbarEnabled = toolbarEnabled)
                     }
 
                     when (mode) {
@@ -600,7 +629,7 @@ fun CanvasScreen(
                             snapGeometries = emptyList()
                             val wins = openWindows.ifEmpty { currentSupervisor.queryOpenWindows() }
                             wins.forEach { win ->
-                                currentSupervisor.setWindowDecorations(win.id, decorated = false)
+                                currentSupervisor.setWindowDecorations(win.id, decorated = !toolbarEnabled)
                                 currentSupervisor.setWindowMaximized(win.id, true)
                             }
                             val activeWin = wins.find { it.isActive } ?: wins.firstOrNull()
@@ -803,13 +832,14 @@ fun CanvasScreen(
                         }
                     }
 
-                    // Ensure newly opened windows are borderless and opened in fullscreen if in single mode or background/unassigned in split mode
-                    if (newIds.isNotEmpty() && wasNonEmpty && activity.isSupervisorInitialized()) {
+                    // Ensure newly opened windows are borderless (or decorated if toolbar is disabled) and opened in fullscreen if in single mode or background/unassigned in split mode
+                    if (newIds.isNotEmpty() && activity.isSupervisorInitialized()) {
                         val lorie = activity.activeLorieView
                         val vpW = lorie?.width?.takeIf { it > 0 } ?: activity.resources.displayMetrics.widthPixels
                         val vpH = lorie?.height?.takeIf { it > 0 } ?: activity.resources.displayMetrics.heightPixels
                         for (newId in newIds) {
-                            activity.supervisor.setWindowDecorations(newId, false)
+                            val decorated = !toolbarEnabled && (activeSnapMode == SnapLayoutMode.SINGLE)
+                            activity.supervisor.setWindowDecorations(newId, decorated)
                             if (activeSnapMode == SnapLayoutMode.SINGLE ||
                                 (activeSnapMode != SnapLayoutMode.UNLOCKED && newId !in snapLayoutManager.slotAssignments.values)
                             ) {
@@ -1283,130 +1313,132 @@ fun CanvasScreen(
                         }
 
                         // Floating Toolbar Overlay with Isolated Recomposition Scope (stays on top of window animations)
-                        FloatingToolbarOverlay(
-                            canvasWidthPx = canvasWidthPx,
-                            canvasHeightPx = canvasHeightPx,
-                            defaultNormX = defaultNormX,
-                            defaultNormY = defaultNormY,
-                            centerTopBarWithinBounds = centerTopBarWithinBounds,
-                            effectiveInsets = effectiveInsets,
-                            systemBarPadding = systemBarPadding,
-                            isFullscreen = isFullscreen,
-                            displayTitle = displayTitle,
-                            windowIcon = windowIcon,
-                            windowIndex = activeWindowIndex,
-                            windowId = currentDisplayWindow?.id ?: "",
-                            startCollapsed = startCollapsed,
-                            pinButtonMode = pinButtonMode,
-                            autoCollapseTimeoutMs = autoCollapseTimeoutMs,
-                            showStylusClickOverride = showStylusClickOverride,
-                            showTouchStylus = showTouchStylus,
-                            isFingerAsStylus = isFingerAsStylus,
-                            onToggleFingerAsStylus = {
-                                val next = !isFingerAsStylus
-                                isFingerAsStylus = next
-                                activity.inputHandler?.isFingerAsStylusEnabled = next
-                                if (rememberFingerAsStylusState) {
-                                    x11Prefs.edit {putBoolean(X11Preferences.KEY_FINGER_AS_STYLUS_ENABLED, next)}
-                                }
-                            },
-                            stylusClickMode = stylusClickMode,
-                            onStylusClickModeChange = { mode ->
-                                stylusClickMode = mode
-                                activity.inputHandler?.stylusInputHelperMode = mode
-                            },
-                            showTitle = showTitle,
-                            showBack = showBack,
-                            showClose = showClose,
-                            showWindowSwitcher = showWindowSwitcher && (openWindows.size > 1),
-                            showSnapLayouts = showSnapLayouts && (openWindows.size > 1),
-                            activeSnapMode = activeSnapMode,
-                            isSnapMirrored = isSnapMirrored,
-                            onSelectSnapMode = { mode, mirrored ->
-                                applySnapLayout(mode, mirrored, configureSlotsIfMultiWindow = true)
-                            },
-                            onToggleSnapMirror = {
-                                snapLayoutManager.toggleMirrored()
-                                applySnapLayout(activeSnapMode, snapLayoutManager.isMirrored, configureSlotsIfMultiWindow = false)
-                            },
-                            openWindowCount = openWindows.size.coerceAtLeast(1),
-                            onQuickSwitchWindow = { performQuickSwitch() },
-                            onOpenWindowGallery = {
-                                val currentActiveId = openWindows.find { it.isActive }?.id
-                                captureCurrentWindowPreview { bmp ->
-                                    if (currentActiveId != null) {
-                                        windowPreviewCache[currentActiveId] = bmp
+                        if (toolbarEnabled) {
+                            FloatingToolbarOverlay(
+                                canvasWidthPx = canvasWidthPx,
+                                canvasHeightPx = canvasHeightPx,
+                                defaultNormX = defaultNormX,
+                                defaultNormY = defaultNormY,
+                                centerTopBarWithinBounds = centerTopBarWithinBounds,
+                                effectiveInsets = effectiveInsets,
+                                systemBarPadding = systemBarPadding,
+                                isFullscreen = isFullscreen,
+                                displayTitle = displayTitle,
+                                windowIcon = windowIcon,
+                                windowIndex = activeWindowIndex,
+                                windowId = currentDisplayWindow?.id ?: "",
+                                startCollapsed = startCollapsed,
+                                pinButtonMode = pinButtonMode,
+                                autoCollapseTimeoutMs = autoCollapseTimeoutMs,
+                                showStylusClickOverride = showStylusClickOverride,
+                                showTouchStylus = showTouchStylus,
+                                isFingerAsStylus = isFingerAsStylus,
+                                onToggleFingerAsStylus = {
+                                    val next = !isFingerAsStylus
+                                    isFingerAsStylus = next
+                                    activity.inputHandler?.isFingerAsStylusEnabled = next
+                                    if (rememberFingerAsStylusState) {
+                                        x11Prefs.edit {putBoolean(X11Preferences.KEY_FINGER_AS_STYLUS_ENABLED, next)}
                                     }
-                                    showWindowSwitcherGallery = true
-                                }
-                            },
-                            showKeyboard = showKeyboard,
-                            showDragHandle = showDragHandle,
-                            showCut = showCut,
-                            showCopy = showCopy,
-                            showPaste = showPaste,
-                            showImage = showImage,
-                            showSync = showSync,
-                            isSyncing = activity.isSyncRunningState.value,
-                            onSyncNow = {
-                                val vault = dev.ilamparithi.aournalpp.backup.security.CredentialsVault.getInstance(activity)
-                                val configuredServices = vault.reloadServices().filter { it.isEnabled }
-                                if (configuredServices.isEmpty()) {
-                                    Toast.makeText(
-                                        activity,
-                                        activity.getString(R.string.toast_no_cloud_configured),
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                } else {
-                                    val backupPrefs = dev.ilamparithi.aournalpp.backup.worker.BackupPreferences(activity)
-                                    val netCheck = dev.ilamparithi.aournalpp.utils.NetworkUtils.checkSyncNetworkPreconditions(
-                                        activity,
-                                        wifiOnly = backupPrefs.isWifiOnlyEnabled
-                                    )
-                                    if (!netCheck.canSync) {
-                                        Toast.makeText(activity, netCheck.errorMessage ?: "Network not available", Toast.LENGTH_SHORT).show()
+                                },
+                                stylusClickMode = stylusClickMode,
+                                onStylusClickModeChange = { mode ->
+                                    stylusClickMode = mode
+                                    activity.inputHandler?.stylusInputHelperMode = mode
+                                },
+                                showTitle = showTitle,
+                                showBack = showBack,
+                                showClose = showClose,
+                                showWindowSwitcher = showWindowSwitcher && (openWindows.size > 1),
+                                showSnapLayouts = showSnapLayouts && (openWindows.size > 1),
+                                activeSnapMode = activeSnapMode,
+                                isSnapMirrored = isSnapMirrored,
+                                onSelectSnapMode = { mode, mirrored ->
+                                    applySnapLayout(mode, mirrored, configureSlotsIfMultiWindow = true)
+                                },
+                                onToggleSnapMirror = {
+                                    snapLayoutManager.toggleMirrored()
+                                    applySnapLayout(activeSnapMode, snapLayoutManager.isMirrored, configureSlotsIfMultiWindow = false)
+                                },
+                                openWindowCount = openWindows.size.coerceAtLeast(1),
+                                onQuickSwitchWindow = { performQuickSwitch() },
+                                onOpenWindowGallery = {
+                                    val currentActiveId = openWindows.find { it.isActive }?.id
+                                    captureCurrentWindowPreview { bmp ->
+                                        if (currentActiveId != null) {
+                                            windowPreviewCache[currentActiveId] = bmp
+                                        }
+                                        showWindowSwitcherGallery = true
+                                    }
+                                },
+                                showKeyboard = showKeyboard,
+                                showDragHandle = showDragHandle,
+                                showCut = showCut,
+                                showCopy = showCopy,
+                                showPaste = showPaste,
+                                showImage = showImage,
+                                showSync = showSync,
+                                isSyncing = activity.isSyncRunningState.value,
+                                onSyncNow = {
+                                    val vault = dev.ilamparithi.aournalpp.backup.security.CredentialsVault.getInstance(activity)
+                                    val configuredServices = vault.reloadServices().filter { it.isEnabled }
+                                    if (configuredServices.isEmpty()) {
+                                        Toast.makeText(
+                                            activity,
+                                            activity.getString(R.string.toast_no_cloud_configured),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
                                     } else {
-                                        activity.triggerCloudSync()
+                                        val backupPrefs = dev.ilamparithi.aournalpp.backup.worker.BackupPreferences(activity)
+                                        val netCheck = dev.ilamparithi.aournalpp.utils.NetworkUtils.checkSyncNetworkPreconditions(
+                                            activity,
+                                            wifiOnly = backupPrefs.isWifiOnlyEnabled
+                                        )
+                                        if (!netCheck.canSync) {
+                                            Toast.makeText(activity, netCheck.errorMessage ?: "Network not available", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            activity.triggerCloudSync()
+                                        }
                                     }
-                                }
-                            },
-                            onOpenImageSelector = {
-                                activity.lifecycleScope.launch {
-                                    if (activity.sessionManager.isModalOrDialogOpen()) {
-                                        Toast.makeText(activity, "Close open dialogs before inserting image", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        showImageSourceDialog = true
+                                },
+                                onOpenImageSelector = {
+                                    activity.lifecycleScope.launch {
+                                        if (activity.sessionManager.isModalOrDialogOpen()) {
+                                            Toast.makeText(activity, "Close open dialogs before inserting image", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            showImageSourceDialog = true
+                                        }
                                     }
-                                }
-                            },
-                            stylusHoverExpands = stylusHoverExpands,
-                            onSmartBackPress = { activity.handleSmartBackPress() },
-                            onCloseWindow = { activity.handleCloseWindow() },
-                            onToggleKeyboard = {
-                                activity.activeLorieView?.let { view ->
-                                    val insetsCtrl = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
-                                    if (activity.isKeyboardOpenState.value) {
-                                        view.isKeyboardVisible = false
-                                        insetsCtrl.hide(WindowInsetsCompat.Type.ime())
-                                    } else {
-                                        view.requestFocus()
-                                        view.isKeyboardVisible = true
-                                        insetsCtrl.show(WindowInsetsCompat.Type.ime())
+                                },
+                                stylusHoverExpands = stylusHoverExpands,
+                                onSmartBackPress = { activity.handleSmartBackPress() },
+                                onCloseWindow = { activity.handleCloseWindow() },
+                                onToggleKeyboard = {
+                                    activity.activeLorieView?.let { view ->
+                                        val insetsCtrl = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+                                        if (activity.isKeyboardOpenState.value) {
+                                            view.isKeyboardVisible = false
+                                            insetsCtrl.hide(WindowInsetsCompat.Type.ime())
+                                        } else {
+                                            view.requestFocus()
+                                            view.isKeyboardVisible = true
+                                            insetsCtrl.show(WindowInsetsCompat.Type.ime())
+                                        }
+                                    } ?: run {
+                                        val insetsCtrl = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+                                        if (activity.isKeyboardOpenState.value) {
+                                            insetsCtrl.hide(WindowInsetsCompat.Type.ime())
+                                        } else {
+                                            insetsCtrl.show(WindowInsetsCompat.Type.ime())
+                                        }
                                     }
-                                } ?: run {
-                                    val insetsCtrl = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
-                                    if (activity.isKeyboardOpenState.value) {
-                                        insetsCtrl.hide(WindowInsetsCompat.Type.ime())
-                                    } else {
-                                        insetsCtrl.show(WindowInsetsCompat.Type.ime())
-                                    }
-                                }
-                            },
-                            onInjectShortcut = { keyCode, shortcutStr ->
-                                activity.injectKeyboardShortcut(keyCode, shortcutStr)
-                            },
-                            isKeyboardOpen = activity.isKeyboardOpenState.value
-                        )
+                                },
+                                onInjectShortcut = { keyCode, shortcutStr ->
+                                    activity.injectKeyboardShortcut(keyCode, shortcutStr)
+                                },
+                                isKeyboardOpen = activity.isKeyboardOpenState.value
+                            )
+                        }
 
                         // Window Switcher Gallery Overlay (Long-press on Window Switcher)
                         AppAnimatedVisibility(

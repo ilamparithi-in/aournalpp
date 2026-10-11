@@ -28,6 +28,17 @@ class DesktopConfigGeneratorTest {
     }
 
     @Test
+    fun `test generateOpenboxConfig without toolbar enables titlebar for normal windows in fullscreen`() {
+        val config = DesktopConfigGenerator.generateOpenboxConfig(snapLayoutActive = false, toolbarEnabled = false)
+
+        assertTrue(config.contains("<openbox_config"))
+        assertTrue(config.contains("</openbox_config>"))
+        assertTrue(config.contains("<application class=\"*\" type=\"normal\">"))
+        assertTrue(config.contains("<decor>yes</decor>"))
+        assertTrue(config.contains("<maximized>true</maximized>"))
+    }
+
+    @Test
     fun `test generateOpenboxConfig with snap layout omits single-window fullscreen rules`() {
         val config = DesktopConfigGenerator.generateOpenboxConfig(snapLayoutActive = true)
 

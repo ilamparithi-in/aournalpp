@@ -253,8 +253,8 @@ class ProcessSupervisor(val env: LinuxEnvironment) {
         return false
     }
 
-    fun updateOpenboxSnapMode(snapLayoutActive: Boolean) {
-        env.updateOpenboxSnapMode(snapLayoutActive)
+    fun updateOpenboxSnapMode(snapLayoutActive: Boolean, toolbarEnabled: Boolean = env.isToolbarEnabled()) {
+        env.updateOpenboxSnapMode(snapLayoutActive, toolbarEnabled)
         reconfigureOpenbox()
     }
 

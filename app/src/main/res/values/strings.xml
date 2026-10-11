@@ -1241,6 +1241,11 @@
     <string name="pref_cat_toolbar">Floating Toolbar</string>
     <string name="pref_cat_toolbar_desc">Placement, auto-collapse &amp; toolbar controls</string>
 
+    <!-- General & Master Toggle -->
+    <string name="pref_toolbar_enable_title">Enable Floating Toolbar</string>
+    <string name="pref_toolbar_enable_desc">Display on-screen toolbar with canvas controls and quick actions</string>
+    <string name="pref_toolbar_disabled_notice">Some enhanced touch controls are only available in the toolbar, and disabling it is only recommended in case of a full keyboard + mouse setup.</string>
+
     <!-- Placement & Anchors -->
     <string name="pref_toolbar_placement_title">Placement &amp; Anchors</string>
     <string name="pref_toolbar_placement_desc">Canvas dock anchor, safe area bounds, and calibration</string>

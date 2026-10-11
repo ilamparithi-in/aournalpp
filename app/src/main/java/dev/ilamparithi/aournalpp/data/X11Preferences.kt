@@ -30,6 +30,7 @@ object X11Preferences {
     const val KEY_TOP_BAR_CENTER_WITHIN_BOUNDS = "topBarCenterWithinBounds"
 
     // Floating Toolbar Configuration
+    const val KEY_TOOLBAR_ENABLED = "toolbarEnabled"
     const val KEY_TOOLBAR_POSITION_PRESET = "toolbarPositionPreset"
     const val KEY_TOOLBAR_POS_X_RATIO = "toolbarPosXRatio"
     const val KEY_TOOLBAR_POS_Y_RATIO = "toolbarPosYRatio"

@@ -247,11 +247,16 @@ class LinuxEnvironment(private val context: Context) {
         prefs.edit().putString(PREF_KEY_NOTES_DIR, newPath).apply()
     }
 
-    fun generateOpenboxConfig(snapLayoutActive: Boolean = false): String =
-        DesktopConfigGenerator.generateOpenboxConfig(snapLayoutActive)
+    fun isToolbarEnabled(): Boolean {
+        val prefs = context.getSharedPreferences("${context.packageName}_preferences", Context.MODE_PRIVATE)
+        return prefs.getBoolean("toolbarEnabled", true)
+    }
 
-    fun updateOpenboxSnapMode(snapLayoutActive: Boolean) =
-        DesktopConfigGenerator.updateOpenboxSnapMode(openboxConfigDir, snapLayoutActive)
+    fun generateOpenboxConfig(snapLayoutActive: Boolean = false, toolbarEnabled: Boolean = isToolbarEnabled()): String =
+        DesktopConfigGenerator.generateOpenboxConfig(snapLayoutActive, toolbarEnabled)
+
+    fun updateOpenboxSnapMode(snapLayoutActive: Boolean, toolbarEnabled: Boolean = isToolbarEnabled()) =
+        DesktopConfigGenerator.updateOpenboxSnapMode(openboxConfigDir, snapLayoutActive, toolbarEnabled)
 
     fun ensureDirectoryTree() {
         val dirs = listOf(
@@ -265,7 +270,7 @@ class LinuxEnvironment(private val context: Context) {
         }
 
         // Provision Openbox kiosk auto-maximization rules (normal windows maximized, dialogs with borders and center placement)
-        updateOpenboxSnapMode(false)
+        updateOpenboxSnapMode(false, isToolbarEnabled())
         // Symlink xournalpp share assets into homeDir for runtime lookup
         val xoppShareDir = File(shareDir, "xournalpp")
         if (xoppShareDir.exists()) {

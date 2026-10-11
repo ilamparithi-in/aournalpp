@@ -1,11 +1,13 @@
 package dev.ilamparithi.aournalpp.ui.settings.screens
 
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.shrinkVertically
+import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -45,6 +47,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.NearMe
@@ -52,6 +55,7 @@ import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -139,6 +143,11 @@ fun ToolbarSettingsScreen(
     fun saveIntPref(key: String, value: Int) {
         x11Prefs.edit().putInt(key, value).apply()
         X11Preferences.notifyChanged(context, key)
+    }
+
+    // 0. Master Toggle State
+    var toolbarEnabled by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_ENABLED, true))
     }
 
     // 1. Placement & Anchors State
@@ -291,14 +300,85 @@ fun ToolbarSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             // =================================================================
-            // 1. Placement & Anchors Group
+            // 0. Master Toggle & Touch Controls Notice Group
             // =================================================================
             Text(
-                text = stringResource(R.string.pref_toolbar_placement_title),
+                text = stringResource(R.string.pref_cat_general),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold
             )
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp)),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    SettingsSwitchListItem(
+                        headline = stringResource(R.string.pref_toolbar_enable_title),
+                        supporting = stringResource(R.string.pref_toolbar_enable_desc),
+                        checked = toolbarEnabled,
+                        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                        leadingContent = {
+                            SettingsIconBadge(
+                                imageVector = Icons.Default.Tune,
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                iconTint = MaterialTheme.colorScheme.primary
+                            )
+                        },
+                        onCheckedChange = {
+                            toolbarEnabled = it
+                            saveBooleanPref(X11Preferences.KEY_TOOLBAR_ENABLED, it)
+                        }
+                    )
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = if (toolbarEnabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = stringResource(R.string.pref_toolbar_disabled_notice),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (toolbarEnabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+
+            AppAnimatedVisibility(
+                visible = toolbarEnabled,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    // =================================================================
+                    // 1. Placement & Anchors Group
+                    // =================================================================
+                    Text(
+                        text = stringResource(R.string.pref_toolbar_placement_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
 
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -429,7 +509,7 @@ fun ToolbarSettingsScreen(
                     )
 
                     // Auto-collapse Inactivity Timeout with reverted standard Slider & Input Field
-                    AnimatedVisibility(
+                    AppAnimatedVisibility(
                         visible = pinButtonMode,
                         enter = fadeIn(),
                         exit = fadeOut()
@@ -470,7 +550,7 @@ fun ToolbarSettingsScreen(
                                     val haptic = LocalHapticFeedback.current
                                     val resetPrompt = stringResource(R.string.toast_long_press_to_reset)
 
-                                    AnimatedVisibility(
+                                    AppAnimatedVisibility(
                                         visible = !isDefault,
                                         enter = fadeIn() + expandHorizontally(),
                                         exit = fadeOut() + shrinkHorizontally()
@@ -1294,6 +1374,8 @@ fun ToolbarSettingsScreen(
                             saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_SYNC, it)
                         }
                     )
+                }
+            }
                 }
             }
         }

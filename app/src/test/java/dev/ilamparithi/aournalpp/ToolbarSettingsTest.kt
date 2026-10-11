@@ -98,8 +98,14 @@ class ToolbarSettingsTest {
     }
 
     @Test
+    fun testToolbarEnabledPreferenceKey() {
+        assertEquals("toolbarEnabled", X11Preferences.KEY_TOOLBAR_ENABLED)
+    }
+
+    @Test
     fun testAllToolbarItemPreferenceKeysExist() {
         val keys = listOf(
+            X11Preferences.KEY_TOOLBAR_ENABLED,
             X11Preferences.KEY_TOOLBAR_SHOW_TITLE,
             X11Preferences.KEY_TOOLBAR_SHOW_BACK,
             X11Preferences.KEY_TOOLBAR_SHOW_CLOSE,

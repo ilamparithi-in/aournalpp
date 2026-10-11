@@ -13,8 +13,9 @@ object DesktopConfigGenerator {
 
     private const val TAG = "DesktopConfigGenerator"
 
-    fun generateOpenboxConfig(snapLayoutActive: Boolean = false): String {
+    fun generateOpenboxConfig(snapLayoutActive: Boolean = false, toolbarEnabled: Boolean = true): String {
         val fullscreenRules = if (!snapLayoutActive) {
+            val normalDecor = if (toolbarEnabled) "no" else "yes"
             """
     <!-- Fullscreen-marked windows in single window mode (borderless fullscreen) -->
     <application class="*" title="*Choose*Image*">
@@ -168,7 +169,7 @@ object DesktopConfigGenerator {
       <focus>yes</focus>
     </application>
     <application class="*" type="normal">
-      <decor>no</decor>
+      <decor>$normalDecor</decor>
       <maximized>true</maximized>
       <focus>yes</focus>
     </application>
@@ -240,12 +241,12 @@ object DesktopConfigGenerator {
 """.trimIndent()
     }
 
-    fun updateOpenboxSnapMode(openboxConfigDir: File, snapLayoutActive: Boolean) {
+    fun updateOpenboxSnapMode(openboxConfigDir: File, snapLayoutActive: Boolean, toolbarEnabled: Boolean = true) {
         if (!openboxConfigDir.exists()) {
             openboxConfigDir.mkdirs()
         }
         val rcFile = File(openboxConfigDir, "rc.xml")
-        rcFile.writeText(generateOpenboxConfig(snapLayoutActive))
+        rcFile.writeText(generateOpenboxConfig(snapLayoutActive, toolbarEnabled))
     }
 
     fun generateGtkSettings(isDark: Boolean): String = buildString {
