@@ -4,10 +4,7 @@ Preference Migration Script for Aournal++
 Migrates legacy shared preferences XML files to standardized new names via ADB.
 
 Legacy -> New:
-- aournal_prefs.xml -> aournalpp_general.xml
-- aournal_doc_hub_prefs.xml -> aournalpp_document_hub.xml
-- x11_preferences.xml -> aournalpp_x11.xml
-- aournal_cloud_backup_prefs.xml -> aournalpp_backup.xml
+- aournalpp_general.xml -> aournal_prefs.xml
 """
 
 import subprocess
@@ -17,10 +14,7 @@ PACKAGE = "dev.ilamparithi.aournalpp"
 PREF_DIR = f"/data/data/{PACKAGE}/shared_prefs"
 
 MAPPINGS = [
-    ("aournal_prefs.xml", "aournalpp_general.xml"),
-    ("aournal_doc_hub_prefs.xml", "aournalpp_document_hub.xml"),
-    ("x11_preferences.xml", "aournalpp_x11.xml"),
-    ("aournal_cloud_backup_prefs.xml", "aournalpp_backup.xml"),
+    ("aournalpp_general.xml", "aournal_prefs.xml"),
 ]
 
 def run_adb(cmd: list[str]) -> subprocess.CompletedProcess:

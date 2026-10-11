@@ -618,6 +618,7 @@ fun FilesStorageSettingsScreen(
                         onCheckedChange = {
                             showHiddenFilesPref = it
                             prefs.edit().putBoolean("pref_show_hidden_files", it).apply()
+                            AppPreferences.notifyChanged(context, "pref_show_hidden_files")
                         }
                     )
 
@@ -637,6 +638,7 @@ fun FilesStorageSettingsScreen(
                         onCheckedChange = {
                             intelligentRecoveryPref = it
                             prefs.edit().putBoolean("pref_intelligent_emergency_recovery", it).apply()
+                            AppPreferences.notifyChanged(context, "pref_intelligent_emergency_recovery")
                         }
                     )
                 }

@@ -11,15 +11,84 @@ import androidx.compose.ui.platform.LocalContext
  * across the application.
  */
 object AppPreferences {
-    const val PREFS_GENERAL = "aournalpp_general"
+    const val PREFS_GENERAL = "aournal_prefs"
     const val PREFS_DOCUMENT_HUB = "aournalpp_document_hub"
     const val PREFS_X11 = "aournalpp_x11"
     const val PREFS_BACKUP = "aournalpp_backup"
     const val PREF_VISIBLE_FILE_TYPES = "pref_visible_file_types"
     val DEFAULT_FILE_TYPES = setOf("xopp", "pdf", "xoj")
 
-    fun getGeneral(context: Context): SharedPreferences =
-        context.getSharedPreferences(PREFS_GENERAL, Context.MODE_PRIVATE)
+    const val ACTION_AOURNAL_PREFS_CHANGED = "dev.ilamparithi.aournalpp.ACTION_AOURNAL_PREFS_CHANGED"
+
+    @Volatile
+    private var isMigrated = false
+
+    fun migrateIfNeeded(context: Context) {
+        if (isMigrated) return
+        synchronized(this) {
+            if (isMigrated) return
+            try {
+                val legacy = context.getSharedPreferences("aournalpp_general", Context.MODE_PRIVATE)
+                val allLegacy = legacy.all
+                if (allLegacy.isNotEmpty()) {
+                    val target = context.getSharedPreferences(PREFS_GENERAL, Context.MODE_PRIVATE)
+                    val editor = target.edit()
+                    for ((key, value) in allLegacy) {
+                        when (value) {
+                            is Boolean -> editor.putBoolean(key, value)
+                            is Int -> editor.putInt(key, value)
+                            is Long -> editor.putLong(key, value)
+                            is Float -> editor.putFloat(key, value)
+                            is String -> editor.putString(key, value)
+                            is Set<*> -> @Suppress("UNCHECKED_CAST") editor.putStringSet(key, value as Set<String>)
+                        }
+                    }
+                    editor.apply()
+                    legacy.edit().clear().apply()
+                }
+            } catch (_: Exception) {}
+            isMigrated = true
+        }
+    }
+
+    fun notifyChanged(context: Context, key: String) {
+        try {
+            val prefs = getGeneral(context)
+            val value = prefs.all[key]
+            val intent = android.content.Intent(ACTION_AOURNAL_PREFS_CHANGED).apply {
+                putExtra("key", key)
+                when (value) {
+                    is Boolean -> {
+                        putExtra("value_type", "boolean")
+                        putExtra("value_boolean", value)
+                    }
+                    is Int -> {
+                        putExtra("value_type", "int")
+                        putExtra("value_int", value)
+                    }
+                    is Float -> {
+                        putExtra("value_type", "float")
+                        putExtra("value_float", value)
+                    }
+                    is Long -> {
+                        putExtra("value_type", "long")
+                        putExtra("value_long", value)
+                    }
+                    is String -> {
+                        putExtra("value_type", "string")
+                        putExtra("value_string", value)
+                    }
+                }
+                setPackage(context.packageName)
+            }
+            context.sendBroadcast(intent)
+        } catch (_: Exception) {}
+    }
+
+    fun getGeneral(context: Context): SharedPreferences {
+        migrateIfNeeded(context)
+        return context.getSharedPreferences(PREFS_GENERAL, Context.MODE_PRIVATE)
+    }
 
     fun getGeneralPrefs(context: Context): SharedPreferences = getGeneral(context)
 

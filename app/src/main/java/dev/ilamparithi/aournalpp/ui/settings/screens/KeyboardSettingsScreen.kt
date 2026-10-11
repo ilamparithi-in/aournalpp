@@ -85,6 +85,7 @@ fun KeyboardSettingsScreen(onBack: () -> Unit) {
                         onCheckedChange = {
                             autoShowIme = it
                             prefs.edit().putBoolean("pref_auto_show_ime_on_focus", it).apply()
+                            AppPreferences.notifyChanged(context, "pref_auto_show_ime_on_focus")
                         }
                     )
 
@@ -112,6 +113,7 @@ fun KeyboardSettingsScreen(onBack: () -> Unit) {
                         onCheckedChange = {
                             tripleBackForceClose = it
                             prefs.edit().putBoolean("pref_triple_back_force_close", it).apply()
+                            AppPreferences.notifyChanged(context, "pref_triple_back_force_close")
                         }
                     )
                 }

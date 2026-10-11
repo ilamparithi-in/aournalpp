@@ -16,6 +16,7 @@ class AournalppApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        dev.ilamparithi.aournalpp.data.AppPreferences.migrateIfNeeded(this)
         X11Preferences.initDefaults(this)
         DocumentRepository.init(this)
         dev.ilamparithi.aournalpp.logging.CrashHandler.install(this)

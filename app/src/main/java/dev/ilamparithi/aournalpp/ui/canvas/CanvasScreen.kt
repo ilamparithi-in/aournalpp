@@ -123,7 +123,7 @@ fun CanvasScreen(
     viewModel: CanvasViewModel = viewModel()
 ) {
     val x11Prefs = remember(activity) { X11Preferences.getPrefs(activity) }
-    val aournalPrefs = remember(activity) { activity.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
+    val aournalPrefs = remember(activity) { dev.ilamparithi.aournalpp.data.AppPreferences.getGeneral(activity) }
     var uiScaleFloat by remember {
         mutableFloatStateOf(
             (aournalPrefs.getString("pref_ui_scale", "1.0")?.toFloatOrNull() ?: 1.0f).coerceIn(0.5f, 4.0f)

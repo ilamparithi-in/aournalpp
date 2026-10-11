@@ -163,6 +163,7 @@ fun OnboardingSettingsPage(
                             onCheckedChange = {
                                 intelligentRecovery = it
                                 aournalPrefs.edit().putBoolean("pref_intelligent_emergency_recovery", it).apply()
+                                dev.ilamparithi.aournalpp.data.AppPreferences.notifyChanged(context, "pref_intelligent_emergency_recovery")
                             }
                         )
                     }
@@ -285,6 +286,7 @@ fun OnboardingSettingsPage(
                             onCheckedChange = {
                                 reduceAnimations = it
                                 aournalPrefs.edit().putBoolean(LinuxEnvironment.PREF_KEY_REDUCE_ANIMATIONS, it).apply()
+                                dev.ilamparithi.aournalpp.data.AppPreferences.notifyChanged(context, LinuxEnvironment.PREF_KEY_REDUCE_ANIMATIONS)
                             }
                         )
                     }

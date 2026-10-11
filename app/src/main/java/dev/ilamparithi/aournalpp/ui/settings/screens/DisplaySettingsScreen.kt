@@ -134,10 +134,12 @@ fun DisplaySettingsScreen(
 
     fun saveAournalString(key: String, value: String) {
         aournalPrefs.edit { putString(key, value) }
+        AppPreferences.notifyChanged(context, key)
     }
 
     fun saveAournalBoolean(key: String, value: Boolean) {
         aournalPrefs.edit { putBoolean(key, value) }
+        AppPreferences.notifyChanged(context, key)
     }
 
     // 1. Canvas UI Scale State
@@ -259,7 +261,7 @@ fun DisplaySettingsScreen(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "Scales toolbars, menus, and canvas controls.",
+                                    text = "Scales toolbars, menus, and canvas controls. Takes effect on canvas restart.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

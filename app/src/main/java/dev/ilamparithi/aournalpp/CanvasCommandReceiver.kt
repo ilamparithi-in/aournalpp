@@ -70,6 +70,26 @@ class CanvasCommandReceiver : BroadcastReceiver() {
                     CanvasActivity.notifyPreferenceChanged(key)
                 }
             }
+            dev.ilamparithi.aournalpp.data.AppPreferences.ACTION_AOURNAL_PREFS_CHANGED -> {
+                val key = intent.getStringExtra("key")
+                val valueType = intent.getStringExtra("value_type")
+                Log.d("CanvasCommandReceiver", "Received ACTION_AOURNAL_PREFS_CHANGED in :canvas process: key=$key, type=$valueType")
+                if (key != null && valueType != null) {
+                    val prefs = dev.ilamparithi.aournalpp.data.AppPreferences.getGeneral(context)
+                    val editor = prefs.edit()
+                    when (valueType) {
+                        "boolean" -> editor.putBoolean(key, intent.getBooleanExtra("value_boolean", false))
+                        "int" -> editor.putInt(key, intent.getIntExtra("value_int", 0))
+                        "float" -> editor.putFloat(key, intent.getFloatExtra("value_float", 0f))
+                        "long" -> editor.putLong(key, intent.getLongExtra("value_long", 0L))
+                        "string" -> editor.putString(key, intent.getStringExtra("value_string"))
+                    }
+                    editor.commit()
+                }
+                if (key != null) {
+                    CanvasActivity.notifyPreferenceChanged(key)
+                }
+            }
             ACTION_SYNC_STATE_CHANGED -> {
                 val isSyncing = intent.getBooleanExtra(EXTRA_IS_SYNCING, false)
                 Log.d("CanvasCommandReceiver", "Received ACTION_SYNC_STATE_CHANGED in :canvas process: isSyncing=$isSyncing")

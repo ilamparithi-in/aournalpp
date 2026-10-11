@@ -94,19 +94,18 @@ fun AppearanceCanvasSettingsScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val generalPrefs = remember { AppPreferences.getGeneralPrefs(context) }
-    val legacyPrefs = remember { context.getSharedPreferences("aournal_prefs", Context.MODE_PRIVATE) }
     val env = remember { LinuxEnvironment(context) }
     val configManager = remember { XournalConfigManager(env) }
     var showConfigViewerDialog by remember { mutableStateOf(false) }
 
     fun saveStringPref(key: String, value: String) {
         generalPrefs.edit().putString(key, value).apply()
-        legacyPrefs.edit().putString(key, value).apply()
+        AppPreferences.notifyChanged(context, key)
     }
 
     fun saveBooleanPref(key: String, value: Boolean) {
         generalPrefs.edit().putBoolean(key, value).apply()
-        legacyPrefs.edit().putBoolean(key, value).apply()
+        AppPreferences.notifyChanged(context, key)
     }
 
     // 1. Android App Theme State
