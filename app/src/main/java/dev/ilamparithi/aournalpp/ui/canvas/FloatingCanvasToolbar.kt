@@ -63,6 +63,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.automirrored.filled.NoteAdd
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Sync
@@ -287,6 +288,9 @@ fun FloatingToolbarOverlay(
     showClose: Boolean,
     showWindowSwitcher: Boolean = true,
     showSnapLayouts: Boolean = true,
+    showNewWindow: Boolean = true,
+    onOpenNewWindow: () -> Unit = {},
+    onOpenNewWindowDialog: () -> Unit = {},
     activeSnapMode: SnapLayoutMode = SnapLayoutMode.SINGLE,
     isSnapMirrored: Boolean = false,
     onSelectSnapMode: (SnapLayoutMode, Boolean) -> Unit = { _, _ -> },
@@ -730,6 +734,48 @@ fun FloatingToolbarOverlay(
                                         onToggleSnapMirror()
                                     }
                                 )
+                            }
+
+                            if (showNewWindow) {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f),
+                                    modifier = Modifier
+                                        .padding(horizontal = 2.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .combinedClickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                            onClick = {
+                                                interactionSignal.tryEmit(Unit)
+                                                try {
+                                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                } catch (_: Exception) {
+                                                }
+                                                onOpenNewWindow()
+                                            },
+                                            onLongClick = {
+                                                interactionSignal.tryEmit(Unit)
+                                                try {
+                                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                } catch (_: Exception) {
+                                                }
+                                                onOpenNewWindowDialog()
+                                            }
+                                        )
+                                ) {
+                                    Box(
+                                        modifier = Modifier.size(32.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.NoteAdd,
+                                            contentDescription = stringResource(R.string.toolbar_cd_new_window),
+                                            modifier = Modifier.size(18.dp),
+                                            tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                    }
+                                }
                             }
 
                             if (showTitle) {

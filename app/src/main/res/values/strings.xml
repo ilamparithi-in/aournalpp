@@ -1395,6 +1395,8 @@
     <string name="pref_toolbar_item_switcher_desc">Displays Alt+Tab window switcher button. Long press to open the Window Gallery.</string>
     <string name="pref_toolbar_item_snap">Snap Layouts</string>
     <string name="pref_toolbar_item_snap_desc">Displays the snap layouts dropdown button on the floating toolbar.</string>
+    <string name="pref_toolbar_item_new_window">Open New Window</string>
+    <string name="pref_toolbar_item_new_window_desc">Displays Open New Window button to create and open notes without returning to the Document Hub.</string>
     <string name="pref_toolbar_item_keyboard">Soft Keyboard Toggle</string>
     <string name="pref_toolbar_item_keyboard_desc">Displays soft keyboard show/hide action button.</string>
     <string name="pref_toolbar_item_drag">Movable Drag Handle</string>
@@ -1428,6 +1430,7 @@
     <string name="toolbar_cd_close">Close Note (Ctrl+Q)</string>
     <string name="toolbar_cd_switcher">Switch Note Window (Tap to cycle, Long press for gallery)</string>
     <string name="toolbar_cd_snap">Snap Layouts</string>
+    <string name="toolbar_cd_new_window">Open New Note Window (Tap for instant note, Long press to customize)</string>
     <string name="toolbar_cd_touch_stylus_enabled">Finger as Stylus (Enabled)</string>
     <string name="toolbar_cd_touch_stylus_disabled">Finger as Stylus (Disabled)</string>
     <string name="toolbar_cd_cut">Cut (Ctrl+X)</string>

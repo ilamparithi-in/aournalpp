@@ -35,6 +35,7 @@ import androidx.compose.foundation.verticalScroll
 import dev.ilamparithi.aournalpp.ui.settings.components.SettingsIconBadge
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.NoteAdd
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
@@ -201,6 +202,9 @@ fun ToolbarSettingsScreen(
     }
     var showSnapLayouts by remember {
         mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_SNAP_LAYOUTS, true))
+    }
+    var showNewWindow by remember {
+        mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_NEW_WINDOW, true))
     }
     var showKeyboard by remember {
         mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD, true))
@@ -703,6 +707,7 @@ fun ToolbarSettingsScreen(
                                     showClose = true; saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_CLOSE, true)
                                     showWindowSwitcher = true; saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_WINDOW_SWITCHER, true)
                                     showSnapLayouts = true; saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_SNAP_LAYOUTS, true)
+                                    showNewWindow = true; saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_NEW_WINDOW, true)
                                     showKeyboard = true; saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD, true)
                                     showDragHandle = true; saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_DRAG_HANDLE, true)
                                     showStylusMode = false; saveBooleanPref(X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE, false)
@@ -723,6 +728,7 @@ fun ToolbarSettingsScreen(
                                     showClose = true; saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_CLOSE, true)
                                     showWindowSwitcher = true; saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_WINDOW_SWITCHER, true)
                                     showSnapLayouts = true; saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_SNAP_LAYOUTS, true)
+                                    showNewWindow = true; saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_NEW_WINDOW, true)
                                     showKeyboard = true; saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD, true)
                                     showDragHandle = true; saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_DRAG_HANDLE, true)
                                     showStylusMode = true; saveBooleanPref(X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE, true)
@@ -745,6 +751,7 @@ fun ToolbarSettingsScreen(
                         showClose = showClose,
                         showWindowSwitcher = showWindowSwitcher,
                         showSnapLayouts = showSnapLayouts,
+                        showNewWindow = showNewWindow,
                         showTitle = showTitle,
                         showStylusMode = showStylusMode,
                         showTouchStylus = showTouchStylus,
@@ -1079,6 +1086,30 @@ fun ToolbarSettingsScreen(
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                     )
 
+                    // Open New Window
+                    SettingsSwitchListItem(
+                        headline = stringResource(R.string.pref_toolbar_item_new_window),
+                        supporting = stringResource(R.string.pref_toolbar_item_new_window_desc),
+                        checked = showNewWindow,
+                        shape = RectangleShape,
+                        leadingContent = {
+                            SettingsIconBadge(
+                                imageVector = Icons.AutoMirrored.Filled.NoteAdd,
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                                iconTint = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        },
+                        onCheckedChange = {
+                            showNewWindow = it
+                            saveBooleanPref(X11Preferences.KEY_TOOLBAR_SHOW_NEW_WINDOW, it)
+                        }
+                    )
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                    )
+
                     // Soft Keyboard Toggle
                     SettingsSwitchListItem(
                         headline = stringResource(R.string.pref_toolbar_item_keyboard),
@@ -1392,6 +1423,7 @@ private fun FloatingToolbarPreview(
     showClose: Boolean,
     showWindowSwitcher: Boolean,
     showSnapLayouts: Boolean,
+    showNewWindow: Boolean,
     showTitle: Boolean,
     showStylusMode: Boolean,
     showTouchStylus: Boolean,
@@ -1417,6 +1449,7 @@ private fun FloatingToolbarPreview(
             showClose = showClose,
             showWindowSwitcher = showWindowSwitcher,
             showSnapLayouts = showSnapLayouts,
+            showNewWindow = showNewWindow,
             showTitle = showTitle,
             showStylusClickOverride = showStylusMode,
             showTouchStylus = showTouchStylus,

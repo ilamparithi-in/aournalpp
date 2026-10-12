@@ -111,6 +111,7 @@ class ToolbarSettingsTest {
             X11Preferences.KEY_TOOLBAR_SHOW_CLOSE,
             X11Preferences.KEY_TOOLBAR_SHOW_WINDOW_SWITCHER,
             X11Preferences.KEY_TOOLBAR_SHOW_SNAP_LAYOUTS,
+            X11Preferences.KEY_TOOLBAR_SHOW_NEW_WINDOW,
             X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD,
             X11Preferences.KEY_TOOLBAR_SHOW_DRAG_HANDLE,
             X11Preferences.KEY_SHOW_STYLUS_CLICK_OVERRIDE,

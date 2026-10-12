@@ -228,6 +228,7 @@ fun ToolbarPositionEditorScreen(
         val showClose = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CLOSE, true) }
         val showWindowSwitcher = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_WINDOW_SWITCHER, true) }
         val showSnapLayouts = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_SNAP_LAYOUTS, true) }
+        val showNewWindow = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_NEW_WINDOW, true) }
         val showKeyboard = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD, true) }
         val showDragHandle = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_DRAG_HANDLE, true) }
         val showCut = remember { x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CUT, true) }
@@ -424,6 +425,7 @@ fun ToolbarPositionEditorScreen(
                 showClose = showClose,
                 showWindowSwitcher = showWindowSwitcher,
                 showSnapLayouts = showSnapLayouts,
+                showNewWindow = showNewWindow,
                 showTitle = showTitle,
                 showStylusClickOverride = showStylusClickOverride,
                 showTouchStylus = showTouchStylus,

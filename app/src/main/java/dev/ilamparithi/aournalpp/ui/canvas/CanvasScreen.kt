@@ -79,8 +79,12 @@ import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
 import dev.ilamparithi.aournalpp.runtime.WallpaperHelper
 import dev.ilamparithi.aournalpp.runtime.WindowOrientationAdvisor
+import dev.ilamparithi.aournalpp.model.FolderItem
 import dev.ilamparithi.aournalpp.ui.AppDialogDefaults
 import dev.ilamparithi.aournalpp.ui.FloatingToolbarLayout
+import dev.ilamparithi.aournalpp.ui.SaveAsNoteDialog
+import dev.ilamparithi.aournalpp.utils.FileNameTemplateEngine
+import androidx.compose.ui.res.stringResource
 import dev.ilamparithi.aournalpp.ui.InteractiveMarqueeText
 import dev.ilamparithi.aournalpp.ui.SafeAreaInsets
 import dev.ilamparithi.aournalpp.ui.animation.AppAnimatedVisibility
@@ -355,6 +359,14 @@ fun CanvasScreen(
                 var showSnapLayouts by remember {
                     mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_SNAP_LAYOUTS, true))
                 }
+                var showNewWindow by remember {
+                    mutableStateOf(x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_NEW_WINDOW, true))
+                }
+                var showNewNoteDialogInCanvas by remember { mutableStateOf(false) }
+                var newNoteDefaultNameInCanvas by remember { mutableStateOf("") }
+                var targetFolderForNewNoteInCanvas by remember { mutableStateOf<File?>(null) }
+                var allFoldersForNewNoteInCanvas by remember { mutableStateOf<List<FolderItem>>(emptyList()) }
+                var isSpawningNewWindow by remember { mutableStateOf(false) }
                 val snapLayoutManager = remember { SnapLayoutManager(activity) }
                 var activeSnapMode by viewModel.activeSnapMode
                 var isSnapMirrored by viewModel.isSnapMirrored
@@ -426,6 +438,8 @@ fun CanvasScreen(
                                 showWindowSwitcher = prefs.getBoolean(key, true)
                             X11Preferences.KEY_TOOLBAR_SHOW_SNAP_LAYOUTS ->
                                 showSnapLayouts = prefs.getBoolean(key, true)
+                            X11Preferences.KEY_TOOLBAR_SHOW_NEW_WINDOW ->
+                                showNewWindow = prefs.getBoolean(key, true)
                             X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD ->
                                 showKeyboard = prefs.getBoolean(key, true)
                             X11Preferences.KEY_TOOLBAR_SHOW_DRAG_HANDLE ->
@@ -485,6 +499,7 @@ fun CanvasScreen(
                         showClose = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CLOSE, true)
                         showWindowSwitcher = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_WINDOW_SWITCHER, true)
                         showSnapLayouts = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_SNAP_LAYOUTS, true)
+                        showNewWindow = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_NEW_WINDOW, true)
                         showKeyboard = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_KEYBOARD, true)
                         showDragHandle = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_DRAG_HANDLE, true)
                         showCut = x11Prefs.getBoolean(X11Preferences.KEY_TOOLBAR_SHOW_CUT, true)
@@ -809,8 +824,76 @@ fun CanvasScreen(
                     performWindowSwitch(target, isForward = true)
                 }
 
+                fun performOpenNewWindowInstant() {
+                    val isDialogActive = activity.sessionManager.isModalOrDialogOpenFlow.value
+                    if (!FloatingToolbarUtils.canTriggerNewWindow(isSpawningNewWindow, isDialogActive)) {
+                        if (isDialogActive) {
+                            Toast.makeText(activity, "Close open dialogs before opening a new window", Toast.LENGTH_SHORT).show()
+                        }
+                        return
+                    }
+                    isSpawningNewWindow = true
+                    activity.lifecycleScope.launch(Dispatchers.IO) {
+                        try {
+                            val repository = DocumentRepository.getInstance(activity)
+                            val notesRoot = repository.getRootNotesDirectory()
+                            val activeEntry = openWindows.find { it.isActive }
+                            val currentFile = activeEntry?.let { ProcessSupervisor.resolveNoteFile(notesRoot, it.title) }
+                                ?: (targetPath?.let { File(it) })
+                            val targetDir = FloatingToolbarUtils.resolveTargetFolderForNewNote(currentFile, notesRoot)
+                            val templatePattern = FileNameTemplateEngine.getNewFileTemplate(activity)
+                            val defaultName = FileNameTemplateEngine.evaluate(templatePattern, activity)
+                            val result = repository.createBlankNote(defaultName, targetDir)
+                            if (result.isSuccess) {
+                                val newFile = result.getOrThrow()
+                                repository.recordNoteOpened(newFile.absolutePath)
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(activity, "Opening ${newFile.name}...", Toast.LENGTH_SHORT).show()
+                                }
+                                activity.sessionManager.openNoteInNewWindow(newFile.absolutePath)
+                            } else {
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(activity, "Failed to create note: ${result.exceptionOrNull()?.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e("CanvasScreen", "Failed to launch new window instant", e)
+                        } finally {
+                            delay(1000)
+                            isSpawningNewWindow = false
+                        }
+                    }
+                }
+
+                fun performOpenNewWindowDialog() {
+                    val isDialogActive = activity.sessionManager.isModalOrDialogOpenFlow.value
+                    if (isDialogActive) {
+                        Toast.makeText(activity, "Close open dialogs before opening a new window", Toast.LENGTH_SHORT).show()
+                        return
+                    }
+                    activity.lifecycleScope.launch(Dispatchers.IO) {
+                        val repository = DocumentRepository.getInstance(activity)
+                        val notesRoot = repository.getRootNotesDirectory()
+                        val activeEntry = openWindows.find { it.isActive }
+                        val currentFile = activeEntry?.let { ProcessSupervisor.resolveNoteFile(notesRoot, it.title) }
+                            ?: (targetPath?.let { File(it) })
+                        val targetDir = FloatingToolbarUtils.resolveTargetFolderForNewNote(currentFile, notesRoot)
+                        val templatePattern = FileNameTemplateEngine.getNewFileTemplate(activity)
+                        val defaultName = FileNameTemplateEngine.evaluate(templatePattern, activity)
+                        val allFolders = repository.getAllFolders()
+                        withContext(Dispatchers.Main) {
+                            targetFolderForNewNoteInCanvas = targetDir
+                            newNoteDefaultNameInCanvas = defaultName
+                            allFoldersForNewNoteInCanvas = allFolders
+                            showNewNoteDialogInCanvas = true
+                        }
+                    }
+                }
+
                 BackHandler(enabled = true) {
-                    if (showSnapAssistHost) {
+                    if (showNewNoteDialogInCanvas) {
+                        showNewNoteDialogInCanvas = false
+                    } else if (showSnapAssistHost) {
                         showSnapAssistHost = false
                     } else if (showWindowSwitcherGallery) {
                         showWindowSwitcherGallery = false
@@ -1334,6 +1417,7 @@ fun CanvasScreen(
                             (activePromptTitle != null) ||
                             showEmergencyForceCloseDialog ||
                             showImageSourceDialog ||
+                            showNewNoteDialogInCanvas ||
                             showWindowSwitcherGallery ||
                             showSnapAssistHost ||
                             isSwitchTransitionActive
@@ -1485,6 +1569,9 @@ fun CanvasScreen(
                                 showClose = showClose,
                                 showWindowSwitcher = showWindowSwitcher && (openWindows.size > 1),
                                 showSnapLayouts = showSnapLayouts && (openWindows.size > 1),
+                                showNewWindow = FloatingToolbarUtils.isNewWindowButtonVisible(showNewWindow),
+                                onOpenNewWindow = { performOpenNewWindowInstant() },
+                                onOpenNewWindowDialog = { performOpenNewWindowDialog() },
                                 activeSnapMode = activeSnapMode,
                                 isSnapMirrored = isSnapMirrored,
                                 onSelectSnapMode = { mode, mirrored ->
@@ -1860,6 +1947,48 @@ fun CanvasScreen(
                                     Spacer(modifier = Modifier.height(16.dp))
                                 }
                             }
+                        }
+
+                        if (showNewNoteDialogInCanvas) {
+                            val repository = remember { DocumentRepository.getInstance(activity) }
+                            SaveAsNoteDialog(
+                                title = stringResource(R.string.dialog_new_note_title),
+                                subtitle = stringResource(R.string.dialog_new_note_subtitle),
+                                icon = Icons.Default.Add,
+                                initialName = newNoteDefaultNameInCanvas,
+                                initialFolder = targetFolderForNewNoteInCanvas,
+                                availableFolders = allFoldersForNewNoteInCanvas,
+                                rootFolder = repository.getRootNotesDirectory(),
+                                confirmButtonLabel = stringResource(R.string.action_create_and_open),
+                                onDismiss = { showNewNoteDialogInCanvas = false },
+                                onSave = { name, chosenFolder ->
+                                    showNewNoteDialogInCanvas = false
+                                    activity.lifecycleScope.launch(Dispatchers.IO) {
+                                        val result = repository.createBlankNote(name, chosenFolder)
+                                        if (result.isSuccess) {
+                                            val newFile = result.getOrThrow()
+                                            repository.recordNoteOpened(newFile.absolutePath)
+                                            withContext(Dispatchers.Main) {
+                                                Toast.makeText(activity, "Opening ${newFile.name}...", Toast.LENGTH_SHORT).show()
+                                            }
+                                            activity.sessionManager.openNoteInNewWindow(newFile.absolutePath)
+                                        } else {
+                                            withContext(Dispatchers.Main) {
+                                                Toast.makeText(activity, "Failed to create note: ${result.exceptionOrNull()?.message}", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    }
+                                },
+                                onCreateFolder = { name, colorHex, iconEmoji, iconType ->
+                                    repository.createFolder(
+                                        parentDir = repository.getRootNotesDirectory(),
+                                        name = name,
+                                        colorHex = colorHex,
+                                        iconEmoji = iconEmoji,
+                                        iconType = iconType
+                                    )
+                                }
+                            )
                         }
                     }
                 }

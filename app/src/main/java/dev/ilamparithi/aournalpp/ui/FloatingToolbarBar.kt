@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.NoteAdd
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentCut
@@ -76,6 +77,7 @@ fun FloatingToolbarBar(
     showClose: Boolean = true,
     showWindowSwitcher: Boolean = true,
     showSnapLayouts: Boolean = true,
+    showNewWindow: Boolean = true,
     showTitle: Boolean = true,
     displayTitle: String = stringResource(R.string.pref_toolbar_sample_filename),
     titleIcon: ImageVector = Icons.Default.Description,
@@ -103,6 +105,7 @@ fun FloatingToolbarBar(
     onSmartBackPress: (() -> Unit)? = null,
     onCloseWindow: (() -> Unit)? = null,
     onQuickSwitchWindow: (() -> Unit)? = null,
+    onOpenNewWindow: (() -> Unit)? = null,
     onOpenImageSelector: (() -> Unit)? = null,
     onInjectShortcut: ((Int, String) -> Unit)? = null,
     onSyncNow: (() -> Unit)? = null,
@@ -239,6 +242,36 @@ fun FloatingToolbarBar(
                             Icon(
                                 imageVector = Icons.Default.GridView,
                                 contentDescription = stringResource(R.string.toolbar_cd_snap),
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                    }
+                }
+
+                if (showNewWindow) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f),
+                        modifier = Modifier
+                            .padding(horizontal = 2.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .then(
+                                if (onOpenNewWindow != null) {
+                                    Modifier.clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) { onOpenNewWindow() }
+                                } else Modifier
+                            )
+                    ) {
+                        Box(
+                            modifier = Modifier.size(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.NoteAdd,
+                                contentDescription = stringResource(R.string.toolbar_cd_new_window),
                                 modifier = Modifier.size(18.dp),
                                 tint = MaterialTheme.colorScheme.onSecondaryContainer
                             )
