@@ -1,4 +1,4 @@
-From ef88acd7a15c9627fcef1a350fd849a4d1646ffd Mon Sep 17 00:00:00 2001
+From 122c2a64188653fe1a8edd805b651e9cd90282aa Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Sun, 30 Aug 2026 02:20:17 +0530
 Subject: [PATCH 9/9] feat(clipboard): overhaul native clipboard with in-memory
@@ -679,10 +679,10 @@ index ffb3d90..3240033 100644
  void lorieSyncLockKeysState(uint8_t state);
  void lorieWakeServer(void);
 diff --git a/lorie/src/main/java/com/termux/x11/LorieView.java b/lorie/src/main/java/com/termux/x11/LorieView.java
-index 3cbe94a..e31ca7f 100644
+index d68620c..79f8c95 100644
 --- a/lorie/src/main/java/com/termux/x11/LorieView.java
 +++ b/lorie/src/main/java/com/termux/x11/LorieView.java
-@@ -628,6 +628,7 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -629,6 +629,7 @@ public class LorieView extends SurfaceView implements InputStub {
      }
  
      ClipboardManager.OnPrimaryClipChangedListener clipboardListener = this::handleClipboardChange;
@@ -690,7 +690,7 @@ index 3cbe94a..e31ca7f 100644
  
      public void reloadPreferences(Prefs p) {
          if (p != null) {
-@@ -648,7 +649,7 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -649,7 +650,7 @@ public class LorieView extends SurfaceView implements InputStub {
      }
  
      // It is used in native code
@@ -699,7 +699,7 @@ index 3cbe94a..e31ca7f 100644
          if (clipboard == null || text == null) return;
          try {
              isUpdatingFromX11 = true;
-@@ -663,7 +664,7 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -664,7 +665,7 @@ public class LorieView extends SurfaceView implements InputStub {
      }
  
      // It is used in native code
@@ -708,7 +708,7 @@ index 3cbe94a..e31ca7f 100644
          if (clipboard == null || imageBytes == null || imageBytes.length == 0) return;
          try {
              File clipDir = new File(getContext().getCacheDir(), "clipboard");
-@@ -688,7 +689,7 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -689,7 +690,7 @@ public class LorieView extends SurfaceView implements InputStub {
      }
  
      // It is used in native code
@@ -717,7 +717,7 @@ index 3cbe94a..e31ca7f 100644
          if (clipboard == null || htmlBytes == null || htmlBytes.length == 0) return;
          try {
              String html = new String(htmlBytes, UTF_8);
-@@ -705,69 +706,17 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -706,69 +707,17 @@ public class LorieView extends SurfaceView implements InputStub {
          }
      }
  
@@ -797,7 +797,7 @@ index 3cbe94a..e31ca7f 100644
      }
  
      public void handleClipboardChange() {
-@@ -780,36 +729,63 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -781,36 +730,63 @@ public class LorieView extends SurfaceView implements InputStub {
              ClipDescription desc = clipboard.getPrimaryClipDescription();
              if (desc == null) return;
              long timestamp = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ? lastClipboardTimestamp + 1 : desc.getTimestamp();

@@ -221,7 +221,7 @@ class CanvasActivity : ComponentActivity() {
     fun onPreferenceChanged(key: String) {
         runOnUiThread {
             preferenceUpdateVersionState.intValue++
-            val prefs = com.termux.x11.Prefs(this)
+            val prefs = X11Preferences.createLoriePrefs(this)
             val x11Prefs = X11Preferences.getPrefs(this)
 
             when (key) {

@@ -120,6 +120,12 @@ object X11Preferences {
         return context.getSharedPreferences("${context.packageName}_preferences", Context.MODE_PRIVATE)
     }
 
+    fun createLoriePrefs(context: Context): com.termux.x11.Prefs {
+        val prefs = com.termux.x11.Prefs()
+        prefs.attach(context, getPrefs(context))
+        return prefs
+    }
+
     fun initDefaults(context: Context) {
         val prefs = getPrefs(context)
         val editor = prefs.edit()

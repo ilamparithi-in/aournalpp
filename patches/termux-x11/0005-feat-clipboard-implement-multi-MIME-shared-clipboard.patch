@@ -1,4 +1,4 @@
-From 94ff76fba8fe78be8c275e7307aac0a4627100b4 Mon Sep 17 00:00:00 2001
+From d9932ad16908b929897323183543a52085b5a70f Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Tue, 25 Aug 2026 15:42:17 +0530
 Subject: [PATCH 5/9] feat(clipboard): implement multi-MIME shared clipboard
@@ -698,7 +698,7 @@ index edf0631..ffb3d90 100644
      } clipboardSend;
      struct {
 diff --git a/lorie/src/main/java/com/termux/x11/LorieView.java b/lorie/src/main/java/com/termux/x11/LorieView.java
-index 3907f80..a634032 100644
+index 951ea1c..80ce93b 100644
 --- a/lorie/src/main/java/com/termux/x11/LorieView.java
 +++ b/lorie/src/main/java/com/termux/x11/LorieView.java
 @@ -5,6 +5,8 @@ import android.content.ClipData;
@@ -746,7 +746,7 @@ index 3907f80..a634032 100644
      private long mNativeContext;
      private boolean clipboardSyncEnabled = false;
      private boolean hardwareKbdScancodesWorkaround = false;
-@@ -617,31 +627,137 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -618,31 +628,137 @@ public class LorieView extends SurfaceView implements InputStub {
          hardwareKbdScancodesWorkaround = p.hardwareKbdScancodesWorkaround.get();
          clipboardSyncEnabled = p.clipboardEnable.get();
          setClipboardSyncEnabled(mNativeContext, clipboardSyncEnabled, clipboardSyncEnabled);
@@ -899,7 +899,7 @@ index 3907f80..a634032 100644
      }
  
      public void handleClipboardChange() {
-@@ -649,17 +765,38 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -650,17 +766,38 @@ public class LorieView extends SurfaceView implements InputStub {
      }
  
      public void checkForClipboardChange() {
@@ -948,7 +948,7 @@ index 3907f80..a634032 100644
          }
      }
  
-@@ -717,7 +854,7 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -718,7 +855,7 @@ public class LorieView extends SurfaceView implements InputStub {
      @FastNative private native void setFiltering(long ptr, int filtering);
      @FastNative private native void setClipboardSyncEnabled(long ptr, boolean enabled, boolean ignored);
      @FastNative private native void sendClipboardAnnounce(long ptr);

@@ -1,4 +1,4 @@
-From 9ac5896fe1a0e56d4df9c7e838eb14c10f56fe18 Mon Sep 17 00:00:00 2001
+From 738178d776431de4862dd267796736ceccbb1265 Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Sat, 29 Aug 2026 19:30:59 +0530
 Subject: [PATCH 7/9] feat(input): add Touch Stylus mode with single finger
@@ -70,7 +70,7 @@ index a201d11..848b4cd 100644
      buttons_prev = e->stylus.buttons;
  
 diff --git a/lorie/src/main/java/com/termux/x11/LorieView.java b/lorie/src/main/java/com/termux/x11/LorieView.java
-index 9b462a0..3cbe94a 100644
+index 17d728b..d68620c 100644
 --- a/lorie/src/main/java/com/termux/x11/LorieView.java
 +++ b/lorie/src/main/java/com/termux/x11/LorieView.java
 @@ -308,6 +308,7 @@ public class LorieView extends SurfaceView implements InputStub {
@@ -92,7 +92,7 @@ index 9b462a0..3cbe94a 100644
      private Prefs mPrefs;
  
      public void setPrefs(Prefs p) {
-@@ -639,8 +644,6 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -640,8 +645,6 @@ public class LorieView extends SurfaceView implements InputStub {
          }
          if (activity != null && activity.mInputHandler != null) {
              activity.mInputHandler.refreshInputDevices();
@@ -101,7 +101,7 @@ index 9b462a0..3cbe94a 100644
          }
      }
  
-@@ -822,8 +825,6 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -823,8 +826,6 @@ public class LorieView extends SurfaceView implements InputStub {
  
          if (activity != null && activity.mInputHandler != null) {
              activity.mInputHandler.refreshInputDevices();

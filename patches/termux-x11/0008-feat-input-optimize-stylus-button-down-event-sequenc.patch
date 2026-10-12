@@ -1,4 +1,4 @@
-From 7039ffe8b4a79e836c14e06e7250c6eb01d28d42 Mon Sep 17 00:00:00 2001
+From 52f433f1543f102f1451d6d2d7b211dccf8ea69a Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Sat, 29 Aug 2026 21:38:50 +0530
 Subject: [PATCH 8/9] feat(input): optimize stylus button down event sequence

@@ -97,6 +97,7 @@ class CanvasSessionManager @JvmOverloads constructor(
                         Log.i(TAG, "Connecting LorieView to X server fd=$fd...")
                         lorieView.connect(fd)
                         lorieView.post {
+                            lorieView.triggerCallback()
                             lorieView.requestLayout()
                         }
                     } else {
