@@ -1,4 +1,4 @@
-From 4bd7757d9c209e307261729695352d913461bb3c Mon Sep 17 00:00:00 2001
+From 1e2506060c72c77f61027e7cba02d53df018b44b Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Tue, 25 Aug 2026 01:23:42 +0530
 Subject: [PATCH 4/9] fix(input): restore cursor visibility in
@@ -9,10 +9,10 @@ Subject: [PATCH 4/9] fix(input): restore cursor visibility in
  1 file changed, 1 insertion(+)
 
 diff --git a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
-index c21604c..3972b58 100644
+index e80882c..e039e2a 100644
 --- a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
 +++ b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
-@@ -265,6 +265,7 @@ static Bool handleStylusEvent(__unused ClientPtr pClient, void *closure) {
+@@ -267,6 +267,7 @@ static Bool handleStylusEvent(__unused ClientPtr pClient, void *closure) {
          free(e);
          return TRUE;
      }
@@ -21,5 +21,5 @@ index c21604c..3972b58 100644
      valuator_mask_zero(&mask);
      static int buttons_prev = 0;
 -- 
-2.55.0
+2.56.0
 

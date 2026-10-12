@@ -1,4 +1,4 @@
-From c5dddb9c4988023a2550983976e59aab8654474b Mon Sep 17 00:00:00 2001
+From dae4c5a8140b82e85398d6ed39edd8055403d155 Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Tue, 25 Aug 2026 18:39:47 +0530
 Subject: [PATCH 6/9] fix(input): implement onCheckIsTextEditor and improve
@@ -9,7 +9,7 @@ Subject: [PATCH 6/9] fix(input): implement onCheckIsTextEditor and improve
  1 file changed, 20 insertions(+), 3 deletions(-)
 
 diff --git a/lorie/src/main/java/com/termux/x11/LorieView.java b/lorie/src/main/java/com/termux/x11/LorieView.java
-index 6c3db66..efd5f22 100644
+index a634032..9b462a0 100644
 --- a/lorie/src/main/java/com/termux/x11/LorieView.java
 +++ b/lorie/src/main/java/com/termux/x11/LorieView.java
 @@ -347,11 +347,18 @@ public class LorieView extends SurfaceView implements InputStub {
@@ -32,7 +32,7 @@ index 6c3db66..efd5f22 100644
      }
  
      public void toggleKeyboardVisible() {
-@@ -796,10 +803,20 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -809,10 +816,20 @@ public class LorieView extends SurfaceView implements InputStub {
          if (clipboardSyncEnabled && hasFocus) {
              clipboard.addPrimaryClipChangedListener(clipboardListener);
              checkForClipboardChange();
@@ -56,5 +56,5 @@ index 6c3db66..efd5f22 100644
  
      @Override
 -- 
-2.55.0
+2.56.0
 

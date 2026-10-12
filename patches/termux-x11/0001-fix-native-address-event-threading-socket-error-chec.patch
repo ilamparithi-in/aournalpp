@@ -1,4 +1,4 @@
-From 96f9f2e6c907e0232e00284813730885af7d80c8 Mon Sep 17 00:00:00 2001
+From ce0c81a18a7ea469d19edb6c22bca44b81224c48 Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Sun, 23 Aug 2026 08:07:38 +0530
 Subject: [PATCH 1/9] fix(native): address event threading, socket error check
@@ -29,10 +29,10 @@ index a344700..1ff6e52 100644
      (void) mieqInit();
  }
 diff --git a/lorie/src/main/cpp/lorie/activity.cpp b/lorie/src/main/cpp/lorie/activity.cpp
-index ef13b0f..79a5a8d 100644
+index 2946a39..2768377 100644
 --- a/lorie/src/main/cpp/lorie/activity.cpp
 +++ b/lorie/src/main/cpp/lorie/activity.cpp
-@@ -143,7 +143,8 @@ static jlong nativeInit(JNIEnv *env, jobject thiz) {
+@@ -147,7 +147,8 @@ static jlong nativeInit(JNIEnv *env, jobject thiz) {
  
          MainActivity.self = FindClassOrDie(env,  "com/termux/x11/MainActivity");
          MainActivity.clientConnectedStateChanged = FindMethodOrDie(env, MainActivity.self, "clientConnectedStateChanged", "()V", JNI_FALSE);
@@ -42,7 +42,7 @@ index ef13b0f..79a5a8d 100644
      }
  
      return (jlong) (intptr_t) new (malloc(sizeof(LorieViewResources))) LorieViewResources(env, thiz);
-@@ -269,12 +270,12 @@ int LorieViewResources::xcallback(int fd, int events) {
+@@ -273,12 +274,12 @@ int LorieViewResources::xcallback(int fd, int events) {
                      break;
                  }
                  case EVENT_WINDOW_FOCUS_CHANGED: {
@@ -57,7 +57,7 @@ index ef13b0f..79a5a8d 100644
                      break;
                  }
              }
-@@ -490,7 +491,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, __unused void *reserved) {
+@@ -494,7 +495,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, __unused void *reserved) {
                  lastInputTimestampMs = nowMs();
                  auto* r = (LorieViewResources*) ptr;
                  if (r && r->connFd != -1) {
@@ -66,7 +66,7 @@ index ef13b0f..79a5a8d 100644
                          env->CallVoidMethod(r->thiz, MainActivity.resetIme);
                      sendEvent(r, .mouse = { .t = EVENT_MOUSE, .x = x, .y = y, .detail = (uint8_t) which_button, .down = button_down, .relative = relative });
                  }
-@@ -501,11 +502,10 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, __unused void *reserved) {
+@@ -505,11 +506,10 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, __unused void *reserved) {
                  if (action != -1)
                      sendEvent(r, .touch = { .t = EVENT_TOUCH, .type = (uint16_t) action, .id = (uint16_t) id, .x = (uint16_t) x, .y = (uint16_t) y });
              }},
@@ -80,10 +80,10 @@ index ef13b0f..79a5a8d 100644
                  }
              }},
 diff --git a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
-index bde6821..c21604c 100644
+index f294521..e80882c 100644
 --- a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
 +++ b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
-@@ -211,7 +211,9 @@ static jboolean start(JNIEnv *env, jobject self, jobjectArray args) {
+@@ -213,7 +213,9 @@ static jboolean start(JNIEnv *env, jobject self, jobjectArray args) {
  
      AChoreographer *choreographer = AChoreographer_getInstance();
      // Trigger it first time
@@ -94,7 +94,7 @@ index bde6821..c21604c 100644
  
      xorg_list_init(&registeredBuffers);
      pthread_create(&t, nullptr, +[](void* cookie) -> void* {
-@@ -257,6 +259,54 @@ static Bool handleTouchEvent(__unused ClientPtr pClient, void *closure) {
+@@ -259,6 +261,54 @@ static Bool handleTouchEvent(__unused ClientPtr pClient, void *closure) {
      return TRUE;
  }
  
@@ -149,7 +149,7 @@ index bde6821..c21604c 100644
  void handleLorieEvents(int fd, __unused int ready, __unused void *ignored) {
      ValuatorMask mask;
      lorieEvent e = {0};
-@@ -301,48 +351,18 @@ void handleLorieEvents(int fd, __unused int ready, __unused void *ignored) {
+@@ -303,48 +353,18 @@ void handleLorieEvents(int fd, __unused int ready, __unused void *ignored) {
                  break;
              }
              case EVENT_STYLUS: {
@@ -208,5 +208,5 @@ index bde6821..c21604c 100644
              }
              case EVENT_MOUSE: {
 -- 
-2.55.0
+2.56.0
 

@@ -1,4 +1,4 @@
-From 3fe175367fde09afe863e553f3dfa24330595391 Mon Sep 17 00:00:00 2001
+From c810987264db5f42772184090240b56242043323 Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Sun, 23 Aug 2026 08:07:47 +0530
 Subject: [PATCH 2/9] feat(input): add stylus event handling, Lenovo pen
@@ -8,10 +8,10 @@ Subject: [PATCH 2/9] feat(input): add stylus event handling, Lenovo pen
  .../termux/x11/input/InputEventSender.java    |   2 +-
  .../x11/input/LenovoPenButtonMapper.java      | 241 ++++++++++++++++++
  .../com/termux/x11/input/StylusState.java     |  51 ++++
- .../termux/x11/input/TouchInputHandler.java   | 215 ++++++++++++----
+ .../termux/x11/input/TouchInputHandler.java   | 217 ++++++++++++----
  .../helper/LenovoPenButtonListener.java       |  67 +++++
  .../lppdebug/helper/PenButtonEvent.java       |  26 ++
- 6 files changed, 554 insertions(+), 48 deletions(-)
+ 6 files changed, 556 insertions(+), 48 deletions(-)
  create mode 100644 lorie/src/main/java/com/termux/x11/input/LenovoPenButtonMapper.java
  create mode 100644 lorie/src/main/java/com/termux/x11/input/StylusState.java
  create mode 100644 lorie/src/main/java/dev/ilamparithi/lppdebug/helper/LenovoPenButtonListener.java
@@ -335,7 +335,7 @@ index 0000000..21e6de4
 +    }
 +}
 diff --git a/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java b/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java
-index e5598c0..3c02cba 100644
+index ec1323a..07246aa 100644
 --- a/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java
 +++ b/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java
 @@ -10,6 +10,7 @@ import static android.view.KeyEvent.KEYCODE_VOLUME_DOWN;
@@ -344,17 +344,17 @@ index e5598c0..3c02cba 100644
  import android.annotation.SuppressLint;
 +import android.app.Activity;
  import android.app.PendingIntent;
- import android.content.ComponentName;
  import android.content.Context;
-@@ -21,6 +22,7 @@ import android.graphics.RectF;
- import android.hardware.display.DisplayManager;
+ import android.content.Intent;
+@@ -21,6 +22,7 @@ import android.hardware.display.DisplayManager;
  import android.hardware.input.InputManager;
+ import android.net.Uri;
  import android.os.Handler;
 +import android.os.Looper;
  import android.os.Build;
  import android.util.DisplayMetrics;
  import android.view.Display;
-@@ -45,10 +47,14 @@ import com.termux.x11.utils.SamsungDexUtils;
+@@ -46,10 +48,14 @@ import com.termux.x11.utils.SamsungDexUtils;
  import java.lang.annotation.Retention;
  import java.lang.annotation.RetentionPolicy;
  import java.lang.reflect.InvocationTargetException;
@@ -369,7 +369,7 @@ index e5598c0..3c02cba 100644
  
  /**
   * This class is responsible for handling Touch input from the user.  Touch events which manipulate
-@@ -99,7 +105,17 @@ public class TouchInputHandler {
+@@ -100,7 +106,19 @@ public class TouchInputHandler {
  
      private InputStrategyInterface mInputStrategy;
      private final InputEventSender mInjector;
@@ -377,8 +377,10 @@ index e5598c0..3c02cba 100644
 +    private final Activity mActivity;
 +
 +    private LorieView getLorieView() {
-+        if (MainActivity.getInstance() != null && MainActivity.getInstance().getLorieView() != null)
-+            return MainActivity.getInstance().getLorieView();
++        if (mActivity instanceof MainActivity) {
++            LorieView lv = ((MainActivity) mActivity).getLorieView();
++            if (lv != null) return lv;
++        }
 +        if (mActivity != null) {
 +            View v = mActivity.findViewById(com.termux.x11.R.id.lorieView);
 +            if (v instanceof LorieView) return (LorieView) v;
@@ -388,7 +390,7 @@ index e5598c0..3c02cba 100644
      private final InputManager.InputDeviceListener mInputDeviceListener;
      private final DisplayMetrics mMetrics = new DisplayMetrics();
      private final float[] mappedPoint = new float[2];
-@@ -115,6 +131,87 @@ public class TouchInputHandler {
+@@ -116,6 +134,87 @@ public class TouchInputHandler {
      private boolean keyIntercepting = false;
      private boolean ignoreGamepadEvents = false;
  
@@ -476,7 +478,7 @@ index e5598c0..3c02cba 100644
      /**
       * Used for tracking swipe gestures. Only the Y-direction is needed for responding to swipe-up
       * or swipe-down.
-@@ -179,8 +276,8 @@ public class TouchInputHandler {
+@@ -180,8 +279,8 @@ public class TouchInputHandler {
          return ((currentBS & mask) != 0);
      }
  
@@ -487,7 +489,7 @@ index e5598c0..3c02cba 100644
          if (injector == null)
              throw new NullPointerException();
  
-@@ -250,7 +347,7 @@ public class TouchInputHandler {
+@@ -251,7 +350,7 @@ public class TouchInputHandler {
          ((InputManager) mActivity.getSystemService(Context.INPUT_SERVICE)).registerInputDeviceListener(mInputDeviceListener, null);
      }
  
@@ -496,7 +498,7 @@ index e5598c0..3c02cba 100644
          this(activity, null, injector, false);
      }
  
-@@ -282,8 +379,16 @@ public class TouchInputHandler {
+@@ -283,8 +382,16 @@ public class TouchInputHandler {
                  });
          android.util.Log.d("DEVICES", "requesting stylus " + stylusAvailable.get());
          android.util.Log.d("DEVICES", "external keyboard connected " + externalKeyboardAvailable.get());
@@ -515,7 +517,7 @@ index e5598c0..3c02cba 100644
      }
  
      boolean isDexEvent(MotionEvent event) {
-@@ -425,16 +530,17 @@ public class TouchInputHandler {
+@@ -426,16 +533,17 @@ public class TouchInputHandler {
      }
  
      private static boolean hasPointerCapture(View view) {
@@ -538,7 +540,7 @@ index e5598c0..3c02cba 100644
          }
  
          if (mInjector.pauseKeyInterceptingWithEsc) {
-@@ -489,10 +595,10 @@ public class TouchInputHandler {
+@@ -490,10 +598,10 @@ public class TouchInputHandler {
  
          mActivity.getRealMetrics(mMetrics);
  
@@ -552,7 +554,7 @@ index e5598c0..3c02cba 100644
          SamsungDexUtils.dexMetaKeyCapture(mActivity, mInjector.dexMetaKeyCapture && keyIntercepting);
  
          swipeUpAction = extractUserActionFromPreferences(p, "swipeUp");
-@@ -514,15 +620,20 @@ public class TouchInputHandler {
+@@ -515,15 +623,20 @@ public class TouchInputHandler {
              return noAction;
  
          switch(pref.asList().get()) {
@@ -580,7 +582,7 @@ index e5598c0..3c02cba 100644
              default: return noAction;
          }
      }
-@@ -634,7 +745,8 @@ public class TouchInputHandler {
+@@ -640,7 +753,8 @@ public class TouchInputHandler {
          private static final long CURSOR_SYNC_RELEASE_GRACE_MS = 50;
          private final Runnable mCursorSyncTimeout = () -> {
              mPendingCursorSyncSerial = -1;
@@ -590,7 +592,7 @@ index e5598c0..3c02cba 100644
          };
  
          /** Fires once the X server confirms the post-pinch cursor correction has taken effect. */
-@@ -644,10 +756,13 @@ public class TouchInputHandler {
+@@ -650,10 +764,13 @@ public class TouchInputHandler {
              mGestureListenerHandler.removeCallbacks(mCursorSyncTimeout);
              mPendingCursorSyncSerial = -1;
              // Small grace period on top of the server's own confirmation, as extra safety margin.
@@ -606,7 +608,7 @@ index e5598c0..3c02cba 100644
              if (msg.what == InputStub.BUTTON_LEFT)
                  mInputStrategy.onTap(InputStub.BUTTON_LEFT);
              return true;
-@@ -977,8 +1092,10 @@ public class TouchInputHandler {
+@@ -978,8 +1095,10 @@ public class TouchInputHandler {
              if (e.isFromSource(InputDevice.SOURCE_MOUSE) || e.isFromSource(InputDevice.SOURCE_MOUSE_RELATIVE)) {
                  if (e.getRepeatCount() != 0) // ignore auto-repeat
                      return true;
@@ -619,7 +621,7 @@ index e5598c0..3c02cba 100644
                  return true;
              }
  
-@@ -1082,7 +1199,7 @@ public class TouchInputHandler {
+@@ -1083,7 +1202,7 @@ public class TouchInputHandler {
              return (e.getButtonState() & button) == button;
          }
  
@@ -628,7 +630,7 @@ index e5598c0..3c02cba 100644
              if (mInjector.stylusButtonContactModifierMode) {
                  if (e.getPressure() > 0) {
                      if (hasButton(e, MotionEvent.BUTTON_STYLUS_SECONDARY))
-@@ -1112,12 +1229,13 @@ public class TouchInputHandler {
+@@ -1113,12 +1232,13 @@ public class TouchInputHandler {
              int newButtons = extractButtons(e);
              float newX = e.getX(e.getActionIndex()), newY = e.getY(e.getActionIndex());
              InputDevice dev = e.getDevice();
@@ -647,7 +649,7 @@ index e5598c0..3c02cba 100644
                      isExternal(dev) && rangeX != null && rangeY != null) {
                  newX *= (float) mMetrics.widthPixels / rangeX.getMax();
                  newY *= (float) mMetrics.heightPixels / rangeY.getMax();
-@@ -1126,27 +1244,30 @@ public class TouchInputHandler {
+@@ -1127,27 +1247,30 @@ public class TouchInputHandler {
              newX = mappedPoint[0];
              newY = mappedPoint[1];
  
@@ -692,7 +694,7 @@ index e5598c0..3c02cba 100644
  
              return true;
          }
-@@ -1163,7 +1284,7 @@ public class TouchInputHandler {
+@@ -1164,7 +1287,7 @@ public class TouchInputHandler {
          DexListener(Context ctx) {
              mScroller = new GestureDetector(ctx, this, null, false);
          }
@@ -807,5 +809,5 @@ index 0000000..25516ff
 +    }
 +}
 -- 
-2.55.0
+2.56.0
 

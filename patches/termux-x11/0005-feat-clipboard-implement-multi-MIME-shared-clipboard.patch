@@ -1,4 +1,4 @@
-From c4c23a8b9f4de31d8515fa55a2d1cd90d48beeec Mon Sep 17 00:00:00 2001
+From 94ff76fba8fe78be8c275e7307aac0a4627100b4 Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Tue, 25 Aug 2026 15:42:17 +0530
 Subject: [PATCH 5/9] feat(clipboard): implement multi-MIME shared clipboard
@@ -17,7 +17,7 @@ Subject: [PATCH 5/9] feat(clipboard): implement multi-MIME shared clipboard
  5 files changed, 475 insertions(+), 153 deletions(-)
 
 diff --git a/lorie/src/main/cpp/lorie/activity.cpp b/lorie/src/main/cpp/lorie/activity.cpp
-index 79a5a8d..58f829f 100644
+index 2768377..ed6cd5b 100644
 --- a/lorie/src/main/cpp/lorie/activity.cpp
 +++ b/lorie/src/main/cpp/lorie/activity.cpp
 @@ -20,9 +20,37 @@
@@ -59,7 +59,7 @@ index 79a5a8d..58f829f 100644
  
  bool lorieDebugEnabled = false;
  
-@@ -220,22 +248,47 @@ int LorieViewResources::xcallback(int fd, int events) {
+@@ -224,22 +252,47 @@ int LorieViewResources::xcallback(int fd, int events) {
                          log(ERROR, "Could not allocate clipboard buffer");
                          return xcallback(fd, ALOOPER_EVENT_HANGUP);
                      }
@@ -118,7 +118,7 @@ index 79a5a8d..58f829f 100644
                      break;
                  }
                  case EVENT_SHARED_SERVER_STATE: {
-@@ -466,14 +519,16 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, __unused void *reserved) {
+@@ -470,14 +523,16 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, __unused void *reserved) {
                  auto* r = (LorieViewResources*) ptr;
                  sendEvent(r, .type = EVENT_CLIPBOARD_ANNOUNCE);
              }},
@@ -553,7 +553,7 @@ index e5f6e37..b2509d2 100644
      if (!origProcConvertSelection) {
          origProcConvertSelection = ProcVector[X_ConvertSelection];
 diff --git a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
-index 3972b58..0e072ba 100644
+index e039e2a..a201d11 100644
 --- a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
 +++ b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
 @@ -32,6 +32,34 @@ extern "C" {
@@ -591,7 +591,7 @@ index 3972b58..0e072ba 100644
  #define log(prio, ...) __android_log_print(ANDROID_LOG_ ## prio, "LorieNative", __VA_ARGS__)
  
  static int argc = 0;
-@@ -433,14 +461,25 @@ void handleLorieEvents(int fd, __unused int ready, __unused void *ignored) {
+@@ -435,14 +463,25 @@ void handleLorieEvents(int fd, __unused int ready, __unused void *ignored) {
                  lorieWakeServer();
                  break;
              case EVENT_CLIPBOARD_SEND: {
@@ -622,7 +622,7 @@ index 3972b58..0e072ba 100644
                  lorieWakeServer();
                  break;
              }
-@@ -492,26 +531,27 @@ void handleLorieEvents(int fd, __unused int ready, __unused void *ignored) {
+@@ -494,26 +533,27 @@ void handleLorieEvents(int fd, __unused int ready, __unused void *ignored) {
      }
  }
  
@@ -661,10 +661,10 @@ index 3972b58..0e072ba 100644
  }
  
 diff --git a/lorie/src/main/cpp/lorie/lorie.h b/lorie/src/main/cpp/lorie/lorie.h
-index ca2638e..016a273 100644
+index edf0631..ffb3d90 100644
 --- a/lorie/src/main/cpp/lorie/lorie.h
 +++ b/lorie/src/main/cpp/lorie/lorie.h
-@@ -24,13 +24,17 @@ extern "C" {
+@@ -25,13 +25,17 @@ extern "C" {
  
  struct lorie_shared_server_state;
  
@@ -685,7 +685,7 @@ index ca2638e..016a273 100644
  void lorieSetStylusEnabled(Bool enabled);
  void lorieSyncLockKeysState(uint8_t state);
  void lorieWakeServer(void);
-@@ -163,6 +167,11 @@ typedef union {
+@@ -164,6 +168,11 @@ typedef union {
      } clipboardEnable;
      struct {
          uint8_t t;
@@ -698,7 +698,7 @@ index ca2638e..016a273 100644
      } clipboardSend;
      struct {
 diff --git a/lorie/src/main/java/com/termux/x11/LorieView.java b/lorie/src/main/java/com/termux/x11/LorieView.java
-index 64604ec..6c3db66 100644
+index 3907f80..a634032 100644
 --- a/lorie/src/main/java/com/termux/x11/LorieView.java
 +++ b/lorie/src/main/java/com/termux/x11/LorieView.java
 @@ -5,6 +5,8 @@ import android.content.ClipData;
@@ -746,7 +746,7 @@ index 64604ec..6c3db66 100644
      private long mNativeContext;
      private boolean clipboardSyncEnabled = false;
      private boolean hardwareKbdScancodesWorkaround = false;
-@@ -604,31 +614,137 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -617,31 +627,137 @@ public class LorieView extends SurfaceView implements InputStub {
          hardwareKbdScancodesWorkaround = p.hardwareKbdScancodesWorkaround.get();
          clipboardSyncEnabled = p.clipboardEnable.get();
          setClipboardSyncEnabled(mNativeContext, clipboardSyncEnabled, clipboardSyncEnabled);
@@ -899,7 +899,7 @@ index 64604ec..6c3db66 100644
      }
  
      public void handleClipboardChange() {
-@@ -636,17 +752,38 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -649,17 +765,38 @@ public class LorieView extends SurfaceView implements InputStub {
      }
  
      public void checkForClipboardChange() {
@@ -948,7 +948,7 @@ index 64604ec..6c3db66 100644
          }
      }
  
-@@ -704,7 +841,7 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -717,7 +854,7 @@ public class LorieView extends SurfaceView implements InputStub {
      @FastNative private native void setFiltering(long ptr, int filtering);
      @FastNative private native void setClipboardSyncEnabled(long ptr, boolean enabled, boolean ignored);
      @FastNative private native void sendClipboardAnnounce(long ptr);
@@ -958,5 +958,5 @@ index 64604ec..6c3db66 100644
      @FastNative private native void setViewport(long ptr, int x, int y, int width, int height, int expectedWidth, int expectedHeight, int hiddenBottom);
      @FastNative private native void setRendererZoom(long ptr, int percent);
 -- 
-2.55.0
+2.56.0
 

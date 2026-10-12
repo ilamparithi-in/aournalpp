@@ -1,4 +1,4 @@
-From 6a761708e0eebdcf285a3d348efc1221c3e90f63 Mon Sep 17 00:00:00 2001
+From 7039ffe8b4a79e836c14e06e7250c6eb01d28d42 Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Sat, 29 Aug 2026 21:38:50 +0530
 Subject: [PATCH 8/9] feat(input): optimize stylus button down event sequence
@@ -9,10 +9,10 @@ Subject: [PATCH 8/9] feat(input): optimize stylus button down event sequence
  1 file changed, 14 insertions(+), 4 deletions(-)
 
 diff --git a/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java b/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java
-index 344b037..227c6e3 100644
+index 7309399..28999dd 100644
 --- a/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java
 +++ b/lorie/src/main/java/com/termux/x11/input/TouchInputHandler.java
-@@ -1431,10 +1431,20 @@ public class TouchInputHandler {
+@@ -1434,10 +1434,20 @@ public class TouchInputHandler {
                  sendStylusState(state);
  
                  if (action == MotionEvent.ACTION_DOWN && buttons != 0) {
@@ -38,5 +38,5 @@ index 344b037..227c6e3 100644
              }
  
 -- 
-2.55.0
+2.56.0
 

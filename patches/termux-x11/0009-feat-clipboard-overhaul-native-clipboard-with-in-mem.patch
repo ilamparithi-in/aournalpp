@@ -1,4 +1,4 @@
-From 52398df15000d6cea371caa6a262ffce1ba667d3 Mon Sep 17 00:00:00 2001
+From ef88acd7a15c9627fcef1a350fd849a4d1646ffd Mon Sep 17 00:00:00 2001
 From: "Ilamparithi Murali (ilamparithi-in)" <ilamparithi.in@gmail.com>
 Date: Sun, 30 Aug 2026 02:20:17 +0530
 Subject: [PATCH 9/9] feat(clipboard): overhaul native clipboard with in-memory
@@ -13,10 +13,10 @@ Subject: [PATCH 9/9] feat(clipboard): overhaul native clipboard with in-memory
  5 files changed, 252 insertions(+), 388 deletions(-)
 
 diff --git a/lorie/src/main/cpp/lorie/activity.cpp b/lorie/src/main/cpp/lorie/activity.cpp
-index 58f829f..7eead63 100644
+index ed6cd5b..117d305 100644
 --- a/lorie/src/main/cpp/lorie/activity.cpp
 +++ b/lorie/src/main/cpp/lorie/activity.cpp
-@@ -262,14 +262,6 @@ int LorieViewResources::xcallback(int fd, int events) {
+@@ -266,14 +266,6 @@ int LorieViewResources::xcallback(int fd, int events) {
                          }
                          env->DeleteLocalRef(mime);
                          env->DeleteLocalRef(byteArr);
@@ -31,7 +31,7 @@ index 58f829f..7eead63 100644
                      } else {
                          log(DEBUG, "Clipboard text content (%u symbols)", e.clipboardSend.count);
                          jmethodID id = env->GetMethodID(env->GetObjectClass(thiz), "setClipboardText", "(Ljava/lang/String;)V");
-@@ -284,13 +276,6 @@ int LorieViewResources::xcallback(int fd, int events) {
+@@ -288,13 +280,6 @@ int LorieViewResources::xcallback(int fd, int events) {
                      free(clipboard);
                      break;
                  }
@@ -625,10 +625,10 @@ index b2509d2..17e564c 100644
 -        FatalError("Adding ClientStateCallback failed\n");
  }
 diff --git a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
-index 1b9815d..69f1249 100644
+index 848b4cd..714745d 100644
 --- a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
 +++ b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
-@@ -487,7 +487,7 @@ void handleLorieEvents(int fd, __unused int ready, __unused void *ignored) {
+@@ -489,7 +489,7 @@ void handleLorieEvents(int fd, __unused int ready, __unused void *ignored) {
                  QueueWorkProc(+[](__unused ClientPtr pClient, void *closure) -> Bool {
                      // This must be done only on X server thread.
                      auto *p = (ClipboardPayload*) closure;
@@ -637,7 +637,7 @@ index 1b9815d..69f1249 100644
                      free(p);
                      return TRUE;
                  }, nullptr, p);
-@@ -559,13 +559,6 @@ void lorieSendSyncReply(uint32_t serial) {
+@@ -561,13 +561,6 @@ void lorieSendSyncReply(uint32_t serial) {
      }
  }
  
@@ -652,10 +652,10 @@ index 1b9815d..69f1249 100644
      if (conn_fd == -1)
          return false;
 diff --git a/lorie/src/main/cpp/lorie/lorie.h b/lorie/src/main/cpp/lorie/lorie.h
-index 016a273..f06aab6 100644
+index ffb3d90..3240033 100644
 --- a/lorie/src/main/cpp/lorie/lorie.h
 +++ b/lorie/src/main/cpp/lorie/lorie.h
-@@ -24,17 +24,17 @@ extern "C" {
+@@ -25,17 +25,17 @@ extern "C" {
  
  struct lorie_shared_server_state;
  
@@ -679,18 +679,18 @@ index 016a273..f06aab6 100644
  void lorieSyncLockKeysState(uint8_t state);
  void lorieWakeServer(void);
 diff --git a/lorie/src/main/java/com/termux/x11/LorieView.java b/lorie/src/main/java/com/termux/x11/LorieView.java
-index 856a3bd..4c0ad76 100644
+index 3cbe94a..e31ca7f 100644
 --- a/lorie/src/main/java/com/termux/x11/LorieView.java
 +++ b/lorie/src/main/java/com/termux/x11/LorieView.java
-@@ -618,6 +618,7 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -628,6 +628,7 @@ public class LorieView extends SurfaceView implements InputStub {
      }
  
      ClipboardManager.OnPrimaryClipChangedListener clipboardListener = this::handleClipboardChange;
 +    private final java.util.concurrent.ExecutorService clipExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
  
      public void reloadPreferences(Prefs p) {
-         String filtering = p.displayFilteringMode.get();
-@@ -635,7 +636,7 @@ public class LorieView extends SurfaceView implements InputStub {
+         if (p != null) {
+@@ -648,7 +649,7 @@ public class LorieView extends SurfaceView implements InputStub {
      }
  
      // It is used in native code
@@ -699,7 +699,7 @@ index 856a3bd..4c0ad76 100644
          if (clipboard == null || text == null) return;
          try {
              isUpdatingFromX11 = true;
-@@ -650,7 +651,7 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -663,7 +664,7 @@ public class LorieView extends SurfaceView implements InputStub {
      }
  
      // It is used in native code
@@ -708,7 +708,7 @@ index 856a3bd..4c0ad76 100644
          if (clipboard == null || imageBytes == null || imageBytes.length == 0) return;
          try {
              File clipDir = new File(getContext().getCacheDir(), "clipboard");
-@@ -675,7 +676,7 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -688,7 +689,7 @@ public class LorieView extends SurfaceView implements InputStub {
      }
  
      // It is used in native code
@@ -717,7 +717,7 @@ index 856a3bd..4c0ad76 100644
          if (clipboard == null || htmlBytes == null || htmlBytes.length == 0) return;
          try {
              String html = new String(htmlBytes, UTF_8);
-@@ -692,69 +693,17 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -705,69 +706,17 @@ public class LorieView extends SurfaceView implements InputStub {
          }
      }
  
@@ -797,7 +797,7 @@ index 856a3bd..4c0ad76 100644
      }
  
      public void handleClipboardChange() {
-@@ -767,36 +716,63 @@ public class LorieView extends SurfaceView implements InputStub {
+@@ -780,36 +729,63 @@ public class LorieView extends SurfaceView implements InputStub {
              ClipDescription desc = clipboard.getPrimaryClipDescription();
              if (desc == null) return;
              long timestamp = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ? lastClipboardTimestamp + 1 : desc.getTimestamp();
@@ -885,5 +885,5 @@ index 856a3bd..4c0ad76 100644
      public void onWindowFocusChanged(boolean hasFocus) {
          super.onWindowFocusChanged(hasFocus);
 -- 
-2.55.0
+2.56.0
 

@@ -396,8 +396,6 @@ class CanvasActivity : ComponentActivity() {
             insets
         }
 
-        com.termux.x11.MainActivity.setPrefs(com.termux.x11.Prefs(this))
-
         env = LinuxEnvironment(this)
         env.checkAndQuarantineEmergencySave()
         supervisor = ProcessSupervisor(env).apply {
