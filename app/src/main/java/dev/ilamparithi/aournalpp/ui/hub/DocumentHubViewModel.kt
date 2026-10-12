@@ -104,19 +104,7 @@ class DocumentHubViewModel @JvmOverloads constructor(
     private val _enabledFileTypes = MutableStateFlow<Set<NoteFileType>>(loadEnabledFileTypes())
     val enabledFileTypes: StateFlow<Set<NoteFileType>> = _enabledFileTypes.asStateFlow()
 
-    private fun loadEnabledFileTypes(): Set<NoteFileType> {
-        val raw = prefs.getStringSet(AppPreferences.PREF_VISIBLE_FILE_TYPES, AppPreferences.DEFAULT_FILE_TYPES)
-            ?: AppPreferences.DEFAULT_FILE_TYPES
-        val parsed = raw.mapNotNull { ext ->
-            when (ext.lowercase()) {
-                "xopp" -> NoteFileType.XOPP
-                "pdf" -> NoteFileType.PDF
-                "xoj" -> NoteFileType.XOJ
-                else -> null
-            }
-        }.toSet()
-        return parsed.ifEmpty { setOf(NoteFileType.XOPP, NoteFileType.PDF, NoteFileType.XOJ) }
-    }
+    private fun loadEnabledFileTypes(): Set<NoteFileType> = AppPreferences.loadEnabledFileTypes(prefs)
 
     fun toggleFileType(type: NoteFileType) {
         val current = _enabledFileTypes.value
@@ -125,13 +113,13 @@ class DocumentHubViewModel @JvmOverloads constructor(
             if (current.size > 1) {
                 val updated = current - type
                 _enabledFileTypes.value = updated
-                prefs.edit().putStringSet(AppPreferences.PREF_VISIBLE_FILE_TYPES, updated.map { it.extension }.toSet()).apply()
+                AppPreferences.saveEnabledFileTypes(prefs, updated)
                 loadContent()
             }
         } else {
             val updated = current + type
             _enabledFileTypes.value = updated
-            prefs.edit().putStringSet(AppPreferences.PREF_VISIBLE_FILE_TYPES, updated.map { it.extension }.toSet()).apply()
+            AppPreferences.saveEnabledFileTypes(prefs, updated)
             loadContent()
         }
     }

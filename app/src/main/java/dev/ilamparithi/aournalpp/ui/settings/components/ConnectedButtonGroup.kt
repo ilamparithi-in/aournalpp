@@ -73,12 +73,14 @@ fun <T> ConnectedButtonGroup(
     items: List<ConnectedButtonItem<T>>,
     selectedItem: T,
     onItemSelected: (T) -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier.fillMaxWidth(),
+    height: Dp = 48.dp,
     isScrollable: Boolean = false,
     showCheckmark: Boolean = true
 ) {
     val reduceMotion = LocalMotionPreferences.current.reduceAnimations
-    val outerRadius = 24.dp
+    val outerRadius = (height / 2)
+    val scaleFactor = height.value / 48f
 
     // M3 Expressive Spring Motion Specs (Snappier speed, preserved springiness)
     val bouncyFloatSpec: AnimationSpec<Float> = if (reduceMotion) snap() else spring(
@@ -99,9 +101,9 @@ fun <T> ConnectedButtonGroup(
     )
 
     val rowModifier = if (isScrollable) {
-        modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+        modifier.horizontalScroll(rememberScrollState())
     } else {
-        modifier.fillMaxWidth()
+        modifier
     }
 
     // Expansion ratio per M3 Expressive specs: selected item expands, compressing adjacent items
@@ -131,7 +133,7 @@ fun <T> ConnectedButtonGroup(
             )
 
             // Dynamic padding for scrollable mode
-            val targetPadding = if (isSelected) 22.dp else 14.dp
+            val targetPadding = if (isSelected) (22f * scaleFactor).dp else (14f * scaleFactor).dp
             val animatedPadding by animateDpAsState(
                 targetValue = targetPadding,
                 animationSpec = bouncyDpSpec,
@@ -140,9 +142,9 @@ fun <T> ConnectedButtonGroup(
 
             // Corner morphing: active/pressed states morph inner corners
             val targetInner = when {
-                isPressed -> 20.dp
-                isSelected -> 16.dp
-                else -> 6.dp
+                isPressed -> (20f * scaleFactor).dp
+                isSelected -> (16f * scaleFactor).dp
+                else -> (6f * scaleFactor).dp
             }
             val animatedInnerRadius by animateDpAsState(
                 targetValue = targetInner,
@@ -200,7 +202,7 @@ fun <T> ConnectedButtonGroup(
             val baseModifier = Modifier
                 .zIndex(if (isSelected) 1f else 0f)
                 .scale(animatedScale)
-                .height(48.dp)
+                .height(height)
                 .clip(shape)
                 .background(animatedContainerColor, shape)
                 .selectable(
@@ -216,7 +218,7 @@ fun <T> ConnectedButtonGroup(
             } else {
                 baseModifier
                     .weight(animatedWeight)
-                    .padding(horizontal = if (items.size >= 5) 2.dp else 6.dp)
+                    .padding(horizontal = if (height <= 36.dp) 4.dp else if (items.size >= 5) 2.dp else 6.dp)
             }
 
             Box(
@@ -227,6 +229,9 @@ fun <T> ConnectedButtonGroup(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
+                    val iconSize = if (height <= 36.dp) 13.dp else 18.dp
+                    val iconSpacer = if (height <= 36.dp) 3.dp else 6.dp
+
                     if (showCheckmark) {
                         AnimatedVisibility(
                             visible = isSelected,
@@ -252,9 +257,9 @@ fun <T> ConnectedButtonGroup(
                                     imageVector = Icons.Default.Check,
                                     contentDescription = null,
                                     tint = animatedContentColor,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(iconSize)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(iconSpacer))
                             }
                         }
                     } else if (item.icon != null) {
@@ -262,13 +267,13 @@ fun <T> ConnectedButtonGroup(
                             imageVector = item.icon,
                             contentDescription = null,
                             tint = animatedContentColor,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(iconSize)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(iconSpacer))
                     }
                     Text(
                         text = item.label,
-                        style = if (items.size >= 5) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
+                        style = if (height <= 36.dp) MaterialTheme.typography.labelMedium else if (items.size >= 5) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = animatedContentColor,
                         maxLines = 1,
@@ -291,12 +296,14 @@ fun <T> MultiSelectConnectedButtonGroup(
     items: List<ConnectedButtonItem<T>>,
     selectedItems: Set<T>,
     onItemToggled: (T) -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier.fillMaxWidth(),
+    height: Dp = 48.dp,
     isScrollable: Boolean = false,
     showCheckmark: Boolean = true
 ) {
     val reduceMotion = LocalMotionPreferences.current.reduceAnimations
-    val outerRadius = 24.dp
+    val outerRadius = (height / 2)
+    val scaleFactor = height.value / 48f
 
     val bouncyFloatSpec: AnimationSpec<Float> = if (reduceMotion) snap() else spring(
         dampingRatio = 0.52f,
@@ -316,9 +323,9 @@ fun <T> MultiSelectConnectedButtonGroup(
     )
 
     val rowModifier = if (isScrollable) {
-        modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+        modifier.horizontalScroll(rememberScrollState())
     } else {
-        modifier.fillMaxWidth()
+        modifier
     }
 
     val expansionRatio = when {
@@ -345,7 +352,7 @@ fun <T> MultiSelectConnectedButtonGroup(
                 label = "MultiConnectedButtonWeight_$index"
             )
 
-            val targetPadding = if (isSelected) 22.dp else 14.dp
+            val targetPadding = if (isSelected) (22f * scaleFactor).dp else (14f * scaleFactor).dp
             val animatedPadding by animateDpAsState(
                 targetValue = targetPadding,
                 animationSpec = bouncyDpSpec,
@@ -353,9 +360,9 @@ fun <T> MultiSelectConnectedButtonGroup(
             )
 
             val targetInner = when {
-                isPressed -> 20.dp
-                isSelected -> 16.dp
-                else -> 6.dp
+                isPressed -> (20f * scaleFactor).dp
+                isSelected -> (16f * scaleFactor).dp
+                else -> (6f * scaleFactor).dp
             }
             val animatedInnerRadius by animateDpAsState(
                 targetValue = targetInner,
@@ -411,7 +418,7 @@ fun <T> MultiSelectConnectedButtonGroup(
             val baseModifier = Modifier
                 .zIndex(if (isSelected) 1f else 0f)
                 .scale(animatedScale)
-                .height(48.dp)
+                .height(height)
                 .clip(shape)
                 .background(animatedContainerColor, shape)
                 .selectable(
@@ -427,7 +434,7 @@ fun <T> MultiSelectConnectedButtonGroup(
             } else {
                 baseModifier
                     .weight(animatedWeight)
-                    .padding(horizontal = if (items.size >= 5) 2.dp else 6.dp)
+                    .padding(horizontal = if (height <= 36.dp) 4.dp else if (items.size >= 5) 2.dp else 6.dp)
             }
 
             Box(
@@ -438,6 +445,9 @@ fun <T> MultiSelectConnectedButtonGroup(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
+                    val iconSize = if (height <= 36.dp) 13.dp else 18.dp
+                    val iconSpacer = if (height <= 36.dp) 3.dp else 6.dp
+
                     if (showCheckmark) {
                         AnimatedVisibility(
                             visible = isSelected,
@@ -463,9 +473,9 @@ fun <T> MultiSelectConnectedButtonGroup(
                                     imageVector = Icons.Default.Check,
                                     contentDescription = null,
                                     tint = animatedContentColor,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(iconSize)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(iconSpacer))
                             }
                         }
                     } else if (item.icon != null) {
@@ -473,13 +483,13 @@ fun <T> MultiSelectConnectedButtonGroup(
                             imageVector = item.icon,
                             contentDescription = null,
                             tint = animatedContentColor,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(iconSize)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(iconSpacer))
                     }
                     Text(
                         text = item.label,
-                        style = if (items.size >= 5) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
+                        style = if (height <= 36.dp) MaterialTheme.typography.labelMedium else if (items.size >= 5) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = animatedContentColor,
                         maxLines = 1,

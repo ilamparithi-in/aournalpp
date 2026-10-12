@@ -14,6 +14,7 @@ import dev.ilamparithi.aournalpp.data.DocumentRepository
 import dev.ilamparithi.aournalpp.model.AutosaveInfo
 import dev.ilamparithi.aournalpp.model.FolderItem
 import dev.ilamparithi.aournalpp.model.NoteDocument
+import dev.ilamparithi.aournalpp.model.NoteFileType
 import dev.ilamparithi.aournalpp.runtime.ActiveNotesTracker
 import dev.ilamparithi.aournalpp.runtime.ActiveSessionTracker
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
@@ -61,6 +62,8 @@ sealed interface HomeDialogState {
  */
 data class HomeUiState(
     val recentNotes: List<NoteDocument> = emptyList(),
+    val rawRecentNotes: List<NoteDocument> = emptyList(),
+    val enabledFileTypes: Set<NoteFileType> = AppPreferences.ALL_NOTE_FILE_TYPES,
     val continueNote: NoteDocument? = null,
     val totalNotesCount: Int = 0,
     val totalFoldersCount: Int = 0,
@@ -83,13 +86,19 @@ class HomeViewModel @JvmOverloads constructor(
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(
-        HomeUiState(
-            recentNotes = repository.getCachedHomeNotes(16) ?: emptyList(),
-            continueNote = repository.getCachedContinueNote(),
-            totalNotesCount = repository.getCachedTotalNotesCount() ?: 0,
-            totalFoldersCount = repository.getCachedTotalFoldersCount() ?: 0,
-            viewMode = prefs.getString("pref_home_view_mode", "EXPRESSIVE") ?: "EXPRESSIVE"
-        )
+        run {
+            val initialTypes = AppPreferences.loadEnabledFileTypes(prefs)
+            val initialRaw = repository.getCachedHomeNotes(16) ?: emptyList()
+            HomeUiState(
+                recentNotes = initialRaw.filter { initialTypes.contains(it.fileType) },
+                rawRecentNotes = initialRaw,
+                enabledFileTypes = initialTypes,
+                continueNote = repository.getCachedContinueNote(),
+                totalNotesCount = repository.getCachedTotalNotesCount() ?: 0,
+                totalFoldersCount = repository.getCachedTotalFoldersCount() ?: 0,
+                viewMode = prefs.getString("pref_home_view_mode", "EXPRESSIVE") ?: "EXPRESSIVE"
+            )
+        }
     )
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
@@ -109,13 +118,15 @@ class HomeViewModel @JvmOverloads constructor(
     }
 
     init {
-        val filter = IntentFilter("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED")
-        ContextCompat.registerReceiver(
-            getApplication(),
-            sessionClosedReceiver,
-            filter,
-            ContextCompat.RECEIVER_NOT_EXPORTED
-        )
+        try {
+            val filter = IntentFilter("dev.ilamparithi.aournalpp.ACTION_SESSION_CLOSED")
+            ContextCompat.registerReceiver(
+                getApplication(),
+                sessionClosedReceiver,
+                filter,
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+        } catch (_: Exception) {}
         loadHomeData(force = true, checkEmergencyAndAutoload = true)
     }
 
@@ -131,6 +142,15 @@ class HomeViewModel @JvmOverloads constructor(
      */
     fun onAppResume(force: Boolean = false) {
         ActiveSessionTracker.notifySessionChanged()
+        val currentTypes = AppPreferences.loadEnabledFileTypes(prefs)
+        if (currentTypes != _uiState.value.enabledFileTypes) {
+            _uiState.update { state ->
+                state.copy(
+                    enabledFileTypes = currentTypes,
+                    recentNotes = state.rawRecentNotes.filter { currentTypes.contains(it.fileType) }
+                )
+            }
+        }
         val now = System.currentTimeMillis()
         if (!force && (now - lastLoadedTimestamp < 2000L)) {
             return
@@ -148,9 +168,14 @@ class HomeViewModel @JvmOverloads constructor(
         }
         lastLoadedTimestamp = System.currentTimeMillis()
 
+        val activeTypes = AppPreferences.loadEnabledFileTypes(prefs)
+        val filteredNotes = payload.notes.filter { activeTypes.contains(it.fileType) }
+
         _uiState.update { current ->
             current.copy(
-                recentNotes = payload.notes,
+                rawRecentNotes = payload.notes,
+                recentNotes = filteredNotes,
+                enabledFileTypes = activeTypes,
                 continueNote = payload.continueNote,
                 totalNotesCount = payload.totalNotesCount,
                 totalFoldersCount = payload.totalFoldersCount,
@@ -184,8 +209,27 @@ class HomeViewModel @JvmOverloads constructor(
     }
 
     fun refresh() {
-        _uiState.update { it.copy(isRefreshing = true, refreshSeed = System.currentTimeMillis()) }
+        val savedTypes = AppPreferences.loadEnabledFileTypes(prefs)
+        _uiState.update { it.copy(isRefreshing = true, refreshSeed = System.currentTimeMillis(), enabledFileTypes = savedTypes) }
         loadHomeData(force = true)
+    }
+
+    fun toggleFileType(type: NoteFileType) {
+        val current = _uiState.value.enabledFileTypes
+        val updated = if (current.contains(type)) {
+            if (current.size > 1) current - type else current
+        } else {
+            current + type
+        }
+        if (updated != current) {
+            AppPreferences.saveEnabledFileTypes(prefs, updated)
+            _uiState.update { state ->
+                state.copy(
+                    enabledFileTypes = updated,
+                    recentNotes = state.rawRecentNotes.filter { updated.contains(it.fileType) }
+                )
+            }
+        }
     }
 
     fun setViewMode(mode: String) {

@@ -157,6 +157,7 @@ import dev.ilamparithi.aournalpp.data.DocumentRepository
 import dev.ilamparithi.aournalpp.model.FolderItem
 import dev.ilamparithi.aournalpp.model.NoteDocument
 import dev.ilamparithi.aournalpp.model.NoteFileType
+import dev.ilamparithi.aournalpp.ui.common.NoteFileTypeFilterRow
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
 import dev.ilamparithi.aournalpp.runtime.ProcessSupervisor
 import dev.ilamparithi.aournalpp.utils.NoteOpenAction
@@ -637,6 +638,11 @@ fun HomeScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
+                                    NoteFileTypeFilterRow(
+                                        enabledFileTypes = uiState.enabledFileTypes,
+                                        onToggleFileType = { viewModel.toggleFileType(it) }
+                                    )
+
                                     ViewModeToggle()
 
                                     TextButton(onClick = onNavigateToFiles) {
@@ -679,7 +685,18 @@ fun HomeScreen(
                                 }
                             }
 
-                            ViewModeToggle(modifier = Modifier.align(Alignment.Start))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                ViewModeToggle()
+
+                                NoteFileTypeFilterRow(
+                                    enabledFileTypes = uiState.enabledFileTypes,
+                                    onToggleFileType = { viewModel.toggleFileType(it) }
+                                )
+                            }
                         }
 
                         if (uiState.recentNotes.isEmpty()) {

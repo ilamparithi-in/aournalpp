@@ -504,11 +504,17 @@ fun DocumentHubTopBar(
 
                 // Line 3: In-place file type filter row for all folders in notes home
                 if (enabledFileTypes.isNotEmpty()) {
-                    NoteFileTypeFilterRow(
-                        enabledFileTypes = enabledFileTypes,
-                        onToggleFileType = onToggleFileType,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        NoteFileTypeFilterRow(
+                            enabledFileTypes = enabledFileTypes,
+                            onToggleFileType = onToggleFileType
+                        )
+                    }
                 }
             }
         }

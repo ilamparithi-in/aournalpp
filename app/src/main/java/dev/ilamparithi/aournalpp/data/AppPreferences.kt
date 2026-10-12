@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import dev.ilamparithi.aournalpp.model.NoteFileType
 
 /**
  * Centralized preferences accessor providing standardized SharedPreferences instances
@@ -17,6 +18,25 @@ object AppPreferences {
     const val PREFS_BACKUP = "aournalpp_backup"
     const val PREF_VISIBLE_FILE_TYPES = "pref_visible_file_types"
     val DEFAULT_FILE_TYPES = setOf("xopp", "pdf", "xoj")
+    val ALL_NOTE_FILE_TYPES = setOf(NoteFileType.XOPP, NoteFileType.XOJ, NoteFileType.PDF)
+
+    fun loadEnabledFileTypes(prefs: SharedPreferences): Set<NoteFileType> {
+        val raw = prefs.getStringSet(PREF_VISIBLE_FILE_TYPES, DEFAULT_FILE_TYPES)
+            ?: DEFAULT_FILE_TYPES
+        val parsed = raw.mapNotNull { ext ->
+            when (ext.lowercase()) {
+                "xopp" -> NoteFileType.XOPP
+                "pdf" -> NoteFileType.PDF
+                "xoj" -> NoteFileType.XOJ
+                else -> null
+            }
+        }.toSet()
+        return parsed.ifEmpty { ALL_NOTE_FILE_TYPES }
+    }
+
+    fun saveEnabledFileTypes(prefs: SharedPreferences, types: Set<NoteFileType>) {
+        prefs.edit().putStringSet(PREF_VISIBLE_FILE_TYPES, types.map { it.extension }.toSet()).apply()
+    }
 
     const val ACTION_AOURNAL_PREFS_CHANGED = "dev.ilamparithi.aournalpp.ACTION_AOURNAL_PREFS_CHANGED"
 
