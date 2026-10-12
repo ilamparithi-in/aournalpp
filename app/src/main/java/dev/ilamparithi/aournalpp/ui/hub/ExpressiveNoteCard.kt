@@ -86,7 +86,6 @@ import dev.ilamparithi.aournalpp.utils.ThumbnailManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ExpressiveNoteCard(
     note: NoteDocument,

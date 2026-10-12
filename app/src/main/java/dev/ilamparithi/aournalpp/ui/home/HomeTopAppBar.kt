@@ -33,7 +33,6 @@ import dev.ilamparithi.aournalpp.ui.cloud.QuickSyncButton
  * Top app bar for the Home screen, featuring the app title/badge, dynamic fun subhero pill on scroll,
  * active session status banner, and quick sync action.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeTopAppBar(
     isWideOrLandscape: Boolean,

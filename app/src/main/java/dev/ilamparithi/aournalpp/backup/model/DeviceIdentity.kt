@@ -66,16 +66,49 @@ object DeviceIdentity {
         return id
     }
 
+    private const val KEY_CUSTOM_DEVICE_NAME = "custom_device_name"
+
+    fun getCustomDeviceName(context: Context): String? {
+        val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getString(KEY_CUSTOM_DEVICE_NAME, null)?.takeIf { it.isNotBlank() }
+    }
+
+    fun setCustomDeviceName(context: Context, name: String?) {
+        val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val trimmed = name?.trim()
+        if (trimmed.isNullOrBlank()) {
+            prefs.edit().remove(KEY_CUSTOM_DEVICE_NAME).apply()
+        } else {
+            prefs.edit().putString(KEY_CUSTOM_DEVICE_NAME, trimmed).apply()
+        }
+    }
+
     /**
      * Gets a friendly human-readable name for this device (e.g. "Google Pixel 9 Pro").
      */
     fun getDeviceName(): String {
-        val manufacturer = Build.MANUFACTURER.replaceFirstChar { it.uppercase() }
-        val model = Build.MODEL
+        val manufacturer = Build.MANUFACTURER?.takeIf { it.isNotBlank() }?.replaceFirstChar { it.uppercase() } ?: "Android"
+        val model = Build.MODEL?.takeIf { it.isNotBlank() } ?: "Device"
         return if (model.startsWith(manufacturer, ignoreCase = true)) {
             model
         } else {
             "$manufacturer $model"
+        }
+    }
+
+    /**
+     * Returns the effective device name. Prefers user-configured custom device name if present,
+     * otherwise falls back to hardware-detected device name.
+     * If [includeShortUid] is true, appends the first 4 characters of the unique device ID
+     * (e.g. "Lenovo Tab P12 [a629]") to disambiguate identical devices.
+     */
+    fun getEffectiveDeviceName(context: Context, includeShortUid: Boolean = false): String {
+        val baseName = getCustomDeviceName(context) ?: getDeviceName()
+        return if (includeShortUid) {
+            val shortUid = getDeviceId(context).take(4)
+            "$baseName [$shortUid]"
+        } else {
+            baseName
         }
     }
 
@@ -91,7 +124,7 @@ object DeviceIdentity {
         val appVer = packageInfo?.versionName ?: "1.0"
         return DeviceInfo(
             deviceId = getDeviceId(context),
-            deviceName = getDeviceName(),
+            deviceName = getEffectiveDeviceName(context),
             manufacturer = Build.MANUFACTURER,
             model = Build.MODEL,
             osVersion = Build.VERSION.SDK_INT,

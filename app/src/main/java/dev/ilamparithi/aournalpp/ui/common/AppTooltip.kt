@@ -1,7 +1,6 @@
 package dev.ilamparithi.aournalpp.ui.common
 
 import android.widget.Toast
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -13,6 +12,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TooltipAnchorPosition
 import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.rememberTooltipState
@@ -31,6 +31,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.ilamparithi.aournalpp.utils.minTouchTarget
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
@@ -49,7 +50,7 @@ fun AppTooltipBox(
         content()
     } else {
         TooltipBox(
-            positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
             tooltip = {
                 PlainTooltip {
                     Text(tooltipText)
@@ -67,7 +68,7 @@ fun AppTooltipBox(
  * Standard Material 3 IconButton with integrated hover and long-press tooltip,
  * haptic vibration, toast fallback, and WCAG 48dp minimum touch target enforcement.
  */
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppIconButton(
     onClick: () -> Unit,
@@ -91,7 +92,9 @@ fun AppIconButton(
         coroutineScope.launch {
             try {
                 tooltipState.show()
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
         }
         if (tooltip.isNotBlank()) {
             Toast.makeText(context, tooltip, Toast.LENGTH_SHORT).show()
@@ -100,7 +103,7 @@ fun AppIconButton(
     }
 
     TooltipBox(
-        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
         tooltip = {
             if (tooltip.isNotBlank()) {
                 PlainTooltip {
@@ -144,7 +147,7 @@ fun AppIconButton(
  * Material 3 FilledTonalIconButton with integrated tooltip, haptic vibration,
  * long-press toast description, custom shape support, and minimum touch target.
  */
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppFilledTonalIconButton(
     onClick: () -> Unit,
@@ -167,7 +170,9 @@ fun AppFilledTonalIconButton(
         coroutineScope.launch {
             try {
                 tooltipState.show()
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
         }
         if (tooltip.isNotBlank()) {
             Toast.makeText(context, tooltip, Toast.LENGTH_SHORT).show()
@@ -176,7 +181,7 @@ fun AppFilledTonalIconButton(
     }
 
     TooltipBox(
-        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
         tooltip = {
             if (tooltip.isNotBlank()) {
                 PlainTooltip {

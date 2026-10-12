@@ -200,7 +200,6 @@ data class PendingSingleExport(
     val customName: String
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onNavigateToFiles: () -> Unit,

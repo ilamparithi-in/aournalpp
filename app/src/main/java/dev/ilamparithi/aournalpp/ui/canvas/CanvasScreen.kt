@@ -1515,8 +1515,7 @@ fun CanvasScreen(
                                 isSyncing = activity.isSyncRunningState.value,
                                 onSyncNow = {
                                     val vault = dev.ilamparithi.aournalpp.backup.security.CredentialsVault.getInstance(activity)
-                                    val configuredServices = vault.reloadServices().filter { it.isEnabled }
-                                    if (configuredServices.isEmpty()) {
+                                    if (!vault.hasActiveEnabledServices()) {
                                         Toast.makeText(
                                             activity,
                                             activity.getString(R.string.toast_no_cloud_configured),
@@ -1701,9 +1700,12 @@ fun CanvasScreen(
                                 mutableStateOf(list)
                             }
 
+                            @Suppress("DEPRECATION")
+                            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
                             ModalBottomSheet(
                                 onDismissRequest = { showImageSourceDialog = false },
-                                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                                sheetState = sheetState,
                                 containerColor = MaterialTheme.colorScheme.surface,
                                 tonalElevation = 6.dp
                             ) {
@@ -1723,7 +1725,6 @@ fun CanvasScreen(
 
                                     // Option 1: Take Photo (Camera)
                                     ListItem(
-                                        headlineContent = { Text("Take Photo", fontWeight = FontWeight.Medium) },
                                         supportingContent = { Text("Capture directly using device camera") },
                                         leadingContent = {
                                             Surface(
@@ -1746,11 +1747,12 @@ fun CanvasScreen(
                                                 showImageSourceDialog = false
                                                 activity.launchCameraCapture()
                                             }
-                                    )
+                                    ) {
+                                        Text("Take Photo", fontWeight = FontWeight.Medium)
+                                    }
 
                                     // Option 2: Choose from Photos / Gallery
                                     ListItem(
-                                        headlineContent = { Text("Photo Gallery", fontWeight = FontWeight.Medium) },
                                         supportingContent = { Text("Select pictures from your photo library") },
                                         leadingContent = {
                                             Surface(
@@ -1773,11 +1775,12 @@ fun CanvasScreen(
                                                 showImageSourceDialog = false
                                                 activity.launchGalleryPicker()
                                             }
-                                    )
+                                    ) {
+                                        Text("Photo Gallery", fontWeight = FontWeight.Medium)
+                                    }
 
                                     // Option 3: Browse Files
                                     ListItem(
-                                        headlineContent = { Text("Browse Files", fontWeight = FontWeight.Medium) },
                                         supportingContent = { Text("Pick image files from your storage or downloads") },
                                         leadingContent = {
                                             Surface(
@@ -1800,7 +1803,9 @@ fun CanvasScreen(
                                                 showImageSourceDialog = false
                                                 activity.launchFilePicker()
                                             }
-                                    )
+                                    ) {
+                                        Text("Browse Files", fontWeight = FontWeight.Medium)
+                                    }
 
                                     if (tempFilesList.isNotEmpty()) {
                                         Spacer(modifier = Modifier.height(4.dp))

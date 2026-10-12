@@ -1046,7 +1046,9 @@ class LinuxEnvironment(private val context: Context) {
 
         val manufacturer = android.os.Build.MANUFACTURER.replaceFirstChar { it.uppercase() }
         val model = android.os.Build.MODEL
-        val devName = if (model.startsWith(manufacturer, ignoreCase = true)) model else "$manufacturer $model"
+        val devicePrefs = context.getSharedPreferences("aournal_device_identity", android.content.Context.MODE_PRIVATE)
+        val customName = devicePrefs.getString("custom_device_name", null)?.takeIf { it.isNotBlank() }
+        val devName = customName ?: if (model.startsWith(manufacturer, ignoreCase = true)) model else "$manufacturer $model"
         envMap["AOURNALPP_CREATOR_TAG"] = "Aournal++ 1.3.7 ($devName)"
 
         if (shimModule.exists()) {

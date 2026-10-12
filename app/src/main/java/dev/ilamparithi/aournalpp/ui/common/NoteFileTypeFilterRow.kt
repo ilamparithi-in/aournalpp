@@ -24,7 +24,6 @@ import dev.ilamparithi.aournalpp.model.NoteFileType
  * In-place file type filter row displaying M3 FilterChips for XOPP, PDF, and XOJ notes.
  * Enforces the invariant that at least 1 file type must remain enabled at all times.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NoteFileTypeFilterRow(
     enabledFileTypes: Set<NoteFileType>,

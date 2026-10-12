@@ -84,7 +84,6 @@ import kotlinx.coroutines.launch
  * 3. Canvas Backdrop & Wallpaper (System / Custom / Theme)
  * 4. Motion & Animations (Reduce Animations switch)
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppearanceCanvasSettingsScreen(
     showTopBar: Boolean = true,

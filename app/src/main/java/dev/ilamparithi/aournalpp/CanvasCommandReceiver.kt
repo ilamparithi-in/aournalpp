@@ -24,6 +24,9 @@ class CanvasCommandReceiver : BroadcastReceiver() {
         const val ACTION_REQUEST_FORCE_CLOSE = "dev.ilamparithi.aournalpp.ACTION_REQUEST_FORCE_CLOSE"
         const val ACTION_SYNC_STATE_CHANGED = "dev.ilamparithi.aournalpp.ACTION_SYNC_STATE_CHANGED"
         const val EXTRA_IS_SYNCING = "extra_is_syncing"
+        const val EXTRA_SERVICE_NAME = "extra_service_name"
+        const val EXTRA_CURRENT_INDEX = "extra_current_index"
+        const val EXTRA_TOTAL_COUNT = "extra_total_count"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -92,8 +95,20 @@ class CanvasCommandReceiver : BroadcastReceiver() {
             }
             ACTION_SYNC_STATE_CHANGED -> {
                 val isSyncing = intent.getBooleanExtra(EXTRA_IS_SYNCING, false)
-                Log.d("CanvasCommandReceiver", "Received ACTION_SYNC_STATE_CHANGED in :canvas process: isSyncing=$isSyncing")
+                val serviceName = intent.getStringExtra(EXTRA_SERVICE_NAME)
+                val currentIndex = intent.getIntExtra(EXTRA_CURRENT_INDEX, 0)
+                val totalCount = intent.getIntExtra(EXTRA_TOTAL_COUNT, 0)
+                Log.d("CanvasCommandReceiver", "Received ACTION_SYNC_STATE_CHANGED in :canvas process: isSyncing=$isSyncing, service=$serviceName, current=$currentIndex, total=$totalCount")
                 CanvasActivity.notifySyncStateChanged(isSyncing)
+                if (dev.ilamparithi.aournalpp.runtime.CanvasSessionService.isSessionActive()) {
+                    dev.ilamparithi.aournalpp.runtime.CanvasSessionService.updateSyncProgress(
+                        context = context,
+                        isSyncing = isSyncing,
+                        serviceName = serviceName,
+                        currentIndex = currentIndex,
+                        totalCount = totalCount
+                    )
+                }
             }
         }
     }

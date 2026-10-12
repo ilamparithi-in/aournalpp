@@ -67,7 +67,6 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ServiceDetailSubpage(
     service: ServiceConfig,

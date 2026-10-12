@@ -31,7 +31,6 @@ import androidx.compose.ui.unit.dp
  * - Minimum 48dp touch target and clear state description for assistive technologies.
  * - Balanced internal padding and uniform container colors across DPIs and orientations.
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SettingsSwitchListItem(
     headline: String,

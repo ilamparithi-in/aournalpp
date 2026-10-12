@@ -46,7 +46,6 @@ import dev.ilamparithi.aournalpp.R
 import dev.ilamparithi.aournalpp.utils.a11yHeading
 import dev.ilamparithi.aournalpp.utils.minTouchTarget
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StoragePromptDialog(
     requiredBytes: Long,

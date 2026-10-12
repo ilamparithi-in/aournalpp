@@ -44,17 +44,20 @@ class MainActivityIntentHandler(
         if (intent == null) return
         val action = intent.action
 
-        // 1. Notification / Tab Navigation (e.g. Action Open Transfer Queue)
+        // 1. Notification / Tab Navigation (e.g. Action Open Transfer Queue or Conflicts)
         if (action == "dev.ilamparithi.aournalpp.ACTION_OPEN_TRANSFER_QUEUE" ||
+            action == "dev.ilamparithi.aournalpp.ACTION_OPEN_CONFLICTS" ||
             intent.hasExtra("EXTRA_OPEN_TAB") ||
             intent.hasExtra("EXTRA_CLOUD_SUBPAGE")
         ) {
             val tabId = intent.getIntExtra("EXTRA_OPEN_TAB", AppTab.CLOUD.id)
             val subpageStr = intent.getStringExtra("EXTRA_CLOUD_SUBPAGE")
-            val subpage = if (subpageStr == "TRANSFER_QUEUE" || action == "dev.ilamparithi.aournalpp.ACTION_OPEN_TRANSFER_QUEUE") {
-                CloudSubpage.TRANSFER_QUEUE
-            } else {
-                null
+            val subpage = when {
+                subpageStr == "CONFLICT_RESOLUTION" || subpageStr == "CONFLICTS" || action == "dev.ilamparithi.aournalpp.ACTION_OPEN_CONFLICTS" ->
+                    CloudSubpage.CONFLICT_RESOLUTION
+                subpageStr == "TRANSFER_QUEUE" || action == "dev.ilamparithi.aournalpp.ACTION_OPEN_TRANSFER_QUEUE" ->
+                    CloudSubpage.TRANSFER_QUEUE
+                else -> null
             }
             onNavigateTab(tabId, subpage)
             return

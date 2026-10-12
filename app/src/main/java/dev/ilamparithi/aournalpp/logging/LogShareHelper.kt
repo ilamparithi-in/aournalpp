@@ -57,6 +57,7 @@ object LogShareHelper {
     ) {
         try {
             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            @Suppress("UsePropertyAccessSyntax")
             clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
             Toast.makeText(context, toastMessage, Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {

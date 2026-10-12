@@ -56,7 +56,6 @@ import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import java.io.File
 import java.util.UUID
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CustomMappingDialog(
     services: List<ServiceConfig>,

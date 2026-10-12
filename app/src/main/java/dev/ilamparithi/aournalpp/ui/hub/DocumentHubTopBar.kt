@@ -58,7 +58,6 @@ import dev.ilamparithi.aournalpp.ui.cloud.QuickSyncButton
 import dev.ilamparithi.aournalpp.ui.common.AppIconButton
 import java.io.File
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DocumentHubTopBar(
     isSelectionMode: Boolean,

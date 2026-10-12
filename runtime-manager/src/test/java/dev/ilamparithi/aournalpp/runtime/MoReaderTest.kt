@@ -52,7 +52,6 @@ class MoReaderTest {
             currentOffset += b.size + 1
         }
 
-        val origTabOffset = headerSize
         val transTabOffset = headerSize + count * 8
 
         val out = ByteArrayOutputStream()
@@ -62,7 +61,7 @@ class MoReaderTest {
         buf.putInt(0x950412de.toInt())
         buf.putInt(0) // revision
         buf.putInt(count)
-        buf.putInt(origTabOffset)
+        buf.putInt(headerSize)
         buf.putInt(transTabOffset)
         buf.putInt(0) // hash table size
         buf.putInt(0) // hash table offset

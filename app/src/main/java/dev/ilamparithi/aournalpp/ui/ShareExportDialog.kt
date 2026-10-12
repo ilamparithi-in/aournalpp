@@ -102,7 +102,7 @@ fun SingleShareExportDialog(
     val canExportAsXopp = !isSourcePdf && !isSourceXoj
 
     var selectedFormat by remember {
-        mutableStateOf(if (canExportAsXopp) ShareExportFormat.PDF else ShareExportFormat.PDF)
+        mutableStateOf(ShareExportFormat.PDF)
     }
 
     var textFieldValue by remember {
@@ -328,11 +328,7 @@ fun BatchShareExportDialog(
     }
 
     var selectedFormat by remember {
-        mutableStateOf(
-            if (allXopp) ShareExportFormat.XOPP
-            else if (hasMultipleTypes) ShareExportFormat.PDF
-            else ShareExportFormat.PDF
-        )
+        mutableStateOf(if (allXopp) ShareExportFormat.XOPP else ShareExportFormat.PDF)
     }
 
     AlertDialog(

@@ -46,7 +46,6 @@ import dev.ilamparithi.aournalpp.backup.model.ConflictResolutionPolicy
 import dev.ilamparithi.aournalpp.backup.model.ExclusionFilterConfig
 import dev.ilamparithi.aournalpp.utils.FormatUtils
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConflictPolicyCard(
     selectedPolicy: ConflictResolutionPolicy,
@@ -241,7 +240,7 @@ fun ExclusionFiltersCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@Suppress("DEPRECATION")
 @Composable
 fun AutomationCard(
     isAutoBackupOnExit: Boolean,

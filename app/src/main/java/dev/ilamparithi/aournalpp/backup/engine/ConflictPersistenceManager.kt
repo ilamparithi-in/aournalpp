@@ -183,7 +183,7 @@ class ConflictPersistenceManager internal constructor(storageDir: File) {
         if (remotesArray != null) {
             for (i in 0 until remotesArray.length()) {
                 val rObj = remotesArray.optJSONObject(i) ?: continue
-                deserializeVersionItem(rObj)?.let { remoteVersions.add(it) }
+                remoteVersions.add(deserializeVersionItem(rObj))
             }
         }
 
@@ -198,7 +198,7 @@ class ConflictPersistenceManager internal constructor(storageDir: File) {
         )
     }
 
-    private fun deserializeVersionItem(obj: JSONObject): FileVersionItem? {
+    private fun deserializeVersionItem(obj: JSONObject): FileVersionItem {
         val fileName = obj.optString("fileName", "")
         val relativePath = obj.optString("relativePath", "")
         val localFilePath = obj.optString("localFilePath", "")

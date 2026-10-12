@@ -82,8 +82,7 @@ fun QuickSyncButton(
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     } catch (_: Exception) {}
 
-                    val services = vault.getAllServices().filter { it.isEnabled }
-                    if (services.isEmpty()) {
+                    if (!vault.hasActiveEnabledServices()) {
                         onSyncFinished?.invoke("No active cloud services configured")
                         return@IconButton
                     }

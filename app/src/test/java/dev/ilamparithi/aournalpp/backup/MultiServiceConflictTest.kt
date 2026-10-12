@@ -354,4 +354,48 @@ class MultiServiceConflictTest {
         assertEquals(v1Cloud, conflictGroup.remoteVersions[0])
         assertEquals("Nextcloud", conflictGroup.remoteVersions[0].source.displayName)
     }
+
+    @Test
+    fun testMarkdownDiffConflictResolutionLogic() {
+        val tempDir = java.nio.file.Files.createTempDirectory("md_conflict_test").toFile()
+        try {
+            val localFile = File(tempDir, "notes.md")
+            val remoteFileIdentical = File(tempDir, "remote_notes_identical.md")
+            val remoteFileModified = File(tempDir, "remote_notes_modified.md")
+
+            localFile.writeText("# Meeting Notes\n- Action items\n- Next steps\n")
+            // Different line endings (CRLF vs LF) & whitespace
+            remoteFileIdentical.writeText("# Meeting Notes\r\n- Action items  \r\n- Next steps\r\n")
+            // Modified content
+            remoteFileModified.writeText("# Meeting Notes\r\n- Action items (done)\r\n- Next steps\r\n")
+
+            // 1. Verify text-based identification
+            org.junit.Assert.assertTrue(dev.ilamparithi.aournalpp.backup.engine.BackupEngine.isTextBasedFile("Notes/notes.md"))
+
+            // 2. Diff check: 0 diff changes for identical content
+            org.junit.Assert.assertFalse(dev.ilamparithi.aournalpp.backup.engine.BackupEngine.hasContentChanges(localFile, remoteFileIdentical))
+
+            // 3. Diff check: has changes for modified content
+            org.junit.Assert.assertTrue(dev.ilamparithi.aournalpp.backup.engine.BackupEngine.hasContentChanges(localFile, remoteFileModified))
+
+            // 4. Simulate conflict detection logic for text-based file
+            val isTextBased = dev.ilamparithi.aournalpp.backup.engine.BackupEngine.isTextBasedFile("Notes/notes.md")
+
+            // Case A: Identical content -> no conflict flagged, leave it alone
+            var hasConflictIdentical = false
+            if (isTextBased && dev.ilamparithi.aournalpp.backup.engine.BackupEngine.hasContentChanges(localFile, remoteFileIdentical)) {
+                hasConflictIdentical = true
+            }
+            org.junit.Assert.assertFalse(hasConflictIdentical)
+
+            // Case B: Content diff exists -> ask for conflict resolution
+            var hasConflictModified = false
+            if (isTextBased && dev.ilamparithi.aournalpp.backup.engine.BackupEngine.hasContentChanges(localFile, remoteFileModified)) {
+                hasConflictModified = true
+            }
+            org.junit.Assert.assertTrue(hasConflictModified)
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
 }

@@ -167,4 +167,45 @@ class CredentialsVaultTest {
         assertFalse(vault.pendingDeletionsFlow.value.contains("svc-del-1"))
         assertEquals(1, vault.getActiveConfiguredServices().size)
     }
+
+    @Test
+    fun testHasActiveEnabledServices() {
+        val vault = CredentialsVault.createForTesting(mockContext)
+
+        // 1. Initial state: zero services
+        assertFalse(vault.hasActiveEnabledServices())
+        assertTrue(vault.getActiveEnabledServices().isEmpty())
+
+        // 2. Disabled service added
+        val disabledService = ServiceConfig(
+            id = "svc-disabled",
+            name = "Disabled Cloud",
+            providerType = StorageProviderType.NEXTCLOUD,
+            isEnabled = false
+        )
+        vault.saveService(disabledService)
+        assertFalse(vault.hasActiveEnabledServices())
+        assertTrue(vault.getActiveEnabledServices().isEmpty())
+
+        // 3. Enabled service added
+        val enabledService = ServiceConfig(
+            id = "svc-enabled",
+            name = "Active Cloud",
+            providerType = StorageProviderType.GOOGLE_DRIVE,
+            isEnabled = true
+        )
+        vault.saveService(enabledService)
+        assertTrue(vault.hasActiveEnabledServices())
+        assertEquals(1, vault.getActiveEnabledServices().size)
+
+        // 4. Enabled service marked pending deletion
+        vault.markServicePendingDeletion("svc-enabled")
+        assertFalse(vault.hasActiveEnabledServices())
+        assertTrue(vault.getActiveEnabledServices().isEmpty())
+
+        // 5. Restoring enabled service
+        vault.restorePendingDeletedService("svc-enabled")
+        assertTrue(vault.hasActiveEnabledServices())
+        assertEquals(1, vault.getActiveEnabledServices().size)
+    }
 }

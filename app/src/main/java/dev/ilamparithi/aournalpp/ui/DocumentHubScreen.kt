@@ -120,6 +120,7 @@ import dev.ilamparithi.aournalpp.utils.ExternalFileHandler
 import dev.ilamparithi.aournalpp.utils.FileNameTemplateEngine
 import dev.ilamparithi.aournalpp.utils.NoteOpenManager
 import dev.ilamparithi.aournalpp.utils.a11yHeading
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -169,7 +170,6 @@ private fun requestStoragePermission(context: Context) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DocumentHubScreen(
     onNavigateToSettings: (() -> Unit)? = null,
@@ -264,6 +264,7 @@ fun DocumentHubScreen(
                     onUndo()
                     viewModel.loadContentNow()
                 } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                     snackbarHostState.showSnackbar("Failed to undo: ${e.message}")
                 }
             }
@@ -792,7 +793,7 @@ fun DocumentHubScreen(
                             if (displayFolders.isNotEmpty() && !targetIsTrash) {
                                 item(span = { GridItemSpan(maxLineSpan) }) {
                                     Text(
-                                        text = if (targetIsTrash) "Trashed Notes (${displayNotes.size})" else pluralStringResource(R.plurals.hub_section_notes_count, displayNotes.size, displayNotes.size),
+                                        text = pluralStringResource(R.plurals.hub_section_notes_count, displayNotes.size, displayNotes.size),
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.primary,
@@ -1511,7 +1512,7 @@ fun DocumentHubScreen(
             if (batchSelectedDocs.size == 1) {
                 showBatchShareExportDialog = false
                 shareExportNote = batchSelectedDocs.first()
-            } else if (batchSelectedDocs.size > 1) {
+            } else if (batchSelectedDocs.isNotEmpty()) {
                 BatchShareExportDialog(
                     selectedNotes = batchSelectedDocs,
                     onDismiss = {
@@ -1530,12 +1531,11 @@ fun DocumentHubScreen(
                         showBatchShareExportDialog = false
                         viewModel.setSelectionMode(false)
                         viewModel.setPdfConverting(true, "Preparing ${batchSelectedDocs.size} documents to share...")
-                        val docsToShare = batchSelectedDocs
                         batchShareExportNotes = emptyList()
                         scope.launch {
                             val result = repository.shareUnifiedDocuments(
                                 context = context,
-                                docs = docsToShare,
+                                docs = batchSelectedDocs,
                                 format = format,
                                 pdfExportManager = pdfExportManager
                             )

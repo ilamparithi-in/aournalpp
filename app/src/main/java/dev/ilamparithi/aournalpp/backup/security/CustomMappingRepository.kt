@@ -8,6 +8,7 @@ import dev.ilamparithi.aournalpp.backup.model.FolderValidationResult
 import dev.ilamparithi.aournalpp.backup.model.MappingSet
 import dev.ilamparithi.aournalpp.backup.model.MappingTemplateItem
 import dev.ilamparithi.aournalpp.backup.model.ServiceConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -325,7 +326,8 @@ class CustomMappingRepository(
                         } finally {
                             provider.disconnect()
                         }
-                    } catch (_: Exception) {
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
                         false
                     }
                     remoteExistenceCache[cacheKey] = Pair(checkedVal, now)

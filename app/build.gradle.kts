@@ -180,6 +180,7 @@ android {
     lint {
         abortOnError = true
         checkReleaseBuilds = true
+        disable += listOf("LocalContextGetResourceValueCall")
     }
     androidResources {
         generateLocaleConfig = true
@@ -233,6 +234,10 @@ dependencies {
     implementation(libs.androidx.preference)
     implementation(libs.androidx.preference.ktx)
     implementation(project(":runtime-manager"))
+
+    compileOnly(fileTree("build/intermediates/compile_r_class_jar") {
+        include("**/R.jar")
+    })
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.appcompat)

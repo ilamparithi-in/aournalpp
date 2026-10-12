@@ -18,6 +18,7 @@ import dev.ilamparithi.aournalpp.model.NoteDocument
 import dev.ilamparithi.aournalpp.runtime.ActiveNotesTracker
 import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.io.File
@@ -318,6 +319,7 @@ object NoteOpenManager {
                 Toast.makeText(context, "No PDF viewer app found on device", Toast.LENGTH_LONG).show()
                 onError?.invoke("No PDF viewer app found on device")
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 onConvertingState?.invoke(false)
                 val errorMsg = e.message ?: "Failed to convert or open PDF"
                 Toast.makeText(context, "PDF Error: $errorMsg", Toast.LENGTH_SHORT).show()
@@ -388,9 +390,7 @@ object NoteOpenManager {
         onError: ((String) -> Unit)? = null
     ) {
         val mainActivity = findMainActivity(context)
-        if (mainActivity != null) {
-            mainActivity.checkEmergencySave()
-        }
+        mainActivity?.checkEmergencySave()
         val hasEmergency = mainActivity?.hasPendingEmergencySave() == true
         val activeMatch = if (onShowActiveNotePrompt != null) ActiveNotesTracker.findActiveNote(context, file) else null
         val repo = repository ?: DocumentRepository.getInstance(context)

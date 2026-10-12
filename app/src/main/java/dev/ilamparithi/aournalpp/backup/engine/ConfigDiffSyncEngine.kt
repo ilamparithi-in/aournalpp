@@ -20,6 +20,44 @@ object ConfigDiffSyncEngine {
         "sync_mappings.json"
     )
 
+    /** Set of common text-based file extensions. */
+    private val TEXT_EXTENSIONS = setOf(
+        "txt",
+        "text",
+        "md",
+        "markdown",
+        "mdown",
+        "mkdn",
+        "mkd",
+        "json",
+        "xml",
+        "ini",
+        "conf",
+        "cfg",
+        "properties",
+        "yaml",
+        "yml",
+        "toml",
+        "csv",
+        "tsv",
+        "log",
+        "gpl",
+        "html",
+        "htm",
+        "svg",
+        "css",
+        "js",
+        "ts",
+        "py",
+        "sh",
+        "bash",
+        "lua",
+        "tex",
+        "bib",
+        "rst",
+        "org"
+    )
+
     /**
      * Identifies whether the given file path or file name corresponds to an application configuration file.
      */
@@ -30,6 +68,17 @@ object ConfigDiffSyncEngine {
                 clean.startsWith(".config/") ||
                 clean.contains("/.config/") ||
                 clean == ".config"
+    }
+
+    /**
+     * Identifies whether the given file path or file name corresponds to a text-based format
+     * (including Markdown notes, plain text, and configuration files).
+     */
+    fun isTextBasedFile(pathOrName: String): Boolean {
+        if (isConfigFile(pathOrName)) return true
+        val clean = pathOrName.replace('\\', '/')
+        val ext = File(clean).extension.lowercase()
+        return ext in TEXT_EXTENSIONS || clean.endsWith(".md", ignoreCase = true) || clean.endsWith(".markdown", ignoreCase = true)
     }
 
     /**
@@ -54,7 +103,7 @@ object ConfigDiffSyncEngine {
                 lines1 != lines2
             }
         }
-        if (ext in listOf("xml", "ini", "txt", "conf", "cfg", "properties")) {
+        if (isTextBasedFile(f1.name) || isTextBasedFile(f2.name)) {
             return try {
                 val lines1 = f1.readLines().map { it.trim() }.filter { it.isNotEmpty() }
                 val lines2 = f2.readLines().map { it.trim() }.filter { it.isNotEmpty() }

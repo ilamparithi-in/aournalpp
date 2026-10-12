@@ -204,6 +204,57 @@
     <!-- Sync notification action labels -->
     <string name="notification_action_cancel_sync">Cancel Sync</string>
     <string name="notification_action_view_queue">View Transfers</string>
+    <!-- Cloud Sync & Canvas Notification Strings -->
+    <string name="notification_channel_backup_name">Cloud Backup &amp; Sync</string>
+    <string name="notification_channel_backup_desc">Shows progress and status of background cloud synchronization</string>
+    <string name="notification_channel_conflicts_name">Cloud Sync Conflicts</string>
+    <string name="notification_channel_conflicts_desc">Alerts when remote and local files or settings have conflicting changes requiring resolution</string>
+    <string name="notification_channel_canvas_name">Active Canvas Session</string>
+    <string name="notification_channel_canvas_desc">Keeps the X11 and Xournal++ session active in background</string>
+
+    <string name="notification_sync_title">Aournal++ Cloud Sync</string>
+    <string name="notification_sync_preparing">Preparing cloud backup…</string>
+    <string name="notification_syncing_service_file">Syncing %1$s (%2$d/%3$d): %4$s</string>
+    <string name="notification_backing_up_file">Backing up (%1$d/%2$d): %3$s</string>
+    <string name="notification_sync_subtext_service">Syncing %1$s (%2$d/%3$d)</string>
+    <string name="notification_sync_subtext">Syncing (%1$d/%2$d)</string>
+
+    <string name="notification_worker_title">Worker %1$d: %2$s</string>
+    <string name="notification_transfer_uploading">Uploading</string>
+    <string name="notification_transfer_downloading">Downloading</string>
+    <string name="notification_transfer_progress">%1$s: %2$s</string>
+
+    <string name="notification_sync_interrupted_title">Cloud Backup Interrupted</string>
+    <string name="notification_unexpected_error">An unexpected error occurred</string>
+    <string name="notification_action_retry">Retry</string>
+
+    <string name="notification_conflicts_title">Cloud Conflicts Detected</string>
+    <string name="notification_action_resolve_conflicts">Resolve Conflicts</string>
+    <plurals name="notification_conflicts_desc">
+        <item quantity="one">%1$d note or setting modified in cloud outside this app</item>
+        <item quantity="other">%1$d notes or settings modified in cloud outside this app</item>
+    </plurals>
+
+    <string name="notification_issues_detected_title">Cloud Sync Issues Detected</string>
+    <string name="notification_issues_failed_count">(%1$d failed)</string>
+    <string name="notification_failed_items_header">Failed items:</string>
+    <string name="notification_failed_items_more">and %1$d more…</string>
+
+    <string name="notification_sync_finished_title">Cloud Backup Finished</string>
+    <string name="notification_all_files_up_to_date">All cloud files are up-to-date</string>
+
+    <string name="notification_canvas_title">Canvas Session Active</string>
+    <string name="notification_canvas_editing">Editing: %1$s</string>
+    <string name="notification_canvas_active">Note session active</string>
+    <!-- Device Identity strings -->
+    <string name="cloud_device_identity_title">Device Identity</string>
+    <string name="cloud_device_identity_desc">Identifies this device across cloud notes, version histories, and alongside saves</string>
+    <string name="cloud_device_id_badge">ID: %1$s</string>
+    <string name="cloud_device_rename_button">Rename Device</string>
+    <string name="cloud_device_rename_dialog_title">Device Name</string>
+    <string name="cloud_device_rename_dialog_desc">Set a custom name for this device to distinguish it from other devices using the same cloud account.</string>
+    <string name="cloud_device_rename_field_label">Device Name</string>
+    <string name="cloud_device_reset_default">Reset Default</string>
     <!-- Step 3 Choose folder title -->
     <string name="onboarding_folder_title">Notes Storage Folder</string>
     <!-- Step 3 Choose folder description -->

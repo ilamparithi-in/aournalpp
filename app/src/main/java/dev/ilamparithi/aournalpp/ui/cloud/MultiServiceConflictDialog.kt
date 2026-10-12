@@ -90,7 +90,6 @@ enum class ConflictDialogMode {
     CONFIG_CONFLICT
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MultiServiceConflictDialog(
     conflictGroups: List<FileConflictGroup>,

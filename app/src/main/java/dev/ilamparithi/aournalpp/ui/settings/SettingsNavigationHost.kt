@@ -96,7 +96,6 @@ fun SettingsScreen(onBack: (() -> Unit)? = null) {
  * - Wide screens (>= 720dp): Adaptive Two-Pane Layout (Master Category Pane + Detail Pane)
  * - Compact screens (< 720dp): Push-pop single pane with predictive back
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsNavigationHost(onFinish: () -> Unit) {
     var selectedCategory by rememberSaveable { mutableStateOf(SettingsCategory.FILES_STORAGE) }

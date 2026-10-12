@@ -733,7 +733,6 @@ fun Material3ExpressiveLoadingScreen(
  * Material 3 Expressive Pull-To-Refresh Indicator.
  * Displays rotating & morphing expressive shapes that expand as user pulls and bounce when refreshing.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExpressivePullRefreshIndicator(
     state: PullToRefreshState,

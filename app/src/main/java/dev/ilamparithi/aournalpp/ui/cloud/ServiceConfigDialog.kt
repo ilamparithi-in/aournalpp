@@ -71,10 +71,10 @@ import dev.ilamparithi.aournalpp.backup.model.StorageProviderType
 import dev.ilamparithi.aournalpp.backup.provider.StorageProviderFactory
 import dev.ilamparithi.aournalpp.backup.security.GoogleOAuthManager
 import dev.ilamparithi.aournalpp.backup.security.NextcloudQrParser
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ServiceConfigDialog(
     initialService: ServiceConfig? = null,
@@ -1019,6 +1019,7 @@ fun ServiceConfigDialog(
                                     testResultMessage = result.exceptionOrNull()?.message ?: "Connection failed"
                                 }
                             } catch (e: Exception) {
+                                if (e is CancellationException) throw e
                                 testResultSuccess = false
                                 testResultMessage = e.message ?: "Connection failed"
                             } finally {

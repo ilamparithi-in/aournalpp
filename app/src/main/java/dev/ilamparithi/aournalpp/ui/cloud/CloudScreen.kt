@@ -1,5 +1,6 @@
 package dev.ilamparithi.aournalpp.ui.cloud
 
+import android.content.Context
 import android.widget.TimePicker
 import androidx.compose.ui.res.stringResource
 import dev.ilamparithi.aournalpp.AournalppApplication
@@ -185,8 +186,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.ilamparithi.aournalpp.backup.engine.BackupEngine
 import dev.ilamparithi.aournalpp.backup.model.ConflictResolutionPolicy
 import dev.ilamparithi.aournalpp.backup.model.CustomFolderMapping
+import dev.ilamparithi.aournalpp.backup.model.DeviceIdentity
 import dev.ilamparithi.aournalpp.backup.model.FileConflictGroup
 import dev.ilamparithi.aournalpp.backup.model.ServiceConfig
+import androidx.compose.material.icons.filled.TabletAndroid
 import dev.ilamparithi.aournalpp.backup.model.StorageProviderType
 import dev.ilamparithi.aournalpp.backup.model.TransferStatus
 import dev.ilamparithi.aournalpp.backup.provider.StorageProviderFactory
@@ -198,6 +201,7 @@ import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.ui.InteractiveMarqueeText
 import dev.ilamparithi.aournalpp.ui.SpeedDialActionItem
 import dev.ilamparithi.aournalpp.utils.FormatUtils
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -210,7 +214,6 @@ enum class CloudSubpage {
 }
 
 @Suppress("FunctionName")
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CloudScreen(
     initialSubpage: CloudSubpage = CloudSubpage.OVERVIEW,
@@ -234,6 +237,7 @@ fun CloudScreen(
     }
     var selectedDetailServiceId by remember { mutableStateOf<String?>(null) }
     var showMappingSetsDialog by remember { mutableStateOf(false) }
+    var showDeviceRenameDialog by remember { mutableStateOf(false) }
 
     var hasNotificationPermission by remember {
         mutableStateOf(
@@ -406,6 +410,11 @@ fun CloudScreen(
                         AournalppApplication.applicationScope.launch(Dispatchers.IO) {
                             try {
                                 val report = engine.resolveConflicts(resolutions)
+                                val remaining = ConflictPersistenceManager.getInstance(context).getConflicts()
+                                if (remaining.isEmpty()) {
+                                    val nm = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+                                    nm?.cancel(dev.ilamparithi.aournalpp.backup.worker.BackupWorker.CONFLICT_NOTIFICATION_ID)
+                                }
                                 refreshState()
                                 if (report.errors.isNotEmpty()) {
                                     coroutineScope.launch {
@@ -597,6 +606,7 @@ fun CloudScreen(
                                             snackbarHostState.showSnackbar("All cloud files and local notes are up to date with zero conflicts!")
                                         }
                                     } catch (e: Exception) {
+                                        if (e is CancellationException) throw e
                                         snackbarHostState.showSnackbar("Conflict check failed: ${e.message}")
                                     } finally {
                                         isCheckingConflicts = false
@@ -765,6 +775,13 @@ fun CloudScreen(
                         }
                     }
                 }
+            }
+
+            item {
+                DeviceIdentityCard(
+                    context = context,
+                    onShowRenameDialog = { showDeviceRenameDialog = true }
+                )
             }
 
             item {
@@ -1087,10 +1104,9 @@ fun CloudScreen(
                                     }
                                 }
                             } catch (e: Exception) {
-                                if (e !is kotlin.coroutines.cancellation.CancellationException) {
-                                    withContext(Dispatchers.Main) {
-                                        snackbarHostState.showSnackbar("Restore failed: ${e.message}")
-                                    }
+                                if (e is CancellationException) throw e
+                                withContext(Dispatchers.Main) {
+                                    snackbarHostState.showSnackbar("Restore failed: ${e.message}")
                                 }
                             }
                         }
@@ -1163,5 +1179,163 @@ fun CloudScreen(
                 }
             }
         )
+    }
+
+    if (showDeviceRenameDialog) {
+        var editName by remember {
+            mutableStateOf(DeviceIdentity.getCustomDeviceName(context) ?: DeviceIdentity.getDeviceName())
+        }
+        AlertDialog(
+            onDismissRequest = { showDeviceRenameDialog = false },
+            properties = AppDialogDefaults.Properties,
+            modifier = Modifier.promptWidth(),
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.TabletAndroid,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            },
+            title = { Text(stringResource(R.string.cloud_device_rename_dialog_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = stringResource(R.string.cloud_device_rename_dialog_desc),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = editName,
+                        onValueChange = { editName = it },
+                        label = { Text(stringResource(R.string.cloud_device_rename_field_label)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        DeviceIdentity.setCustomDeviceName(context, editName.trim())
+                        showDeviceRenameDialog = false
+                        refreshState()
+                    }
+                ) {
+                    Text(stringResource(android.R.string.ok))
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = {
+                            DeviceIdentity.setCustomDeviceName(context, null)
+                            showDeviceRenameDialog = false
+                            refreshState()
+                        }
+                    ) {
+                        Text(stringResource(R.string.cloud_device_reset_default))
+                    }
+                    TextButton(onClick = { showDeviceRenameDialog = false }) {
+                        Text(stringResource(android.R.string.cancel))
+                    }
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun DeviceIdentityCard(
+    context: Context,
+    onShowRenameDialog: () -> Unit
+) {
+    val effectiveName = DeviceIdentity.getEffectiveDeviceName(context)
+    val deviceId = DeviceIdentity.getDeviceId(context)
+    val customName = DeviceIdentity.getCustomDeviceName(context)
+    val isCustom = customName != null
+
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(42.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.TabletAndroid,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = effectiveName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = stringResource(R.string.cloud_device_identity_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh
+                    ) {
+                        Text(
+                            text = stringResource(R.string.cloud_device_id_badge, deviceId.take(8)),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
+                    if (isCustom) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
+                        ) {
+                            Text(
+                                text = DeviceIdentity.getDeviceName(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            AppIconButton(
+                onClick = onShowRenameDialog,
+                tooltip = stringResource(R.string.cloud_device_rename_button)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = stringResource(R.string.cloud_device_rename_button),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
     }
 }

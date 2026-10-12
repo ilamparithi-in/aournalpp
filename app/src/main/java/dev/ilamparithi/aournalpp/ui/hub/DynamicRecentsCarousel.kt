@@ -37,7 +37,6 @@ import dev.ilamparithi.aournalpp.utils.a11yHeading
  * Powered by Material 3 HorizontalMultiBrowseCarousel for authentic, adaptive responsive cards,
  * buttery smooth gesture physics, and zero rubberband scroll contention.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DynamicRecentsCarousel(
     recentNotes: List<NoteDocument>,

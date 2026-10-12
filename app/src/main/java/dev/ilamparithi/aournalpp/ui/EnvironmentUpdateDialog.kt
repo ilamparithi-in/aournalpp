@@ -72,7 +72,6 @@ import dev.ilamparithi.aournalpp.runtime.BootstrapDiff
 import dev.ilamparithi.aournalpp.utils.a11yHeading
 import dev.ilamparithi.aournalpp.utils.minTouchTarget
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun EnvironmentUpdateDialog(
     installedVersion: Long,
@@ -107,7 +106,7 @@ fun EnvironmentUpdateDialog(
         } else {
             val target = (countdownSeconds - 1f) / 10f
             val currentSecondMark = countdownSeconds / 10f
-            if (animatedProgress.value > currentSecondMark || animatedProgress.value < target) {
+            if (animatedProgress.value !in target..currentSecondMark) {
                 animatedProgress.snapTo(currentSecondMark)
             }
             pulseScale.snapTo(1.24f)

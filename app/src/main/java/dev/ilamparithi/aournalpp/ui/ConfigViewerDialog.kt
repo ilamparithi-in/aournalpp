@@ -34,7 +34,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -111,6 +111,7 @@ fun ConfigViewerDialog(
                     onClick = {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         val clip = ClipData.newPlainText(currentType.fileName, contentText)
+                        @Suppress("UsePropertyAccessSyntax")
                         clipboard.setPrimaryClip(clip)
                         copiedState = true
                         Toast.makeText(context, "${currentType.fileName} copied to clipboard", Toast.LENGTH_SHORT).show()
@@ -129,7 +130,7 @@ fun ConfigViewerDialog(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                ScrollableTabRow(
+                PrimaryScrollableTabRow(
                     selectedTabIndex = selectedTabIndex,
                     edgePadding = 0.dp,
                     containerColor = MaterialTheme.colorScheme.surface,

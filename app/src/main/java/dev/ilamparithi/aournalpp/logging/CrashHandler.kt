@@ -118,10 +118,12 @@ class CrashHandler private constructor(
                 }
 
                 val combinedLogs = if (stdoutStderrTail.isNotEmpty()) {
-                    listOf("--- Native Process ($binaryName) Output ---") +
-                            stdoutStderrTail +
-                            listOf("--- System Logcat Tail ---") +
-                            recentLogcat
+                    buildList {
+                        add("--- Native Process ($binaryName) Output ---")
+                        addAll(stdoutStderrTail)
+                        add("--- System Logcat Tail ---")
+                        addAll(recentLogcat)
+                    }
                 } else {
                     recentLogcat
                 }

@@ -13,6 +13,7 @@ import dev.ilamparithi.aournalpp.runtime.LinuxEnvironment
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
 import dev.ilamparithi.aournalpp.R
 import dev.ilamparithi.aournalpp.utils.FormatUtils
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -456,7 +457,9 @@ class DocumentRepository internal constructor(
                         )
                     }
                     noteIndexDao.upsertNotes(entities)
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                }
             }
         }
 
@@ -658,21 +661,24 @@ class DocumentRepository internal constructor(
         if (discoveredEntities.isNotEmpty()) {
             try {
                 noteIndexDao.upsertNotes(discoveredEntities)
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+            }
         }
 
         // 2. Query Room FTS index with fallback to LIKE search
         val ftsResults = try {
             val ftsQuery = "*${trimmedQuery.replace("\"", "\"\"")}*"
             val res = noteIndexDao.searchNotesFts(folderPath, folderPathPrefix, ftsQuery, enabledExtensions)
-            if (res.isNotEmpty()) res else {
+            res.ifEmpty {
                 noteIndexDao.searchNotesLike(folderPath, folderPathPrefix, trimmedQuery, enabledExtensions)
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
             noteIndexDao.searchNotesLike(folderPath, folderPathPrefix, trimmedQuery, enabledExtensions)
         }
 
-        val candidateEntities = if (ftsResults.isNotEmpty()) ftsResults else {
+        val candidateEntities = ftsResults.ifEmpty {
             discoveredEntities.filter { entity ->
                 enabledExtensions.contains(entity.extension.lowercase()) &&
                 (entity.title.contains(trimmedQuery, ignoreCase = true) || entity.tags.contains(trimmedQuery, ignoreCase = true))
@@ -683,7 +689,11 @@ class DocumentRepository internal constructor(
             val file = File(entity.path)
             if (!file.exists()) {
                 repoScope.launch {
-                    try { noteIndexDao.deleteByPath(entity.path) } catch (_: Exception) {}
+                    try {
+                        noteIndexDao.deleteByPath(entity.path)
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                    }
                 }
                 continue
             }

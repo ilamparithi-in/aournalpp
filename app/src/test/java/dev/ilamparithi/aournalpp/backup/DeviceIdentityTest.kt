@@ -87,4 +87,39 @@ class DeviceIdentityTest {
         val jsonString = info.toJsonString()
         assertTrue(jsonString.contains("\"deviceId\": \"test-device-uuid-999\""))
     }
+
+    @Test
+    fun testCustomDeviceNameAndEffectiveDeviceName() {
+        // Mock a stable device ID
+        every { mockPrefs.getString("stable_device_id", null) } returns "abcd-1234-uuid"
+
+        // Initially no custom device name set
+        every { mockPrefs.getString("custom_device_name", null) } returns null
+        assertEquals(null, DeviceIdentity.getCustomDeviceName(mockContext))
+
+        val effectiveFallback = DeviceIdentity.getEffectiveDeviceName(mockContext, includeShortUid = false)
+        assertTrue(effectiveFallback.isNotBlank())
+
+        val effectiveFallbackWithUid = DeviceIdentity.getEffectiveDeviceName(mockContext, includeShortUid = true)
+        assertTrue(effectiveFallbackWithUid.endsWith("[abcd]"))
+
+        // Set custom device name
+        every { mockEditor.apply() } returns Unit
+        every { mockEditor.remove(any()) } returns mockEditor
+        DeviceIdentity.setCustomDeviceName(mockContext, "My Study Tablet")
+        verify { mockEditor.putString("custom_device_name", "My Study Tablet") }
+
+        every { mockPrefs.getString("custom_device_name", null) } returns "My Study Tablet"
+        assertEquals("My Study Tablet", DeviceIdentity.getCustomDeviceName(mockContext))
+
+        val effectiveCustom = DeviceIdentity.getEffectiveDeviceName(mockContext, includeShortUid = false)
+        assertEquals("My Study Tablet", effectiveCustom)
+
+        val effectiveCustomWithUid = DeviceIdentity.getEffectiveDeviceName(mockContext, includeShortUid = true)
+        assertEquals("My Study Tablet [abcd]", effectiveCustomWithUid)
+
+        // Clear custom device name
+        DeviceIdentity.setCustomDeviceName(mockContext, "")
+        verify { mockEditor.remove("custom_device_name") }
+    }
 }

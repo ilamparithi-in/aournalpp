@@ -231,7 +231,7 @@ fun SaveAsNoteDialog(
                                             )
                                         }
                                         selectedFolderItem?.iconType == "import" || selectedFolderItem?.iconType == "imported" || selectedFolderItem?.role == "import" -> {
-                                            val tintColor = parseHexColor(selectedFolderItem?.colorHex) ?: MaterialTheme.colorScheme.primary
+                                            val tintColor = parseHexColor(selectedFolderItem.colorHex) ?: MaterialTheme.colorScheme.primary
                                             Icon(
                                                 imageVector = Icons.Default.FileDownload,
                                                 contentDescription = null,
@@ -240,7 +240,7 @@ fun SaveAsNoteDialog(
                                             )
                                         }
                                         selectedFolderItem?.iconType == "audio" || selectedFolderItem?.role == "audio" -> {
-                                            val tintColor = parseHexColor(selectedFolderItem?.colorHex) ?: MaterialTheme.colorScheme.primary
+                                            val tintColor = parseHexColor(selectedFolderItem.colorHex) ?: MaterialTheme.colorScheme.primary
                                             Icon(
                                                 imageVector = Icons.Default.AudioFile,
                                                 contentDescription = null,
@@ -314,7 +314,7 @@ fun SaveAsNoteDialog(
                             }
 
                             // Option: Notes Home (Root)
-                            val isRootSelected = selectedFolder?.canonicalPath == rootFolder.canonicalPath
+                            val isRootSelected = selectedFolder.canonicalPath == rootFolder.canonicalPath
                             AppDropdownMenuItem(
                                 text = { Text("Notes Home (Root)") },
                                 leadingIcon = {
@@ -333,7 +333,7 @@ fun SaveAsNoteDialog(
 
                             // List of all other folders
                             currentFolders.forEach { folder ->
-                                val isFolderSelected = selectedFolder?.canonicalPath == folder.file.canonicalPath
+                                val isFolderSelected = selectedFolder.canonicalPath == folder.file.canonicalPath
                                 AppDropdownMenuItem(
                                     text = {
                                         Text(

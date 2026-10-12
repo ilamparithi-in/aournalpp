@@ -55,7 +55,6 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import dev.ilamparithi.aournalpp.backup.model.ExclusionFilterConfig
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ExclusionFilterDialog(
     initialConfig: ExclusionFilterConfig = ExclusionFilterConfig.DEFAULT,

@@ -66,6 +66,7 @@ import java.io.File
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+@Suppress("DEPRECATION")
 @Composable
 fun OnboardingSettingsPage(
     context: Context,

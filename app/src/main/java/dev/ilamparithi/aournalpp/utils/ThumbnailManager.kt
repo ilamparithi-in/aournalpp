@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.createBitmap
 import dev.ilamparithi.aournalpp.model.NoteDocument
 import dev.ilamparithi.aournalpp.runtime.PdfExportManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -51,7 +52,6 @@ object ThumbnailManager : IThumbnailManager {
     private const val THUMBNAIL_WIDTH = 600
 
     /** Parallel dispatcher allowing up to 4 concurrent thumbnail renders without blocking each other. */
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     private val renderDispatcher = Dispatchers.IO.limitedParallelism(4)
 
     /** In-flight deduplication map so identical requests share the same render task. */
@@ -399,7 +399,9 @@ object ThumbnailManager : IThumbnailManager {
                 async {
                     try {
                         getOrCreateThumbnailBitmap(context, note.file, pdfExportManager, note.lastModifiedMs)
-                    } catch (_: Exception) {}
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                    }
                 }
             }.awaitAll()
         }

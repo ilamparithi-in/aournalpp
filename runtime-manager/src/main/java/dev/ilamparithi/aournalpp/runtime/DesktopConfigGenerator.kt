@@ -95,11 +95,7 @@ object DesktopConfigGenerator {
         val preferencesTitles = resolvePreferencesTitles(localeDir, activeLocale)
 
         // Evaluate whether Preferences can fit in fullscreen under current viewport and UI scale
-        val canFitPreferencesFullscreen = if (viewportWidth > 0 && viewportHeight > 0) {
-            WindowOrientationAdvisor.canFitPreferencesFullscreen(viewportWidth, viewportHeight, uiScale)
-        } else {
-            true // Default to fullscreen if viewport is not yet measured
-        }
+        val canFitPreferencesFullscreen = WindowOrientationAdvisor.canFitPreferencesFullscreen(viewportWidth, viewportHeight, uiScale)
 
         val fullscreenPreferencesRules = if (canFitPreferencesFullscreen) {
             buildString {

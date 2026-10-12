@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
  * using Compose Material 3 experimental APIs.
  */
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("DEPRECATION")
 @Composable
 fun AppSearchBar(
     query: String,

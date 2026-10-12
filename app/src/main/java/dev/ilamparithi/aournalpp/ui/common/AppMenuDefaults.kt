@@ -105,7 +105,6 @@ fun AppDropdownMenu(
 /**
  * Standard Material 3 Expressive ExposedDropdownMenu (for form text fields).
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExposedDropdownMenuBoxScope.AppExposedDropdownMenu(
     expanded: Boolean,

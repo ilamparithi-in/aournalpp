@@ -2,6 +2,7 @@ package dev.ilamparithi.aournalpp.ui.cloud
 
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
+import kotlinx.coroutines.CancellationException
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -145,7 +146,6 @@ private fun decodeUrlSafe(value: String): String {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FolderBrowserDialog(
     mode: FolderBrowserMode,
@@ -284,6 +284,7 @@ fun FolderBrowserDialog(
                     }
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 errorMessage = e.message ?: "Failed to load directory"
             } finally {
                 isLoading = false

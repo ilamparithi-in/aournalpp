@@ -59,7 +59,6 @@ import dev.ilamparithi.aournalpp.utils.minTouchTarget
  * - Hardware keycode mapping actions (Single, Double, Triple, Long, Long+Click) via ConnectedButtonGroup.
  * - Momentary hold duration vs Toggle mode bindings with spring recoil.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LenovoPenSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current

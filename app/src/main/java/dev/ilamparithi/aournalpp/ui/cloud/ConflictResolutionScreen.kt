@@ -102,7 +102,6 @@ import java.io.File
  * Partitions Note conflicts (with rich origin badges and multi-selection) from
  * Configuration conflicts (which require exclusive either/or selection and line diff viewing).
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ConflictResolutionScreen(
     conflictGroups: List<FileConflictGroup>,
@@ -229,8 +228,8 @@ fun ConflictResolutionScreen(
                                 text = { Text("Keep All Local") },
                                 onClick = {
                                     showMenu = false
-                                    for (group in conflictGroups) {
-                                        group.localVersion?.let { selectedVersionsMap[group.id] = setOf(it) }
+                                    for ((id, _, localVersion) in conflictGroups) {
+                                        localVersion?.let { selectedVersionsMap[id] = setOf(it) }
                                     }
                                 },
                                 leadingIcon = { Icon(Icons.Default.PhoneAndroid, contentDescription = null) }
@@ -239,9 +238,9 @@ fun ConflictResolutionScreen(
                                 text = { Text("Keep All Cloud") },
                                 onClick = {
                                     showMenu = false
-                                    for (group in conflictGroups) {
-                                        val firstRemote = group.remoteVersions.firstOrNull()
-                                        if (firstRemote != null) selectedVersionsMap[group.id] = setOf(firstRemote)
+                                    for ((id, _, _, remoteVersions) in conflictGroups) {
+                                        val firstRemote = remoteVersions.firstOrNull()
+                                        if (firstRemote != null) selectedVersionsMap[id] = setOf(firstRemote)
                                     }
                                 },
                                 leadingIcon = { Icon(Icons.Default.Cloud, contentDescription = null) }
@@ -577,7 +576,7 @@ private fun ConflictResolutionItemCard(
                         Spacer(modifier = Modifier.width(1.dp))
                     }
 
-                    if (isConfig) {
+                    if (isConfig || BackupEngine.isTextBasedFile(group.relativePath)) {
                         TextButton(
                             onClick = { onPreviewDiff(group) },
                             modifier = Modifier.height(32.dp)
@@ -716,7 +715,7 @@ private fun ConflictVersionRow(
                 }
 
                 // Origin Badge (Device or App Fingerprint)
-                val originLabel = version.originApp ?: version.originDevice
+                val originLabel = version.originDevice?.takeIf { it.isNotBlank() } ?: version.originApp
                 if (!originLabel.isNullOrBlank() && !isLocal) {
                     Surface(
                         shape = RoundedCornerShape(6.dp),

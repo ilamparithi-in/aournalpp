@@ -43,7 +43,6 @@
                 <action android:name="android.intent.action.VIEW" />
                 <action android:name="android.intent.action.EDIT" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="content" />
                 <data android:scheme="file" />
                 <data android:mimeType="application/x-xopp" />
@@ -57,9 +56,8 @@
                 <action android:name="android.intent.action.VIEW" />
                 <action android:name="android.intent.action.EDIT" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="content" />
-                <data android:scheme="file" />
+                <data android:scheme="content" android:host="*" />
+                <data android:scheme="file" android:host="*" />
                 <data android:pathPattern=".*\\.xopp" />
                 <data android:pathPattern=".*\\.xoj" />
                 <data android:pathPattern=".*\\.pdf" />
@@ -73,9 +71,8 @@
                 <action android:name="android.intent.action.VIEW" />
                 <action android:name="android.intent.action.EDIT" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="content" />
-                <data android:scheme="file" />
+                <data android:scheme="content" android:host="*" />
+                <data android:scheme="file" android:host="*" />
                 <data android:mimeType="*/*" />
                 <data android:pathPattern=".*\\.xopp" />
                 <data android:pathPattern=".*\\.xoj" />

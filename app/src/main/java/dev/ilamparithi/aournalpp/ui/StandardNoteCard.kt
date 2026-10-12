@@ -2,7 +2,6 @@ package dev.ilamparithi.aournalpp.ui
 
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -99,7 +98,6 @@ import dev.ilamparithi.aournalpp.ui.common.AppTooltipBox
  * - Bottom: Floating folder-palette details pill ([FloatingDetailsPill]) with folder icon/emoji, folder name, and modification timestamp
  * - Long press: Radial sweep & persistent turbulence floating preview
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun StandardNoteCard(
     note: NoteDocument,
@@ -393,7 +391,7 @@ fun FloatingDetailsPill(
 
             // Bottom Row: Folder & Timestamp
             val defaultHomeFolder = androidx.compose.ui.res.stringResource(dev.ilamparithi.aournalpp.R.string.hub_root_folder_name)
-            val folderDisplayName = if (note.folder.isBlank()) defaultHomeFolder else note.folder
+            val folderDisplayName = note.folder.ifBlank { defaultHomeFolder }
             val isHome = note.folder.isBlank() || note.folder == "Notes Home" || note.folder == defaultHomeFolder
             val isEmergency = note.folderIconType == "emergency" || note.folder.equals("Emergency Saves", ignoreCase = true)
 

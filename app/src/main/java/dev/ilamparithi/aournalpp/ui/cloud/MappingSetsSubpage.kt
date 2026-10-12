@@ -75,7 +75,6 @@ import java.util.UUID
  * Dedicated subpage common to all clouds displaying all saved mapping sets.
  * Searchable across set name, description, constituent mapping names, and folder paths.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MappingSetsSubpage(
     services: List<ServiceConfig>,

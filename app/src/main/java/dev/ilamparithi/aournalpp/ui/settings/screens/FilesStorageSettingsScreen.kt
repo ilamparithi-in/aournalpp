@@ -10,7 +10,6 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -41,7 +40,6 @@ import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -99,7 +97,6 @@ import java.io.File
  * Implements M3 Expressive Inset Group containers, clear Documents folder hierarchy,
  * segmented note actions, and an intuitive file name template builder.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun FilesStorageSettingsScreen(
     showTopBar: Boolean = true,
@@ -666,7 +663,6 @@ private fun getTemplateTargetLabel(target: FileNameTemplateTarget): String {
  * dynamic live preview card with sample context, high-contrast editable template field,
  * cursor-aware token insertion palette, and an explicit reset button.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FileNameTemplateSection(
     prefs: android.content.SharedPreferences,

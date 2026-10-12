@@ -8,7 +8,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -39,7 +38,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -109,7 +108,6 @@ data class TemplatePlaceholderGuide(
     val description: String
 )
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun FileNameTemplateSettingsCard(
     prefs: android.content.SharedPreferences,
@@ -203,7 +201,7 @@ fun FileNameTemplateSettingsCard(
             )
 
             // Scrollable Category Tabs for 5 Targets
-            ScrollableTabRow(
+            PrimaryScrollableTabRow(
                 selectedTabIndex = selectedTarget.ordinal,
                 edgePadding = 0.dp,
                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
@@ -383,7 +381,7 @@ fun FileNameTemplateSettingsCard(
 
             // Tab ribbon matching the target template tab ribbon above
             val guideCategories = listOf("Date/Time", "Context", "Metadata", "Random")
-            ScrollableTabRow(
+            PrimaryScrollableTabRow(
                 selectedTabIndex = selectedGuideCategory,
                 edgePadding = 0.dp,
                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),

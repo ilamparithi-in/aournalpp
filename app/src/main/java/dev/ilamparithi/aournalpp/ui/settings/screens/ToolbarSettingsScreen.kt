@@ -120,7 +120,6 @@ import kotlin.math.roundToInt
  * 2. Collapse & Pin Behavior (Start collapsed, Pin mode, standard Slider timeout + responsive input)
  * 3. Toolbar Items & Actions (Authentic FloatingToolbarLayout preview, functional filter chips, grouped cards)
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ToolbarSettingsScreen(
     showTopBar: Boolean = true,
@@ -609,6 +608,7 @@ fun ToolbarSettingsScreen(
                                 mutableFloatStateOf((autoCollapseTimeoutMs / 1000f).coerceIn(1f, 30f))
                             }
 
+                            @Suppress("DEPRECATION")
                             Slider(
                                 value = sliderSeconds,
                                 onValueChange = { newVal ->

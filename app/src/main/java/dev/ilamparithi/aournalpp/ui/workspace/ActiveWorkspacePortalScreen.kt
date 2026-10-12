@@ -102,7 +102,6 @@ private data class PendingSingleExport(
  * and background stashed windows. Tapping a window tile seamlessly transitions back into CanvasActivity
  * focusing that window, without changing size or snap geometry.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ActiveWorkspacePortalScreen(
     onNavigateHome: () -> Unit,
@@ -516,7 +515,7 @@ fun ActiveWorkspacePortalScreen(
             )
         }
     ) { paddingValues ->
-        BoxWithConstraints(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)

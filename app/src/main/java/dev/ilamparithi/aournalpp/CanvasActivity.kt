@@ -465,12 +465,25 @@ class CanvasActivity : ComponentActivity() {
             else -> "New Note"
         }
 
-        CanvasSessionService.startSession(this, initialTitle)
+        val initialCount = if (isSupervisorInitialized()) supervisor.openWindows.value.size.coerceAtLeast(1) else 1
+        CanvasSessionService.startSession(this, initialTitle, initialCount)
 
         lifecycleScope.launch {
             supervisor.documentTitle.collect { title ->
                 if (!title.isNullOrBlank()) {
-                    CanvasSessionService.updateTitle(this@CanvasActivity, title)
+                    val count = supervisor.openWindows.value.size.coerceAtLeast(1)
+                    CanvasSessionService.updateTitle(this@CanvasActivity, title, count)
+                }
+            }
+        }
+
+        lifecycleScope.launch {
+            supervisor.openWindows.collect { windows ->
+                if (windows.isNotEmpty()) {
+                    val activeWin = windows.find { it.isActive }
+                    val activeTitle = activeWin?.title?.takeIf { it.isNotBlank() } ?: supervisor.documentTitle.value ?: initialTitle
+                    val count = windows.size
+                    CanvasSessionService.updateTitle(this@CanvasActivity, activeTitle, count)
                 }
             }
         }
@@ -1126,7 +1139,8 @@ class CanvasActivity : ComponentActivity() {
                     }
                 }
             }
-            CanvasSessionService.updateTitle(this, File(targetPath).name)
+            val currentCount = supervisor.openWindows.value.size + 1
+            CanvasSessionService.updateTitle(this, File(targetPath).name, currentCount)
             sessionManager.openNoteInNewWindow(targetPath)
         }
 

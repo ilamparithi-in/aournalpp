@@ -125,10 +125,10 @@ import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.seconds
 
 private fun Modifier.minTouchTarget(): Modifier = this.padding(0.dp)
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogManagerScreen(
     onBack: () -> Unit,
@@ -633,7 +633,6 @@ private fun CrashReportCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LiveLogsTabContent(
     uiState: LogManagerUiState,
@@ -652,7 +651,7 @@ private fun LiveLogsTabContent(
     LaunchedEffect(uiState.isAutoRefreshEnabled) {
         if (uiState.isAutoRefreshEnabled) {
             while (isActive) {
-                delay(5000L)
+                delay(5.seconds)
                 if (!scrollState.isScrollInProgress) {
                     onAutoRefresh()
                 }

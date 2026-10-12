@@ -102,7 +102,6 @@ import kotlin.math.roundToInt
  * 4. External Pointer (Speed ExpressiveSlider with editable pill & reset, Rotation)
  * 5. OEM-Specific Pen Settings (Sub-pages for OEM pens: Lenovo Precision Pen / Pen Plus)
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InputSettingsScreen(
     showTopBar: Boolean = true,
@@ -440,7 +439,7 @@ fun InputSettingsScreen(
                         headline = stringResource(R.string.pref_input_contact_modifier),
                         supporting = stringResource(R.string.pref_input_contact_modifier_desc),
                         checked = stylusButtonContactModifier,
-                        shape = if (touchMode == "1") RectangleShape else RectangleShape,
+                        shape = RectangleShape,
                         onCheckedChange = {
                             stylusButtonContactModifier = it
                             saveBooleanPref(X11Preferences.KEY_STYLUS_BUTTON_CONTACT_MODIFIER, it)

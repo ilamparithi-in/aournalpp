@@ -249,6 +249,22 @@ class CredentialsVault private constructor(context: Context) {
     }
 
     /**
+     * Returns true if there is at least one configured, enabled service that is not pending deletion.
+     */
+    @Synchronized
+    fun hasActiveEnabledServices(): Boolean {
+        return getActiveEnabledServices().any { it.isEnabled }
+    }
+
+    /**
+     * Returns all active, enabled services that are not pending deletion.
+     */
+    @Synchronized
+    fun getActiveEnabledServices(): List<ServiceConfig> {
+        return getActiveConfiguredServices().filter { it.isEnabled }
+    }
+
+    /**
      * Permanently purges a cloud service from the device, including:
      * 1. Removal from CredentialsVault (services JSON and active service ID).
      * 2. Deletion of all Room database sync_metadata checksum records.

@@ -6,6 +6,7 @@ import android.system.Os
 import android.util.Log
 import com.termux.x11.CmdEntryPoint
 import com.termux.x11.LorieView
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -380,14 +381,17 @@ class CanvasSessionManager @JvmOverloads constructor(
                                     }
                                 }
                             } catch (e: Exception) {
+                                if (e is CancellationException) throw e
                                 // Client socket closed
                             }
                         }
                     } catch (e: Exception) {
+                        if (e is CancellationException) throw e
                         break
                     }
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 Log.w(TAG, "Failed to start IME focus bridge server", e)
             }
         }

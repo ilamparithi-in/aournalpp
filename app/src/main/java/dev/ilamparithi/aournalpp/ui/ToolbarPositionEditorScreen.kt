@@ -155,7 +155,7 @@ fun ToolbarPositionEditorScreen(
     val currentRotation = remember(configuration.orientation, configuration.screenWidthDp, configuration.screenHeightDp) {
         val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            context.display?.rotation ?: Surface.ROTATION_0
+            context.display.rotation
         } else {
             @Suppress("DEPRECATION")
             windowManager?.defaultDisplay?.rotation ?: Surface.ROTATION_0

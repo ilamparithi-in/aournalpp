@@ -252,7 +252,6 @@ http://www.apache.org/licenses/
     )
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LicensesScreen(onBack: (() -> Unit)? = null) {
     val context = LocalContext.current

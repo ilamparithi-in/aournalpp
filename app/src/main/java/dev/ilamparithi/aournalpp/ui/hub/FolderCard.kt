@@ -65,7 +65,6 @@ import dev.ilamparithi.aournalpp.ui.InteractiveMarqueeText
 import dev.ilamparithi.aournalpp.ui.common.AppIconButton
 import dev.ilamparithi.aournalpp.utils.AccessibilityUtils
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FolderCard(
     folder: FolderItem,

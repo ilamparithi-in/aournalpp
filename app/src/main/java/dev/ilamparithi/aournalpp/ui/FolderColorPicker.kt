@@ -38,11 +38,11 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -316,6 +316,7 @@ fun FolderColorPickerRow(
  * - RGB sliders (Red, Green, Blue) & Hex code input
  * - Live color preview banner
  */
+@Suppress("DEPRECATION")
 @Composable
 fun CustomColorPickerDialog(
     initialColorHex: String,
@@ -414,7 +415,7 @@ fun CustomColorPickerDialog(
                 }
 
                 // Mode Tabs (Visual 2D Palette vs RGB Sliders)
-                TabRow(
+                PrimaryTabRow(
                     selectedTabIndex = selectedTab,
                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                     modifier = Modifier.clip(RoundedCornerShape(12.dp))

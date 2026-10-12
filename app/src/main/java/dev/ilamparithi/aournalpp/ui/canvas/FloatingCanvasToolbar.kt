@@ -259,7 +259,6 @@ internal data class TitleDisplayState(
     val windowId: String = ""
 )
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FloatingToolbarOverlay(
     canvasWidthPx: Float,

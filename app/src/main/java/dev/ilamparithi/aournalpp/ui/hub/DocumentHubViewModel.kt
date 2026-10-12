@@ -115,7 +115,7 @@ class DocumentHubViewModel @JvmOverloads constructor(
                 else -> null
             }
         }.toSet()
-        return if (parsed.isEmpty()) setOf(NoteFileType.XOPP, NoteFileType.PDF, NoteFileType.XOJ) else parsed
+        return parsed.ifEmpty { setOf(NoteFileType.XOPP, NoteFileType.PDF, NoteFileType.XOJ) }
     }
 
     fun toggleFileType(type: NoteFileType) {

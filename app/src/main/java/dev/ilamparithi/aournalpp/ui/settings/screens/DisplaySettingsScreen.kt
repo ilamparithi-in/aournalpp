@@ -113,7 +113,6 @@ import kotlin.math.roundToInt
  * 4. Screen Idle Timeout & Fullscreen Mode
  * 5. Soft Keyboard & IME (Auto-show on focus, character-based input, reseed)
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DisplaySettingsScreen(
     showTopBar: Boolean = true,

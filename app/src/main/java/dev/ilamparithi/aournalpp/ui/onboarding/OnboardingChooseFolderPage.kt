@@ -62,7 +62,6 @@ import java.io.File
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OnboardingChooseFolderPage(
     env: LinuxEnvironment,

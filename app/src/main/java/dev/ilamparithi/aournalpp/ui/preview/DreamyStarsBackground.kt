@@ -260,9 +260,9 @@ fun DreamyParticleField(
         }
 
         // Draw Sweeping Particle Sparkle Ignition
-        for (p in particles) {
-            val x = p.xNorm * canvasWidth
-            val y = p.yNorm * canvasHeight
+        for ((xNorm, yNorm, baseRadiusPx, baseAlpha, shimmerSpeed, phase) in particles) {
+            val x = xNorm * canvasWidth
+            val y = yNorm * canvasHeight
 
             val dx = x - resolvedOrigin.x
             val dy = y - resolvedOrigin.y
@@ -279,9 +279,9 @@ fun DreamyParticleField(
                 0f
             }
 
-            val shimmer = (sin(time * p.shimmerSpeed + p.phase) * 0.40f + 0.60f)
-            val dynamicAlpha = ((p.baseAlpha * shimmer + flash * 0.65f) * alpha * strength).coerceIn(0f, 1f)
-            val dynamicRadius = p.baseRadiusPx * (1f + flash * 0.50f)
+            val shimmer = (sin(time * shimmerSpeed + phase) * 0.40f + 0.60f)
+            val dynamicAlpha = ((baseAlpha * shimmer + flash * 0.65f) * alpha * strength).coerceIn(0f, 1f)
+            val dynamicRadius = baseRadiusPx * (1f + flash * 0.50f)
 
             drawCircle(
                 color = Color.White.copy(alpha = dynamicAlpha),

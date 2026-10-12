@@ -5,6 +5,7 @@ import dev.ilamparithi.aournalpp.backup.model.RemoteFileMetadata
 import dev.ilamparithi.aournalpp.backup.model.ServiceConfig
 import dev.ilamparithi.aournalpp.backup.model.StorageProviderType
 import dev.ilamparithi.aournalpp.backup.security.GoogleOAuthManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -430,7 +431,8 @@ class GoogleDriveProvider(
                 val bytes = resp.body?.bytes() ?: return@withContext null to null
                 dev.ilamparithi.aournalpp.backup.engine.FingerprintParser.extractFingerprintFromGzipBytes(bytes)
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
             null to null
         }
     }
@@ -496,6 +498,7 @@ class GoogleDriveProvider(
                 } else null
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             null
         }
     }
@@ -525,6 +528,7 @@ class GoogleDriveProvider(
                 }
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             Log.e(TAG, "Error creating folder $folderName", e)
             null
         }
@@ -556,6 +560,7 @@ class GoogleDriveProvider(
                 } else null
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             null
         }
     }

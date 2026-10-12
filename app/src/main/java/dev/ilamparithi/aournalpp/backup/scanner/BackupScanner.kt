@@ -174,7 +174,8 @@ class BackupScanner(
             val lastModified = file.lastModified()
 
             val cached = cachedMetadata?.get(relativePath)
-            val hash = if (cached != null && cached.sizeBytes == size && cached.localLastModified == lastModified && cached.localSha256.isNotEmpty()) {
+            val isConfigFile = dev.ilamparithi.aournalpp.backup.engine.ConfigDiffSyncEngine.isConfigFile(file.name)
+            val hash = if (!isConfigFile && cached != null && cached.sizeBytes == size && cached.localLastModified == lastModified && cached.localSha256.isNotEmpty()) {
                 cached.localSha256
             } else {
                 calculateSha256(file)

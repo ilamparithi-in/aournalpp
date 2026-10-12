@@ -20,7 +20,17 @@ object BackupScheduler {
     private const val ONE_TIME_WORK_NAME = "aournal_on_demand_cloud_sync"
     private const val EXIT_WORK_NAME = "aournal_on_exit_cloud_sync"
 
-    fun updateSchedules(context: Context) {
+    fun updateSchedules(
+        context: Context,
+        workManager: WorkManager = WorkManager.getInstance(context),
+        vault: dev.ilamparithi.aournalpp.backup.security.CredentialsVault = dev.ilamparithi.aournalpp.backup.security.CredentialsVault.getInstance(context)
+    ) {
+        if (!vault.hasActiveEnabledServices()) {
+            cancelDailySync(workManager)
+            cancelIntervalSync(workManager)
+            return
+        }
+
         val prefs = BackupPreferences(context)
 
         // 1. Daily scheduled sync
@@ -32,7 +42,7 @@ object BackupScheduler {
                 wifiOnly = prefs.isWifiOnlyEnabled
             )
         } else {
-            cancelDailySync(context)
+            cancelDailySync(workManager)
         }
 
         // 2. Interval-based periodic sync (e.g. every 15m, 30m, 60m)
@@ -40,7 +50,7 @@ object BackupScheduler {
         if (intervalMinutes in 15..1439) {
             scheduleIntervalSync(context, intervalMinutes.toLong(), prefs.isWifiOnlyEnabled)
         } else {
-            cancelIntervalSync(context)
+            cancelIntervalSync(workManager)
         }
     }
 
@@ -61,10 +71,6 @@ object BackupScheduler {
             ExistingPeriodicWorkPolicy.UPDATE,
             periodicRequest
         )
-    }
-
-    fun cancelIntervalSync(context: Context) {
-        WorkManager.getInstance(context).cancelUniqueWork(PERIODIC_INTERVAL_WORK_NAME)
     }
 
     fun scheduleDailySync(context: Context, hour: Int, minute: Int, wifiOnly: Boolean) {
@@ -101,15 +107,36 @@ object BackupScheduler {
         )
     }
 
+    fun cancelDailySync(workManager: WorkManager) {
+        workManager.cancelUniqueWork(PERIODIC_DAILY_WORK_NAME)
+    }
+
     fun cancelDailySync(context: Context) {
-        WorkManager.getInstance(context).cancelUniqueWork(PERIODIC_DAILY_WORK_NAME)
+        cancelDailySync(WorkManager.getInstance(context))
+    }
+
+    fun cancelIntervalSync(workManager: WorkManager) {
+        workManager.cancelUniqueWork(PERIODIC_INTERVAL_WORK_NAME)
+    }
+
+    fun cancelIntervalSync(context: Context) {
+        cancelIntervalSync(WorkManager.getInstance(context))
     }
 
     fun triggerImmediateSync(
         context: Context,
         wifiOnly: Boolean = false,
-        targetServiceId: String? = null
+        targetServiceId: String? = null,
+        workManager: WorkManager = WorkManager.getInstance(context),
+        vault: dev.ilamparithi.aournalpp.backup.security.CredentialsVault = dev.ilamparithi.aournalpp.backup.security.CredentialsVault.getInstance(context)
     ) {
+        if (targetServiceId != null) {
+            val service = vault.getAllServices().firstOrNull { it.id == targetServiceId }
+            if (service == null || !service.isEnabled) return
+        } else if (!vault.hasActiveEnabledServices()) {
+            return
+        }
+
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
             .build()
@@ -128,7 +155,7 @@ object BackupScheduler {
             .addTag(BackupWorker.TAG)
             .build()
 
-        WorkManager.getInstance(context).enqueueUniqueWork(
+        workManager.enqueueUniqueWork(
             ONE_TIME_WORK_NAME,
             ExistingWorkPolicy.REPLACE,
             request
@@ -136,6 +163,9 @@ object BackupScheduler {
     }
 
     fun triggerOnAppExitSync(context: Context) {
+        val vault = dev.ilamparithi.aournalpp.backup.security.CredentialsVault.getInstance(context)
+        if (!vault.hasActiveEnabledServices()) return
+
         val prefs = BackupPreferences(context)
         if (!prefs.isAutoBackupOnExitEnabled) return
 
